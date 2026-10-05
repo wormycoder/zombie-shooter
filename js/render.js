@@ -486,6 +486,13 @@ const Render = {
       }
     }
     for (const f of Fx.fires) lights.push({ x: f.x, y: f.y, r: 6, p: 0.9 });
+    // facade sprite caches age by frame; a few roofs may be painted per frame
+    Facade.tick++; Facade.rbudget = 3;
+    // porch lanterns beside house doors, on after dark while the grid is up
+    if (amb < 0.6 && powered) for (const L of Facade.lamps()) {
+      if (L.x < vx0 - 4 || L.x > vx0 + vw + 4 || L.y < vy0 - 4 || L.y > vy0 + vh + 4 || L.b.roofGone) continue;
+      lights.push({ x: L.x, y: L.y, r: 3.6, p: 0.5, out: true, warm: true });
+    }
     if (amb < 0.6) {
       for (const rm of w.rooms) {
         if (!rm.lights) continue;
@@ -654,7 +661,10 @@ const Render = {
       }
     }
     if (cut && WALL_INFO[t].fence) { cut = false; }
-    const rec = Spr.wall(t, d, col, f, cut);
+    // facade descriptor (material, trim, fixtures); a shared scratch record, so read what we need now
+    const st = Facade.edge(x, y, d, t, f, col);
+    const rec = Spr.wall(t, d, col, f, cut, st);
+    const fx0 = cut ? '' : st.fx.charAt(0), lampB = st.b, neon = st.pst === 9;
     // shading: the face tile, but walls bordering visible tiles stay readable
     let s = this.shadeAt(x, y);
     const so = d ? this.shadeAt(x - 1, y) : this.shadeAt(x, y - 1);
@@ -671,6 +681,11 @@ const Render = {
     }
     Spr.drawShaded(this.ctx, rec, X - rec.ax, Y - rec.ay, s, alpha);
     if (f && f.k === 'window' && !cut && G.light.amb < 0.55 && (f.barricade || 0) < 3) this.windowGlow(x, y, d, f, alpha);
+    // porch lantern and neon OPEN signs light up after dark while the grid is up
+    if (G.light.amb < 0.6 && !G.events.powerOff) {
+      if ((fx0 === 'L' || fx0 === 'J') && lampB && !lampB.roofGone) this.lanternGlow(x, y, d, fx0 === 'L' ? 0.8 : 0.2, alpha);
+      else if (neon && !cut && f && !f.smashed && (f.barricade || 0) < 2) this.neonGlow(x, y, d, alpha);
+    }
     if (rope === 2) this.drawRope(up ? x : x + LV.W0, y, d, s, up ? WALL_H : 0.05, up ? WALL_H + 0.85 : WALL_H);
   },
   // warm light in the windows of lit rooms after dark
@@ -685,6 +700,32 @@ const Render = {
     ctx.globalCompositeOperation = 'lighter';
     poly(ctx, [Pt(a0, z0), Pt(a1, z0), Pt(a1, z1), Pt(a0, z1)], 'rgba(255,190,100,' + (0.42 * k).toFixed(3) + ')');
     ctx.globalCompositeOperation = op;
+  },
+  // warm halo of a porch lantern (a on the wall edge, lantern 0.1 out from the face)
+  lanternGlow(x, y, d, a, alpha) {
+    const ctx = this.ctx, p = d ? this.P(x + 0.12, y + a, 1.78) : this.P(x + a, y + 0.12, 1.78);
+    if (!this.lglow) {
+      const c = mkCanvas(64, 64), g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,214,140,0.85)'); gr.addColorStop(0.25, 'rgba(255,190,110,0.32)'); gr.addColorStop(1, 'rgba(255,170,90,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      this.lglow = c;
+    }
+    const op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (alpha === undefined ? 1 : alpha) * Math.min(1, (0.6 - G.light.amb) * 2.5);
+    ctx.drawImage(this.lglow, p[0] - 24, p[1] - 22, 48, 44);
+    ctx.fillStyle = 'rgba(255,236,170,0.95)'; ctx.fillRect(p[0] - 1.5, p[1] - 2.5, 3, 5);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = op;
+  },
+  // red neon OPEN sign in a store window
+  neonGlow(x, y, d, alpha) {
+    const ctx = this.ctx, p = d ? this.P(x, y + 0.5, 1.24) : this.P(x + 0.5, y, 1.24);
+    const op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (alpha === undefined ? 1 : alpha) * Math.min(1, (0.6 - G.light.amb) * 2.5) * (0.85 + Math.sin(performance.now() / 160) * 0.08);
+    ctx.fillStyle = 'rgba(255,70,50,0.35)'; ctx.beginPath(); ctx.ellipse(p[0], p[1], 11, 7, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,120,90,0.5)'; ctx.fillRect(p[0] - 5, p[1] - 1.5, 10, 3);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = op;
   },
   // knotted sheet rope hanging from an upstairs window (edge x,y,d upstairs), the part between heights z0..z1
   drawRope(x, y, d, s, z0, z1) {
@@ -740,13 +781,20 @@ const Render = {
   },
 
   // ------------------------------------------------------------------ roofs
+  // Roofs are pre-rendered per building (Facade.roof: shingles, gables, chimneys, snow...) and darkened
+  // through their outline path. Over the per-frame build budget a roof falls back to plain polygons.
   drawRoof(b, p) {
     const ctx = this.ctx;
-    const H = WALL_H * (b.floors || 1), ov = 0.18;
-    const x0 = b.x0 - ov, y0 = b.y0 - ov, x1 = b.x1 + 1 + ov, y1 = b.y1 + 1 + ov;
+    const H = WALL_H * (b.floors || 1);
     const P = (x, y, z) => [(x - y) * HTW, (x + y) * HTH - z * ZU];
-    let s = Math.max(this.shadeAt(b.x1 + 1, b.y1 + 1), this.shadeAt(b.x0 - 1, b.y1 + 1), this.shadeAt(b.x1 + 1, b.y0 - 1));
-    s = Math.max(s, G.light.amb * 0.42);
+    // brightness: daylight / moonlight, raised by lit and visible ground around the building (lamps light
+    // a roof far less than the street below it), never pitch black
+    const amb = G.light.amb, cap = amb + 0.32;
+    let s = Math.max(0.12, amb * 0.8);
+    const vw = this.vw, vh = this.vh, SB = this.shadeB, vx0 = this.vx0, vy0 = this.vy0;
+    const smp = (sx, sy) => { const i = sx - vx0, j = sy - vy0; if (i >= 0 && j >= 0 && i < vw && j < vh) { const l = Math.min(cap, SB[j * vw + i]); if (l > s) s = l; } };
+    smp(b.x1 + 1, b.y1 + 1); smp(b.x0 - 1, b.y1 + 1); smp(b.x1 + 1, b.y0 - 1); smp((b.x0 + b.x1) >> 1, b.y1 + 1); smp(b.x1 + 1, (b.y0 + b.y1) >> 1);
+    if (s > 1) s = 1;
     // translucency if player hidden beneath
     let alpha = 1;
     if (p && !p.dead) {
@@ -755,7 +803,17 @@ const Render = {
       const quad2 = [P(b.x0, b.y0, 0), P(b.x1 + 1, b.y0, 0), P(b.x1 + 1, b.y0, H + 1.2), P(b.x0, b.y0, H + 1.2)];
       if (pointInPoly(q, quad) || (pointInPoly(q, quad2))) alpha = 0.28;
     }
+    const rr = Facade.roof(b, Math.round(Season.snow * 4) / 4);
     if (alpha < 1) ctx.globalAlpha = alpha;
+    if (rr) {
+      ctx.drawImage(rr.c, rr.x, rr.y);
+      if (s < 0.98) { ctx.globalAlpha = alpha * (1 - s); ctx.fillStyle = 'rgb(3,5,14)'; ctx.fill(rr.path); }
+    } else this.drawRoofPlain(b, s, H, P);
+    ctx.globalAlpha = 1;
+  },
+  drawRoofPlain(b, s, H, P) {
+    const ctx = this.ctx, ov = 0.18;
+    const x0 = b.x0 - ov, y0 = b.y0 - ov, x1 = b.x1 + 1 + ov, y1 = b.y1 + 1 + ov;
     const sq = Math.round(Season.snow * 8) / 8;
     const rc = sq > 0 ? Col.mix(b.roofCol, '#e4eaf0', Math.min(0.85, sq * 1.1)) : b.roofCol;
     if (b.roof === 'flat') {
@@ -805,7 +863,6 @@ const Render = {
         if (b.type !== 'barn' && b.type !== 'cabin') { const cx = um - 0.7, cy = b.y0 + 1.2 + (b.id % 3); this.chimney(ctx, P, cx, cy, zr - 0.2, s); }
       }
     }
-    if (alpha < 1) ctx.globalAlpha = 1;
   },
   chimney(ctx, P, x, y, z, s) {
     const c = '#8a4a3a', h = 0.9;
