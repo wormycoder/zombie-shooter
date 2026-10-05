@@ -92,6 +92,7 @@ const Combat = {
         let dmg = R.f(w.dmg[0], w.dmg[1]) * (0.55 + sk * 0.07) * (0.75 + str * 0.05);
         if (p.st.endurance < 0.25) dmg *= 0.75;
         if (p.st.panic > 65) dmg *= 0.85;
+        if (Player.brokenArm()) dmg *= 0.55;
         const crit = R.chance(w.crit + sk * 0.02 + (Player.hasTrait('lucky') ? 0.03 : 0));
         if (crit) dmg *= 2.5;
         const knock = R.chance(w.knock + str * 0.02 + (crit ? 0.2 : 0));

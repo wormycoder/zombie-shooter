@@ -248,9 +248,9 @@ const Interact = {
       if (f && f.smashed && !f.glassOut && R.chance(0.5)) Player.addWound(R.pick(['HandL', 'HandR', 'ForeArmL', 'ForeArmR']), 'cut', { isZombie: false });
       if (!rope) {
         Sfx.play('thud'); Noise.emit(p.x, p.y, 9, 'thud');
-        const legs = ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR'];
-        const n = R.chance(0.45) ? 2 : 1;
-        for (let k = 0; k < n; k++) Player.addWound(R.pick(legs), R.chance(0.3) ? 'deep' : 'scratch', { isZombie: false });
+        const legs = LEG_PARTS;
+        if (R.chance(0.35 - Player.skill('Nimble') * 0.02)) Player.fracture(legs);
+        else { const n = R.chance(0.45) ? 2 : 1; for (let k = 0; k < n; k++) Player.addWound(R.pick(legs), R.chance(0.3) ? 'deep' : 'scratch', { isZombie: false }); }
         p.hurtFlash = 1;
         p.st.endurance = Math.max(0, p.st.endurance - 0.2);
       } else Player.xp('Nimble', 1);

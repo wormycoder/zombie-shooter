@@ -171,6 +171,7 @@ Mt('Nails', 'Nails', 0.01, ['nails', '#a0a8b0', '#606870']);
 Mt('NailsBox', 'Box of Nails', 1.0, ['box', '#c02020', '#a0a8b0'], { boxOf: 'Nails', boxN: 100 });
 Mt('RippedSheets', 'Ripped Sheets', 0.1, ['rag', '#e8e4d8', '#c0b8a8'], { bandage: 0 });
 Mt('Sheet', 'Sheet', 1.0, ['sheet', '#e8e8f0', '#a0b0d0'], {});
+Mt('Splint', 'Splint', 0.4, ['plank', '#c8a878', '#e8e0d0'], { splint: true, desc: 'Straightens and supports a broken bone so it heals properly.' });
 Mt('SheetRope', 'Sheet Rope', 1.6, ['rag', '#f2f0ea', '#b8b0a0'], { desc: 'Knotted sheets. Nail it to an upstairs window to climb down and back up.' });
 Mt('TreeBranch', 'Tree Branch', 1.5, ['branch', '#6a4a2a', '#4a7a2a'], { fuel: 1 });
 Mt('Twigs', 'Twigs', 0.3, ['branch', '#8a6a4a', '#8a6a4a'], { fuel: 0.4 });

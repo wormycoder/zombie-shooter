@@ -263,6 +263,17 @@ const Actions = {
       Sfx.play('bandage'); UI.refresh();
     }, { anim: 'work' });
   },
+  splint(part, it) {
+    return this.mk('Applying splint', 6 * (1 - Player.skill('FirstAid') * 0.05), () => {
+      const b = G.player.body[part];
+      if (!b.w.fracture || b.splint) return;
+      b.splint = true;
+      Player.removeItem(it);
+      Player.xp('FirstAid', 10);
+      G.player.st.pain = Math.min(100, G.player.st.pain + 15);
+      Sfx.play('bandage'); UI.refresh();
+    }, { anim: 'work' });
+  },
   removeGlass(part) {
     const tw = Player.findTag('tweezers');
     return this.mk('Removing glass', tw ? 3 : 5, () => {

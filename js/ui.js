@@ -502,6 +502,7 @@ const UI = {
       if (b.glass) tags.push('<span class="warn">Glass shard</span>');
       if (b.w.deep && !b.stitched) tags.push('<span class="warn">Needs stitches</span>');
       if (b.stitched) tags.push('Stitched');
+      if (b.w.fracture) tags.push(b.splint ? 'Splinted' : '<span class="warn">Needs a splint</span>');
       if (b.disinf > 0) tags.push('Disinfected');
       rows.push(`<div class="hrow ${sel === pt ? 'on' : ''}" data-part="${pt}"><b>${PART_NAMES[pt]}</b>: ${tags.join(', ')}</div>`);
     }
@@ -518,6 +519,8 @@ const UI = {
       const sut = Player.find(it => ITEMS[it.id].suture);
       if (sut && b.w.deep && !b.stitched) btns.push(`<span class="btn" data-ha="stitch:${sut.uid}">Stitch wound</span>`);
       if (b.glass) btns.push(`<span class="btn" data-ha="glass">Remove glass shard</span>`);
+      const spl = Player.find(it => ITEMS[it.id].splint);
+      if (spl && b.w.fracture && !b.splint) btns.push(`<span class="btn" data-ha="splint:${spl.uid}">Apply splint</span>`);
       actions = `<div class="hact"><div class="sub2">${PART_NAMES[sel]}</div>${btns.join('') || '<i>No treatment items. Rip clothing into rags for makeshift bandages.</i>'}</div>`;
     }
     const st = p.st;
@@ -541,6 +544,7 @@ const UI = {
           if (k === 'dis') Actions.withItem(it, () => Actions.disinfect(P.sel, it));
           if (k === 'stitch') Actions.withItem(it, () => Actions.stitch(P.sel, it));
           if (k === 'glass') Actions.queue(Actions.removeGlass(P.sel));
+          if (k === 'splint') Actions.withItem(it, () => Actions.splint(P.sel, it));
           setTimeout(() => this.renderHealth(P), 50);
         }
       });
@@ -562,12 +566,14 @@ const UI = {
       let col = '#4a6a4a';
       if (b.w.scratch) col = '#b0a040';
       if (b.w.cut || b.w.burn) col = '#c07030';
+      if (b.w.fracture) col = '#c05a20';
       if (b.w.bite || b.w.deep) col = '#b03030';
       if (b.infect > 0.05) col = '#8a3a8a';
       g.fillStyle = col;
       const r = pt === 'Head' ? 14 : 5;
       roundRect(g, x, y, w, h, r); g.fill();
       if (b.bandage) { g.fillStyle = b.bandage.dirt >= 0.99 ? 'rgba(150,120,80,0.75)' : 'rgba(240,240,230,0.7)'; for (let k = 0; k < 3; k++) g.fillRect(x + 2, y + h * (0.25 + k * 0.2), w - 4, 3); }
+      if (b.w.fracture) { g.strokeStyle = '#2a1a10'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + 3, y + h * 0.45); g.lineTo(x + w * 0.45, y + h * 0.55); g.lineTo(x + w * 0.6, y + h * 0.42); g.lineTo(x + w - 3, y + h * 0.52); g.stroke(); if (b.splint) { g.fillStyle = '#c8a878'; g.fillRect(x - 2, y + 4, 3, h - 8); g.fillRect(x + w - 1, y + 4, 3, h - 8); } }
       if (Player.partBleed(b) > 0) { g.fillStyle = '#e02020'; g.beginPath(); g.arc(x + w / 2, y + h / 2, 3, 0, 7); g.fill(); }
       g.strokeStyle = sel === pt ? '#ffe080' : 'rgba(0,0,0,0.5)'; g.lineWidth = sel === pt ? 2 : 1;
       roundRect(g, x, y, w, h, r); g.stroke();

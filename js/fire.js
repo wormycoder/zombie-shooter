@@ -158,7 +158,7 @@ const Fire = {
     if (p && !p.dead && fall(p)) {
       p.x -= W0; p.path = null;
       Player.say('The floor gave way!', '#f99');
-      Player.addWound(R.pick(['LowerLegL', 'LowerLegR', 'FootL', 'FootR']), 'deep', { isZombie: false });
+      if (R.chance(0.5)) Player.fracture(LEG_PARTS); else Player.addWound(R.pick(['LowerLegL', 'LowerLegR', 'FootL', 'FootR']), 'deep', { isZombie: false });
     }
     Zombie.rebuildGrid();
     Sfx.play('woodbreak', (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);

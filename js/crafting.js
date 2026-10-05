@@ -5,6 +5,7 @@
 const RECIPES = [
   { id: 'bandage', n: 'Bandage', cat: 'Medical', in: [['RippedSheets', 2]], out: [['Bandage', 1]], time: 3, xp: { FirstAid: 2 } },
   { id: 'sterile', n: 'Sterilized Bandage', cat: 'Medical', in: [['Bandage', 1], ['@uses:Disinfectant', 1]], out: [['SterileBandage', 1]], time: 3, xp: { FirstAid: 2 } },
+  { id: 'splint', n: 'Splint', cat: 'Medical', in: [['@any:Plank|TreeBranch', 1], ['RippedSheets', 2]], out: [['Splint', 1]], time: 4, xp: { FirstAid: 2 } },
   { id: 'rags', n: 'Ripped Sheets (from Sheet)', cat: 'Medical', in: [['Sheet', 1]], out: [['RippedSheets', 4]], time: 3 },
   { id: 'sheetrope', n: 'Sheet Rope', cat: 'Survival', in: [['Sheet', 2]], out: [['SheetRope', 1]], time: 5 },
   { id: 'planks', n: 'Saw Log into Planks', cat: 'Carpentry', in: [['Log', 1]], tools: ['saw'], out: [['Plank', 3]], time: 8, xp: { Carpentry: 3 } },

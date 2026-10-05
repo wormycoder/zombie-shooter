@@ -12,7 +12,10 @@ const WOUND = {
   bite: { n: 'Bitten', heal: [50, 70], bleed: 0.4, pain: 25, dmg: 8 },
   deep: { n: 'Deep Wound', heal: [60, 90], bleed: 0.7, pain: 30, dmg: 7 },
   burn: { n: 'Burned', heal: [40, 60], bleed: 0, pain: 35, dmg: 6 },
+  fracture: { n: 'Fractured', heal: [420, 620], bleed: 0, pain: 40, dmg: 8 },
 };
+const LEG_PARTS = ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR'];
+const ARM_PARTS = ['UpperArmL', 'UpperArmR', 'ForeArmL', 'ForeArmR', 'HandL', 'HandR'];
 const WEAR_SLOTS = ['hat', 'eyes', 'neck', 'shirt', 'jacket', 'vest', 'gloves', 'pants', 'shoes', 'wrist', 'back', 'belt'];
 const FISTS = { sk: null, dmg: [0.1, 0.25], range: 0.85, arc: 0.6, swing: 0.55, hits: 1, knock: 0.12, crit: 0.05, end: 0.012, model: null };
 
@@ -159,6 +162,18 @@ const Player = {
     }
     return false;
   },
+  // a broken leg rules out running, a broken arm weakens attacks
+  brokenLeg() { const p = G.player; return LEG_PARTS.some(pt => p.body[pt].w.fracture > 0); },
+  brokenArm() { const p = G.player; return ARM_PARTS.some(pt => p.body[pt].w.fracture > 0); },
+  fracture(parts) {
+    const p = G.player, pt = R.pick(parts), b = p.body[pt];
+    b.w.fracture = Math.max(b.w.fracture || 0, R.f(WOUND.fracture.heal[0], WOUND.fracture.heal[1]));
+    p.health -= WOUND.fracture.dmg;
+    p.st.panic = Math.min(100, p.st.panic + 30);
+    this.say(PART_NAMES[pt] + ': Fractured!', '#f66');
+    Sfx.play('hurt'); Sfx.play('break');
+    if (p.health <= 0) this.die('Died from a bad fall');
+  },
   flashlight() {
     const p = G.player;
     if (!p || p.inCar) return false;
@@ -240,7 +255,8 @@ const Player = {
     if (end < 0.1) m *= 0.65; else if (end < 0.25) m *= 0.8; else if (end < 0.5) m *= 0.92;
     if (p.health < 40) m *= 0.85;
     if (p.grabbed > 0) m *= 0.25;
-    for (const pt of ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR']) { const b = p.body[pt]; if (b.w.cut || b.w.bite || b.w.deep) { m *= 0.85; break; } }
+    for (const pt of LEG_PARTS) { const b = p.body[pt]; if (b.w.cut || b.w.bite || b.w.deep) { m *= 0.85; break; } }
+    for (const pt of LEG_PARTS) { const b = p.body[pt]; if (b.w.fracture) { m *= b.splint ? 0.72 : 0.5; break; } }
     if (this.hasTrait('obese')) m *= 0.88; else if (this.hasTrait('overweight')) m *= 0.94;
     if (this.hasTrait('adrenaline')) m *= 1 + p.st.panic / 400;
     if (p.st.fatigue > 0.9) m *= 0.85;
@@ -267,6 +283,7 @@ const Player = {
     let run = Input.down('Shift');
     let sprint = Input.down('Alt') || Input.down('x');
     if (p.st.endurance < 0.1) { run = false; sprint = false; }
+    if ((run || sprint) && this.brokenLeg()) { run = false; sprint = false; }
     if (aiming) { run = false; sprint = false; }
     // auto-walk path
     if (!moving && p.path && p.path.length) {
@@ -610,16 +627,19 @@ const Player = {
         let r = hm * (b.bandage ? 1.5 : 1);
         if (b.infect > 0.3 || b.glass) r = 0;
         if (k === 'deep' && !b.stitched) r = 0;
+        if (k === 'fracture') r = hm * (b.splint ? 1 : 0.3);
         b.w[k] -= gh * r;
         const wd = WOUND[k];
-        pain += wd.pain * Math.min(1, b.w[k] / wd.heal[0] + 0.3);
+        pain += wd.pain * Math.min(1, b.w[k] / wd.heal[0] + 0.3) * (k === 'fracture' && b.splint ? 0.5 : 1);
+        if (k === 'fracture' && b.w[k] <= 0 && b.splint) { b.splint = false; this.say(PART_NAMES[pt] + ' has healed. Splint removed.', '#8f8'); }
       }
       bleed += this.partBleed(b);
       if (b.bandage) {
         b.bandage.dirt = Math.min(1, b.bandage.dirt + gh * 0.04);
         if (!has) { b.bandage.dirt = Math.max(b.bandage.dirt, 0.3); }
       }
-      if (!has) { b.glass = false; b.stitched = false; b.infect = Math.max(0, b.infect - gh * 0.1); continue; }
+      if (!has) { b.glass = false; b.stitched = false; b.splint = false; b.infect = Math.max(0, b.infect - gh * 0.1); continue; }
+      if (b.w.fracture && !b.w.scratch && !b.w.cut && !b.w.bite && !b.w.deep && !b.w.burn) continue; // closed fracture: no infection risk
       if (b.disinf > 0) b.disinf -= gh;
       if (b.disinf <= 0 && b.infect <= 0) {
         let ch = b.bandage ? (b.bandage.dirt >= 0.99 ? 0.03 : 0.004) : 0.015;

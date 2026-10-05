@@ -176,7 +176,10 @@ const Vehicles = {
           c.hp = Math.max(0, c.hp - imp * 1.6);
           Sfx.play('crash', c.x, c.y);
           Noise.emit(c.x, c.y, 15 + imp, 'crash');
-          if (imp > 9 && G.player.inCar === c) { Player.addWound(R.pick(['Head', 'TorsoUpper', 'ForeArmL', 'ForeArmR']), imp > 13 ? 'cut' : 'scratch', { isZombie: false }); }
+          if (imp > 9 && G.player.inCar === c) {
+            Player.addWound(R.pick(['Head', 'TorsoUpper', 'ForeArmL', 'ForeArmR']), imp > 13 ? 'cut' : 'scratch', { isZombie: false });
+            if (imp > 13 && R.chance(0.3)) Player.fracture(R.chance(0.5) ? ARM_PARTS : LEG_PARTS);
+          }
           if (c.hp <= 0) { c.engine = false; Player.say('The engine died.', '#f99'); }
         }
         c.v = -c.v * 0.2;
