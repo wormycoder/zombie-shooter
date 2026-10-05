@@ -50,6 +50,10 @@ F('Fries', 'French Fries', 0.2, ['fries', '#f2c83a', '#d0302a'], { hunger: 0.14,
 F('Berries', 'Wild Berries', 0.1, ['berries', '#5a2a8a', '#3a7a2a'], { hunger: 0.05, thirst: 0.02, fresh: 2, rot: 4 });
 F('Mushrooms', 'Mushrooms', 0.1, ['mushroom', '#d8c0a0', '#a07a50'], { hunger: 0.05, fresh: 3, rot: 6 });
 F('StrangeMushrooms', 'Strange Mushrooms', 0.1, ['mushroom', '#c03030', '#f0f0f0'], { hunger: 0.05, fresh: 3, rot: 6, poison: 0.55 });
+F('DeadRabbit', 'Dead Rabbit', 1.2, ['meat', '#8a7a68', '#e8d8c8'], { hunger: 0.3, fresh: 2, rot: 4, raw: true, cook: 40, cookBonus: 0.12 });
+F('DeadSquirrel', 'Dead Squirrel', 0.6, ['meat', '#8a5a3a', '#e0c0a0'], { hunger: 0.18, fresh: 2, rot: 4, raw: true, cook: 30, cookBonus: 0.1 });
+F('DeadBird', 'Dead Bird', 0.3, ['meat', '#6a6a7a', '#f0e0d0'], { hunger: 0.1, fresh: 2, rot: 4, raw: true, cook: 20, cookBonus: 0.06 });
+F('DeadMouse', 'Dead Mouse', 0.05, ['meat', '#7a7068', '#d8c8c0'], { hunger: 0.04, fresh: 1, rot: 2, raw: true, cook: 10, unhappy: 10 });
 F('Worms', 'Worms', 0.05, ['worm', '#c08080', '#806050'], { hunger: 0.02, unhappy: 25, bait: true });
 F('Insects', 'Grasshoppers', 0.05, ['worm', '#6a8a3a', '#405020'], { hunger: 0.03, unhappy: 20, bait: true });
 F('Stew', 'Bowl of Stew', 0.6, ['stew', '#8a4a2a', '#e0e0e0'], { hunger: 0.42, thirst: 0.1, unhappy: -15, fresh: 2, rot: 4 });

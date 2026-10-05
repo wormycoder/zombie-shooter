@@ -15,7 +15,7 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Moodles (hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, wetness, temperature...), body-part injuries, infection and reanimation
 - Inventory with weight, bags, containers, timed actions, drag & drop; loot tables per room/store type
 - Melee & firearms, shoving & stomping, weapon durability, skills & XP, skill books, occupations & traits
-- Barricading, carpentry & building, crafting, cooking, farming, foraging, fishing, generators, rain barrels
+- Barricading, carpentry & building, crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
 - Drivable cars with keys, hotwiring, fuel, trunks, alarms
 - Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
 - Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread

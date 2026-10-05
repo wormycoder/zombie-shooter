@@ -262,6 +262,35 @@ const Interact = {
     });
     Actions.queue(a);
   },
+  trapOptions(o, x, y, add, go) {
+    const ANIMAL = { rabbit: 'DeadRabbit', squirrel: 'DeadSquirrel', bird: 'DeadBird', mouse: 'DeadMouse' };
+    if (o.caught) {
+      add('Collect ' + ITEMS[ANIMAL[o.caught]].n.toLowerCase(), () => go(() => {
+        if (!o.caught) return;
+        const it = Items.make(ANIMAL[o.caught]);
+        it.age = Math.max(0, (G.time - (o.caughtT || G.time)) / 60);
+        Player.addItem(it); o.caught = null; o.caughtT = null;
+        Player.xp('Trapping', 5); Player.say('Got a ' + ITEMS[it.id].n.replace('Dead ', '').toLowerCase() + '!', '#8f8'); Sfx.play('pickup'); UI.refresh();
+      }));
+    } else if (!o.bait) {
+      const baits = Player.findAll(i => ['Carrots', 'Cabbage', 'Lettuce', 'Apple', 'Banana', 'Bread', 'PeanutButter', 'Berries', 'Worms', 'Potato', 'Corn', 'Tomato', 'Insects', 'Cheese'].includes(i.id));
+      const seen = new Set();
+      for (const b of baits) {
+        if (seen.has(b.id)) continue; seen.add(b.id);
+        add('Bait with ' + Items.name(b), () => go(() => {
+          if (!Player.find(i => i === b)) return;
+          if (ITEMS[b.id].uses) { b.uses--; if (b.uses <= 0) Player.removeItem(b); } else Player.removeItem(b);
+          o.bait = b.id; o.baitT = G.time; Sfx.play('pickup'); UI.refresh();
+        }));
+      }
+      if (!baits.length) add('Needs bait (vegetables, fruit, bread, worms...)', null, { info: true });
+    } else add('Baited with ' + ITEMS[o.bait].n.toLowerCase() + ' - check back later', null, { info: true });
+    add('Dismantle trap', () => go(() => {
+      World.setObj(x, y, null);
+      if (o.kind === 'box') { Player.addItem(Items.make('Plank')); if (R.chance(0.6)) Player.addItem(Items.make('Nails')); } else Player.addItem(Items.make('Twigs'));
+      Sfx.play('wood'); UI.refresh();
+    }));
+  },
   // an upstairs window/edge whose far side is open air
   upperOutside(e) {
     const [x, y, d] = e;
@@ -355,6 +384,7 @@ const Interact = {
     if (o.t === 'pump') { const can = Player.find(i => i.id === 'GasCan' && i.fl < 0.99); if (can) add('Fill gas can', () => go(() => Actions.queue(Actions.pumpGas(can)))); }
     const wood = ['bed', 'table', 'chair', 'wardrobe', 'dresser', 'nightstand', 'bookshelf', 'crate', 'woodcrate', 'desk', 'counter', 'pew', 'bench', 'sofa', 'armchair', 'toolcab'];
     if (wood.includes(o.t)) add('Disassemble', () => go(() => Actions.queue(Actions.disassemble(x, y))), { disabled: !(Player.findTag('hammer') || Player.findTag('saw') || Player.findTag('screwdriver')) });
+    if (o.t === 'trap') this.trapOptions(o, x, y, add, go);
     if (o.sx !== undefined) {
       const st = Wd.stairs.find(q => q.x === o.sx && q.y === o.sy);
       if (st) {

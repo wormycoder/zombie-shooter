@@ -440,6 +440,7 @@ const Spr = {
     let key = 'o' + o.t + '|' + o.dir + '|' + (o.part === undefined ? '' : o.part) + '|' + (o.col || '') + '|' + (o.kind || '') + '|' + (o.v === undefined ? '' : o.v);
     if (o.t === 'tree') key += '|' + Math.round((o.sz || 1) * 10) + (o.stump ? 's' : '') + (o.burnt ? 'x' : '') + '|' + (o.kind === 'pine' ? '' : Season.tree) + (Season.snow > 0.3 ? 'S' : '');
     if (o.t === 'bush') key += '|' + Season.tree + (Season.snow > 0.3 ? 'S' : '');
+    if (o.t === 'trap') key += '|' + (o.bait ? 'b' : '') + (o.caught || '');
     if (o.t === 'crop') key = 'ocrop|' + o.crop + '|' + o.stage + '|' + (o.dead ? 1 : 0) + (o.seed ? 'x' : '');
     if (o.t === 'campfire') key += '|' + (o.lit ? 1 : 0);
     if (o.t === 'barrel') key += '|' + Math.round((o.water || 0) * 4);
@@ -638,6 +639,37 @@ const ObjArt = {
     const b = this.inset(o.dir, 0.86, 0.03);
     this.box(b[0], b[1], 0, b[3], b[4], 0.55, '#f2f2f0');
     poly(this.g, [this.P(b[0] + 0.08, b[1] + 0.08, 0.551), this.P(b[3] - 0.08, b[1] + 0.08, 0.551), this.P(b[3] - 0.08, b[4] - 0.08, 0.551), this.P(b[0] + 0.08, b[4] - 0.08, 0.551)], '#c8d8e0');
+  },
+  // small game traps
+  d_trap(o) {
+    const g = this.g;
+    const animal = (u, v, kind) => {
+      const c = this.P(u, v, 0.05);
+      const col = { rabbit: '#8a7a68', squirrel: '#9a5a32', bird: '#4a4a58', mouse: '#7a7068' }[kind] || '#777';
+      const s = kind === 'rabbit' ? 1 : kind === 'squirrel' ? 0.75 : kind === 'bird' ? 0.6 : 0.45;
+      g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.ellipse(c[0] + 2, c[1] + 2, 10 * s, 4 * s, 0, 0, 7); g.fill();
+      g.fillStyle = col; g.beginPath(); g.ellipse(c[0], c[1] - 3 * s, 9 * s, 4.5 * s, -0.2, 0, 7); g.fill();
+      g.beginPath(); g.arc(c[0] + 8 * s, c[1] - 5 * s, 3.5 * s, 0, 7); g.fill();
+      if (kind === 'rabbit') { g.fillRect(c[0] + 7, c[1] - 13, 2, 6); g.fillRect(c[0] + 10, c[1] - 12, 2, 5); g.fillStyle = '#e8e0d8'; g.beginPath(); g.arc(c[0] - 9, c[1] - 3, 2.5, 0, 7); g.fill(); }
+      if (kind === 'squirrel') { g.strokeStyle = col; g.lineWidth = 3; g.beginPath(); g.moveTo(c[0] - 6, c[1] - 3); g.quadraticCurveTo(c[0] - 14, c[1] - 6, c[0] - 9, c[1] - 12); g.stroke(); }
+      if (kind === 'bird') { g.fillStyle = '#2a2a34'; g.beginPath(); g.ellipse(c[0] - 1, c[1] - 4, 6, 2, -0.5, 0, 7); g.fill(); g.fillStyle = '#d0a030'; g.fillRect(c[0] + 10, c[1] - 6, 3, 1.5); }
+      g.fillStyle = 'rgba(120,10,10,0.5)'; g.fillRect(c[0] + 2, c[1] - 1, 3, 2);
+    };
+    if (o.kind === 'snare') {
+      line(g, this.P(0.5, 0.35, 0), this.P(0.5, 0.35, 0.45), '#6a4a2a', 2);
+      g.strokeStyle = '#d8d0b8'; g.lineWidth = 1.2;
+      const c = this.P(0.5, 0.6, 0.02);
+      g.beginPath(); g.ellipse(c[0], c[1], 9, 4.5, 0, 0, 7); g.stroke();
+      line(g, this.P(0.5, 0.35, 0.4), [c[0], c[1] - 4], '#d8d0b8', 1);
+      if (o.bait) { g.fillStyle = '#e07a2a'; g.fillRect(c[0] - 2, c[1] - 2, 4, 3); }
+      if (o.caught) animal(0.5, 0.62, o.caught);
+      return;
+    }
+    const b = [0.22, 0.3, 0, 0.78, 0.7, 0.32];
+    this.box(0.22, 0.3, 0, 0.78, 0.7, 0.32, '#8a6a40');
+    for (let k = 1; k < 4; k++) this.faceRect('S', b, k / 4 - 0.02, k / 4 + 0.02, 0.02, 0.3, '#5a4028');
+    if (o.caught) { this.faceRect('E', b, 0.15, 0.85, 0.03, 0.29, '#6a4a2c', '#3a2a18'); const e = this.P(0.66, 0.5, 0.33); g.fillStyle = { rabbit: '#8a7a68', squirrel: '#9a5a32', bird: '#4a4a58', mouse: '#7a7068' }[o.caught] || '#777'; g.fillRect(e[0] - 3, e[1] - 4, 2, 4); g.fillRect(e[0] + 1, e[1] - 4, 2, 4); }
+    else { this.faceRect('E', b, 0.15, 0.85, 0.03, 0.29, '#1a140e'); if (o.bait) { const e = this.P(0.7, 0.5, 0.05); g.fillStyle = '#e07a2a'; g.fillRect(e[0] - 2, e[1] - 3, 4, 3); } }
   },
   // charred furniture remains
   d_ash(o) {

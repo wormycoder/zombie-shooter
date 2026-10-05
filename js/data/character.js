@@ -8,7 +8,7 @@ const SKILL_NAMES = {
   Axe: 'Axe', LongBlunt: 'Long Blunt', ShortBlunt: 'Short Blunt', LongBlade: 'Long Blade', ShortBlade: 'Short Blade', Spear: 'Spear', Maintenance: 'Maintenance',
   Aiming: 'Aiming', Reloading: 'Reloading',
   Carpentry: 'Carpentry', Cooking: 'Cooking', Farming: 'Farming', FirstAid: 'First Aid', Electrical: 'Electrical', Mechanics: 'Mechanics',
-  Fishing: 'Fishing', Foraging: 'Foraging',
+  Fishing: 'Fishing', Foraging: 'Foraging', Trapping: 'Trapping',
 };
 const SKILL_GROUPS = [
   ['Passive', ['Fitness', 'Strength']],
@@ -16,7 +16,7 @@ const SKILL_GROUPS = [
   ['Combat', ['Axe', 'LongBlunt', 'ShortBlunt', 'LongBlade', 'ShortBlade', 'Spear', 'Maintenance']],
   ['Firearm', ['Aiming', 'Reloading']],
   ['Crafting', ['Carpentry', 'Cooking', 'Farming', 'FirstAid', 'Electrical', 'Mechanics']],
-  ['Survivalist', ['Fishing', 'Foraging']],
+  ['Survivalist', ['Fishing', 'Foraging', 'Trapping']],
 ];
 // xp needed to go from level i to i+1
 const XP_TABLE = [75, 150, 300, 750, 1500, 3000, 4500, 6000, 7500, 9000];

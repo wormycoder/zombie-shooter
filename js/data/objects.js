@@ -57,6 +57,7 @@ const OBJ = {
   railing: { n: 'Stairwell', solid: true, h: 0.9 },
   stairtop: { n: 'Stairs', solid: false, h: 0.3 },
   ash: { n: 'Burnt Remains', solid: false, h: 0.35 },
+  trap: { n: 'Trap', solid: false, h: 0.45 },
 };
 
 // Crop types for farming

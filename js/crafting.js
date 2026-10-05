@@ -12,6 +12,8 @@ const RECIPES = [
   { id: 'spikedbat', n: 'Spiked Baseball Bat', cat: 'Weapons', in: [['BaseballBat', 1], ['Nails', 5]], tools: ['hammer'], out: [['SpikedBat', 1]], time: 6, xp: { Carpentry: 2 } },
   { id: 'molotov', n: 'Molotov Cocktail', cat: 'Weapons', in: [['@emptybottle', 1], ['@gas:0.15', 1], ['RippedSheets', 1]], out: [['Molotov', 1]], time: 4 },
   { id: 'rod', n: 'Crafted Fishing Rod', cat: 'Survival', in: [['TreeBranch', 1], ['RippedSheets', 2], ['Nails', 1]], out: [['FishingRod', 1]], time: 6, xp: { Fishing: 3 } },
+  { id: 'trapbox', n: 'Trap Box', cat: 'Survival', build: 'obj', obj: 'trap', trapKind: 'box', in: [['Plank', 2], ['Nails', 3]], tools: ['hammer'], time: 8, xp: { Carpentry: 2, Trapping: 3 } },
+  { id: 'snare', n: 'Snare Trap', cat: 'Survival', build: 'obj', obj: 'trap', trapKind: 'snare', in: [['Twigs', 2], ['@any:RippedSheets|Sheet', 1]], time: 5, xp: { Trapping: 3 } },
   { id: 'twigs', n: 'Break Branch into Twigs', cat: 'Survival', in: [['TreeBranch', 1]], out: [['Twigs', 3]], time: 3 },
   { id: 'salad', n: 'Salad', cat: 'Cooking', in: [['Lettuce', 1], ['@any:Tomato|Carrots|Cabbage', 1]], tools: ['cut'], out: [['Salad', 1]], time: 4, xp: { Cooking: 3 } },
   { id: 'sandwich', n: 'Sandwich', cat: 'Cooking', in: [['Bread', 1], ['@any:Cheese|PeanutButter|Lettuce|Tomato', 1]], out: [['Sandwich', 1]], time: 3, xp: { Cooking: 2 } },
@@ -136,7 +138,10 @@ const Build = {
   },
   valid(rec, x, y, d) {
     if (!World.inb(x, y)) return false;
-    if (rec.build === 'obj') return !World.obj(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && !G.zombies.some(z => !z.dead && Math.floor(z.x) === x && Math.floor(z.y) === y);
+    if (rec.build === 'obj') {
+      if (rec.obj === 'trap' && (World.room(x, y) >= 0 || ![FL.GRASS, FL.GRASS2, FL.FOREST, FL.DIRT, FL.SAND].includes(World.floor(x, y)))) return false;
+      return !World.obj(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && !G.zombies.some(z => !z.dead && Math.floor(z.x) === x && Math.floor(z.y) === y);
+    }
     if (World.wall(x, y, d)) return false;
     const [[ax, ay], [bx, by]] = World.edgeSides(x, y, d);
     if (!World.inb(ax, ay) || !World.inb(bx, by)) return false;
@@ -147,6 +152,7 @@ const Build = {
       const o = MapGen.mkObj(rec.obj, 'S');
       if (rec.obj === 'campfire') { o.fuel = 30; o.lit = false; }
       if (rec.obj === 'barrel') o.water = 0;
+      if (rec.obj === 'trap') { o.kind = rec.trapKind; o.bait = null; o.caught = null; }
       World.setObj(x, y, o);
     } else {
       World.setWall(x, y, d, rec.wall);

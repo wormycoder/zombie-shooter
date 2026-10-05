@@ -343,6 +343,7 @@ const Game = {
           o.stage = o.grow < 0.25 ? 1 : o.grow < 0.5 ? 2 : o.grow < 0.8 ? 3 : 4;
           if (o.grow > 1.7) o.dead = true;
         } else if (o.t === 'barrel' && rain > 0.05 && World.room(i % Wd.w, (i / Wd.w) | 0) < 0) o.water = Math.min(1, (o.water || 0) + rain * sg / 60 * 0.12);
+        else if (o.t === 'trap') this.trapTick(o, i, sg);
         else if (o.t === 'bush' && o.berryDay !== undefined && this.day() - o.berryDay >= 3 && Season.doy >= 150 && Season.doy < 300) { o.berries = true; delete o.berryDay; }
       }
       for (const g of Wd.powerGens) if (g.on) { g.fuel -= sg / (60 * 14); if (g.fuel <= 0) { g.fuel = 0; g.on = false; } else Noise.emit(g.x + 0.5, g.y + 0.5, 16, 'gen'); }
@@ -358,6 +359,28 @@ const Game = {
       if (!src && radio) src = { x: p.x, y: p.y, radio: true };
       if (src) this.broadcast(src);
     }
+  },
+  // small game wanders into baited traps, mostly at dawn and dusk, away from people
+  trapTick(o, i, sg) {
+    if (!o.bait || o.caught) return;
+    const x = i % Wd.w, y = (i / Wd.w) | 0, p = G.player;
+    const h = this.hour();
+    let rate = o.kind === 'snare' ? 0.017 : 0.014; // per hour
+    if (World.floor(x, y) === FL.FOREST) rate *= 1.7;
+    let nearHouse = false;
+    for (let yy = y - 4; yy <= y + 4 && !nearHouse; yy += 2) for (let xx = x - 4; xx <= x + 4; xx += 2) if (World.room(xx, yy) >= 0) { nearHouse = true; break; }
+    if (nearHouse) rate *= 0.35;
+    rate *= (h > 5 && h < 8) || (h > 17 && h < 20.5) ? 1.6 : (h > 10 && h < 16) ? 0.6 : 1;
+    if (p && !p.dead && World.lvDist(p.x, p.y, x + 0.5, y + 0.5) < 14) rate *= 0.1;
+    rate *= 1 + Player.skill('Trapping') * 0.12;
+    if (Season.tree === 'b' || Season.snow > 0.3) rate *= 0.5;
+    const bq = { Worms: 1.2, PeanutButter: 1.4, Carrots: 1.3, Cabbage: 1.2, Lettuce: 1.1, Apple: 1.1, Corn: 1.2, Insects: 1.1 }[o.bait] || 1;
+    rate *= bq;
+    // the bait itself goes off after a couple of days
+    if (G.time - (o.baitT || G.time) > 2880 && R.chance(sg / 600)) { o.bait = null; return; }
+    if (!R.chance(Math.min(0.5, rate * sg / 60))) return;
+    const tbl = o.kind === 'snare' ? [['rabbit', 45], ['squirrel', 25], ['bird', 15], ['mouse', 15]] : [['rabbit', 40], ['squirrel', 30], ['mouse', 20], ['bird', 10]];
+    o.caught = R.weighted(tbl); o.caughtT = G.time; o.bait = null;
   },
   broadcast(src) {
     const d = this.day(), h = this.hour();
@@ -574,6 +597,7 @@ const Save = {
     const p = s.player;
     p.inCar = p.inCar ? G.cars.find(c => c.id === p.inCar) || null : null;
     p.action = null; p.queue = []; p.halo = []; p.fovT = 0;
+    for (const sk in SKILL_NAMES) if (!p.skills[sk]) p.skills[sk] = { lv: 0, xp: 0 };
     G.player = p;
     G.speed = 1; G.paused = false; G.corpse = false; G.build = null; G.hover = null;
     Combat.projs = []; Combat.sources = []; Fx.parts = []; Fx.fires = []; Fx.floats = [];
