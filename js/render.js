@@ -911,14 +911,47 @@ const Fx = {
     }
     ctx.globalAlpha = 1;
   },
+  // flames: a few pre-rendered flickering frames plus an additive glow
+  flameFrames: null, glow: null,
+  initFlames() {
+    this.flameFrames = [];
+    for (let f = 0; f < 10; f++) {
+      const c = mkCanvas(48, 64), g = c.getContext('2d');
+      const x = 24, y = 60, t = f * 0.63;
+      const tongue = (ox, h, wdt, c0, c1) => {
+        const gr = g.createLinearGradient(0, y, 0, y - h);
+        gr.addColorStop(0, c0); gr.addColorStop(1, c1);
+        g.fillStyle = gr;
+        g.beginPath(); g.moveTo(x + ox - wdt, y); g.bezierCurveTo(x + ox - wdt * 1.1, y - h * 0.45, x + ox - wdt * 0.2, y - h * 0.7, x + ox + Math.sin(t * 3 + ox) * 2, y - h);
+        g.bezierCurveTo(x + ox + wdt * 0.3, y - h * 0.65, x + ox + wdt * 1.1, y - h * 0.4, x + ox + wdt, y); g.closePath(); g.fill();
+      };
+      for (let k = 0; k < 5; k++) {
+        const ph = t * 7 + k * 1.7;
+        tongue(Math.sin(ph * 1.3 + k) * 3 + (k - 2) * 3.2, 26 + Math.sin(ph) * 9 - Math.abs(k - 2) * 4, 7 - Math.abs(k - 2) * 1.2, 'rgba(255,90,20,0.85)', 'rgba(255,50,10,0)');
+      }
+      for (let k = 0; k < 3; k++) {
+        const ph = t * 9 + k * 2.3;
+        tongue(Math.sin(ph) * 2.5 + (k - 1) * 3, 17 + Math.sin(ph * 1.7) * 5, 4.5, 'rgba(255,215,90,0.95)', 'rgba(255,150,40,0)');
+      }
+      tongue(Math.sin(t * 5) * 1.5, 9 + Math.sin(t * 11) * 2, 3.2, 'rgba(255,250,220,0.95)', 'rgba(255,230,150,0)');
+      this.flameFrames.push(c);
+    }
+    const c = mkCanvas(64, 64), g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,150,50,0.5)'); gr.addColorStop(0.5, 'rgba(255,100,30,0.16)'); gr.addColorStop(1, 'rgba(255,80,20,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    this.glow = c;
+  },
   drawFlame(ctx, x, y, t, sc) {
     sc = sc || 1;
-    for (let k = 0; k < 5; k++) {
-      const ph = t * 7 + k * 1.7;
-      const h = (14 + Math.sin(ph) * 5) * sc, wdt = (6 - k * 0.6) * sc;
-      const ox = Math.sin(ph * 1.3 + k) * 3 * sc + (k - 2) * 3 * sc;
-      ctx.fillStyle = k < 2 ? 'rgba(255,120,30,0.75)' : k < 4 ? 'rgba(255,190,60,0.8)' : 'rgba(255,240,170,0.9)';
-      ctx.beginPath(); ctx.moveTo(x + ox - wdt, y); ctx.quadraticCurveTo(x + ox - wdt * 0.5, y - h * 0.6, x + ox, y - h); ctx.quadraticCurveTo(x + ox + wdt * 0.5, y - h * 0.6, x + ox + wdt, y); ctx.closePath(); ctx.fill();
-    }
+    if (!this.flameFrames) this.initFlames();
+    const fr = this.flameFrames[Math.floor(t * 13) % 10 < 0 ? 0 : Math.floor(t * 13) % 10];
+    const op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    const gs = 44 * sc * (0.9 + Math.sin(t * 17) * 0.08);
+    ctx.drawImage(this.glow, x - gs, y - 10 * sc - gs * 0.75, gs * 2, gs * 1.5);
+    ctx.globalCompositeOperation = op;
+    const w = 24 * sc, h = 32 * sc;
+    ctx.drawImage(fr, x - w, y - h * 1.88, w * 2, h * 2);
   },
 };
