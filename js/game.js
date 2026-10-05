@@ -16,6 +16,7 @@ const SANDBOX_OPTS = {
   utilities: { n: 'Power & water shutoff', opts: [['Instant', 0], ['Within a week', 1], ['Within two weeks', 2], ['Within a month', 3], ['Never', 4]], def: 2 },
   start: { n: 'Start time', opts: [['7 AM', 7], ['9 AM', 9], ['Noon', 12], ['5 PM', 17], ['9 PM', 21], ['2 AM', 2]], def: 1 },
   fire: { n: 'Fire spread', opts: [['On', 1], ['Off', 0]], def: 0 },
+  month: { n: 'Start month', opts: [['July (summer)', 7], ['September', 9], ['October (autumn colours)', 10], ['November', 11], ['December (winter)', 12], ['January (deep winter)', 1], ['April (spring)', 4]], def: 0 },
 };
 const SANDBOX_PRESETS = {
   Apocalypse: { pop: 2, speed: 0, day: 1, loot: 2, utilities: 2, start: 1 },
@@ -50,13 +51,7 @@ const SHOWS = [
 const Game = {
   day() { return Math.floor(G.time / 1440); },
   hour() { return (G.time % 1440) / 60; },
-  dateStr() {
-    let d = 9 + this.day(), m = 7;
-    const ml = { 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
-    while (d > (ml[m] || 30)) { d -= ml[m] || 30; m++; }
-    const mn = ['', '', '', '', '', '', '', 'July', 'August', 'September', 'October', 'November', 'December'][m] || 'Month';
-    return mn + ' ' + d + ', 1993';
-  },
+  dateStr() { return Season.dateStr(); },
   timeStr() {
     const h = Math.floor(this.hour()), mi = Math.floor(G.time % 60);
     return U.pad2(h) + ':' + U.pad2(mi);
@@ -123,7 +118,15 @@ const Game = {
     const util = [[0, 1], [3, 7], [6, 13], [10, 30], [1e5, 1e5]][G.sb.utilities];
     G.events = { powerOff: false, waterOff: false, powerAt: (R.int(util[0], util[1]) * 1440 + R.int(6, 20) * 60), waterAt: (R.int(Math.max(0, util[0] - 1), Math.max(0, util[1] - 2)) * 1440 + R.int(6, 20) * 60), heliAt: (R.int(5, 8) * 1440 + R.int(9, 15) * 60), heli: null, metaAt: G.time + R.int(30, 120), heliDone: false };
     if (G.sb.utilities === 0) { G.events.powerAt = G.time + R.int(60, 600); G.events.waterAt = G.time + R.int(60, 600); }
-    G.weather = { rain: 0, target: 0, fog: 0, fogT: 0, temp: 24, next: G.time + R.int(180, 600), storm: false, thunderT: 0 };
+    G.weather = { rain: 0, target: 0, fog: 0, fogT: 0, temp: 24, next: G.time + R.int(180, 600), storm: false, thunderT: 0, snow: 0, tOff: 0 };
+    // the season we start in shapes the world: snow cover, frozen fields, berries
+    const mo = G.sb.month || 7;
+    if (mo === 12 || mo === 1 || mo === 2) G.weather.snow = R.f(0.55, 0.9);
+    for (const o of w.obj) {
+      if (!o) continue;
+      if (o.t === 'crop' && o.crop) { if (mo >= 11 || mo <= 3) o.dead = true; else if (mo >= 9) { o.stage = 4; o.grow = 1.05; } else if (mo <= 5) { o.stage = 1; o.grow = 0.1; } }
+      if (o.t === 'bush' && (mo >= 11 || mo <= 5)) o.berries = false;
+    }
     G.speed = 1; G.paused = false;
     Render.cam.x = vxOf(sx); Render.cam.y = sy; Render.cam.z = sx >= LV.W0 ? WALL_H : 0;
     for (const it of p.inv) void it;
@@ -241,8 +244,10 @@ const Game = {
   },
   updateLight(dt) {
     const h = this.hour();
+    Season.update();
+    const sr = Season.sunrise(), ss = Season.sunset();
     let a;
-    if (h < 5.3 || h >= 22) a = 0; else if (h < 7) a = (h - 5.3) / 1.7; else if (h < 20.4) a = 1; else a = 1 - (h - 20.4) / 1.6;
+    if (h < sr - 0.8 || h >= ss + 1.2) a = 0; else if (h < sr + 0.9) a = (h - (sr - 0.8)) / 1.7; else if (h < ss - 0.4) a = 1; else a = 1 - (h - (ss - 0.4)) / 1.6;
     let amb = 0.07 + 0.93 * U.smooth(U.clamp(a, 0, 1));
     amb *= 1 - G.weather.rain * 0.28 - G.weather.fog * 0.1;
     G.light.flash = Math.max(0, G.light.flash - dt * 3);
@@ -326,13 +331,15 @@ const Game = {
         }
         else if (o.t === 'crop' && o.crop && !o.dead) {
           const cd = CROPS[o.crop];
+          const outside = World.room(i % Wd.w, (i / Wd.w) | 0) < 0;
+          if (outside && G.weather.temp < -1 && R.chance(0.5)) { o.dead = true; continue; }
           if (World.room(i % Wd.w, (i / Wd.w) | 0) < 0 && rain > 0.1) o.water = Math.min(1, (o.water || 0) + rain * sg / 60 * 0.5);
           o.water = Math.max(0, (o.water || 0) - sg / 1440 * 0.45);
-          o.grow = (o.grow || 0) + sg / (cd.days * 1440) * (o.water > 0.12 ? 1 : 0.1);
+          o.grow = (o.grow || 0) + sg / (cd.days * 1440) * (o.water > 0.12 ? 1 : 0.1) * (G.weather.temp < 8 ? 0.3 : 1);
           o.stage = o.grow < 0.25 ? 1 : o.grow < 0.5 ? 2 : o.grow < 0.8 ? 3 : 4;
           if (o.grow > 1.7) o.dead = true;
         } else if (o.t === 'barrel' && rain > 0.05 && World.room(i % Wd.w, (i / Wd.w) | 0) < 0) o.water = Math.min(1, (o.water || 0) + rain * sg / 60 * 0.12);
-        else if (o.t === 'bush' && o.berryDay !== undefined && this.day() - o.berryDay >= 3) { o.berries = true; delete o.berryDay; }
+        else if (o.t === 'bush' && o.berryDay !== undefined && this.day() - o.berryDay >= 3 && Season.doy >= 150 && Season.doy < 300) { o.berries = true; delete o.berryDay; }
       }
       for (const g of Wd.powerGens) if (g.on) { g.fuel -= sg / (60 * 14); if (g.fuel <= 0) { g.fuel = 0; g.on = false; } else Noise.emit(g.x + 0.5, g.y + 0.5, 16, 'gen'); }
     }
@@ -397,6 +404,7 @@ const Weather = {
       else if (r < 0.88) { w.target = R.f(0.25, 0.6); w.storm = false; }
       else { w.target = R.f(0.75, 1); w.storm = true; }
       w.next = G.time + R.int(90, 480);
+      w.tOff = R.f(-3.5, 3.5);
       const h = Game.hour();
       if (h > 4 && h < 9 && R.chance(0.35)) w.fogT = R.f(0.3, 0.8); else w.fogT = 0;
     }
@@ -404,7 +412,12 @@ const Weather = {
     w.fog += (w.fogT - w.fog) * Math.min(1, gm * 0.02);
     if (Game.hour() > 10) w.fogT = 0;
     const h = Game.hour();
-    w.temp = 24 + 7 * Math.sin((h - 9) / 24 * Math.PI * 2) - w.rain * 5;
+    Season.doy = Season.date().doy;
+    w.temp = Season.temp(h) + (w.tOff || 0) - w.rain * 4;
+    // snow cover builds while it snows and melts above freezing
+    if (w.snow === undefined) w.snow = 0;
+    if (w.rain > 0.03 && w.temp < 1) w.snow = Math.min(1, w.snow + w.rain * gm * 0.005);
+    else if (w.snow > 0 && w.temp > 1) w.snow = Math.max(0, w.snow - ((w.temp - 1) * 0.0007 + w.rain * 0.004) * gm);
     if (w.storm && w.rain > 0.6) {
       w.thunderT -= dt;
       if (w.thunderT <= 0) {
@@ -413,7 +426,7 @@ const Weather = {
         setTimeout(() => Sfx.play('thunder'), R.f(300, 2500) / Math.max(1, G.speed));
       }
     }
-    Sfx.rain(w.rain, G.player && !World.outdoor(G.player.x, G.player.y));
+    Sfx.rain(w.temp < 1 ? w.rain * 0.15 : w.rain, G.player && !World.outdoor(G.player.x, G.player.y));
     this.fireT = (this.fireT || 0) - dt;
     if (this.fireT <= 0) { this.fireT = 0.25; const p = G.player; Sfx.fire(p && !p.dead && Wd.fire && Wd.fire.size ? Fire.near(p.x, p.y, 7) : 0); }
   },
@@ -421,21 +434,38 @@ const Weather = {
     const w = G.weather;
     const p = G.player;
     if (w.fog > 0.02) { ctx.fillStyle = 'rgba(170,178,186,' + (w.fog * 0.35 * Math.max(0.3, G.light.amb)).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
-    if (w.rain < 0.03) { this.drops.length = 0; return; }
     const indoor = p && !World.outdoor(p.x, p.y) && !p.inCar;
-    const n = Math.floor(w.rain * 260);
-    while (this.drops.length < n) this.drops.push({ x: Math.random() * W, y: Math.random() * H, l: R.f(10, 22), v: R.f(700, 1000) });
-    if (this.drops.length > n) this.drops.length = n;
-    ctx.strokeStyle = 'rgba(170,190,215,' + ((indoor ? 0.12 : 0.32) * (0.4 + G.light.amb * 0.6)).toFixed(3) + ')';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
     const sp = Math.min(dt, 0.05);
-    for (const d of this.drops) {
-      d.y += d.v * sp; d.x -= d.v * sp * 0.18;
-      if (d.y > H) { d.y = -20; d.x = Math.random() * (W + 100); }
-      ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.l * 0.18, d.y - d.l);
+    if (w.rain < 0.03) this.drops.length = 0;
+    else if (w.temp < 1) {
+      // snowfall: slow drifting flakes
+      const n = Math.floor(w.rain * 320);
+      while (this.drops.length < n) this.drops.push({ x: Math.random() * W, y: Math.random() * H, l: R.f(1.2, 2.8), v: R.f(40, 90), ph: R.f(0, 6) });
+      if (this.drops.length > n) this.drops.length = n;
+      ctx.fillStyle = 'rgba(240,244,250,' + ((indoor ? 0.25 : 0.8) * (0.45 + G.light.amb * 0.55)).toFixed(3) + ')';
+      const t = performance.now() / 1000;
+      for (const d of this.drops) {
+        if (d.ph === undefined) d.ph = R.f(0, 6);
+        d.y += d.v * sp * 0.6; d.x += Math.sin(t * 1.3 + d.ph) * 18 * sp - 12 * sp;
+        if (d.y > H) { d.y = -5; d.x = Math.random() * (W + 60); }
+        if (d.x < -10) d.x = W + 5;
+        ctx.fillRect(d.x, d.y, d.l, d.l);
+      }
+    } else {
+      const n = Math.floor(w.rain * 260);
+      while (this.drops.length < n) this.drops.push({ x: Math.random() * W, y: Math.random() * H, l: R.f(10, 22), v: R.f(700, 1000) });
+      if (this.drops.length > n) this.drops.length = n;
+      ctx.strokeStyle = 'rgba(170,190,215,' + ((indoor ? 0.12 : 0.32) * (0.4 + G.light.amb * 0.6)).toFixed(3) + ')';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const d of this.drops) {
+        if (d.l < 5) d.l = R.f(10, 22), d.v = R.f(700, 1000);
+        d.y += d.v * sp; d.x -= d.v * sp * 0.18;
+        if (d.y > H) { d.y = -20; d.x = Math.random() * (W + 100); }
+        ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.l * 0.18, d.y - d.l);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
     // helicopter shadow & searchlight
     const hl = G.events.heli;
     if (hl) {

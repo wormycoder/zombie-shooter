@@ -168,8 +168,18 @@ const Fire = {
   entities(dt) {
     const m = Wd.fire, W = Wd.w;
     const has = m && m.size;
+    let gone = false;
     for (const z of G.zombies) {
-      if (z.dead) { z.fire = 0; continue; }
+      if (z.dead) {
+        z.fire = 0;
+        // corpses in the flames char and burn away (the classic way to deal with corpse piles)
+        if (has && m.has(Math.floor(z.y) * W + Math.floor(z.x))) {
+          z.charT = (z.charT || 0) + dt;
+          if (z.charT > 5 && !z.charred) { z.charred = true; z.look = Object.assign({}, z.look, { skin: '#2a2420', shirt: '#2a2420', pants: '#221c18', jacket: z.look.jacket ? '#2a2420' : null, hair: '#1a1410' }); }
+          if (z.charT > 14) { z.gone = true; gone = true; Fx.scorch(z.x, z.y, 1.2); }
+        }
+        continue;
+      }
       if (has && m.has(Math.floor(z.y) * W + Math.floor(z.x)) && !z.fire) z.fire = R.f(14, 22);
       if (!z.fire) continue;
       z.fire = Math.max(0, z.fire - dt);
@@ -181,6 +191,7 @@ const Fire = {
         if (R.chance(0.35)) this.ignite(Math.floor(z.x), Math.floor(z.y), 0.3);
       }
     }
+    if (gone) { G.zombies = G.zombies.filter(z => !z.gone); Zombie.rebuildGrid(); }
     const p = G.player;
     if (!p || p.dead) return;
     const e = has ? m.get(Math.floor(p.y) * W + Math.floor(p.x)) : null;

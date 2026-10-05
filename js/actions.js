@@ -442,10 +442,13 @@ const Actions = {
       if (z.day !== Game.day()) { z.n = 0; z.day = Game.day(); }
       Wd.forage.set(zk, z);
       const sk = Player.skill('Foraging') + (Player.hasTrait('outdoorsman') ? 1 : 0) + (p.occ === 'ranger' ? 1 : 0);
-      if (z.n >= 6 || !R.chance(0.3 + sk * 0.06)) { Player.say("Didn't find anything.", '#ccc'); Player.xp('Foraging', 1); return; }
+      // the woods are bare in winter
+      const st = Season.tree, winter = st === 'b' || Season.snow > 0.3, autumn = st === 'y' || st === 'a' || st === 's';
+      if (z.n >= 6 || !R.chance((0.3 + sk * 0.06) * (winter ? 0.45 : 1))) { Player.say(winter ? 'Nothing but frozen ground.' : "Didn't find anything.", '#ccc'); Player.xp('Foraging', 1); return; }
       z.n++;
       const forest = World.floor(x, y) === FL.FOREST;
-      const tbl = forest ? [['Mushrooms', 3], ['StrangeMushrooms', 2], ['Berries', 3], ['Worms', 3], ['Insects', 2], ['Twigs', 4], ['TreeBranch', 3], ['Stone', 2]] : [['Worms', 4], ['Insects', 3], ['Twigs', 3], ['Stone', 3], ['Berries', 1], ['TreeBranch', 1]];
+      let tbl = forest ? [['Mushrooms', autumn ? 6 : 3], ['StrangeMushrooms', 2], ['Berries', 3], ['Worms', 3], ['Insects', 2], ['Twigs', 4], ['TreeBranch', 3], ['Stone', 2]] : [['Worms', 4], ['Insects', 3], ['Twigs', 3], ['Stone', 3], ['Berries', 1], ['TreeBranch', 1]];
+      if (winter) tbl = [['Twigs', 5], ['TreeBranch', 4], ['Stone', 3], ['Mushrooms', 0.5]];
       const n = R.int(1, sk >= 4 ? 3 : 2);
       const found = [];
       for (let k = 0; k < n; k++) { const id = R.weighted(tbl); Player.addItem(Items.make(id)); found.push(ITEMS[id].n); }

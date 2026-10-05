@@ -150,6 +150,15 @@ const Player = {
     const b = Wd.buildings[f.b];
     return !!this.find(it => it.id === 'HouseKey' && it.keyId === (b ? b.keyId : -1));
   },
+  nearHeat() {
+    const p = G.player, cx = Math.floor(p.x), cy = Math.floor(p.y);
+    if (Fire.near(p.x, p.y, 2) > 0.3) return true;
+    for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+      const o = World.obj(x, y);
+      if (o && (((o.t === 'campfire' || o.t === 'bbq') && o.lit) || (o.t === 'stove' && o.on && World.hasPower(x, y)))) return true;
+    }
+    return false;
+  },
   flashlight() {
     const p = G.player;
     if (!p || p.inCar) return false;
@@ -511,11 +520,15 @@ const Player = {
     if (st.stress > 0.6) st.unhappy = Math.min(100, st.unhappy + gh * 1.5);
     // wetness & temperature
     const rain = G.weather.rain;
-    if (!indoors && rain > 0.05 && !p.inCar) st.wet = Math.min(1, st.wet + gh * rain * 0.9);
+    if (!indoors && rain > 0.05 && !p.inCar) st.wet = Math.min(1, st.wet + gh * rain * (G.weather.temp < 1 ? 0.25 : 0.9));
     else st.wet = Math.max(0, st.wet - gh * (indoors ? 0.2 : 0.1));
     let ins = 0;
     for (const it of p.inv) if (it.worn && ITEMS[it.id].ins) ins += ITEMS[it.id].ins;
-    const amb = indoors ? Math.max(G.weather.temp, 19) : G.weather.temp;
+    // unheated houses get cold in winter; fires and running stoves warm you up
+    let amb = G.weather.temp;
+    if (indoors) amb = World.hasPower(Math.floor(p.x), Math.floor(p.y)) ? Math.max(amb, 20) : Math.min(22, amb + 7);
+    if (p.inCar && p.inCar.engine) amb = Math.max(amb, 21);
+    if (amb < 18 && this.nearHeat()) amb = Math.min(24, amb + 14);
     const thermal = amb + ins * 12 + (active ? 8 : 0) - st.wet * 10;
     let target = 37;
     if (thermal < 14) target = 37 - (14 - thermal) * 0.12;

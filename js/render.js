@@ -135,6 +135,8 @@ const Render = {
     // ---------------- floor pass
     const W_ = w.w;
     const t = performance.now() / 1000;
+    const gs = Season.grass === 'g' ? '' : Season.grass;
+    const snowA = Math.min(1, Season.snow * 1.15) * 0.94;
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const X = (x - y) * HTW, Y = (x + y) * HTH;
@@ -143,7 +145,7 @@ const Render = {
         const f = w.floor[i];
         let vx = (x * 7 + y * 13) & 3;
         if (f === FL.WATER || f === FL.DEEPWATER) vx = (vx + Math.floor(t * 1.5 + (x + y) * 0.3)) & 3;
-        const rec = Spr.floor(f, w.fvar[i], vx);
+        const rec = Spr.floor(f, w.fvar[i], vx, gs && (f === FL.GRASS || f === FL.GRASS2 || f === FL.FOREST) ? gs : '');
         ctx.drawImage(rec.c, X - rec.ax, Y - rec.ay);
         const dc = w.deco[i];
         if (dc) { const r2 = Spr.deco(dc); ctx.drawImage(r2.c, X - r2.ax, Y - r2.ay); }
@@ -152,8 +154,13 @@ const Render = {
             const nx = x + FR_DX[dn], ny = y + FR_DY[dn];
             if (nx < 0 || ny < 0 || nx >= GW || ny >= w.h) continue;
             const nf = w.floor[ny * W_ + nx];
-            if (nf === FL.GRASS || nf === FL.GRASS2 || nf === FL.FOREST) { const r3 = Spr.fringe(dn, nf, vx); ctx.drawImage(r3.c, X - r3.ax, Y - r3.ay); }
+            if (nf === FL.GRASS || nf === FL.GRASS2 || nf === FL.FOREST) { const r3 = Spr.fringe(dn, nf, vx, gs); ctx.drawImage(r3.c, X - r3.ax, Y - r3.ay); }
           }
+        }
+        if (snowA > 0.02 && w.room[i] < 0 && f !== FL.WATER && f !== FL.DEEPWATER) {
+          ctx.globalAlpha = f === FL.ASPHALT || f === FL.PARKING ? snowA * 0.68 : f === FL.SIDEWALK ? snowA * 0.85 : snowA;
+          const rs = Spr.snow(vx); ctx.drawImage(rs.c, X - rs.ax, Y - rs.ay);
+          ctx.globalAlpha = 1;
         }
       }
     }
@@ -699,7 +706,8 @@ const Render = {
       if (pointInPoly(q, quad) || (pointInPoly(q, quad2))) alpha = 0.28;
     }
     if (alpha < 1) ctx.globalAlpha = alpha;
-    const rc = b.roofCol;
+    const sq = Math.round(Season.snow * 8) / 8;
+    const rc = sq > 0 ? Col.mix(b.roofCol, '#e4eaf0', Math.min(0.85, sq * 1.1)) : b.roofCol;
     if (b.roof === 'flat') {
       poly(ctx, [P(b.x0, b.y0, H), P(b.x1 + 1, b.y0, H), P(b.x1 + 1, b.y1 + 1, H), P(b.x0, b.y1 + 1, H)], Col.shade(rc, s));
       // parapet

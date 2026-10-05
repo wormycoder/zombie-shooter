@@ -58,7 +58,9 @@ window.addEventListener('load', () => {
   const q = new URLSearchParams(location.search);
   if (q.has('autostart')) {
     // quick-start for testing
-    Game.newGame({ name: 'Test Survivor', occ: q.get('occ') || 'police', traits: ['keenhearing'], look: { female: false, skin: SKIN_TONES[1], hair: HAIR_COLS[2], hairStyle: 'short', shirtCol: '#2a4a8a', pantsCol: '#3a5a8a' } });
+    const sb = sandboxValues({});
+    if (q.has('month')) sb.month = +q.get('month');
+    Game.newGame({ sb, name: 'Test Survivor', occ: q.get('occ') || 'police', traits: ['keenhearing'], look: { female: false, skin: SKIN_TONES[1], hair: HAIR_COLS[2], hairStyle: 'short', shirtCol: '#2a4a8a', pantsCol: '#3a5a8a' } });
     UI.startGame();
     if (q.has('night')) G.time = 23 * 60;
     if (q.has('rain')) { G.weather.target = 1; G.weather.rain = 1; G.weather.storm = true; }
