@@ -230,7 +230,8 @@ const Sfx = {
     const t = this.ctx.currentTime;
     this.rainSrc.g.gain.setTargetAtTime(level * (indoor ? 0.12 : 0.3), t, 0.5);
     this.rainSrc.fl.frequency.setTargetAtTime(indoor ? 900 : 3500, t, 0.5);
-    this.windSrc.g.gain.setTargetAtTime(0.06 + level * 0.12, t, 1);
+    const cold = typeof Season !== 'undefined' && (Season.tree === 'b' || Season.snow > 0.3);
+    this.windSrc.g.gain.setTargetAtTime(0.06 + level * 0.12 + (cold ? 0.07 : 0), t, 1);
   },
   // roar and crackle of nearby fires (level: summed intensity nearby)
   fire(level) {
@@ -365,13 +366,22 @@ const Music = {
       if (this.tension < 0.4 && !(p && p.asleep)) { const len = this.phrase(); this.nextPhrase = this.t + len + R.f(18, 45); }
       else this.nextPhrase = this.t + 5;
     }
-    // ambience: birds by day, crickets by night
+    // ambience follows the season: songbirds in spring and summer, cicadas on hot days,
+    // crickets on warm nights, crows and owls through the cold months
     this.ambT -= dt;
     if (this.ambT <= 0 && G.mode === 'play' && p && World.outdoor(p.x, p.y) && G.weather.rain < 0.3) {
       this.ambT = R.f(1.5, 6);
       const t = c.currentTime;
-      if (G.light.amb > 0.6) { const f = R.f(2500, 4200); for (let k = 0; k < R.int(2, 5); k++) Sfx.tn(t + k * 0.12, 0.08, 'sine', f, f * R.f(1.1, 1.4), 0.025, R.f(-0.8, 0.8)); }
-      else if (G.light.amb < 0.3) { for (let k = 0; k < R.int(3, 8); k++) Sfx.tn(t + k * 0.06, 0.03, 'sine', 4700, 4600, 0.012, R.f(-0.8, 0.8)); }
+      const st = Season.tree, winter = st === 'b' || Season.snow > 0.3, autumn = st === 'y' || st === 'a' || st === 's', temp = G.weather.temp;
+      if (G.light.amb > 0.6) {
+        const birds = winter ? 0 : st === 'p' ? 1 : autumn ? 0.35 : 0.8;
+        if (R.chance(birds)) { const f = R.f(2500, 4200); for (let k = 0; k < R.int(2, 5); k++) Sfx.tn(t + k * 0.12, 0.08, 'sine', f, f * R.f(1.1, 1.4), 0.025, R.f(-0.8, 0.8)); }
+        else if ((winter || autumn) && R.chance(0.3)) { const pan = R.f(-0.8, 0.8); for (let k = 0; k < R.int(1, 3); k++) Sfx.nz(t + k * 0.32, 0.18, 'bandpass', R.f(800, 1000), 4, 0.06, pan, { a: 0.02 }); }
+        if (!winter && !autumn && temp > 27 && R.chance(0.3)) Sfx.nz(t, R.f(2, 4), 'bandpass', 5200, 6, 0.018, R.f(-0.6, 0.6), { a: 0.6 });
+      } else if (G.light.amb < 0.3) {
+        if ((st === 'g' || st === 'y') && temp > 10) { for (let k = 0; k < R.int(3, 8); k++) Sfx.tn(t + k * 0.06, 0.03, 'sine', 4700, 4600, 0.012, R.f(-0.8, 0.8)); }
+        else if (R.chance(0.2)) { const pan = R.f(-0.8, 0.8); Sfx.tn(t, 0.35, 'sine', 390, 370, 0.03, pan); Sfx.tn(t + 0.45, 0.5, 'sine', 380, 350, 0.03, pan); }
+      }
     }
     // heartbeat when hurt / panicking
     if (p && !p.dead && (p.st.panic > 65 || p.health < 30)) { this.hbT = (this.hbT || 0) - dt; if (this.hbT <= 0) { this.hbT = p.health < 30 ? 0.8 : 1.0; Sfx.play('heartbeat'); } }
