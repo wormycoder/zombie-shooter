@@ -2,6 +2,10 @@
 // ---------------------------------------------------------------------------
 // Isometric renderer
 // ---------------------------------------------------------------------------
+// extension registries: DECAL_ART[kind] = (ctx, d, X, Y) draws a decal with string kind d.k;
+// FLOOR_HOOKS functions (ctx, minX, minY, maxX, maxY) draw on the ground after decals.
+const DECAL_ART = {};
+const FLOOR_HOOKS = [];
 const Render = {
   cam: { x: 120, y: 120, z: 0, zoom: 1.25, tz: 1.25 },
   init(cv) {
@@ -175,6 +179,8 @@ const Render = {
       this.drawDecal(ctx, d, 0);
     }
     ctx.globalAlpha = 1;
+    // ground-level overlays from other modules (tyre marks etc.), drawn under entities
+    for (const fn of FLOOR_HOOKS) fn(ctx, minX, minY, maxX, maxY);
     // floor items
     for (const [i, arr] of w.items) {
       const x = i % W_, y = (i / W_) | 0;
@@ -348,6 +354,9 @@ const Render = {
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
     const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);
+    // custom decal kinds (string d.k) registered by other modules
+    const da = typeof d.k === 'string' && DECAL_ART[d.k];
+    if (da) { da(ctx, d, X, Y); ctx.globalAlpha = 1; return; }
     const rec = d.k ? Spr.scorch(d.v) : Spr.blood(d.v);
     ctx.globalAlpha = U.clamp(1 - d.age / 400, 0.25, 1) * (d.a || 1);
     const s = d.s || 1;

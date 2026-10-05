@@ -8,6 +8,14 @@ const CAR_TYPES = {
   van: { n: 'Van', len: 2.5, wid: 1.15, h: 0.85, cab: [-0.48, 0.36], cabH: 0.75, maxV: 12, acc: 3.5, trunk: 70, cols: ['#e0e0d8', '#3a4a6a', '#8a8a7a', '#5a3a2a'] },
   police: { n: 'Police Car', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 16, acc: 5, trunk: 35, cols: ['#f0f0f0'], lightbar: true },
   firetruck: { n: 'Fire Truck', len: 3.4, wid: 1.25, h: 1.05, cab: [0.18, 0.48], cabH: 0.6, maxV: 10, acc: 2.6, trunk: 60, cols: ['#c02020'], lightbar: true, red: true },
+  hatchback: { n: 'Hatchback', len: 2.0, wid: 1.0, h: 0.7, cab: [-0.42, 0.2], cabH: 0.5, maxV: 14, acc: 4.6, trunk: 25, cols: ['#b03a2a', '#e0d8c8', '#3a5a8a', '#6a8a5a', '#d0a030', '#4a4a50', '#8a8a90'] },
+  wagon: { n: 'Station Wagon', len: 2.5, wid: 1.05, h: 0.72, cab: [-0.44, 0.22], cabH: 0.52, maxV: 14, acc: 4.0, trunk: 55, cols: ['#7a5a3a', '#4a5a4a', '#c8c0a8', '#5a2a2a', '#3a4a6a'] },
+  sports: { n: 'Sports Car', len: 2.25, wid: 1.05, h: 0.56, cab: [-0.28, 0.1], cabH: 0.4, maxV: 21, acc: 7.0, trunk: 12, cols: ['#c01818', '#e8e8e8', '#1a1a1a', '#e0b010', '#1a4ab0'] },
+  suv: { n: 'SUV', len: 2.45, wid: 1.12, h: 0.86, cab: [-0.46, 0.24], cabH: 0.6, maxV: 14, acc: 4.3, trunk: 55, cols: ['#2a2a2a', '#5a6a5a', '#8a2a2a', '#c8c8c0', '#2a3a5a', '#6a5a4a'] },
+  taxi: { n: 'Taxi', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 15, acc: 4.5, trunk: 35, cols: ['#e8c020'] },
+  ambulance: { n: 'Ambulance', len: 2.9, wid: 1.2, h: 1.0, cab: [0.12, 0.44], cabH: 0.5, maxV: 13, acc: 3.4, trunk: 45, cols: ['#f0f0ec'], lightbar: true },
+  bus: { n: 'School Bus', len: 4.6, wid: 1.25, h: 1.15, cab: [-0.48, 0.46], cabH: 0.45, maxV: 9, acc: 2.0, trunk: 30, cols: ['#e8b020'] },
+  army: { n: 'Military Truck', len: 3.1, wid: 1.25, h: 1.0, cab: [0.2, 0.48], cabH: 0.55, maxV: 12, acc: 3.0, trunk: 80, cols: ['#4a5a3a'] },
 };
 let _carId = 1;
 const Vehicles = {
@@ -266,6 +274,8 @@ const Vehicles = {
   },
   // ------------------------------------------------------------------ drawing
   draw(ctx, c) {
+    // detailed renderer lives in carart.js
+    if (typeof CarArt !== 'undefined' && CarArt.draw) { CarArt.draw(ctx, c); return; }
     const T = CAR_TYPES[c.type];
     const s = Math.max(0.12, Render.shadeSmooth(c.x, c.y));
     if (!World.isVis(c.x | 0, c.y | 0) && !World.isVis((c.x + Math.cos(c.a)) | 0, (c.y + Math.sin(c.a)) | 0) && G.player && !G.player.inCar && Render.shadeAt(c.x, c.y) < 0.05) return;
