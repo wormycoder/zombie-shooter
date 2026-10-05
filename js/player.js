@@ -468,7 +468,8 @@ const Player = {
     this.say(PART_NAMES[part] + ': ' + wd.n + '!', '#f66');
     Sfx.play('hurt');
     if (src && src.isZombie !== false && (type === 'bite' || type === 'cut' || type === 'scratch')) {
-      const ch = type === 'bite' ? 1 : type === 'cut' ? 0.25 : 0.07;
+      const tr = G.sb ? G.sb.trans || 0 : 0;
+      const ch = tr === 2 ? 0 : type === 'bite' ? 1 : tr === 1 ? 0 : type === 'cut' ? 0.25 : 0.07;
       if (!p.infection && R.chance(ch)) {
         const prone = this.hasTrait('proneillness') ? 0.8 : 1;
         p.infection = { t: 0, sym: R.f(8, 16) * prone, death: R.f(48, 72) * prone };

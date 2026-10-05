@@ -19,6 +19,7 @@ const Zombie = {
       hairCol: R.pick(HAIR_COLS), skin: Col.mix(R.pick(SKIN_TONES), ZSKIN, 0.5), blood: R.f(0.2, 1),
     };
     z.look = this.computeLook(z);
+    if (G.sb && G.sb.tough) z.hp *= G.sb.tough;
     z.maxhp = z.hp;
     // some of the dead drag a ruined leg
     if (R.chance(0.22)) { z.limp = R.f(0.35, 0.85); z.limpSide = R.chance(0.5) ? 1 : -1; z.speed *= 1 - z.limp * 0.18; }
@@ -347,6 +348,10 @@ const Zombie = {
     const f = World.feat(x, y, d);
     const t = World.wall(x, y, d);
     z.obE = e; z.obTo = [wx + 0.5, wy + 0.5];
+    // clever dead turn handles
+    if (G.sb && G.sb.smart && f && f.k === 'door' && !f.locked && !f.barricade && !f.broken && !f.open && f.style !== 'garage') {
+      f.open = true; Sfx.play('doorOpen', x + 0.5, y + 0.5); z.path = null; return;
+    }
     if (f && (f.k === 'door' || (f.k === 'window' && (f.barricade > 0 || (!f.smashed && !f.open))))) {
       z.st = 'thump'; z.thumpT = R.f(0.3, 1.0);
       return;

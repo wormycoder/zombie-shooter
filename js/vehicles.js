@@ -7,7 +7,7 @@ const CAR_TYPES = {
   pickup: { n: 'Pickup Truck', len: 2.5, wid: 1.1, h: 0.82, cab: [-0.05, 0.3], cabH: 0.58, bed: true, maxV: 14, acc: 4.2, trunk: 50, cols: ['#3a5a3a', '#7a3a2a', '#2a3a5a', '#c8c0a8', '#4a4a4a'] },
   van: { n: 'Van', len: 2.5, wid: 1.15, h: 0.85, cab: [-0.48, 0.36], cabH: 0.75, maxV: 12, acc: 3.5, trunk: 70, cols: ['#e0e0d8', '#3a4a6a', '#8a8a7a', '#5a3a2a'] },
   police: { n: 'Police Car', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 16, acc: 5, trunk: 35, cols: ['#f0f0f0'], lightbar: true },
-  firetruck: { n: 'Fire Truck', len: 3.4, wid: 1.25, h: 1.05, cab: [0.18, 0.48], cabH: 0.6, maxV: 10, acc: 2.6, trunk: 60, cols: ['#c02020'] },
+  firetruck: { n: 'Fire Truck', len: 3.4, wid: 1.25, h: 1.05, cab: [0.18, 0.48], cabH: 0.6, maxV: 10, acc: 2.6, trunk: 60, cols: ['#c02020'], lightbar: true, red: true },
 };
 let _carId = 1;
 const Vehicles = {
@@ -246,6 +246,17 @@ const Vehicles = {
       const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
       this.active = G.cars.filter(c => Math.abs(c.x - px) < 75 && Math.abs(c.y - py) < 75);
     }
+    // sirens wail for miles and pull every zombie that hears them
+    let siren = null, sd = 1e9;
+    for (const c of G.cars) {
+      if (!c.siren) continue;
+      if (!c.engine || c.gas <= 0) { c.siren = false; continue; }
+      c.sirenT = (c.sirenT || 0) - dt;
+      if (c.sirenT <= 0) { c.sirenT = 2; Noise.emit(c.x, c.y, 60, 'alarm'); }
+      const d = U.dist(c.x, c.y, p.inCar ? p.inCar.x : vxOf(p.x), p.inCar ? p.inCar.y : p.y);
+      if (d < sd) { sd = d; siren = c; }
+    }
+    Sfx.siren(siren);
     for (const c of G.cars) {
       if (p && p.inCar === c) continue;
       if (Math.abs(c.v) > 0.01) { this.physics(c, dt, 0); c.v -= Math.sign(c.v) * Math.min(Math.abs(c.v), 3 * dt); }
@@ -306,8 +317,19 @@ const Vehicles = {
     box(L * T.cab[0], L * T.cab[1], -W / 2 + 0.07, W / 2 - 0.07, T.h, T.h + T.cabH, col, col, true);
     if (T.lightbar) {
       const t = performance.now() / 200;
-      const lb = (Math.floor(t) & 1) ? '#ff2020' : '#2040ff';
-      box(-0.12, 0.12, -W / 2 + 0.15, W / 2 - 0.15, T.h + T.cabH, T.h + T.cabH + 0.1, c.engine ? lb : '#606060', c.engine ? lb : '#707070');
+      const lb = T.red ? ((Math.floor(t) & 1) ? '#ff2020' : '#ff9030') : (Math.floor(t) & 1) ? '#ff2020' : '#2040ff';
+      const on = c.siren && c.engine;
+      const lz = T.h + T.cabH;
+      if (T.red) box(L * T.cab[0] + 0.05, L * T.cab[0] + 0.25, -W / 2 + 0.15, W / 2 - 0.15, lz, lz + 0.1, on ? lb : '#802020', on ? lb : '#902020');
+      else box(-0.12, 0.12, -W / 2 + 0.15, W / 2 - 0.15, lz, lz + 0.1, on ? lb : '#606060', on ? lb : '#707070');
+      if (on) {
+        const gp = P(T.red ? L * T.cab[0] + 0.15 : 0, 0, lz + 0.1);
+        const op = ctx.globalCompositeOperation; ctx.globalCompositeOperation = 'lighter';
+        const gr = ctx.createRadialGradient(gp[0], gp[1], 1, gp[0], gp[1], 40);
+        gr.addColorStop(0, (Math.floor(t) & 1) || T.red ? 'rgba(255,40,40,0.5)' : 'rgba(50,80,255,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gp[0], gp[1], 40, 0, 7); ctx.fill();
+        ctx.globalCompositeOperation = op;
+      }
     }
     if (c.type === 'firetruck') box(-L / 2 + 0.1, L * T.cab[0] - 0.1, -W / 2 + 0.15, W / 2 - 0.15, T.h, T.h + 0.15, '#c0c0c0', '#d0d0d0');
     // driver head

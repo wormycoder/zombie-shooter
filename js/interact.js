@@ -170,6 +170,7 @@ const Interact = {
       if (!p.inCar.engine) add(Vehicles.hasKey(p.inCar) ? 'Start engine' : 'Hotwire', () => Vehicles.tryStart(p.inCar));
       else add('Turn off engine', () => { p.inCar.engine = false; });
       add((p.inCar.lightsOn ? 'Headlights off' : 'Headlights on'), () => { p.inCar.lightsOn = !p.inCar.lightsOn; });
+      if (CAR_TYPES[p.inCar.type].lightbar && p.inCar.engine) add(p.inCar.siren ? 'Siren off' : 'Siren on (attracts every zombie for miles)', () => { p.inCar.siren = !p.inCar.siren; });
       UI.showContext(sx, sy, opts, t);
       return;
     }
@@ -469,7 +470,7 @@ const Interact = {
     const p = G.player;
     const go = (fn) => this.goDo(car.x, car.y, fn, 2.4);
     add('Enter vehicle', () => go(() => Vehicles.enter(car)));
-    add(car.trunkOpen ? 'Close trunk' : 'Open trunk', () => go(() => { if (car.locked && !Vehicles.hasKey(car)) { Player.say("It's locked.", '#ccc'); return; } car.trunkOpen = !car.trunkOpen; Sfx.play('door'); if (car.trunkOpen) UI.openLoot('car' + car.id + 'trunk'); }));
+    add(car.trunkOpen ? 'Close trunk' : 'Open trunk', () => go(() => { if (car.locked && !Vehicles.hasKey(car)) { Player.say("It's locked.", '#ccc'); return; } car.trunkOpen = !car.trunkOpen; Sfx.play(car.trunkOpen ? 'doorOpen' : 'doorClose'); if (car.trunkOpen) UI.openLoot('car' + car.id + 'trunk'); }));
     if (car.locked && !car.winBroken) add('Smash window', () => go(() => Vehicles.smashWindow(car)));
     const can = Player.find(i => i.id === 'GasCan' && i.fl > 0.05);
     if (can) add('Refuel with gas can', () => go(() => Actions.queue(Actions.refuelCar(car, can))));

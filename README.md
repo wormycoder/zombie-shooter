@@ -16,9 +16,9 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Inventory with weight, bags, containers, timed actions, drag & drop; loot tables per room/store type
 - Melee & firearms, shoving & stomping, weapon durability, skills & XP, skill books, occupations & traits
 - Barricading, carpentry & building, moving furniture (pick up beds, shelves, fridges... and place them with rotation), crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
-- Drivable cars with keys, hotwiring, fuel, trunks, alarms
+- Drivable cars with keys, hotwiring, fuel, trunks, alarms, crash damage; police car and fire truck sirens that lure every zombie for miles
 - Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
-- Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread
+- Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread, infection transmission, zombie toughness, door-opening zombies
 - Save/load (permadeath)
 
 ## Controls

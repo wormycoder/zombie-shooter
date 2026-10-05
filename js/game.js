@@ -16,6 +16,9 @@ const SANDBOX_OPTS = {
   utilities: { n: 'Power & water shutoff', opts: [['Instant', 0], ['Within a week', 1], ['Within two weeks', 2], ['Within a month', 3], ['Never', 4]], def: 2 },
   start: { n: 'Start time', opts: [['7 AM', 7], ['9 AM', 9], ['Noon', 12], ['5 PM', 17], ['9 PM', 21], ['2 AM', 2]], def: 1 },
   fire: { n: 'Fire spread', opts: [['On', 1], ['Off', 0]], def: 0 },
+  trans: { n: 'Infection', opts: [['Bites & scratches', 0], ['Bites only', 1], ['None', 2]], def: 0 },
+  tough: { n: 'Zombie toughness', opts: [['Fragile', 0.6], ['Normal', 1], ['Tough', 1.6]], def: 1 },
+  smart: { n: 'Zombie cognition', opts: [['Bash doors', 0], ['Open doors', 1]], def: 0 },
   month: { n: 'Start month', opts: [['July (summer)', 7], ['September', 9], ['October (autumn)', 10], ['November', 11], ['December (winter)', 12], ['January', 1], ['April (spring)', 4]], def: 0 },
 };
 const SANDBOX_PRESETS = {

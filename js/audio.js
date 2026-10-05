@@ -266,6 +266,24 @@ const Sfx = {
     this.eng.fl.frequency.setTargetAtTime(250 + Math.abs(car.v) * 40, c.currentTime, 0.1);
     this.eng.g.gain.setTargetAtTime(0.09, c.currentTime, 0.1);
   },
+  // two-tone wail of the nearest active siren
+  siren(c) {
+    if (!this.on) return;
+    const ctx = this.ctx;
+    if (!c) { if (this.sir) this.sir.g.gain.setTargetAtTime(0, ctx.currentTime, 0.2); return; }
+    if (!this.sir) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 900;
+      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.28;
+      const lg = ctx.createGain(); lg.gain.value = 320; lfo.connect(lg); lg.connect(o.frequency);
+      const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 2200;
+      const g = ctx.createGain(); g.gain.value = 0;
+      o.connect(fl); fl.connect(g); g.connect(this.sfxG); o.start(); lfo.start();
+      this.sir = { g };
+    }
+    const p = G.player;
+    const sp = p && p.inCar === c ? { g: 1 } : this.spatial(c.x, c.y, 120);
+    this.sir.g.gain.setTargetAtTime(0.07 * sp.g + 0.004, ctx.currentTime, 0.1);
+  },
   heli(h) {
     if (!this.on) return;
     const c = this.ctx;
