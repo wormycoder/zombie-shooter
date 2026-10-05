@@ -42,27 +42,32 @@ const Spr = {
     const c = mkCanvas(w, h);
     const g = c.getContext('2d');
     draw(g, ax, ay);
-    rec = { c, ax, ay, sh: [] };
+    rec = { c, ax, ay, sil: null };
     this.cache.set(key, rec);
     return rec;
   },
-  // darkened version (s: 0..1 brightness)
-  shaded(rec, s) {
-    const lv = s >= 0.985 ? 24 : Math.max(0, Math.round(s * 24));
-    if (lv >= 24) return rec.c;
-    let c = rec.sh[lv];
-    if (c) return c;
-    c = mkCanvas(rec.c.width, rec.c.height);
-    const g = c.getContext('2d');
-    g.drawImage(rec.c, 0, 0);
-    g.globalCompositeOperation = 'source-atop';
-    const a = 1 - lv / 24;
-    g.fillStyle = 'rgba(3,5,14,' + a.toFixed(3) + ')';
-    g.fillRect(0, 0, c.width, c.height);
-    rec.sh[lv] = c;
-    return c;
+  draw(ctx, rec, sx, sy, s) { this.drawShaded(ctx, rec, sx - rec.ax, sy - rec.ay, s, 1); },
+  // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light)
+  drawShaded(ctx, rec, x, y, s, alpha) {
+    const a = alpha === undefined ? 1 : alpha;
+    if (a < 1) ctx.globalAlpha = a;
+    ctx.drawImage(rec.c, x, y);
+    const dk = 1 - s;
+    if (dk > 0.02) {
+      if (!rec.sil) {
+        const c = mkCanvas(rec.c.width, rec.c.height);
+        const g = c.getContext('2d');
+        g.drawImage(rec.c, 0, 0);
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = 'rgb(3,5,14)';
+        g.fillRect(0, 0, c.width, c.height);
+        rec.sil = c;
+      }
+      ctx.globalAlpha = a * Math.min(1, dk);
+      ctx.drawImage(rec.sil, x, y);
+    }
+    ctx.globalAlpha = 1;
   },
-  draw(ctx, rec, sx, sy, s) { ctx.drawImage(this.shaded(rec, s), sx - rec.ax, sy - rec.ay); },
 
   // ------------------------------------------------------------ floors
   floor(f, v, vx) {

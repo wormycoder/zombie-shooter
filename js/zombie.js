@@ -13,7 +13,7 @@ const Zombie = {
       id: _zid++, x, y, a: R.f(-Math.PI, Math.PI), r: 0.26,
       hp: R.f(1.4, 2.4), st: 'idle', tx: x, ty: y, mem: 0, path: null, pathT: 0,
       think: R.f(0, 0.5), atkT: 0, cd: 0, downT: 0, lie: 0, lieDir: 1, stag: 0, svx: 0, svy: 0,
-      speed: R.f(0.62, 0.95), crawl: false, female, wear,
+      speed: Zombie.rollSpeed(), crawl: false, female, wear,
       va: 0, ph: R.f(0, 6), amp: 0, idleT: R.f(1, 8), groanT: R.f(2, 12), dead: false,
       hair: female ? R.pick(['long', 'ponytail', 'short', 'messy']) : R.pick(['short', 'buzz', 'bald', 'messy', 'short']),
       hairCol: R.pick(HAIR_COLS), skin: Col.mix(R.pick(SKIN_TONES), ZSKIN, 0.5), blood: R.f(0.2, 1),
@@ -21,6 +21,13 @@ const Zombie = {
     z.look = this.computeLook(z);
     z.maxhp = z.hp;
     return z;
+  },
+  rollSpeed() {
+    let s = G.sb ? G.sb.speed : 'shambler';
+    if (s === 'random') s = R.weighted([['shambler', 85], ['fast', 10], ['sprinter', 5]]);
+    if (s === 'fast') return R.f(1.25, 1.65);
+    if (s === 'sprinter') return R.f(2.7, 3.3);
+    return R.f(0.62, 0.95);
   },
   outfit(kind, female) {
     const out = [];
@@ -56,8 +63,9 @@ const Zombie = {
     G.zombies = [];
     const w = Wd;
     const okTile = (x, y) => World.inb(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && U.dist(x, y, avoidX, avoidY) > 22;
+    const pop = G.sb ? G.sb.pop : 1;
     for (const zn of w.zones) {
-      let n = zn.n, tries = 0;
+      let n = Math.round(zn.n * pop), tries = 0;
       while (n > 0 && tries++ < zn.n * 30) {
         const x = R.int(zn.x0, zn.x1), y = R.int(zn.y0, zn.y1);
         if (!okTile(x, y) || World.room(x, y) >= 0) continue;
@@ -71,7 +79,7 @@ const Zombie = {
       }
     }
     for (const b of w.buildings) {
-      let n = b.zIndoor || 0;
+      let n = (b.zIndoor || 0) * pop;
       if (b.isHome) continue;
       while (n > 0) {
         if (n < 1 && !R.chance(n)) break;

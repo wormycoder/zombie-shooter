@@ -55,6 +55,10 @@ const Render = {
     const z = cam.zoom, dpr = this.dpr;
     this.camIX = (cam.x - cam.y) * HTW;
     this.camIY = (cam.x + cam.y) * HTH - 0.8 * ZU;
+    if (p && !p.dead && p.st && p.st.drunk > 0.25) {
+      const t2 = performance.now() / 1000, k = (p.st.drunk - 0.25) * 28;
+      this.camIX += Math.sin(t2 * 0.9) * k; this.camIY += Math.sin(t2 * 0.7 + 1) * k * 0.6;
+    }
     const ox = this.W / 2 - this.camIX * z, oy = this.H / 2 - this.camIY * z;
     this.ox = ox; this.oy = oy;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -340,9 +344,7 @@ const Render = {
     let s = this.shadeAt(x, y);
     const so = d ? this.shadeAt(x - 1, y) : this.shadeAt(x, y - 1);
     if (World.room(x, y) < 0 && so > s) s = Math.max(s, so * 0.85);
-    if (alpha < 1) this.ctx.globalAlpha = alpha;
-    this.ctx.drawImage(Spr.shaded(rec, s), X - rec.ax, Y - rec.ay);
-    if (alpha < 1) this.ctx.globalAlpha = 1;
+    Spr.drawShaded(this.ctx, rec, X - rec.ax, Y - rec.ay, s, alpha);
   },
   drawObj(o, x, y, X, Y, p, t) {
     const def = OBJ[o.t];
@@ -356,9 +358,7 @@ const Render = {
     }
     const s = this.shadeAt(x, y);
     const ctx = this.ctx;
-    if (alpha < 1) ctx.globalAlpha = alpha;
-    ctx.drawImage(Spr.shaded(rec, s), X - rec.ax, Y - rec.ay);
-    if (alpha < 1) ctx.globalAlpha = 1;
+    Spr.drawShaded(ctx, rec, X - rec.ax, Y - rec.ay, s, alpha);
     // animated extras
     if ((o.t === 'campfire' || o.t === 'bbq') && o.lit) Fx.drawFlame(ctx, X, Y + HTH - (o.t === 'bbq' ? 30 : 4), t + x * 0.37);
     if (o.t === 'tv' && o.on) {
@@ -488,6 +488,12 @@ const Render = {
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     }
     if (p.sleepFade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + Math.min(1, p.sleepFade).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+    // drowsy blinks when exhausted
+    if (!p.dead && !p.asleep && p.st && p.st.fatigue > 0.8) {
+      this.blinkT = (this.blinkT || 0) - 1 / 60;
+      if (this.blinkT <= 0) { this.blinkT = R.f(4, 12) * (1.2 - p.st.fatigue); this.blink = 0.45; }
+    }
+    if (this.blink > 0) { this.blink -= 1 / 60; ctx.fillStyle = 'rgba(0,0,0,' + Math.min(0.92, Math.sin(Math.max(0, this.blink) / 0.45 * Math.PI) * 1.1).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
     if (G.light.flash > 0) { ctx.fillStyle = 'rgba(220,230,255,' + (G.light.flash * 0.5).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
   },
 };

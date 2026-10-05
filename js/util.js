@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 const TW = 64, TH = 32, HTW = 32, HTH = 16, ZU = 32;
 const WALL_H = 2.45;               // wall height in z-units
-const MIN_PER_SEC = 0.4;           // game minutes per real second at 1x (1 day = 1 hour)
+let MIN_PER_SEC = 0.4;             // game minutes per real second at 1x (1 day = 1 hour); sandbox can change it
 
 const U = {
   clamp(v, a, b) { return v < a ? a : v > b ? b : v; },

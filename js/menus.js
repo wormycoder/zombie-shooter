@@ -18,8 +18,7 @@ const Menu = {
     this.path = [[70, 70], [170, 160]];
     this.cam = { x: 95, y: 100 };
   },
-  show() {
-    G.mode = 'menu';
+  prepareBg() {
     G.corpse = false;
     Sfx.engine(null); Sfx.heli(null);
     $('#hud').classList.add('hidden');
@@ -27,7 +26,12 @@ const Menu = {
     this.buildBackground();
     G.player = { x: this.cam.x, y: this.cam.y, dead: true, inCar: null, st: { panic: 0 }, look: { skin: '#ccc' }, angle: 0, halo: [], deadT: 0 };
     G.weather = { rain: 0, target: 0, fog: 0.15, temp: 20, next: 1e12, storm: false };
+    G.events.heli = null; G.alarms = [];
     Render.cam.tz = 1.1;
+  },
+  show() {
+    G.mode = 'menu';
+    this.prepareBg();
     const meta = Save.meta();
     $('#menu').className = '';
     $('#menu').innerHTML = `<div class="modal title"><div class="tbox">
@@ -44,7 +48,7 @@ const Menu = {
       const b = e.target.closest('[data-m]'); if (!b) return;
       Sfx.play('pickup');
       const k = b.dataset.m;
-      if (k === 'new') { if (!meta || confirm('Starting a new game will erase your current save. Continue?')) this.create(); }
+      if (k === 'new') { if (!meta || confirm('Starting a new game will erase your current save. Continue?')) this.sandbox(); }
       if (k === 'continue') this.load();
       if (k === 'options') this.options(false);
       if (k === 'controls') this.controls(false);
@@ -76,9 +80,36 @@ const Menu = {
     Render.ctx.setTransform(Render.dpr, 0, 0, Render.dpr, 0, 0);
     Render.ctx.fillStyle = 'rgba(0,0,0,0.35)'; Render.ctx.fillRect(0, 0, Render.W, Render.H);
   },
+  // ------------------------------------------------------------------ sandbox settings
+  sbSel: null,
+  sandbox() {
+    this.sbSel = this.sbSel || Object.assign({}, SANDBOX_PRESETS.Apocalypse);
+    const sel = this.sbSel;
+    const rows = Object.keys(SANDBOX_OPTS).map(k => {
+      const o = SANDBOX_OPTS[k];
+      return `<div class="opt"><span>${o.n}</span><select data-sb="${k}">${o.opts.map((op, i) => `<option value="${i}" ${i === sel[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
+    }).join('');
+    const presets = Object.keys(SANDBOX_PRESETS).map(n => `<span class="btn sm" data-preset="${n}">${n}</span>`).join('');
+    $('#menu').innerHTML = `<div class="modal"><div class="mbox"><h2>World settings</h2>
+      <div class="sml" style="margin-bottom:6px">Presets</div><div style="margin-bottom:10px">${presets}</div>
+      ${rows}
+      <div class="sml" style="margin:8px 0 4px;max-width:360px">Sprinters run as fast as you do. Shorter days make hunger, thirst and fatigue tick faster in real time.</div>
+      <div class="cfoot" style="padding:8px 0 0;border:0"><span class="btn" data-m="back">Back</span><span class="btn big" data-m="next">Next</span></div></div></div>`;
+    const m = $('#menu');
+    m.onchange = (e) => { const k = e.target.dataset.sb; if (k) sel[k] = +e.target.value; };
+    m.oninput = null;
+    m.onclick = (e) => {
+      const pr = e.target.closest('[data-preset]');
+      if (pr) { this.sbSel = Object.assign({}, SANDBOX_PRESETS[pr.dataset.preset]); this.sandbox(); return; }
+      const b = e.target.closest('[data-m]'); if (!b) return;
+      if (b.dataset.m === 'back') this.show();
+      if (b.dataset.m === 'next') this.create();
+    };
+  },
   // ------------------------------------------------------------------ character creation
   cfg: null,
   create() {
+    if (!this.bgWorld || Wd !== this.bgWorld) this.prepareBg();
     G.mode = 'create';
     const r = R;
     const female = r.chance(0.5);
@@ -141,7 +172,7 @@ const Menu = {
         if (k === 'rname') c.name = R.pick(FIRST_NAMES) + ' ' + R.pick(LAST_NAMES);
         if (k === 'male') { c.look.female = false; if (['long', 'ponytail'].includes(c.look.hairStyle)) c.look.hairStyle = 'short'; }
         if (k === 'female') { c.look.female = true; }
-        if (k === 'back') { this.show(); return; }
+        if (k === 'back') { this.sandbox(); return; }
         if (k === 'play') { if (this.points() >= 0) this.start(); return; }
         this.renderCreate(); return;
       }
@@ -178,6 +209,7 @@ const Menu = {
   start() {
     const cfg = JSON.parse(JSON.stringify(this.cfg));
     if (!cfg.name.trim()) cfg.name = 'Survivor';
+    cfg.sb = sandboxValues(this.sbSel || {});
     this.cfg = null;
     $('#menu').innerHTML = '<div class="modal loading"><div class="ltext">Generating Hollow Creek...</div></div>';
     setTimeout(() => {

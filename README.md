@@ -15,6 +15,7 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Barricading, carpentry & building, crafting, cooking, farming, foraging, fishing, generators, rain barrels
 - Drivable cars with keys, hotwiring, fuel, trunks, alarms
 - Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
+- Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time
 - Save/load (permadeath)
 
 ## Controls

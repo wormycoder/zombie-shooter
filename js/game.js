@@ -7,6 +7,26 @@ const G = {
   events: {}, weather: { rain: 0, target: 0, fog: 0, temp: 24, next: 0, storm: false }, light: { amb: 1, flash: 0 },
   alarms: [], chasing: 0, build: null, hover: null, conts: new Set(), seed: 0,
 };
+// sandbox settings (PZ-style)
+const SANDBOX_OPTS = {
+  pop: { n: 'Zombie population', opts: [['None', 0], ['Low', 0.5], ['Normal', 1], ['High', 1.6], ['Insane', 2.5]], def: 2 },
+  speed: { n: 'Zombie speed', opts: [['Shamblers', 'shambler'], ['Fast Shamblers', 'fast'], ['Sprinters', 'sprinter'], ['Random mix', 'random']], def: 0 },
+  day: { n: 'Day length', opts: [['30 minutes', 0.5], ['1 hour', 1], ['2 hours', 2], ['4 hours', 4]], def: 1 },
+  loot: { n: 'Loot', opts: [['Extremely rare', 0.4], ['Rare', 0.7], ['Normal', 1], ['Common', 1.4], ['Abundant', 2]], def: 2 },
+  utilities: { n: 'Power & water shutoff', opts: [['Instant', 0], ['Within a week', 1], ['Within two weeks', 2], ['Within a month', 3], ['Never', 4]], def: 2 },
+  start: { n: 'Start time', opts: [['7 AM', 7], ['9 AM', 9], ['Noon', 12], ['5 PM', 17], ['9 PM', 21], ['2 AM', 2]], def: 1 },
+};
+const SANDBOX_PRESETS = {
+  Apocalypse: { pop: 2, speed: 0, day: 1, loot: 2, utilities: 2, start: 1 },
+  Survivor: { pop: 1, speed: 0, day: 2, loot: 3, utilities: 3, start: 1 },
+  Builder: { pop: 1, speed: 0, day: 2, loot: 4, utilities: 4, start: 1 },
+  'Sprinter Hell': { pop: 2, speed: 2, day: 1, loot: 2, utilities: 1, start: 4 },
+};
+function sandboxValues(sel) {
+  const o = {};
+  for (const k in SANDBOX_OPTS) o[k] = SANDBOX_OPTS[k].opts[sel[k] === undefined ? SANDBOX_OPTS[k].def : sel[k]][1];
+  return o;
+}
 const BROADCASTS = [
   [0, 'Authorities urge residents of Hollow Creek to stay indoors following reports of violent attacks.'],
   [0, 'Symptoms reportedly include high fever and extreme aggression. Avoid contact with anyone who appears ill.'],
@@ -48,6 +68,8 @@ const Game = {
 
   // ------------------------------------------------------------------ new game
   newGame(cfg) {
+    G.sb = cfg.sb || sandboxValues({});
+    MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
     G.seed = (Math.random() * 1e9) | 0;
     const w = MapGen.generate(G.seed);
     World.use(w);
@@ -96,8 +118,10 @@ const Game = {
     Zombie.rebuildGrid();
     Vehicles.spawnAll();
     this.atmosphere(home, sx, sy);
-    G.time = 9 * 60;
-    G.events = { powerOff: false, waterOff: false, powerAt: (R.int(8, 13) * 1440 + R.int(6, 20) * 60), waterAt: (R.int(6, 11) * 1440 + R.int(6, 20) * 60), heliAt: (R.int(5, 8) * 1440 + R.int(9, 15) * 60), heli: null, metaAt: 9 * 60 + R.int(30, 120), heliDone: false };
+    G.time = G.sb.start * 60;
+    const util = [[0, 1], [3, 7], [6, 13], [10, 30], [1e5, 1e5]][G.sb.utilities];
+    G.events = { powerOff: false, waterOff: false, powerAt: (R.int(util[0], util[1]) * 1440 + R.int(6, 20) * 60), waterAt: (R.int(Math.max(0, util[0] - 1), Math.max(0, util[1] - 2)) * 1440 + R.int(6, 20) * 60), heliAt: (R.int(5, 8) * 1440 + R.int(9, 15) * 60), heli: null, metaAt: G.time + R.int(30, 120), heliDone: false };
+    if (G.sb.utilities === 0) { G.events.powerAt = G.time + R.int(60, 600); G.events.waterAt = G.time + R.int(60, 600); }
     G.weather = { rain: 0, target: 0, fog: 0, fogT: 0, temp: 24, next: G.time + R.int(180, 600), storm: false, thunderT: 0 };
     G.speed = 1; G.paused = false;
     Render.cam.x = sx; Render.cam.y = sy;
@@ -122,6 +146,23 @@ const Game = {
       z.blood = 1; z.look.blood = 1;
       G.zombies.push(z);
       w.decals.push({ x: z.x - 0.5, y: z.y - 0.5, v: R.int(0, 7), age: 0, s: R.f(1, 1.5) });
+    }
+    // some people died at home
+    for (const b of w.buildings) {
+      if (b.id === home.id || b.type !== 'house' || !R.chance(0.12)) continue;
+      const rm = w.rooms[R.pick(b.rooms)];
+      for (let t = 0; t < 8; t++) {
+        const x = R.int(rm.x0, rm.x1), y = R.int(rm.y0, rm.y1);
+        if (World.tileSolid(x, y)) continue;
+        const z = Zombie.create(x + 0.5, y + 0.5);
+        z.lie = 1; z.dead = true; z.st = 'dead'; z.lieDir = R.chance(0.5) ? 1 : -1; z.diedAt = -R.f(0, 3000);
+        z.loot = z.wear.concat(Loot.zombiePockets());
+        for (const it of z.loot) if (it.worn && ITEMS[it.id].cat === 'Clothing') delete it.worn;
+        z.blood = 1; z.look.blood = 1;
+        G.zombies.push(z);
+        w.decals.push({ x: x, y: y, v: R.int(0, 7), age: 0, s: 1.3 });
+        break;
+      }
     }
     for (let k = 0; k < 90; k++) { const t = townTile(); if (t) w.decals.push({ x: t[0] + R.f(0, 1) - 0.5, y: t[1] + R.f(0, 1) - 0.5, v: R.int(0, 7), age: 0, s: R.f(0.5, 1.2) }); }
     // fake-dead zombies: look like corpses until you get close
@@ -409,7 +450,7 @@ const Save = {
     const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null });
     const zs = G.zombies.map(z => { const o = Object.assign({}, z); delete o.path; delete o.obE; delete o.obTo; delete o.cFrom; return o; });
     return {
-      v: 1, time: G.time, seed: G.seed, events: G.events, weather: G.weather, alarms: G.alarms,
+      v: 1, time: G.time, seed: G.seed, events: G.events, weather: G.weather, alarms: G.alarms, sb: G.sb,
       uid: _uid, zid: _zid, cid: _carId, kills: p.kills,
       world: {
         w: w.w, h: w.h, floor: u8(w.floor), fvar: u8(w.fvar), deco: u8(w.deco), wallN: u8(w.wallN), wallW: u8(w.wallW), room: u8(w.room), seen: u8(w.seen),
@@ -466,6 +507,8 @@ const Save = {
       if (o.c && o.c.items) { o.c.px = i % w.w; o.c.py = (i / w.w) | 0; G.conts.add(o.c); }
     }
     G.time = s.time; G.seed = s.seed; G.events = s.events; G.weather = s.weather; G.alarms = s.alarms || [];
+    G.sb = s.sb || sandboxValues({});
+    MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
     Items.setUidBase(s.uid); _zid = s.zid; _carId = s.cid;
     G.cars = s.cars;
     Vehicles.active = null;

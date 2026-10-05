@@ -249,3 +249,4 @@ kbd { display: inline-block; min-width: 92px; padding: 1px 6px; background: rgba
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
 input[type=range] { accent-color: #c8b860; }
+select { background: rgba(0, 0, 0, 0.55); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; font-family: inherit; font-size: 12px; min-width: 160px; }

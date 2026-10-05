@@ -693,6 +693,11 @@ const Player = {
     G.speed = 1;
     this.say(msg || 'I woke up.', '#ccc');
     p.sleepBed = null;
+    // step off the bed
+    if (World.tileSolid(Math.floor(p.x), Math.floor(p.y))) {
+      for (const [dx, dy] of DIR8) { const x = Math.floor(p.x) + dx, y = Math.floor(p.y) + dy; if (!World.tileSolid(x, y) && World.adjacentReach(Math.floor(p.x), Math.floor(p.y), x, y)) { p.x = x + 0.5; p.y = y + 0.5; break; } }
+    }
+    World.resolve(p, p.r);
   },
 
   // ------------------------------------------------------------------ death

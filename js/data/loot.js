@@ -106,8 +106,9 @@ const Loot = {
     const tbl = LOOT[roomType + '.' + contType] || LOOT['*.' + contType];
     const out = [];
     if (!tbl) return out;
-    let n = R.int(tbl.n[0], tbl.n[1]);
-    let empty = tbl.empty || 0;
+    const lm = (G && G.sb) ? G.sb.loot : 1;
+    let n = Math.round(R.int(tbl.n[0], tbl.n[1]) * lm);
+    let empty = (tbl.empty || 0) / lm;
     if (luck > 0) { empty *= 0.7; if (R.chance(0.3)) n++; }
     if (luck < 0) { empty *= 1.3; if (R.chance(0.3)) n--; }
     if (R.chance(empty)) n = 0;
