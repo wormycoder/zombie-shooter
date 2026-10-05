@@ -385,6 +385,7 @@ const Interact = {
     const wood = ['bed', 'table', 'chair', 'wardrobe', 'dresser', 'nightstand', 'bookshelf', 'crate', 'woodcrate', 'desk', 'counter', 'pew', 'bench', 'sofa', 'armchair', 'toolcab'];
     if (wood.includes(o.t)) add('Disassemble', () => go(() => Actions.queue(Actions.disassemble(x, y))), { disabled: !(Player.findTag('hammer') || Player.findTag('saw') || Player.findTag('screwdriver')) });
     if (o.t === 'trap') this.trapOptions(o, x, y, add, go);
+    if (MOVEABLE[o.t] && !o.fixed) add('Pick up ' + def.n.toLowerCase() + ' (' + MOVEABLE[o.t] + ' kg)', () => go(() => Actions.queue(Actions.mk('Picking up ' + def.n.toLowerCase(), 2.5, () => { if (World.obj(x, y) === o) Build.pickUp(o, x, y); }, { anim: 'work', begin: () => Actions.face(x, y) }))));
     if (o.sx !== undefined) {
       const st = Wd.stairs.find(q => q.x === o.sx && q.y === o.sy);
       if (st) {

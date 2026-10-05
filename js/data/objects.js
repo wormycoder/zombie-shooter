@@ -60,6 +60,13 @@ const OBJ = {
   trap: { n: 'Trap', solid: false, h: 0.45 },
 };
 
+// Furniture that can be picked up and carried: weight in kg. Two-tile pieces and how their 2nd tile sits.
+const MOVEABLE = {
+  chair: 5, table: 10, armchair: 12, sofa: 24, bed: 28, wardrobe: 22, dresser: 14, nightstand: 6, bookshelf: 14, desk: 12, shelf: 12,
+  crate: 8, woodcrate: 8, toolcab: 18, locker: 14, lamp: 4, tv: 10, trash: 4, fridge: 30, washer: 24, bench: 10, counter: 14, stove: 24,
+  medcab: 8, cooler: 30, pew: 18, register: 10, hay: 12,
+};
+const TWO_TILE = { bed: 'perp', sofa: 'along' };
 // Crop types for farming
 const CROPS = {
   carrot: { n: 'Carrots', item: 'Carrots', days: 4, yield: [3, 6], col: '#f07a1a', leaf: '#4aa02a' },

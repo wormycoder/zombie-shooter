@@ -395,7 +395,7 @@ const Player = {
       if (s.t >= 1) p.swing = null;
     }
     if (G.build) {
-      if (Input.hit('r')) G.build.d = (G.build.d + 1) & 1;
+      if (Input.hit('r')) G.build.d = (G.build.d + 1) % (G.build.move ? 4 : 2);
       if (!Input.overUI && Input.takeClick()) Build.click();
       return;
     }

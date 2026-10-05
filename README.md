@@ -12,10 +12,10 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Spreading fire: molotovs, gasoline, stoves and campfires start fires that spread through grass, forests and wooden houses, burn down roofs and collapse upper floors; zombies catch fire; fight it with water or extinguishers
 - Seasons: pick a start month — autumn foliage, bare winter trees, snow cover and snowfall, shorter winter days, cold unheated houses, frost that kills crops
 - Zombies that see and hear, shamble, lunge, thump doors, smash and climb through windows, climb fences, get knocked down, crawl, and play dead
-- Moodles (hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, wetness, temperature...), body-part injuries, infection and reanimation
+- Moodles (hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, wetness, temperature...), body-part injuries incl. fractures & splints, infection and reanimation
 - Inventory with weight, bags, containers, timed actions, drag & drop; loot tables per room/store type
 - Melee & firearms, shoving & stomping, weapon durability, skills & XP, skill books, occupations & traits
-- Barricading, carpentry & building, crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
+- Barricading, carpentry & building, moving furniture (pick up beds, shelves, fridges... and place them with rotation), crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
 - Drivable cars with keys, hotwiring, fuel, trunks, alarms
 - Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
 - Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread

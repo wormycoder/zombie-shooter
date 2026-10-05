@@ -171,6 +171,7 @@ Mt('Nails', 'Nails', 0.01, ['nails', '#a0a8b0', '#606870']);
 Mt('NailsBox', 'Box of Nails', 1.0, ['box', '#c02020', '#a0a8b0'], { boxOf: 'Nails', boxN: 100 });
 Mt('RippedSheets', 'Ripped Sheets', 0.1, ['rag', '#e8e4d8', '#c0b8a8'], { bandage: 0 });
 Mt('Sheet', 'Sheet', 1.0, ['sheet', '#e8e8f0', '#a0b0d0'], {});
+idef('Moveable', { n: 'Furniture', cat: 'Furniture', w: 10, ic: ['box', '#8a6a48', '#5a4028'], moveable: true, desc: 'Right-click the ground (or use it) to place it. R rotates while placing.' });
 Mt('Splint', 'Splint', 0.4, ['plank', '#c8a878', '#e8e0d0'], { splint: true, desc: 'Straightens and supports a broken bone so it heals properly.' });
 Mt('SheetRope', 'Sheet Rope', 1.6, ['rag', '#f2f0ea', '#b8b0a0'], { desc: 'Knotted sheets. Nail it to an upstairs window to climb down and back up.' });
 Mt('TreeBranch', 'Tree Branch', 1.5, ['branch', '#6a4a2a', '#4a7a2a'], { fuel: 1 });
@@ -314,7 +315,7 @@ const Items = {
   },
   weight(it) {
     const d = ITEMS[it.id];
-    let w = d.w;
+    let w = it.mw || d.w;
     if (d.fluid) w += it.fl * 0.9;
     if (d.gas) w += it.fl * 5.5;
     if (d.bag && it.items) {
@@ -332,7 +333,7 @@ const Items = {
   // items are considered stackable in UI if same id & no distinguishing state
   stackKey(it) {
     const d = ITEMS[it.id];
-    if (d.bag || d.wpn || d.gun || d.fluid || d.gas || d.uses || d.power !== undefined || d.cat === 'Clothing') return 'u' + it.uid;
+    if (d.bag || d.wpn || d.gun || d.fluid || d.gas || d.uses || d.power !== undefined || d.cat === 'Clothing' || d.moveable) return 'u' + it.uid;
     if (it.equipped || it.worn) return 'u' + it.uid;
     let k = it.id;
     if (d.fresh !== undefined) k += '|' + this.freshState(it) + (it.cooked ? 'c' : '') + (it.burnt ? 'b' : '') + (it.frozen ? 'f' : '');

@@ -121,8 +121,62 @@ const Build = {
     UI.closeAll();
     UI.hint('Left-click to place ' + rec.n + (rec.build === 'wall' ? ' · R to rotate' : '') + ' · Esc to cancel');
   },
+  // ---- carrying furniture
+  startMove(it) {
+    G.build = { move: it, d: 0 };
+    UI.closeAll();
+    UI.hint('Left-click to place ' + Items.name(it) + ' · R to rotate · Esc to cancel');
+  },
+  DIRS: ['S', 'W', 'N', 'E'],
+  // tiles a moveable occupies when placed at (x,y) facing dir
+  moveTiles(it, x, y, dir) {
+    const t = it.obj.t, two = TWO_TILE[t];
+    if (!two) return [[x, y]];
+    const [dx, dy] = DIRV[dir];
+    return two === 'perp' ? [[x, y], [x + dx, y + dy]] : [[x, y], [x - dy, y + dx]];
+  },
+  validMove(it, x, y, dir) {
+    const p = G.player;
+    for (const [tx, ty] of this.moveTiles(it, x, y, dir)) {
+      if (!World.inb(tx, ty) || World.obj(tx, ty) || World.tileSolid(tx, ty) || World.isWater(tx, ty) || World.floor(tx, ty) === FL.VOID) return false;
+      if (Math.floor(p.x) === tx && Math.floor(p.y) === ty) return false;
+      if (G.zombies.some(z => !z.dead && Math.floor(z.x) === tx && Math.floor(z.y) === ty)) return false;
+    }
+    const tl = this.moveTiles(it, x, y, dir);
+    if (tl.length === 2 && World.edgeBlocksMove(...World.edgeBetween(tl[0][0], tl[0][1], tl[1][0], tl[1][1]))) return false;
+    return true;
+  },
+  placeMove(it, x, y, dir) {
+    const tl = this.moveTiles(it, x, y, dir);
+    tl.forEach(([tx, ty], i) => {
+      const o = Object.assign({}, it.obj, { dir });
+      if (tl.length > 1) o.part = i;
+      const d = OBJ[o.t];
+      if (d.cont && i === 0) o.c = { type: d.cont.type, cap: d.cont.cap, items: [] };
+      World.setObj(tx, ty, o);
+    });
+    Player.removeItem(it);
+    Sfx.play('thud');
+  },
+  pickUp(o, x, y) {
+    const p = G.player;
+    if (o.c) { World.contItems(o, x, y); if (o.c.items && o.c.items.length) { Player.say('I need to empty it first.', '#ccc'); return; } }
+    const it = Items.make('Moveable');
+    it.label = OBJ[o.t].n; it.mw = MOVEABLE[o.t]; it.col = o.col || ({ fridge: '#e8e8e4', stove: '#d8d8d4', washer: '#e0e0dc', tv: '#303030', locker: '#707a84', cooler: '#d0d8e0', toolcab: '#a03028' }[o.t] || '#8a6a48');
+    const keep = {};
+    for (const k in o) if (!['c', 'part', 'dir', 'on', 'lit'].includes(k)) keep[k] = o[k];
+    it.obj = keep;
+    // the other half of a two-tile piece goes too
+    if (o.part !== undefined) for (const [dx, dy] of DIR4) { const n = World.obj(x + dx, y + dy); if (n && n.t === o.t && n.part !== undefined && n.part !== o.part) { World.setObj(x + dx, y + dy, null); break; } }
+    World.setObj(x, y, null);
+    p.inv.push(it);
+    Sfx.play('wood');
+    if (Player.heavyRatio() > 1) Player.say("It's heavy...", '#ccc');
+    UI.refresh();
+  },
   target() {
     const [wx, wy] = Render.mouseWorld();
+    if (G.build.move) return [Math.floor(wx), Math.floor(wy), G.build.d & 3];
     let tx = Math.floor(wx), ty = Math.floor(wy), d = G.build.d & 1;
     if (G.build.rec.build === 'wall') {
       // choose the edge nearest to the mouse
@@ -164,6 +218,17 @@ const Build = {
   click() {
     const b = G.build;
     const [x, y, d] = this.target();
+    if (b.move) {
+      const it = b.move, dir = this.DIRS[d];
+      if (!this.validMove(it, x, y, dir)) { Player.say("It won't fit there.", '#ccc'); return; }
+      G.build = null;
+      Interact.goDo(x + 0.5, y + 0.5, () => Actions.queue(Actions.mk('Placing ' + Items.name(it), 2, () => {
+        if (!Player.find(i => i === it)) return;
+        if (!this.validMove(it, x, y, dir)) { Player.say("It won't fit there.", '#ccc'); return; }
+        this.placeMove(it, x, y, dir); UI.refresh();
+      }, { anim: 'work', begin: () => Actions.face(x, y) })), 1.6);
+      return;
+    }
     if (!this.valid(b.rec, x, y, d)) { Player.say("Can't build there.", '#ccc'); return; }
     const rec = b.rec;
     G.build = null;
@@ -172,6 +237,19 @@ const Build = {
   drawGhost(ctx) {
     const b = G.build;
     const [x, y, d] = this.target();
+    if (b.move) {
+      const it = b.move, dir = this.DIRS[d], ok = this.validMove(it, x, y, dir);
+      const tl = this.moveTiles(it, x, y, dir);
+      ctx.globalAlpha = 0.6;
+      tl.forEach(([tx, ty], i) => {
+        const o = Object.assign({}, it.obj, { dir }); if (tl.length > 1) o.part = i;
+        const rec = Spr.obj(o); const [X, Y] = Render.P(tx, ty, 0);
+        ctx.drawImage(rec.c, X - rec.ax, Y - rec.ay);
+      });
+      ctx.globalAlpha = 1;
+      for (const [tx, ty] of tl) { const [X, Y] = Render.P(tx, ty, 0); poly(ctx, [[X, Y], [X + HTW, Y + HTH], [X, Y + TH], [X - HTW, Y + HTH]], ok ? 'rgba(80,255,80,0.22)' : 'rgba(255,60,60,0.3)', ok ? '#5f5' : '#f55', 1); }
+      return;
+    }
     const ok = this.valid(b.rec, x, y, d) && Crafting.has(b.rec);
     const [X, Y] = Render.P(x, y, 0);
     ctx.globalAlpha = 0.55;
