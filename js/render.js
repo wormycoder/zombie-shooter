@@ -87,6 +87,14 @@ const Render = {
         ctx.drawImage(rec.c, X - rec.ax, Y - rec.ay);
         const dc = w.deco[i];
         if (dc) { const r2 = Spr.deco(dc); ctx.drawImage(r2.c, X - r2.ax, Y - r2.ay); }
+        if (HARD_FLOORS[f] && w.room[i] < 0) {
+          for (let dn = 0; dn < 4; dn++) {
+            const nx = x + FR_DX[dn], ny = y + FR_DY[dn];
+            if (nx < 0 || ny < 0 || nx >= W_ || ny >= w.h) continue;
+            const nf = w.floor[ny * W_ + nx];
+            if (nf === FL.GRASS || nf === FL.GRASS2 || nf === FL.FOREST) { const r3 = Spr.fringe(dn, nf, vx); ctx.drawImage(r3.c, X - r3.ax, Y - r3.ay); }
+          }
+        }
       }
     }
     // decals
@@ -483,6 +491,8 @@ const Render = {
     if (G.light.flash > 0) { ctx.fillStyle = 'rgba(220,230,255,' + (G.light.flash * 0.5).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
   },
 };
+const HARD_FLOORS = []; for (const f of [FL.ASPHALT, FL.SIDEWALK, FL.CONCRETE, FL.DIRT, FL.SAND, FL.GRAVEL, FL.PARKING]) HARD_FLOORS[f] = true;
+const FR_DX = [0, -1, 0, 1], FR_DY = [-1, 0, 1, 0];
 function pointInPoly(pt, vs) {
   let inside = false;
   for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {

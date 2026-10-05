@@ -218,6 +218,15 @@ const World = {
     }
     return true;
   },
+  // can something on tile a reach tile b (same / 8-neighbour) without crossing a wall?
+  adjacentReach(ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    if (!dx && !dy) return true;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return false;
+    const open = (x0, y0, x1, y1) => !this.edgeBlocksMove(...this.edgeBetween(x0, y0, x1, y1));
+    if (!dx || !dy) return open(ax, ay, bx, by);
+    return (open(ax, ay, bx, ay) && open(bx, ay, bx, by) && !this.tileSolid(bx, ay)) || (open(ax, ay, ax, by) && open(ax, by, bx, by) && !this.tileSolid(ax, by));
+  },
   // walkable straight path for a circle of radius r
   pathClear(x0, y0, x1, y1, r) {
     if (!this.lineClear(x0, y0, x1, y1, 'move')) return false;

@@ -468,6 +468,7 @@ const Save = {
     G.time = s.time; G.seed = s.seed; G.events = s.events; G.weather = s.weather; G.alarms = s.alarms || [];
     Items.setUidBase(s.uid); _zid = s.zid; _carId = s.cid;
     G.cars = s.cars;
+    Vehicles.active = null;
     G.zombies = s.zombies;
     for (const z of G.zombies) { if (z.st === 'thump' || z.st === 'climb') z.st = 'idle'; z.path = null; }
     const p = s.player;

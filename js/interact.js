@@ -78,11 +78,7 @@ const Interact = {
       if (!o || !o.c) continue;
       if (U.dist(p.x, p.y, x + 0.5, y + 0.5) > 1.75) continue;
       // don't loot through walls
-      if (!World.lineClear(p.x, p.y, x + 0.5, y + 0.5, 'move') && !(x === cx && y === cy)) {
-        // allow adjacent solid furniture: check edge between player tile and the furniture tile
-        const ok = Math.abs(x - cx) + Math.abs(y - cy) === 1 && !World.edgeBlocksMove(...World.edgeBetween(cx, cy, x, y));
-        if (!ok) continue;
-      }
+      if (!World.adjacentReach(cx, cy, x, y)) continue;
       out.push(Cont.obj(o, x, y));
     }
     for (const z of Zombie.near(p.x, p.y, 1.6)) if (z.dead) out.push(Cont.corpse(z));

@@ -271,12 +271,14 @@ const Zombie = {
       z.path = null;
       mx = dx / (dist || 1); my = dy / (dist || 1);
     } else {
-      if (!z.path || z.pathT <= 0) {
+      z.pathCool = (z.pathCool || 0) - dt;
+      if ((!z.path || z.pathT <= 0) && z.pathCool <= 0) {
         z.pathT = R.f(1.5, 2.5) + (dPlayer > 25 ? 2 : 0);
+        z.pathCool = R.f(1.0, 1.8) + (dPlayer > 25 ? 2 : 0);
         z.path = World.findPath(z.x, z.y, z.tx, z.ty, 'z', dPlayer < 25 ? 900 : 400);
         z.pi = 0;
         if (!z.path) { z.st = z.st === 'chase' ? 'chase' : 'idle'; mx = dx / dist; my = dy / dist; }
-      }
+      } else if (!z.path) { mx = dx / dist; my = dy / dist; }
       if (z.path) {
         while (z.pi < z.path.length) {
           const [wx, wy] = z.path[z.pi];

@@ -14,6 +14,7 @@ const Vehicles = {
   typeName(c) { return CAR_TYPES[c.type].n; },
   spawnAll() {
     G.cars = [];
+    this.active = null;
     for (const sp of Wd.carSpots) {
       let type = sp.kind || R.weighted([['sedan', 6], ['pickup', 2.5], ['van', 1.5], ['police', 0.4]]);
       const T = CAR_TYPES[type];
@@ -55,7 +56,7 @@ const Vehicles = {
   // local coordinates of point relative to car
   local(c, x, y) { const dx = x - c.x, dy = y - c.y, ca = Math.cos(c.a), sa = Math.sin(c.a); return [dx * ca + dy * sa, -dx * sa + dy * ca]; },
   pushOut(e, r) {
-    for (const c of G.cars) {
+    for (const c of (this.active || G.cars)) {
       if (G.player && G.player.inCar === c && e === G.player) continue;
       if (Math.abs(e.x - c.x) > 3 || Math.abs(e.y - c.y) > 3) continue;
       const T = CAR_TYPES[c.type];
@@ -235,6 +236,13 @@ const Vehicles = {
   },
   update(dt) {
     const p = G.player;
+    // cars near the player are the only ones that can matter for collisions this step
+    this.activeT = (this.activeT || 0) - dt;
+    if (this.activeT <= 0 || !this.active) {
+      this.activeT = 1;
+      const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
+      this.active = G.cars.filter(c => Math.abs(c.x - px) < 75 && Math.abs(c.y - py) < 75);
+    }
     for (const c of G.cars) {
       if (p && p.inCar === c) continue;
       if (Math.abs(c.v) > 0.01) { this.physics(c, dt, 0); c.v -= Math.sign(c.v) * Math.min(Math.abs(c.v), 3 * dt); }

@@ -160,6 +160,34 @@ const Spr = {
       else if (t === 4) { for (const u0 of [0.12, 0.62]) poly(g, [P(u0, 0.05), P(u0 + 0.26, 0.05), P(u0 + 0.26, 0.95), P(u0, 0.95)], 'rgba(225,225,220,0.75)'); }
     });
   },
+  // grass creeping over the edge of a hard surface. dir: 0 N, 1 W, 2 S, 3 E
+  fringe(dir, gf, v) {
+    return this.get('fr' + dir + '_' + gf + '_' + v, 66, 34, 33, 1, (g, ax, ay) => {
+      const rng = new RNG(dir * 101 + gf * 13 + v * 7 + 3);
+      const base = (FLOOR_COL[gf] || FLOOR_COL[FL.GRASS])[v & 3];
+      const P = (u, w) => isoP(ax, ay, u, w, 0);
+      const at = (a, depth) => dir === 0 ? [a, depth] : dir === 2 ? [a, 1 - depth] : dir === 1 ? [depth, a] : [1 - depth, a];
+      g.save();
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(ax + 32, ay + 16); g.lineTo(ax, ay + 32); g.lineTo(ax - 32, ay + 16); g.closePath(); g.clip();
+      // irregular band
+      g.beginPath();
+      const steps = 8;
+      const pts = [];
+      for (let k = 0; k <= steps; k++) pts.push(at(k / steps, rng.f(0.04, 0.16)));
+      let p0 = P(...at(0, 0)); g.moveTo(p0[0], p0[1]);
+      for (const q of pts) { const s = P(...q); g.lineTo(s[0], s[1]); }
+      p0 = P(...at(1, 0)); g.lineTo(p0[0], p0[1]);
+      g.closePath();
+      g.fillStyle = Col.rgba(base, 0.85); g.fill();
+      const dk = Col.mix(base, '#203010', 0.35), lt = Col.mix(base, '#c0d080', 0.25);
+      for (let i = 0; i < 16; i++) {
+        const s = P(...at(rng.next(), rng.f(0, 0.2)));
+        g.strokeStyle = rng.chance(0.5) ? dk : lt; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[0] + rng.f(-1.5, 1.5), s[1] - rng.f(2, 4)); g.stroke();
+      }
+      g.restore();
+    });
+  },
   blood(v) {
     return this.get('blood' + v, 80, 44, 40, 6, (g, ax, ay) => {
       const rng = new RNG(v * 7919 + 3);
