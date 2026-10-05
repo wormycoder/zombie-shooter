@@ -33,6 +33,7 @@ const Cont = {
     if (c.kind === 'obj') Game.trackCont(c.obj.c);
   },
   add(c, it) {
+    if (it.id === 'Corpse') { if (!G.player.inv.includes(it)) G.player.inv.push(it); Interact.dropCorpse(it); return; }
     if (c.kind === 'floor') { const p = G.player; World.dropItem(p.x, p.y, it); c.items.push(it); return; }
     if (c.kind === 'inv' || c.kind === 'bag') { delete it.fx; delete it.fy; }
     c.items.push(it);
@@ -47,6 +48,7 @@ const Cont = {
   },
   weight(c) { if (c.kind === 'inv') return Player.weight(); return Items.contentWeight(c.items); },
   canFit(c, it) {
+    if (it.id === 'Corpse' && c.kind !== 'floor' && c.kind !== 'inv') return false;
     if (c.kind === 'bag' && (it === c.bag || (ITEMS[it.id].bag && c.bag))) { if (it === c.bag) return false; }
     if (c.kind === 'floor' || c.kind === 'corpse') return true;
     return this.weight(c) + Items.weight(it) <= this.cap(c) + 0.001;
@@ -175,7 +177,11 @@ const Interact = {
     this.fireOptions(tx, ty, add);
     if (t.edge) this.edgeOptions(t.edge, add);
     if (t.car) this.carOptions(t.car, add);
-    if (t.corpse) add('Loot corpse', () => this.goDo(t.corpse.x, t.corpse.y, () => UI.openLoot(), 1.4));
+    if (t.corpse) {
+      add('Loot corpse', () => this.goDo(t.corpse.x, t.corpse.y, () => UI.openLoot(), 1.4));
+      const cz = t.corpse;
+      if (!p.inv.some(i => i.id === 'Corpse')) add('Pick up corpse', () => this.goDo(cz.x, cz.y, () => Actions.queue(Actions.mk('Lifting the body', 2.5, () => Interact.liftCorpse(cz), { anim: 'work' })), 1.3));
+    }
     if (t.obj) this.objOptions(t.obj, tx, ty, add);
     if (!t.edge && !t.car) this.groundOptions(tx, ty, add, t);
     // room lights
@@ -290,6 +296,30 @@ const Interact = {
       if (o.kind === 'box') { Player.addItem(Items.make('Plank')); if (R.chance(0.6)) Player.addItem(Items.make('Nails')); } else Player.addItem(Items.make('Twigs'));
       Sfx.play('wood'); UI.refresh();
     }));
+  },
+  liftCorpse(z) {
+    const i = G.zombies.indexOf(z);
+    if (i < 0 || !z.dead) return;
+    G.zombies.splice(i, 1);
+    Zombie.rebuildGrid();
+    const it = Items.make('Corpse');
+    it.z = z; it.mw = 40;
+    G.player.inv.push(it);
+    Player.say("Ugh. It's heavy.", '#ccc');
+    UI.refresh();
+  },
+  dropCorpse(it) {
+    const p = G.player;
+    if (!Player.find(i => i === it)) return;
+    Player.removeItem(it);
+    const z = it.z;
+    z.x = p.x + Math.cos(p.angle) * 0.6; z.y = p.y + Math.sin(p.angle) * 0.6;
+    if (World.tileSolid(Math.floor(z.x), Math.floor(z.y))) { z.x = p.x; z.y = p.y; }
+    z.lie = 1; z.dead = true; z.va = 1;
+    G.zombies.push(z);
+    Zombie.rebuildGrid();
+    Sfx.play('thud', z.x, z.y);
+    UI.refresh();
   },
   // an upstairs window/edge whose far side is open air
   upperOutside(e) {

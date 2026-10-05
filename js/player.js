@@ -535,6 +535,12 @@ const Player = {
     if (st.boredom > 50) st.unhappy = Math.min(100, st.unhappy + gh * 3);
     if (st.antidep > 0) { st.unhappy = Math.max(0, st.unhappy - gh * 4); st.antidep -= gh; }
     if (st.stress > 0.6) st.unhappy = Math.min(100, st.unhappy + gh * 1.5);
+    // the stench of rotting bodies
+    if ((G.stench || 0) > 0.8) {
+      st.unhappy = Math.min(100, st.unhappy + gh * G.stench * (indoors ? 6 : 3));
+      st.stress = Math.min(1, st.stress + gh * 0.02 * G.stench);
+      if (!p.saidStench || G.time - p.saidStench > 600) { p.saidStench = G.time; this.say(indoors ? 'The smell in here is unbearable.' : 'Something nearby really stinks.', '#cc9'); }
+    }
     // wetness & temperature
     const rain = G.weather.rain;
     if (!indoors && rain > 0.05 && !p.inCar) st.wet = Math.min(1, st.wet + gh * rain * (G.weather.temp < 1 ? 0.25 : 0.9));

@@ -455,7 +455,13 @@ const Weather = {
     }
     Sfx.rain(w.temp < 1 ? w.rain * 0.15 : w.rain, G.player && !World.outdoor(G.player.x, G.player.y));
     this.fireT = (this.fireT || 0) - dt;
-    if (this.fireT <= 0) { this.fireT = 0.25; const p = G.player; Sfx.fire(p && !p.dead && Wd.fire && Wd.fire.size ? Fire.near(p.x, p.y, 7) : 0); }
+    if (this.fireT <= 0) {
+      this.fireT = 0.25; const p = G.player;
+      Sfx.fire(p && !p.dead && Wd.fire && Wd.fire.size ? Fire.near(p.x, p.y, 7) : 0);
+      let flies = 0;
+      if (p && !p.dead) for (const z of Zombie.near(p.x, p.y, 6)) if (z.dead) flies += Zombie.rot(z) * (1 - U.dist(z.x, z.y, p.x, p.y) / 6);
+      Sfx.flies(flies); G.stench = flies;
+    }
   },
   drawScreen(ctx, W, H, dt) {
     const w = G.weather;

@@ -34,6 +34,7 @@ const Sfx = {
     this.rainSrc = this.loopNoise(this.noise, 'lowpass', 3500);
     this.windSrc = this.loopNoise(this.brown, 'lowpass', 500);
     this.fireSrc = this.loopNoise(this.brown, 'lowpass', 900);
+    this.flySrc = this.loopNoise(this.noise, 'bandpass', 520); this.flySrc.fl.Q.value = 9;
     this.on = true;
     Music.init();
   },
@@ -243,6 +244,12 @@ const Sfx = {
       const n = 1 + (Math.random() * 3 | 0);
       for (let k = 0; k < n; k++) this.nz(t + Math.random() * 0.2, 0.02 + Math.random() * 0.03, 'highpass', 1800 + Math.random() * 2500, 1, Math.min(0.25, 0.04 + level * 0.01), Math.random() * 1.2 - 0.6);
     }
+  },
+  flies(level) {
+    if (!this.on) return;
+    const t = this.ctx.currentTime;
+    this.flySrc.g.gain.setTargetAtTime(Math.min(0.09, level * 0.02), t, 0.5);
+    this.flySrc.fl.frequency.setTargetAtTime(480 + Math.random() * 120, t, 0.2);
   },
   engine(car) {
     if (!this.on) return;

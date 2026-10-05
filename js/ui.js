@@ -387,6 +387,7 @@ const UI = {
     if (d.cat === 'Literature' && !d.mapItem) { Actions.queue(Actions.read(it)); return; }
     if (d.mapItem) { MapView.reveal(); this.open('map'); return; }
     if (d.moveable) { Build.startMove(it); return; }
+    if (d.corpse) { Interact.dropCorpse(it); return; }
     if (d.boxOf) { Actions.queue(Actions.openBox(it)); return; }
     if (d.bag && d.bag.hand && !d.wpn) { if (it.equipped) Player.unequip(it); else Player.equip(it, 'secondary'); this.refresh(); return; }
     if (d.wpn || d.gun || d.tags.length || d.light || d.throwable || d.generator) { if (it.equipped) Player.unequip(it); else Player.equip(it, d.light ? 'secondary' : 'primary'); this.refresh(); return; }
@@ -420,6 +421,7 @@ const UI = {
     if (d.mapItem) add('Read map', () => { MapView.reveal(); this.open('map'); });
     if (d.boxOf) add('Open box', via(() => Actions.openBox(it)));
     if (d.moveable && mine) add('Place ' + Items.name(it).toLowerCase(), () => Build.startMove(it));
+    if (d.corpse && mine) add('Drop corpse here', () => Interact.dropCorpse(it));
     if (d.cat === 'Clothing' || d.bag) {
       if (it.worn) add('Take off', () => Actions.queue(Actions.unwear(it)));
       else if (d.slot || (d.bag && (d.bag.back || d.bag.belt))) add(d.bag ? 'Wear on ' + (d.bag.belt ? 'belt' : 'back') : 'Wear', via(() => Actions.wear(it)));
