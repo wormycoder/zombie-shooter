@@ -472,6 +472,24 @@ const Render = {
       }
     }
     for (const f of Fx.fires) lights.push({ x: f.x, y: f.y, r: 6, p: 0.9 });
+    if (amb < 0.6) {
+      for (const rm of w.rooms) {
+        if (!rm.lights) continue;
+        const rx0 = rm.x0 >= W0 ? rm.x0 - W0 : rm.x0, rx1 = rm.x1 >= W0 ? rm.x1 - W0 : rm.x1;
+        if (rx1 < vx0 - 4 || rx0 > vx0 + vw + 4 || rm.y1 < vy0 - 4 || rm.y0 > vy0 + vh + 4) continue;
+        if (!powered && !World.hasPower(rm.x0, rm.y0)) continue;
+        const spill = (ex, ey, d, ox, oy) => {
+          const f = World.feat(ex, ey, d);
+          if (!f || f.k !== 'window' || (f.barricade || 0) >= 2) return;
+          if (World.room(ox, oy) >= 0) return;
+          // light from an upstairs window falls on the ground below
+          const up = ox >= W0, gx = up ? ox - W0 : ox;
+          lights.push({ x: gx + 0.5 - (d ? (ox < ex ? -0.35 : 0.35) : 0) + (up ? 0.6 : 0), y: oy + 0.5 - (d ? 0 : (oy < ey ? -0.35 : 0.35)) + (up ? 0.6 : 0), r: up ? 4.2 : 3.6, p: (f.curtainsClosed && !f.smashed ? 0.16 : 0.34) * (up ? 0.6 : 1), out: true, warm: true });
+        };
+        for (let x = rm.x0; x <= rm.x1; x++) { spill(x, rm.y0, 0, x, rm.y0 - 1); spill(x, rm.y1 + 1, 0, x, rm.y1 + 1); }
+        for (let y = rm.y0; y <= rm.y1; y++) { spill(rm.x0, y, 1, rm.x0 - 1, y); spill(rm.x1 + 1, y, 1, rm.x1 + 1, y); }
+      }
+    }
     if (w.fire && w.fire.size) {
       const fl = [];
       for (const [i, e] of w.fire) {
@@ -637,7 +655,21 @@ const Render = {
       if (rope === 1) this.drawRope(ux, y, d, s, up ? WALL_H : 0.05, up ? WALL_H + 0.85 : WALL_H);
     }
     Spr.drawShaded(this.ctx, rec, X - rec.ax, Y - rec.ay, s, alpha);
+    if (f && f.k === 'window' && !cut && G.light.amb < 0.55 && (f.barricade || 0) < 3) this.windowGlow(x, y, d, f, alpha);
     if (rope === 2) this.drawRope(up ? x : x + LV.W0, y, d, s, up ? WALL_H : 0.05, up ? WALL_H + 0.85 : WALL_H);
+  },
+  // warm light in the windows of lit rooms after dark
+  windowGlow(x, y, d, f, alpha) {
+    const ra = World.room(x, y), rb = d ? World.room(x - 1, y) : World.room(x, y - 1);
+    const lit = (r) => r >= 0 && Wd.rooms[r].lights && (!G.events.powerOff || World.hasPower(x, y));
+    if (!lit(ra) && !lit(rb)) return;
+    const k = (1 - G.light.amb) * (f.curtainsClosed && !f.smashed ? 0.55 : 1) * (f.barricade ? 0.5 : 1) * (alpha === undefined ? 1 : alpha);
+    const [a0, a1, z0, z1] = f.big ? [0.05, 0.95, 0.3, 2.1] : [0.22, 0.78, 0.95, 2.0];
+    const Pt = (a, z) => d ? this.P(x, y + a, z) : this.P(x + a, y, z);
+    const ctx = this.ctx, op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    poly(ctx, [Pt(a0, z0), Pt(a1, z0), Pt(a1, z1), Pt(a0, z1)], 'rgba(255,190,100,' + (0.42 * k).toFixed(3) + ')');
+    ctx.globalCompositeOperation = op;
   },
   // knotted sheet rope hanging from an upstairs window (edge x,y,d upstairs), the part between heights z0..z1
   drawRope(x, y, d, s, z0, z1) {
