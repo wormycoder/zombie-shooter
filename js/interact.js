@@ -96,7 +96,8 @@ const Interact = {
   edgeMid(e) { return e[2] ? [e[0], e[1] + 0.5] : [e[0] + 0.5, e[1]]; },
   // ---------------------------------------------------------------- picking under the mouse
   pick(sx, sy) {
-    const [wx, wy] = Render.toWorld(sx, sy);
+    const lv = Render.plv();
+    const [wx, wy] = Render.toWorldL(sx, sy, lv);
     const fx = Math.floor(wx), fy = Math.floor(wy);
     let best = null, bestD = -Infinity;
     const z = Render.cam.zoom;
@@ -104,7 +105,7 @@ const Interact = {
     for (let y = fy - 1; y <= fy + 4; y++) for (let x = fx - 1; x <= fx + 4; x++) {
       for (const d of [0, 1]) {
         const t = World.wall(x, y, d);
-        if (!t) continue;
+        if (!t || t === WT.BOUND) continue;
         const h = WALL_INFO[t].h;
         const a = Render.toScreen(x, y, 0), b = d ? Render.toScreen(x, y + 1, 0) : Render.toScreen(x + 1, y, 0);
         const quad = [a, b, [b[0], b[1] - h * ZU * z], [a[0], a[1] - h * ZU * z]];
@@ -129,7 +130,7 @@ const Interact = {
       }
     }
     // cars
-    for (const car of G.cars) {
+    if (!lv) for (const car of G.cars) {
       const [cx, cy] = Render.toScreen(car.x, car.y, 0.6);
       if (Math.abs(sx - cx) < 44 * z && Math.abs(sy - cy) < 26 * z) { const depth = car.x + car.y + 1.5; if (depth > bestD - 0.5) { best = { car, tile: [Math.floor(car.x), Math.floor(car.y)] }; bestD = depth; } }
     }
@@ -206,7 +207,14 @@ const Interact = {
         if (f.locked && this.insideOf(f)) add('Unlock window', () => go(() => { f.locked = false; Sfx.play('lock'); }));
         add(f.open ? 'Close window' : 'Open window', () => go(() => this.toggleWindow(f, e)));
       }
-      if ((f.open || f.smashed) && !f.barricade) add('Climb through window', () => go(() => this.climb(e)));
+      const upOut = this.upperOutside(e);
+      if ((f.open || f.smashed) && !f.barricade) add(upOut ? (f.rope ? 'Climb down sheet rope' : 'Jump out of window') : 'Climb through window', () => go(() => this.climb(e)));
+      if (upOut && !f.rope && !f.barricade) add('Tie sheet rope (rope + nail)', () => go(() => {
+        const rope = Player.findId('SheetRope');
+        if (!rope || Player.count('Nails') < 1) return;
+        Actions.queue(Actions.mk('Tying sheet rope', 3, () => { if (!Player.findId('SheetRope') || Player.count('Nails') < 1) return; Player.removeItem(Player.findId('SheetRope')); Player.removeItem(Player.findId('Nails')); f.rope = true; Sfx.play('cloth'); UI.refresh(); }, { anim: 'work' }));
+      }), { disabled: !(Player.findId('SheetRope') && Player.count('Nails') >= 1) });
+      if (upOut && f.rope) add('Untie sheet rope', () => go(() => Actions.queue(Actions.mk('Untying sheet rope', 2, () => { if (!f.rope) return; f.rope = false; Player.addItem(Items.make('SheetRope')); Sfx.play('cloth'); UI.refresh(); }, { anim: 'work' }))));
       if (!f.smashed && !f.barricade) add('Smash window', () => go(() => this.smashWindow(e)));
       if (f.smashed && !f.glassOut) add('Remove broken glass', () => go(() => Actions.queue(Actions.removeWinGlass(e))));
       if (f.curtains && !f.smashed) add(f.curtainsClosed ? 'Open curtains' : 'Close curtains', () => go(() => { f.curtainsClosed = !f.curtainsClosed; Sfx.play('cloth'); }));
@@ -216,7 +224,81 @@ const Interact = {
     } else if (t && WALL_INFO[t].climb) {
       add('Climb over ' + WALL_INFO[t].n.toLowerCase(), () => go(() => this.climb(e)));
     }
+    // a sheet rope hanging from the window above
+    if (x < LV.W0) {
+      const f2 = World.feat(x + LV.W0, y, d);
+      if (f2 && f2.k === 'window' && f2.rope) add('Climb sheet rope', () => this.climbRope([x + LV.W0, y, d]));
+    }
     if (t && this.hasSledge()) add('Destroy with sledgehammer', () => go(() => Actions.queue(Actions.demolishEdge(e))));
+  },
+  dropOut(e, f, from, to, mx, my) {
+    const p = G.player;
+    const d = e[2];
+    const rope = !!(f && f.rope);
+    const dur = rope ? 2.6 : 1.0;
+    const sx = p.x, sy = p.y;
+    const ex = to[0] + 0.5 + (d ? 0 : (p.x - (from[0] + 0.5)) * 0.3), ey = to[1] + 0.5 + (d ? (p.y - (from[1] + 0.5)) * 0.3 : 0);
+    const tx = U.lerp(ex, mx, 0.35), ty = U.lerp(ey, my, 0.35);
+    p.angle = Math.atan2(ty - sy, tx - sx);
+    const a = Actions.mk(rope ? 'Climbing down sheet rope' : 'Jumping out', dur, () => {
+      p.climb = null;
+      p.x = tx - LV.W0; p.y = ty;
+      World.resolve(p, p.r);
+      if (f && f.smashed && !f.glassOut && R.chance(0.5)) Player.addWound(R.pick(['HandL', 'HandR', 'ForeArmL', 'ForeArmR']), 'cut', { isZombie: false });
+      if (!rope) {
+        Sfx.play('thud'); Noise.emit(p.x, p.y, 9, 'thud');
+        const legs = ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR'];
+        const n = R.chance(0.45) ? 2 : 1;
+        for (let k = 0; k < n; k++) Player.addWound(R.pick(legs), R.chance(0.3) ? 'deep' : 'scratch', { isZombie: false });
+        p.hurtFlash = 1;
+        p.st.endurance = Math.max(0, p.st.endurance - 0.2);
+      } else Player.xp('Nimble', 1);
+    }, {
+      anim: 'climb',
+      begin: () => { p.climb = { t: 0 }; },
+      tick: () => { const k = a.t / dur; p.climb.t = k; p.x = U.lerp(sx, tx, Math.min(1, k * 1.4)); p.y = U.lerp(sy, ty, Math.min(1, k * 1.4)); },
+      onCancel: () => { p.climb = null; p.x = sx; p.y = sy; },
+    });
+    Actions.queue(a);
+  },
+  // an upstairs window/edge whose far side is open air
+  upperOutside(e) {
+    const [x, y, d] = e;
+    if (x < LV.W0) return false;
+    const [a, b] = World.edgeSides(x, y, d);
+    return (World.inb(a[0], a[1]) && Wd.floor[a[1] * Wd.w + a[0]] === FL.VOID) || (World.inb(b[0], b[1]) && Wd.floor[b[1] * Wd.w + b[0]] === FL.VOID);
+  },
+  // climb up a sheet rope from the ground into the upstairs window
+  climbRope(e) {
+    const p = G.player;
+    const [x, y, d] = e;
+    const f = World.feat(x, y, d);
+    if (!f || !f.rope) return;
+    const [a, b] = World.edgeSides(x, y, d);
+    const out = Wd.floor[a[1] * Wd.w + a[0]] === FL.VOID ? a : b, inn = out === a ? b : a;
+    const gx = out[0] - LV.W0 + 0.5, gy = out[1] + 0.5;
+    const mx = d ? x - LV.W0 : x - LV.W0 + 0.5, my = d ? y + 0.5 : y;
+    const bx = U.lerp(gx, mx, 0.55), by = U.lerp(gy, my, 0.55);
+    if (U.dist(p.x, p.y, bx, by) > 0.9) { this.goDo(bx, by, () => this.climbRope(e), 0.6); return; }
+    if (f.barricade || !(f.open || f.smashed)) { Player.say("The window up there is closed.", '#ccc'); return; }
+    if (World.tileSolid(inn[0], inn[1])) { Player.say("Something is blocking the window.", '#ccc'); return; }
+    if (Player.heavyRatio() > 1.25) { Player.say("I'm carrying too much to climb.", '#ccc'); return; }
+    const dur = 4.2 - Player.skill('Strength') * 0.15 - Player.skill('Nimble') * 0.1;
+    const sx = p.x, sy = p.y;
+    p.angle = Math.atan2(my - sy, mx - sx);
+    const a2 = Actions.mk('Climbing sheet rope', dur, () => {
+      p.climb = null;
+      p.x = U.lerp(inn[0] + 0.5, d ? x : x + 0.5, 0.3); p.y = U.lerp(inn[1] + 0.5, d ? y + 0.5 : y, 0.3);
+      World.resolve(p, p.r);
+      p.st.endurance = Math.max(0, p.st.endurance - 0.12);
+      Player.xp('Strength', 2); Player.xp('Nimble', 1);
+    }, {
+      anim: 'climb',
+      begin: () => { p.climb = { t: 0 }; },
+      tick: () => { p.climb.t = (a2.t / dur * 4) % 1; p.x = U.lerp(sx, mx, Math.min(1, a2.t / dur * 2) * 0.7); p.y = U.lerp(sy, my, Math.min(1, a2.t / dur * 2) * 0.7); },
+      onCancel: () => { p.climb = null; p.x = sx; p.y = sy; },
+    });
+    Actions.queue(a2);
   },
   hasSledge() { const it = Player.primary(); return !!(it && Items.has(it, 'sledge') && it.cond > 0); },
   insideOf(f) {
@@ -272,7 +354,18 @@ const Interact = {
     if (o.t === 'pump') { const can = Player.find(i => i.id === 'GasCan' && i.fl < 0.99); if (can) add('Fill gas can', () => go(() => Actions.queue(Actions.pumpGas(can)))); }
     const wood = ['bed', 'table', 'chair', 'wardrobe', 'dresser', 'nightstand', 'bookshelf', 'crate', 'woodcrate', 'desk', 'counter', 'pew', 'bench', 'sofa', 'armchair', 'toolcab'];
     if (wood.includes(o.t)) add('Disassemble', () => go(() => Actions.queue(Actions.disassemble(x, y))), { disabled: !(Player.findTag('hammer') || Player.findTag('saw') || Player.findTag('screwdriver')) });
-    if (this.hasSledge() && o.t !== 'tree' && o.t !== 'crop') add('Destroy with sledgehammer', () => go(() => Actions.queue(Actions.demolishObj(x, y))));
+    if (o.sx !== undefined) {
+      const st = Wd.stairs.find(q => q.x === o.sx && q.y === o.sy);
+      if (st) {
+        if (p.x < LV.W0) add('Go upstairs', () => this.goDo(st.x + st.dx + LV.W0 + 0.5, st.y + st.dy + 0.5, () => {}, 0.6));
+        else {
+          const bx = st.x - st.dx * 3, by = st.y - st.dy * 3;
+          const ok = !World.tileSolid(bx, by) && World.room(bx, by) === World.room(st.x, st.y);
+          add('Go downstairs', () => this.goDo((ok ? bx : st.x - st.dx * 2) + 0.5, (ok ? by : st.y - st.dy * 2) + 0.5, () => {}, 0.6));
+        }
+      }
+    }
+    if (this.hasSledge() && o.t !== 'tree' && o.t !== 'crop') add(o.sx !== undefined ? 'Destroy stairs with sledgehammer' : 'Destroy with sledgehammer', () => go(() => Actions.queue(Actions.demolishObj(x, y))));
   },
   groundOptions(tx, ty, add, t) {
     const p = G.player;
@@ -388,11 +481,15 @@ const Interact = {
       // pick side closest to the player as 'from'
       if (U.dist(p.x, p.y, to[0] + 0.5, to[1] + 0.5) < U.dist(p.x, p.y, from[0] + 0.5, from[1] + 0.5)) { const tmp = from; from = to; to = tmp; }
     }
-    if (World.tileSolid(to[0], to[1])) { Player.say("Something is blocking the way.", '#ccc'); return; }
+    // out of an upstairs window: down a sheet rope, or a painful drop
+    const drop = to[0] >= LV.W0 && Wd.floor[to[1] * Wd.w + to[0]] === FL.VOID;
+    if (drop && World.tileSolid(to[0] - LV.W0, to[1])) { Player.say("Something is in the way down there.", '#ccc'); return; }
+    if (!drop && World.tileSolid(to[0], to[1])) { Player.say("Something is blocking the way.", '#ccc'); return; }
     const [mx, my] = this.edgeMid(e);
     const dist = U.dist(p.x, p.y, mx, my);
     if (dist > 1.4) { this.goDo(mx, my, () => this.climb(e), 1.2); return; }
     const isWin = f && f.k === 'window';
+    if (drop) { this.dropOut(e, f, from, to, mx, my); return; }
     const dur = isWin ? 1.6 : (WALL_INFO[t].climb || 1.5) * (1 - Player.skill('Nimble') * 0.04);
     const sx = p.x, sy = p.y;
     const ex = to[0] + 0.5 + (d ? 0 : (p.x - (from[0] + 0.5)) * 0.3), ey = to[1] + 0.5 + (d ? (p.y - (from[1] + 0.5)) * 0.3 : 0);

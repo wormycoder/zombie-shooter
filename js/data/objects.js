@@ -52,6 +52,10 @@ const OBJ = {
   sign: { n: 'Sign', solid: false, h: 2.6 },
   grave: { n: 'Grave', solid: false, h: 0.6 },
   hydrant: { n: 'Fire Hydrant', solid: 'circle', rad: 0.15, h: 0.6 },
+  stairs: { n: 'Stairs', solid: false, h: 2.45 },
+  landing: { n: 'Stairs', solid: 'portal', h: 2.45 },
+  railing: { n: 'Stairwell', solid: true, h: 0.9 },
+  stairtop: { n: 'Stairs', solid: false, h: 0.3 },
 };
 
 // Crop types for farming
@@ -65,11 +69,15 @@ const CROPS = {
 // Floor types
 const FL = {
   GRASS: 0, GRASS2: 1, DIRT: 2, ASPHALT: 3, SIDEWALK: 4, WOOD: 5, TILE: 6, CARPET: 7, WATER: 8, SAND: 9,
-  CONCRETE: 10, GRAVEL: 11, FOREST: 12, FURROW: 13, LINO: 14, DEEPWATER: 15, PARKING: 16,
+  CONCRETE: 10, GRAVEL: 11, FOREST: 12, FURROW: 13, LINO: 14, DEEPWATER: 15, PARKING: 16, VOID: 17,
 };
-const FLOOR_NAMES = ['Grass', 'Grass', 'Dirt', 'Asphalt', 'Sidewalk', 'Wooden Floor', 'Tiles', 'Carpet', 'Water', 'Sand', 'Concrete', 'Gravel', 'Forest Floor', 'Furrow', 'Linoleum', 'Deep Water', 'Parking Lot'];
+const FLOOR_NAMES = ['Grass', 'Grass', 'Dirt', 'Asphalt', 'Sidewalk', 'Wooden Floor', 'Tiles', 'Carpet', 'Water', 'Sand', 'Concrete', 'Gravel', 'Forest Floor', 'Furrow', 'Linoleum', 'Deep Water', 'Parking Lot', 'Open air'];
+// Upper floors live in a second copy of the map to the east: x + LV.W0 is the tile above x.
+const LV = { W0: 240 };
+function lvOf(x) { return x >= LV.W0 ? 1 : 0; }
+function vxOf(x) { return x >= LV.W0 ? x - LV.W0 : x; }
 // Wall types
-const WT = { NONE: 0, EXT: 1, INT: 2, BRICK: 3, PICKET: 4, WOODFENCE: 5, CHAIN: 6, BUILT: 7, LOG: 8 };
+const WT = { NONE: 0, EXT: 1, INT: 2, BRICK: 3, PICKET: 4, WOODFENCE: 5, CHAIN: 6, BUILT: 7, LOG: 8, BOUND: 9 };
 const WALL_INFO = {
   1: { n: 'Wall', h: WALL_H, see: false, climb: false, hp: 0 },
   2: { n: 'Wall', h: WALL_H, see: false, climb: false, hp: 0 },
@@ -79,4 +87,5 @@ const WALL_INFO = {
   6: { n: 'Chain-link Fence', h: 1.8, see: true, climb: 2.4, hp: 250, fence: true },
   7: { n: 'Wooden Wall', h: WALL_H, see: false, climb: false, hp: 450, built: true },
   8: { n: 'Log Wall', h: 1.3, see: true, climb: 1.6, hp: 600, built: true, fence: true },
+  9: { n: '', h: 0, see: false, climb: false, hp: 0, invisible: true },
 };

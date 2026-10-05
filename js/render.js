@@ -3,14 +3,18 @@
 // Isometric renderer
 // ---------------------------------------------------------------------------
 const Render = {
-  cam: { x: 120, y: 120, zoom: 1.25, tz: 1.25 },
+  cam: { x: 120, y: 120, z: 0, zoom: 1.25, tz: 1.25 },
   init(cv) {
     this.cv = cv;
     this.ctx = cv.getContext('2d');
     this.lcv = mkCanvas(64, 64);
     this.lctx = this.lcv.getContext('2d');
+    this.lcv1 = mkCanvas(64, 64);
+    this.lctx1 = this.lcv1.getContext('2d');
     this.lightB = new Float32Array(1);
     this.shadeB = new Float32Array(1);
+    this.lightB1 = new Float32Array(1);
+    this.shadeB1 = new Float32Array(1);
     window.addEventListener('resize', () => this.resize());
     this.resize();
   },
@@ -21,19 +25,48 @@ const Render = {
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
   },
   camIX: 0, camIY: 0,
+  // world -> screen. Tiles of the upper floor (x >= LV.W0) are drawn one storey up.
   toScreen(x, y, z) {
+    if (x >= LV.W0) { x -= LV.W0; z = (z || 0) + WALL_H; }
     const z0 = this.cam.zoom;
     return [((x - y) * HTW - this.camIX) * z0 + this.W / 2, ((x + y) * HTH - (z || 0) * ZU - this.camIY) * z0 + this.H / 2];
   },
+  // screen -> ground-plane world coords
   toWorld(sx, sy) {
     const z0 = this.cam.zoom;
     const X = (sx - this.W / 2) / z0 + this.camIX, Y = (sy - this.H / 2) / z0 + this.camIY;
     return [(X / HTW + Y / HTH) / 2, (Y / HTH - X / HTW) / 2];
   },
+  // screen -> world coords on the floor of level lv
+  toWorldL(sx, sy, lv) {
+    if (!lv) return this.toWorld(sx, sy);
+    const w = this.toWorld(sx, sy + WALL_H * ZU * this.cam.zoom);
+    return [w[0] + LV.W0, w[1]];
+  },
+  plv() { const p = G.player; return p && !p.dead && !p.inCar && p.x >= LV.W0 ? 1 : 0; },
+  mouseWorld() {
+    const p = G.player, lv = this.plv();
+    if (!lv && p && !p.dead && !p.inCar) { const zf = World.stairZ(p); if (zf > 0) return this.toWorld(Input.mx, Input.my + zf * ZU * this.cam.zoom); }
+    return this.toWorldL(Input.mx, Input.my, lv);
+  },
+  // world-pixel position of a point (level aware)
+  P(x, y, z) {
+    if (x >= LV.W0) { x -= LV.W0; z = (z || 0) + WALL_H; }
+    return [(x - y) * HTW, (x + y) * HTH - (z || 0) * ZU];
+  },
+  // visual height of an entity's feet (upstairs or part way up a staircase)
+  entZ(e) { return e.x >= LV.W0 ? WALL_H : World.stairZ(e); },
+  epos(e, zo) {
+    const up = e.x >= LV.W0, x = up ? e.x - LV.W0 : e.x;
+    const z = (up ? WALL_H : World.stairZ(e)) + (zo || 0);
+    return [(x - e.y) * HTW, (x + e.y) * HTH - z * ZU];
+  },
   shadeAt(x, y) {
+    let B = this.shadeB;
+    if (x >= LV.W0) { x -= LV.W0; B = this.shadeB1; if (!this.has1) return 0.3; }
     const i = Math.floor(x) - this.vx0, j = Math.floor(y) - this.vy0;
     if (i < 0 || j < 0 || i >= this.vw || j >= this.vh) return 0.3;
-    return this.shadeB[j * this.vw + i];
+    return B[j * this.vw + i];
   },
   shadeSmooth(x, y) {
     const fx = x - 0.5, fy = y - 0.5;
@@ -42,19 +75,30 @@ const Render = {
     return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
   },
   lightAt(x, y) {
+    let B = this.lightB;
+    if (x >= LV.W0) { x -= LV.W0; B = this.lightB1; if (!this.has1) return 0.3; }
     const i = Math.floor(x) - this.vx0, j = Math.floor(y) - this.vy0;
     if (i < 0 || j < 0 || i >= this.vw || j >= this.vh) return 0.3;
-    return this.lightB[j * this.vw + i];
+    return B[j * this.vw + i];
+  },
+  // building id an upstairs wall edge belongs to, and whether it is an outside wall
+  edgeB(x, y, d) {
+    const w = Wd;
+    const ra = World.room(x, y), rb = d ? World.room(x - 1, y) : World.room(x, y - 1);
+    const ba = ra >= 0 ? w.rooms[ra].b : -1, bb = rb >= 0 ? w.rooms[rb].b : -1;
+    this._ext = ba !== bb;
+    return ba >= 0 ? ba : bb;
   },
 
   // ------------------------------------------------------------------ frame
   frame(dt) {
     const w = Wd, ctx = this.ctx, cam = this.cam, p = G.player;
     if (!w) return;
+    const W0 = LV.W0, HH = WALL_H;
     cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 10);
     const z = cam.zoom, dpr = this.dpr;
     this.camIX = (cam.x - cam.y) * HTW;
-    this.camIY = (cam.x + cam.y) * HTH - 0.8 * ZU;
+    this.camIY = (cam.x + cam.y) * HTH - 0.8 * ZU - (cam.z || 0) * ZU;
     if (p && !p.dead && p.st && p.st.drunk > 0.25) {
       const t2 = performance.now() / 1000, k = (p.st.drunk - 0.25) * 28;
       this.camIX += Math.sin(t2 * 0.9) * k; this.camIY += Math.sin(t2 * 0.7 + 1) * k * 0.6;
@@ -67,13 +111,25 @@ const Render = {
     // iso-pixel bounds of screen
     const L = (0 - ox) / z, Rr = (this.W - ox) / z, T = (0 - oy) / z, B = (this.H - oy) / z;
     this.scr = { L, R: Rr, T, B };
-    // tile bounds
+    // tile bounds (ground map only; the upper floors are looked up at x + W0)
     const cs = [this.toWorld(0, 0), this.toWorld(this.W, 0), this.toWorld(0, this.H), this.toWorld(this.W, this.H)];
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const c of cs) { minX = Math.min(minX, c[0]); minY = Math.min(minY, c[1]); maxX = Math.max(maxX, c[0]); maxY = Math.max(maxY, c[1]); }
+    const GW = w.gw || w.w;
     minX = Math.max(0, Math.floor(minX) - 2); minY = Math.max(0, Math.floor(minY) - 2);
-    maxX = Math.min(w.w - 1, Math.ceil(maxX) + 8); maxY = Math.min(w.h - 1, Math.ceil(maxY) + 8);
+    maxX = Math.min(GW - 1, Math.ceil(maxX) + 8); maxY = Math.min(w.h - 1, Math.ceil(maxY) + 8);
     this.vx0 = minX; this.vy0 = minY; this.vw = maxX - minX + 1; this.vh = maxY - minY + 1;
+    // which buildings show an upper floor, and how
+    const live = p && (!p.dead || G.corpse);
+    const plv = live && p.x >= W0 ? 1 : 0;
+    this.plv_ = plv;
+    const pb = live ? World.building(Math.floor(p.x), Math.floor(p.y)) : null;
+    this.pb = pb;
+    const openB = plv && pb && pb.floors === 2 ? pb : null;
+    const hiddenId = !plv && pb && pb.floors === 2 ? pb.id : -1;
+    let any2 = false;
+    for (const b of w.buildings) if (b.floors === 2 && !(b.x1 < minX - 2 || b.x0 > maxX || b.y1 < minY - 2 || b.y0 > maxY)) { any2 = true; break; }
+    this.has1 = any2;
     this.computeLight();
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     // ---------------- floor pass
@@ -94,7 +150,7 @@ const Render = {
         if (HARD_FLOORS[f] && w.room[i] < 0) {
           for (let dn = 0; dn < 4; dn++) {
             const nx = x + FR_DX[dn], ny = y + FR_DY[dn];
-            if (nx < 0 || ny < 0 || nx >= W_ || ny >= w.h) continue;
+            if (nx < 0 || ny < 0 || nx >= GW || ny >= w.h) continue;
             const nf = w.floor[ny * W_ + nx];
             if (nf === FL.GRASS || nf === FL.GRASS2 || nf === FL.FOREST) { const r3 = Spr.fringe(dn, nf, vx); ctx.drawImage(r3.c, X - r3.ax, Y - r3.ay); }
           }
@@ -102,41 +158,45 @@ const Render = {
       }
     }
     // decals
+    const dec1 = new Map();
     for (const d of w.decals) {
+      if (d.x >= W0 - 0.5) {
+        if (openB) { const k = Math.floor(d.y + 0.5) * W_ + Math.floor(d.x + 0.5); let a = dec1.get(k); if (!a) { a = []; dec1.set(k, a); } a.push(d); }
+        continue;
+      }
       if (d.x < minX || d.x > maxX + 1 || d.y < minY || d.y > maxY + 1) continue;
-      const X = (d.x - d.y) * HTW, Y = (d.x + d.y) * HTH;
-      const rec = Spr.blood(d.v);
-      ctx.globalAlpha = U.clamp(1 - d.age / 400, 0.25, 1) * (d.a || 1);
-      const s = d.s || 1;
-      ctx.drawImage(rec.c, X - rec.ax * s, Y - (rec.ay + 16) * s, rec.c.width * s, rec.c.height * s);
+      this.drawDecal(ctx, d, 0);
     }
     ctx.globalAlpha = 1;
     // floor items
     for (const [i, arr] of w.items) {
       const x = i % W_, y = (i / W_) | 0;
       if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      for (const it of arr) {
-        const X = (x + it.fx - y - it.fy) * HTW, Y = (x + it.fx + y + it.fy) * HTH;
-        const ic = Icons.canvas(it);
-        ctx.drawImage(ic, X - 9, Y - 12, 18, 18);
-      }
+      this.drawItems(ctx, x, y, arr, 0);
     }
     // corpses & downed bodies (flat things)
-    this.flatEnts = [];
+    const flat1 = new Map();
     for (const zb of G.zombies) {
+      if (!(zb.dead && (zb.lie || 0) >= 0.99)) continue;
+      if (zb.x >= W0) {
+        if (openB) { const k = Math.floor(zb.y) * W_ + Math.floor(zb.x); let a = flat1.get(k); if (!a) { a = []; flat1.set(k, a); } a.push(zb); }
+        continue;
+      }
       if (zb.x < minX - 2 || zb.x > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
-      if (zb.dead && (zb.lie || 0) >= 0.99) Zombie.draw(ctx, zb, true);
+      Zombie.draw(ctx, zb, true);
     }
-    if (G.corpse && p && p.dead) Player.draw(ctx);
+    if (G.corpse && p && p.dead && p.x < W0) Player.draw(ctx);
     // ---------------- light overlay on floors
     this.drawLightOverlay();
     // ---------------- main pass
     const buckets = new Map();
     const addB = (x, y, e, k) => { const key = Math.floor(y) * W_ + Math.floor(x); let a = buckets.get(key); if (!a) { a = []; buckets.set(key, a); } a.push([k, e]); };
     if (p && !p.dead && !p.inCar) addB(p.x, p.y, p, 'p');
+    if (G.corpse && p && p.dead && p.x >= W0) addB(p.x, p.y, p, 'p');
     for (const zb of G.zombies) {
       if (zb.dead && (zb.lie || 0) >= 0.99) continue;
-      if (zb.x < minX - 2 || zb.x > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
+      const ex = zb.x >= W0 ? zb.x - W0 : zb.x;
+      if (ex < minX - 2 || ex > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
       addB(zb.x, zb.y, zb, 'z');
     }
     for (const c of G.cars) {
@@ -145,36 +205,95 @@ const Render = {
     }
     // buildings roofs by diagonal
     const roofs = new Map();
-    const live = p && (!p.dead || G.corpse);
-    const pb = live ? World.building(Math.floor(p.x), Math.floor(p.y)) : null;
-    this.pb = pb;
     for (const b of w.buildings) {
       if (b.x1 < minX - 2 || b.x0 > maxX || b.y1 < minY - 2 || b.y0 > maxY) continue;
       if (pb && b.id === pb.id) continue;
       const d = b.x1 + b.y1;
       let a = roofs.get(d); if (!a) { a = []; roofs.set(d, a); } a.push(b);
     }
-    const PX = p ? (p.x - p.y) * HTW : 0, PY = p ? (p.x + p.y) * HTH : 0;
+    const pp = live ? this.epos(p) : [0, 0];
+    const PX = pp[0], PY = pp[1];
     this.PX = PX; this.PY = PY;
+    // stairwell opening of the floor the player stands on: ground floor stuff is only seen through it
+    let openPath = null, see = null;
+    if (openB) {
+      openPath = new Path2D(); see = new Set();
+      for (let y = openB.y0; y <= openB.y1; y++) for (let x = openB.x0; x <= openB.x1; x++) {
+        const o = w.obj[y * W_ + x + W0];
+        if (!o || (o.t !== 'railing' && o.t !== 'stairtop')) continue;
+        const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
+        openPath.moveTo(X, Y); openPath.lineTo(X + HTW, Y + HTH); openPath.lineTo(X, Y + TH); openPath.lineTo(X - HTW, Y + HTH); openPath.closePath();
+        for (let yy = y - 4; yy <= y + 1; yy++) for (let xx = x - 4; xx <= x + 1; xx++) see.add(yy * W_ + xx);
+      }
+    }
+    const pl = live ? p : null;
+    const upReady = openB ? this.prepUpFloor(openB, dec1) : false;
     const dMin = minX + minY, dMax = maxX + maxY;
     for (let d = dMin; d <= dMax; d++) {
       const xa = Math.max(minX, d - maxY), xb = Math.min(maxX, d - minY);
+      // ---- ground level
       for (let x = xa; x <= xb; x++) {
         const y = d - x;
         const X = (x - y) * HTW, Y = (x + y) * HTH;
         if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 280) continue;
         const i = y * W_ + x;
-        if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, live ? p : null);
-        if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, live ? p : null);
-        const o = w.obj[i];
-        if (o) this.drawObj(o, x, y, X, Y, live ? p : null, t);
+        const inOpen = openB && x >= openB.x0 && x <= openB.x1 && y >= openB.y0 && y <= openB.y1;
         const bk = buckets.get(i);
+        if (inOpen) {
+          if (!see.has(i)) continue;
+          if (w.wallN[i] || w.wallW[i] || w.obj[i]) {
+            ctx.save(); ctx.clip(openPath);
+            if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+            if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+            if (w.obj[i]) this.drawObj(w.obj[i], x, y, X, Y, pl, t, x);
+            ctx.restore();
+          }
+          if (bk) for (const [k, e] of bk) {
+            // whatever rises above the upper floor (someone on the stairs) shows outside the opening too
+            const cp = new Path2D(openPath);
+            const yl = (e.x + e.y) * HTH - HH * ZU;
+            cp.rect(L - 200, T - 600, (Rr - L) + 400, yl - (T - 600));
+            ctx.save(); ctx.clip(cp);
+            this.drawEnt(ctx, k, e);
+            ctx.restore();
+          }
+          continue;
+        }
+        if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+        if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+        const o = w.obj[i];
+        if (o) this.drawObj(o, x, y, X, Y, pl, t, x);
         if (bk) {
           if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
-          for (const [k, e] of bk) {
-            if (k === 'p') Player.draw(ctx);
-            else if (k === 'z') Zombie.draw(ctx, e, false);
-            else if (k === 'c') Vehicles.draw(ctx, e);
+          for (const [k, e] of bk) this.drawEnt(ctx, k, e);
+        }
+      }
+      // ---- upper floors
+      if (any2) {
+        if (upReady) {
+          if (d === dMin) this.drawUpFloor(ctx, openB, d, flat1);
+          this.drawUpFloor(ctx, openB, d + 1, flat1);
+        }
+        for (let x = xa; x <= xb; x++) {
+          const y = d - x;
+          const i1 = y * W_ + x + W0;
+          const wn = w.wallN[i1], ww = w.wallW[i1], o = w.obj[i1], bk = buckets.get(i1);
+          if (!wn && !ww && !o && !bk) continue;
+          const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
+          if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 200) continue;
+          if (wn && wn !== WT.BOUND) {
+            const bid = this.edgeB(x + W0, y, 0);
+            if (bid >= 0 && bid !== hiddenId && ((openB && bid === openB.id) || this._ext)) this.drawWall(x + W0, y, 0, X, Y, pb, pl, 1);
+          }
+          if (ww && ww !== WT.BOUND) {
+            const bid = this.edgeB(x + W0, y, 1);
+            if (bid >= 0 && bid !== hiddenId && ((openB && bid === openB.id) || this._ext)) this.drawWall(x + W0, y, 1, X, Y, pb, pl, 1);
+          }
+          if (!openB || x < openB.x0 || x > openB.x1 || y < openB.y0 || y > openB.y1) continue;
+          if (o) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
+          if (bk) {
+            if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
+            for (const [k, e] of bk) this.drawEnt(ctx, k, e);
           }
         }
       }
@@ -191,37 +310,134 @@ const Render = {
     Weather.drawScreen(ctx, this.W, this.H, dt);
     this.drawVignette(ctx);
   },
+  drawEnt(ctx, k, e) {
+    if (k === 'p') Player.draw(ctx);
+    else if (k === 'z') Zombie.draw(ctx, e, false);
+    else if (k === 'c') Vehicles.draw(ctx, e);
+  },
+  drawDecal(ctx, d, lv) {
+    const dx = lv ? d.x - LV.W0 : d.x;
+    const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);
+    const rec = Spr.blood(d.v);
+    ctx.globalAlpha = U.clamp(1 - d.age / 400, 0.25, 1) * (d.a || 1);
+    const s = d.s || 1;
+    ctx.drawImage(rec.c, X - rec.ax * s, Y - (rec.ay + 16) * s, rec.c.width * s, rec.c.height * s);
+  },
+  drawItems(ctx, x, y, arr, lv) {
+    const vx = lv ? x - LV.W0 : x, zo = lv ? WALL_H * ZU : 0;
+    for (const it of arr) {
+      const X = (vx + it.fx - y - it.fy) * HTW, Y = (vx + it.fx + y + it.fy) * HTH - zo;
+      ctx.drawImage(Icons.canvas(it), X - 9, Y - 12, 18, 18);
+    }
+  },
+  // The floor of the storey the player is on is composited (tiles, decals, items, light) on an
+  // offscreen layer once per frame, then copied in one diagonal at a time during the painter sweep.
+  prepUpFloor(b, dec1) {
+    const w = Wd, W_ = w.w, W0 = LV.W0, HH = WALL_H;
+    const cw = this.cv.width, ch = this.cv.height;
+    if (!this.ucv) { this.ucv = mkCanvas(cw, ch); this.uctx = this.ucv.getContext('2d'); }
+    if (this.ucv.width !== cw || this.ucv.height !== ch) { this.ucv.width = cw; this.ucv.height = ch; }
+    const g = this.uctx, z = this.cam.zoom, dpr = this.dpr;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, cw, ch);
+    g.setTransform(dpr * z, 0, 0, dpr * z, dpr * this.ox, dpr * this.oy);
+    g.imageSmoothingEnabled = true;
+    const clip = new Path2D();
+    let n = 0;
+    for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) {
+      const i1 = y * W_ + x + W0;
+      const f = w.floor[i1];
+      if (f === FL.VOID) continue;
+      const o = w.obj[i1];
+      if (o && (o.t === 'railing' || o.t === 'stairtop')) continue;
+      const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
+      const rec = Spr.floor(f, w.fvar[i1], (x * 7 + y * 13) & 3);
+      g.drawImage(rec.c, X - rec.ax, Y - rec.ay);
+      clip.moveTo(X, Y); clip.lineTo(X + HTW, Y + HTH); clip.lineTo(X, Y + TH); clip.lineTo(X - HTW, Y + HTH); clip.closePath();
+      n++;
+    }
+    if (!n) return false;
+    for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) {
+      const i1 = y * W_ + x + W0;
+      const dl = dec1.get(i1);
+      if (dl) { for (const d of dl) this.drawDecal(g, d, 1); g.globalAlpha = 1; }
+      const arr = w.items.get(i1);
+      if (arr) this.drawItems(g, x + W0, y, arr, 1);
+    }
+    g.save();
+    g.clip(clip);
+    const s = dpr * z;
+    g.setTransform(s * HTW, s * HTH, -s * HTW, s * HTH, dpr * (this.ox + z * (this.vx0 - this.vy0) * HTW), dpr * (this.oy + z * ((this.vx0 + this.vy0) * HTH - HH * ZU)));
+    g.drawImage(this.lcv1, 0, 0);
+    g.restore();
+    return true;
+  },
+  drawUpFloor(ctx, b, dd, flat1) {
+    const w = Wd, W_ = w.w, W0 = LV.W0, HH = WALL_H;
+    const xa = Math.max(b.x0, dd - b.y1), xb = Math.min(b.x1, dd - b.y0);
+    if (xa > xb) return;
+    ctx.save();
+    ctx.beginPath();
+    let n = 0, minX = Infinity, maxX = -Infinity;
+    const e = 1.2; // overlap neighbouring diagonals so antialiased clip edges leave no seams
+    for (let x = xa; x <= xb; x++) {
+      const y = dd - x, i1 = y * W_ + x + W0;
+      if (w.floor[i1] === FL.VOID) continue;
+      const o = w.obj[i1];
+      if (o && (o.t === 'railing' || o.t === 'stairtop')) continue;
+      const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
+      ctx.moveTo(X, Y - e); ctx.lineTo(X + HTW + e * 2, Y + HTH); ctx.lineTo(X, Y + TH + e); ctx.lineTo(X - HTW - e * 2, Y + HTH); ctx.closePath();
+      n++; minX = Math.min(minX, X - HTW - 4); maxX = Math.max(maxX, X + HTW + 4);
+    }
+    if (n) {
+      ctx.clip();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(this.ucv, 0, 0);
+    }
+    ctx.restore();
+    for (let x = xa; x <= xb; x++) {
+      const fl = flat1.get((dd - x) * W_ + x + W0);
+      if (fl) for (const zb of fl) Zombie.draw(ctx, zb, true);
+    }
+  },
 
   // ------------------------------------------------------------------ lighting
   computeLight() {
     const w = Wd, p = G.player;
     const n = this.vw * this.vh;
-    if (this.lightB.length < n) { this.lightB = new Float32Array(n * 1.3 | 0); this.shadeB = new Float32Array(n * 1.3 | 0); }
-    const LB = this.lightB, SB = this.shadeB;
+    if (this.lightB.length < n) {
+      const m = n * 1.3 | 0;
+      this.lightB = new Float32Array(m); this.shadeB = new Float32Array(m);
+      this.lightB1 = new Float32Array(m); this.shadeB1 = new Float32Array(m);
+    }
     const amb = G.light.amb;
-    const vx0 = this.vx0, vy0 = this.vy0, vw = this.vw, vh = this.vh, W_ = w.w;
+    const vx0 = this.vx0, vy0 = this.vy0, vw = this.vw, vh = this.vh, W_ = w.w, W0 = LV.W0;
     const powered = !G.events.powerOff;
     const lights = [];
-    for (let j = 0; j < vh; j++) {
-      const y = vy0 + j;
-      for (let i = 0; i < vw; i++) {
-        const x = vx0 + i;
-        const idx = y * W_ + x, k = j * vw + i;
-        const r = w.room[idx];
-        let l;
-        if (r < 0) l = amb;
-        else {
-          l = amb * 0.74;
-          const rm = w.rooms[r];
-          if (rm.lights && (powered || World.hasPower(x, y))) l = Math.max(l, 0.9);
-        }
-        LB[k] = l;
-        const o = w.obj[idx];
-        if (o) {
-          if (o.t === 'lamppost' && amb < 0.6 && powered) lights.push({ x: x + 0.5, y: y + 1, r: 7.5, p: 0.75, out: true });
-          else if (o.t === 'lamp' && r >= 0 && w.rooms[r].lights && (powered || World.hasPower(x, y))) lights.push({ x: x + 0.5, y: y + 0.5, r: 4, p: 0.4, room: r });
-          else if ((o.t === 'campfire' && o.lit) || (o.t === 'bbq' && o.lit)) lights.push({ x: x + 0.5, y: y + 0.5, r: 6, p: 0.85 + Math.sin(performance.now() / 90) * 0.06, warm: true });
-          else if (o.t === 'tv' && o.on) lights.push({ x: x + 0.5, y: y + 0.5, r: 3, p: 0.3 });
+    const layers = this.has1 ? 2 : 1;
+    for (let lv = 0; lv < layers; lv++) {
+      const LB = lv ? this.lightB1 : this.lightB, off = lv ? W0 : 0;
+      for (let j = 0; j < vh; j++) {
+        const y = vy0 + j;
+        for (let i = 0; i < vw; i++) {
+          const x = vx0 + i + off;
+          const idx = y * W_ + x, k = j * vw + i;
+          const r = w.room[idx];
+          let l;
+          if (r < 0) l = amb;
+          else {
+            l = amb * 0.74;
+            const rm = w.rooms[r];
+            if (rm.lights && (powered || World.hasPower(x, y))) l = Math.max(l, 0.9);
+          }
+          LB[k] = l;
+          const o = w.obj[idx];
+          if (o) {
+            if (o.t === 'lamppost' && amb < 0.6 && powered) lights.push({ x: x + 0.5, y: y + 1, r: 7.5, p: 0.75, out: true });
+            else if (o.t === 'lamp' && r >= 0 && w.rooms[r].lights && (powered || World.hasPower(x, y))) lights.push({ x: x + 0.5, y: y + 0.5, r: 4, p: 0.4, room: r });
+            else if ((o.t === 'campfire' && o.lit) || (o.t === 'bbq' && o.lit)) lights.push({ x: x + 0.5, y: y + 0.5, r: 6, p: 0.85 + Math.sin(performance.now() / 90) * 0.06, warm: true });
+            else if (o.t === 'tv' && o.on) lights.push({ x: x + 0.5, y: y + 0.5, r: 3, p: 0.3 });
+          }
         }
       }
     }
@@ -237,14 +453,17 @@ const Render = {
       if (fl) lights.push({ x: p.x, y: p.y, r: 2.6, p: 0.35 });
     }
     for (const lt of lights) {
-      const r = lt.r;
-      const ix0 = Math.max(vx0, Math.floor(lt.x - r)), ix1 = Math.min(vx0 + vw - 1, Math.ceil(lt.x + r));
+      const lv = lt.x >= W0 ? 1 : 0;
+      if (lv >= layers) continue;
+      const LB = lv ? this.lightB1 : this.lightB, off = lv ? W0 : 0;
+      const lx = lt.x - off, r = lt.r;
+      const ix0 = Math.max(vx0, Math.floor(lx - r)), ix1 = Math.min(vx0 + vw - 1, Math.ceil(lx + r));
       const iy0 = Math.max(vy0, Math.floor(lt.y - r)), iy1 = Math.min(vy0 + vh - 1, Math.ceil(lt.y + r));
       for (let y = iy0; y <= iy1; y++) for (let x = ix0; x <= ix1; x++) {
-        const dx = x + 0.5 - lt.x, dy = y + 0.5 - lt.y;
+        const dx = x + 0.5 - lx, dy = y + 0.5 - lt.y;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d >= r) continue;
-        const idx = y * W_ + x;
+        const ax = x + off, idx = y * W_ + ax;
         const rm = w.room[idx];
         if (lt.out && rm >= 0) continue;
         if (lt.room !== undefined && rm !== lt.room) continue;
@@ -253,52 +472,66 @@ const Render = {
           const a = Math.atan2(dy, dx);
           const ad = Math.abs(U.angDiff(lt.cone, a));
           if (d > 1.2) { if (ad > lt.cw) continue; f *= 1 - Math.pow(ad / lt.cw, 2) * 0.6; }
-          if (lt.vis && !World.isVis(x, y)) continue;
-          if (lt.ox !== undefined && !World.lineClear(lt.ox, lt.oy, x + 0.5, y + 0.5, 'sight')) continue;
-        } else if (!lt.out && lt.room === undefined && d > 1.5 && !World.lineClear(lt.x, lt.y, x + 0.5, y + 0.5, 'sight')) continue;
+          if (lt.vis && World.visGen[idx] !== World.gen) continue;
+          if (lt.ox !== undefined && !World.lineClear(lt.ox, lt.oy, ax + 0.5, y + 0.5, 'sight')) continue;
+        } else if (!lt.out && lt.room === undefined && d > 1.5 && !World.lineClear(lt.x, lt.y, ax + 0.5, y + 0.5, 'sight')) continue;
         const k = (y - vy0) * vw + (x - vx0);
         LB[k] = Math.min(1.15, LB[k] + f);
       }
     }
     // visibility
     const gen = World.gen, VG = World.visGen;
-    const px = p ? p.x : 0, py = p ? p.y : 0;
+    const plv = p && !p.dead && p.x >= W0 ? 1 : 0;
+    const px = p ? (plv ? p.x - W0 : p.x) : 0, py = p ? p.y : 0;
     const nightMin = p && Player.hasTrait('catseyes') ? 0.22 : 0.15;
     const dead = !p || p.dead;
-    for (let j = 0; j < vh; j++) {
-      const y = vy0 + j;
-      for (let i = 0; i < vw; i++) {
-        const x = vx0 + i;
-        const idx = y * W_ + x, k = j * vw + i;
-        let l = LB[k];
-        let vf;
-        if (dead) vf = 0.6;
-        else if (VG[idx] === gen) {
-          vf = 1;
-          const dx = x + 0.5 - px, dy = y + 0.5 - py;
-          const d2 = dx * dx + dy * dy;
-          const nm = nightMin + (d2 < 16 ? (1 - Math.sqrt(d2) / 4) * 0.22 : 0);
-          if (l < nm) l = nm;
-        } else {
-          const out = w.room[idx] < 0;
-          vf = out ? 0.56 : (w.seen[idx] ? 0.45 : 0.1);
-          if (l < 0.1) l = 0.1;
+    for (let lv = 0; lv < layers; lv++) {
+      const LB = lv ? this.lightB1 : this.lightB, SB = lv ? this.shadeB1 : this.shadeB, off = lv ? W0 : 0;
+      const S0 = this.shadeB;
+      for (let j = 0; j < vh; j++) {
+        const y = vy0 + j;
+        for (let i = 0; i < vw; i++) {
+          const x = vx0 + i;
+          const idx = y * W_ + x + off, k = j * vw + i;
+          // open air upstairs takes the light of the ground below it
+          if (lv && w.floor[idx] === FL.VOID) { SB[k] = S0[k]; continue; }
+          let l = LB[k];
+          let vf;
+          // from upstairs the ground is seen through the air above it
+          const vidx = (!lv && plv) ? idx + W0 : idx;
+          if (dead) vf = 0.6;
+          else if (VG[vidx] === gen) {
+            vf = 1;
+            if (lv === plv) {
+              const dx = x + 0.5 - px, dy = y + 0.5 - py;
+              const d2 = dx * dx + dy * dy;
+              const nm = nightMin + (d2 < 16 ? (1 - Math.sqrt(d2) / 4) * 0.22 : 0);
+              if (l < nm) l = nm;
+            }
+          } else {
+            const out = w.room[idx] < 0;
+            vf = out ? 0.56 : (w.seen[idx] ? 0.45 : 0.1);
+            if (l < 0.1) l = 0.1;
+          }
+          SB[k] = Math.min(1, l * vf);
         }
-        SB[k] = Math.min(1, l * vf);
       }
     }
   },
   drawLightOverlay() {
     const vw = this.vw, vh = this.vh;
-    if (this.lcv.width !== vw || this.lcv.height !== vh) { this.lcv.width = vw; this.lcv.height = vh; this.limg = null; }
-    if (!this.limg) this.limg = this.lctx.createImageData(vw, vh);
-    const d = this.limg.data, SB = this.shadeB;
-    for (let k = 0, n = vw * vh; k < n; k++) {
-      const o = k * 4;
-      d[o] = 3; d[o + 1] = 5; d[o + 2] = 14;
-      d[o + 3] = (1 - SB[k]) * 255;
+    for (let lv = 0; lv < (this.has1 ? 2 : 1); lv++) {
+      const cv = lv ? this.lcv1 : this.lcv, cx = lv ? this.lctx1 : this.lctx, key = lv ? 'limg1' : 'limg';
+      if (cv.width !== vw || cv.height !== vh) { cv.width = vw; cv.height = vh; this[key] = null; }
+      if (!this[key]) this[key] = cx.createImageData(vw, vh);
+      const d = this[key].data, SB = lv ? this.shadeB1 : this.shadeB;
+      for (let k = 0, n = vw * vh; k < n; k++) {
+        const o = k * 4;
+        d[o] = 3; d[o + 1] = 5; d[o + 2] = 14;
+        d[o + 3] = (1 - SB[k]) * 255;
+      }
+      cx.putImageData(this[key], 0, 0);
     }
-    this.lctx.putImageData(this.limg, 0, 0);
     const z = this.cam.zoom, dpr = this.dpr;
     const ctx = this.ctx;
     ctx.save();
@@ -319,14 +552,20 @@ const Render = {
     if (ro >= 0) return Wd.buildings[Wd.rooms[ro].b].extCol;
     return '#a0a0a0';
   },
-  drawWall(x, y, d, X, Y, pb, p) {
+  drawWall(x, y, d, X, Y, pb, p, lv) {
     const w = Wd;
     const t = d ? w.wallW[y * w.w + x] : w.wallN[y * w.w + x];
+    if (t === WT.BOUND) return;
     const f = World.feat(x, y, d);
     const col = this.wallColor(x, y, d, t);
     let cut = false, alpha = 1;
-    const front = p && (d ? x > p.x : y > p.y);
-    if (p && front) {
+    const lw = lv || 0, same = lw === this.plv_;
+    // an upper storey can also hide a player standing behind the building on the ground
+    const front = p && (same ? (d ? x > p.x : y > p.y) : (lw > this.plv_ && (d ? vxOf(x) > vxOf(p.x) : y > p.y)));
+    if (p && front && !same) {
+      const bx = d ? X - HTW * 0.5 : X + HTW * 0.5, by = Y + HTH * 0.5;
+      if (by - WALL_INFO[t].h * ZU < this.PY - 30 && by > this.PY - 75 && Math.abs(bx - this.PX) < 40) alpha = 0.3;
+    } else if (p && front) {
       if (pb) {
         const ra = World.room(x, y), rb = d ? World.room(x - 1, y) : World.room(x, y - 1);
         const ba = ra >= 0 ? w.rooms[ra].b : -1, bb = rb >= 0 ? w.rooms[rb].b : -1;
@@ -344,17 +583,49 @@ const Render = {
     let s = this.shadeAt(x, y);
     const so = d ? this.shadeAt(x - 1, y) : this.shadeAt(x, y - 1);
     if (World.room(x, y) < 0 && so > s) s = Math.max(s, so * 0.85);
+    // a sheet rope from an upstairs window: lower half drawn with the ground floor wall, upper half with the upstairs wall
+    const up = x >= LV.W0, rf = up ? f : World.feat(x + LV.W0, y, d);
+    let rope = 0;
+    if (rf && rf.k === 'window' && rf.rope) {
+      const ux = up ? x : x + LV.W0;
+      const [a, b] = World.edgeSides(ux, y, d);
+      const out = Wd.floor[a[1] * Wd.w + a[0]] === FL.VOID ? a : b;
+      rope = out[0] === ux && out[1] === y ? 2 : 1; // 2: hangs on the face toward the camera
+      if (rope === 1) this.drawRope(ux, y, d, s, up ? WALL_H : 0.05, up ? WALL_H + 0.85 : WALL_H);
+    }
     Spr.drawShaded(this.ctx, rec, X - rec.ax, Y - rec.ay, s, alpha);
+    if (rope === 2) this.drawRope(up ? x : x + LV.W0, y, d, s, up ? WALL_H : 0.05, up ? WALL_H + 0.85 : WALL_H);
   },
-  drawObj(o, x, y, X, Y, p, t) {
+  // knotted sheet rope hanging from an upstairs window (edge x,y,d upstairs), the part between heights z0..z1
+  drawRope(x, y, d, s, z0, z1) {
+    const ctx = this.ctx;
+    const [a, b] = World.edgeSides(x, y, d);
+    const out = Wd.floor[a[1] * Wd.w + a[0]] === FL.VOID ? a : b;
+    const gx = x + (d ? (out[0] < x ? -0.12 : 0.12) : 0.5) - LV.W0, gy = y + (d ? 0.5 : (out[1] < y ? -0.12 : 0.12));
+    const TOP = WALL_H + 0.85, n = 10;
+    const pt = (k) => { const z = TOP * (1 - k / n) + 0.05 * (k / n); const q = this.P(gx, gy, z); return [q[0] + Math.sin(k * 1.7) * 1.5, q[1], z]; };
+    ctx.strokeStyle = Col.shade('#e8e4d8', Math.max(0.3, s)); ctx.lineWidth = 3;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k <= n; k++) {
+      const q = pt(k);
+      if (q[2] > z1 + 0.01 || q[2] < z0 - 0.3) continue;
+      if (!started) { ctx.moveTo(q[0], q[1]); started = true; } else ctx.lineTo(q[0], q[1]);
+    }
+    ctx.stroke();
+    ctx.fillStyle = Col.shade('#d8d0c0', Math.max(0.3, s));
+    for (let k = 1; k < n; k += 2) { const q = pt(k); if (q[2] > z1 || q[2] < z0) continue; ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, 7); ctx.fill(); }
+  },
+  drawObj(o, x, y, X, Y, p, t, vx) {
     const def = OBJ[o.t];
     const rec = Spr.obj(o);
     let alpha = 1;
-    if (p && def.h > 1.1) {
+    if (p && def.h > 1.1 && o.t !== 'stairs' && o.t !== 'landing') {
       const by = Y + HTH;
       const top = by - def.h * ZU - (o.t === 'tree' ? 40 : 6);
       const wdt = o.t === 'tree' ? 56 : 30;
-      if (by > this.PY - 6 && top < this.PY - 10 && Math.abs(X - this.PX) < wdt && (x + y + 1 > p.x + p.y)) alpha = o.t === 'tree' ? 0.35 : 0.45;
+      const pvx = p.x >= LV.W0 ? p.x - LV.W0 : p.x;
+      if (by > this.PY - 6 && top < this.PY - 10 && Math.abs(X - this.PX) < wdt && ((vx === undefined ? x : vx) + y + 1 > pvx + p.y)) alpha = o.t === 'tree' ? 0.35 : 0.45;
     }
     const s = this.shadeAt(x, y);
     const ctx = this.ctx;
@@ -378,7 +649,7 @@ const Render = {
   // ------------------------------------------------------------------ roofs
   drawRoof(b, p) {
     const ctx = this.ctx;
-    const H = WALL_H, ov = 0.18;
+    const H = WALL_H * (b.floors || 1), ov = 0.18;
     const x0 = b.x0 - ov, y0 = b.y0 - ov, x1 = b.x1 + 1 + ov, y1 = b.y1 + 1 + ov;
     const P = (x, y, z) => [(x - y) * HTW, (x + y) * HTH - z * ZU];
     let s = Math.max(this.shadeAt(b.x1 + 1, b.y1 + 1), this.shadeAt(b.x0 - 1, b.y1 + 1), this.shadeAt(b.x1 + 1, b.y0 - 1));
@@ -453,7 +724,7 @@ const Render = {
   drawHover(ctx, h) {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,230,120,0.85)'; ctx.lineWidth = 1.5;
-    const P = (x, y, z) => [(x - y) * HTW, (x + y) * HTH - (z || 0) * ZU];
+    const P = (x, y, z) => this.P(x, y, z);
     if (h.edge) {
       const [x, y, d] = h.edge;
       const ht = WALL_INFO[World.wall(x, y, d)] ? WALL_INFO[World.wall(x, y, d)].h : 1;
@@ -560,7 +831,7 @@ const Fx = {
     for (const d of Wd ? Wd.decals : []) d.age += dt * G.speed * MIN_PER_SEC / 60;
   },
   draw(ctx) {
-    const P = (x, y, z) => [(x - y) * HTW, (x + y) * HTH - z * ZU];
+    const P = (x, y, z) => Render.P(x, y, z);
     for (const p of this.parts) {
       const s = P(p.x, p.y, p.z);
       const a = Math.min(1, p.life / p.max * 2);

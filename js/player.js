@@ -189,9 +189,11 @@ const Player = {
     if (p.grabbed > 0) p.grabbed -= dt;
     if (p.fireCd > 0) p.fireCd -= dt;
     // camera
-    const cx = p.inCar ? p.inCar.x : p.x, cy = p.inCar ? p.inCar.y : p.y;
+    const cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
+    const cz = p.inCar ? 0 : Render.entZ(p);
     Render.cam.x += (cx - Render.cam.x) * Math.min(1, dt * 8);
     Render.cam.y += (cy - Render.cam.y) * Math.min(1, dt * 8);
+    Render.cam.z += (cz - Render.cam.z) * Math.min(1, dt * 8);
     if (p.asleep) { this.sleepUpdate(dt, gh); this.updateStats(gh, dt); this.fov(dt); return; }
     p.sleepFade = Math.max(0, p.sleepFade - dt);
     if (p.inCar) { Vehicles.driveInput(p.inCar, dt); this.updateStats(gh, dt); this.fov(dt); return; }
@@ -259,7 +261,7 @@ const Player = {
     if (aiming) { run = false; sprint = false; }
     // auto-walk path
     if (!moving && p.path && p.path.length) {
-      const [tx, ty] = p.path[0];
+      const ty = p.path[0][1], tx = World.lvX(p, p.path[0][0]);
       const gx = tx + 0.5, gy = ty + 0.5;
       const dx = gx - p.x, dy = gy - p.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -282,7 +284,7 @@ const Player = {
     }
     if (p.action && !moving) { p.anim.amp = Math.max(0, p.anim.amp - dt * 4); return; }
     // facing
-    const [wx, wy] = Render.toWorld(Input.mx, Input.my);
+    const [wx, wy] = Render.mouseWorld();
     const mouseA = Math.atan2(wy - p.y, wx - p.x);
     let target = p.angle;
     if (aiming || (p.swing && p.swing.kind !== 'shove')) target = mouseA;
@@ -753,7 +755,7 @@ const Player = {
   draw(ctx) {
     const p = G.player;
     if (p.inCar) return;
-    const X = (p.x - p.y) * HTW, Y = (p.x + p.y) * HTH;
+    const [X, Y] = Render.epos(p);
     const s = Math.max(0.35, Render.shadeSmooth(p.x, p.y));
     let ang = p.angle;
     if (p.asleep && p.sleepBed) ang = p.sleepAng || ang;
@@ -762,7 +764,7 @@ const Player = {
   drawOverlay(ctx) {
     const p = G.player;
     if (p.inCar) return;
-    const X = (p.x - p.y) * HTW, Y = (p.x + p.y) * HTH - 2.05 * ZU;
+    const [X, Y] = Render.epos(p, 2.05);
     // action progress bar
     if (p.action && p.action.dur > 0.3) {
       const k = U.clamp(p.action.t / p.action.dur, 0, 1);
@@ -783,11 +785,11 @@ const Player = {
     // aim reticle for guns
     const wd = this.weaponDef();
     if (wd && wd.gun && !p.action && !p.dead) {
-      const [wx, wy] = Render.toWorld(Input.mx, Input.my);
+      const [wx, wy] = Render.mouseWorld();
       const d = U.dist(p.x, p.y, wx, wy);
       const sp = Combat.spread(wd.gun, p.aiming);
       const r = Math.max(4, Math.tan(sp) * d * HTW * 1.1);
-      const cx = (wx - wy) * HTW, cy = (wx + wy) * HTH;
+      const [cx, cy] = Render.P(wx, wy, 0);
       ctx.strokeStyle = p.aiming ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.5, 0, 0, 7); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - 4, cy); ctx.lineTo(cx + 4, cy); ctx.moveTo(cx, cy - 3); ctx.lineTo(cx, cy + 3); ctx.stroke();
@@ -797,12 +799,14 @@ const Player = {
       const def = wd ? wd.wpn : FISTS;
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
       ctx.beginPath();
-      const px0 = (p.x - p.y) * HTW, py0 = (p.x + p.y) * HTH;
+      const [px0, py0] = Render.epos(p);
       ctx.moveTo(px0, py0);
+      const zf = Render.entZ(p);
       for (let k = -8; k <= 8; k++) {
         const a = p.angle + def.arc * k / 8;
         const x = p.x + Math.cos(a) * def.range, y = p.y + Math.sin(a) * def.range;
-        ctx.lineTo((x - y) * HTW, (x + y) * HTH);
+        const q = Render.P(x, y, p.x >= LV.W0 ? 0 : zf);
+        ctx.lineTo(q[0], q[1]);
       }
       ctx.closePath(); ctx.fill();
     }

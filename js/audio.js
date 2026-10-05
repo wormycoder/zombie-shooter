@@ -51,9 +51,9 @@ const Sfx = {
     const p = G.player;
     if (x === undefined || !p) return { g: 1, pan: 0 };
     const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
-    const d = U.dist(px, py, x, y);
+    const d = World.lvDist(px, py, x, y);
     const g = U.clamp(1 - d / (maxD || 30), 0, 1);
-    const sx = (x - y) - (px - py);
+    const sx = (vxOf(x) - y) - (vxOf(px) - py);
     return { g: g * g, pan: U.clamp(sx / 14, -0.9, 0.9) };
   },
   out(pan, verb) {

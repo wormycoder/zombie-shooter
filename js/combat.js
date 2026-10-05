@@ -22,7 +22,7 @@ const Combat = {
     if (p.st.endurance < 0.1) dur *= 1.25;
     if (Player.heavyRatio() > 1.25) dur *= 1.15;
     if (p.st.pain > 50) dur *= 1.1;
-    const [wx, wy] = Render.toWorld(Input.mx, Input.my);
+    const [wx, wy] = Render.mouseWorld();
     p.angle = Math.atan2(wy - p.y, wx - p.x);
     p.swing = { t: 0, dur, kind: 'melee', w, it, done: false };
     p.st.endurance = Math.max(0, p.st.endurance - w.end * (1.4 - Player.skill('Fitness') * 0.06));
@@ -137,7 +137,7 @@ const Combat = {
     it.ammo--;
     p.fireCd = g.rof;
     p.swing = { t: 0, dur: 0.22, kind: 'fire', done: true };
-    const [wx, wy] = Render.toWorld(Input.mx, Input.my);
+    const [wx, wy] = Render.mouseWorld();
     const base = Math.atan2(wy - p.y, wx - p.x);
     p.angle = base;
     const sp = this.spread(g, p.aiming);
@@ -152,9 +152,14 @@ const Combat = {
       // zombies along ray
       let best = null, bestT = tEdge;
       const dx = Math.cos(a), dy = Math.sin(a);
-      for (const z of Zombie.near(mx, my, g.range)) {
+      // from upstairs, zombies below open air can be shot too
+      const up = mx >= LV.W0;
+      const cands = Zombie.near(mx, my, g.range);
+      if (up) for (const z of Zombie.near(mx - LV.W0, my, g.range)) if (Wd.floor[Math.floor(z.y) * Wd.w + Math.floor(z.x) + LV.W0] === FL.VOID) cands.push(z);
+      for (const z of cands) {
         if (z.dead) continue;
-        const ox = z.x - mx, oy = z.y - my;
+        const zx = up && z.x < LV.W0 ? z.x + LV.W0 : z.x;
+        const ox = zx - mx, oy = z.y - my;
         const t = ox * dx + oy * dy;
         if (t < 0 || t > bestT) continue;
         const px_ = ox - dx * t, py_ = oy - dy * t;
@@ -162,7 +167,8 @@ const Combat = {
         if (px_ * px_ + py_ * py_ > rr * rr) continue;
         best = z; bestT = t;
       }
-      const hx = mx + dx * bestT, hy = my + dy * bestT;
+      let hx = mx + dx * bestT, hy = my + dy * bestT;
+      if (best && best.x < LV.W0 && up) hx = best.x;
       Fx.tracer(mx, my, 1.25, hx, hy, best ? 1.1 : 1.0);
       if (best) {
         anyHit = true;
@@ -192,7 +198,7 @@ const Combat = {
   throwItem(it) {
     const p = G.player;
     const d = ITEMS[it.id];
-    let [wx, wy] = Render.toWorld(Input.mx, Input.my);
+    let [wx, wy] = Render.mouseWorld();
     const dist = U.dist(p.x, p.y, wx, wy);
     if (dist > 12) { wx = p.x + (wx - p.x) / dist * 12; wy = p.y + (wy - p.y) / dist * 12; }
     Player.removeItem(it);
@@ -210,8 +216,10 @@ const Combat = {
       pr.t += dt;
       const k = Math.min(1, pr.t / pr.T);
       let nx = U.lerp(pr.x0, pr.x1, k), ny = U.lerp(pr.y0, pr.y1, k);
-      // stop at walls
-      if (!World.lineClear(pr.x, pr.y, nx, ny, 'move')) { pr.x1 = pr.x; pr.y1 = pr.y; nx = pr.x; ny = pr.y; pr.t = pr.T; }
+      // stop at walls (open air upstairs lets it fly out of a window)
+      const tx = Math.floor(nx), ty = Math.floor(ny);
+      const blocked = World.firstEdgeHit(pr.x, pr.y, nx, ny) || (World.tileSolid(tx, ty) && Wd.floor[ty * Wd.w + tx] !== FL.VOID);
+      if (blocked) { pr.x1 = pr.x; pr.y1 = pr.y; nx = pr.x; ny = pr.y; pr.t = pr.T; }
       pr.x = nx; pr.y = ny; pr.z = 1.4 * (1 - k) + Math.sin(k * Math.PI) * 1.6;
       if (pr.t >= pr.T) {
         this.projs.splice(i, 1);
@@ -231,6 +239,8 @@ const Combat = {
     }
   },
   land(pr) {
+    // out of an upstairs window: it falls to the ground below
+    if (pr.x >= LV.W0 && Wd.floor[Math.floor(pr.y) * Wd.w + Math.floor(pr.x)] === FL.VOID) pr.x -= LV.W0;
     if (pr.kind === 'fire') {
       Sfx.play('glass', pr.x, pr.y);
       Sfx.play('fire', pr.x, pr.y);
@@ -244,7 +254,7 @@ const Combat = {
   },
   draw(ctx) {
     for (const pr of this.projs) {
-      const X = (pr.x - pr.y) * HTW, Y = (pr.x + pr.y) * HTH - pr.z * ZU;
+      const [X, Y] = Render.P(pr.x, pr.y, pr.z);
       ctx.drawImage(Icons.canvas(pr.item), X - 7, Y - 7, 14, 14);
       if (pr.kind === 'fire') { ctx.fillStyle = 'rgba(255,160,40,0.9)'; ctx.beginPath(); ctx.arc(X, Y - 6, 2.5, 0, 7); ctx.fill(); }
     }

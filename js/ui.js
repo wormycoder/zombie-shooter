@@ -739,35 +739,29 @@ const MapView = {
         const up = () => { this.dragging = false; window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
         window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
       });
-      this.cx = G.player.x; this.cy = G.player.y; this.zoom = 4;
+      this.cx = vxOf(G.player.x); this.cy = G.player.y; this.zoom = 4;
     }
     this.draw();
   },
   buildBase() {
-    const w = Wd;
-    const c = mkCanvas(w.w, w.h), g = c.getContext('2d');
-    const img = g.createImageData(w.w, w.h);
+    const w = Wd, GW = w.gw || w.w;
+    const c = mkCanvas(GW, w.h), g = c.getContext('2d');
+    const img = g.createImageData(GW, w.h);
     const cols = {};
     const hex = (h) => Col.rgb(h);
     cols[FL.GRASS] = hex('#5a7a42'); cols[FL.GRASS2] = hex('#6a8848'); cols[FL.FOREST] = hex('#3e5430'); cols[FL.DIRT] = hex('#8a7458'); cols[FL.ASPHALT] = hex('#505052'); cols[FL.SIDEWALK] = hex('#9a9890');
     cols[FL.CONCRETE] = hex('#8a8884'); cols[FL.SAND] = hex('#c8b48a'); cols[FL.WATER] = hex('#3a6a8a'); cols[FL.DEEPWATER] = hex('#2a4c6c'); cols[FL.FURROW] = hex('#6a5038'); cols[FL.GRAVEL] = hex('#8a8478');
-    for (let i = 0; i < w.w * w.h; i++) {
+    for (let y = 0; y < w.h; y++) for (let x = 0; x < GW; x++) {
+      const i = y * w.w + x, q = (y * GW + x) * 4;
       let c3;
       if (w.room[i] >= 0) c3 = [176, 164, 146];
       else c3 = cols[w.floor[i]] || [90, 120, 66];
       const o = w.obj[i];
       if (o && o.t === 'tree') c3 = [46, 70, 38];
       const known = this.revealed || w.seen[i];
-      const f = known ? 1 : 0.18;
-      img.data[i * 4] = c3[0] * f; img.data[i * 4 + 1] = c3[1] * f; img.data[i * 4 + 2] = c3[2] * f; img.data[i * 4 + 3] = 255;
-    }
-    // walls
-    for (let i = 0; i < w.w * w.h; i++) {
-      if ((w.wallN[i] && w.wallN[i] <= 3) || (w.wallW[i] && w.wallW[i] <= 3)) {
-        const known = this.revealed || w.seen[i];
-        const v = known ? 60 : 20;
-        img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v;
-      }
+      let f = known ? 1 : 0.18;
+      if ((w.wallN[i] && w.wallN[i] <= 3) || (w.wallW[i] && w.wallW[i] <= 3)) { c3 = [60, 60, 60]; f = known ? 1 : 0.33; }
+      img.data[q] = c3[0] * f; img.data[q + 1] = c3[1] * f; img.data[q + 2] = c3[2] * f; img.data[q + 3] = 255;
     }
     g.putImageData(img, 0, 0);
     this.base = c; this.baseT = performance.now();
@@ -798,7 +792,7 @@ const MapView = {
     }
     // player
     const p = G.player;
-    const px = (p.x - this.cx) * this.zoom + W / 2, py = (p.y - this.cy) * this.zoom + H / 2;
+    const px = (vxOf(p.x) - this.cx) * this.zoom + W / 2, py = (p.y - this.cy) * this.zoom + H / 2;
     g.save(); g.translate(px, py); g.rotate(p.angle);
     g.fillStyle = '#ff4040'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(9, 0); g.lineTo(-6, 6); g.lineTo(-3, 0); g.lineTo(-6, -6); g.closePath(); g.fill(); g.stroke();

@@ -603,6 +603,66 @@ const ObjArt = {
     this.box(b[0], b[1], 0, b[3], b[4], 0.55, '#f2f2f0');
     poly(this.g, [this.P(b[0] + 0.08, b[1] + 0.08, 0.551), this.P(b[3] - 0.08, b[1] + 0.08, 0.551), this.P(b[3] - 0.08, b[4] - 0.08, 0.551), this.P(b[0] + 0.08, b[4] - 0.08, 0.551)], '#c8d8e0');
   },
+  // ---- staircase: 3 tiles of 4 steps each, climbing toward o.dir, wall on side o.ws
+  d_stairs(o) {
+    const H = WALL_H, k = o.part || 0, g = this.g;
+    const boxes = [];
+    for (let i = 0; i < 4; i++) {
+      const a0 = i / 4, a1 = (i + 1) / 4, zt = (k * 4 + i + 1) * H / 12;
+      let u0 = 0.02, v0 = 0.02, u1 = 0.98, v1 = 0.98;
+      if (o.dir === 'E') { u0 = a0; u1 = a1; } else if (o.dir === 'W') { u0 = 1 - a1; u1 = 1 - a0; }
+      else if (o.dir === 'S') { v0 = a0; v1 = a1; } else { v0 = 1 - a1; v1 = 1 - a0; }
+      boxes.push([u0, v0, u1, v1, zt]);
+    }
+    boxes.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]));
+    for (const [u0, v0, u1, v1, zt] of boxes) {
+      this.box(u0, v0, 0, u1, v1, zt, '#9a7650', false);
+      // tread nosing
+      poly(g, [this.P(u0, v0, zt), this.P(u1, v0, zt), this.P(u1, v1, zt), this.P(u0, v1, zt)], null, 'rgba(60,40,20,0.45)', 1);
+    }
+    // handrail on the open side
+    const os = OPP[o.ws] || 'S';
+    const z0 = k * H / 3 + 0.95, z1 = (k + 1) * H / 3 + 0.95;
+    const end = (a) => {
+      const t = o.dir === 'E' || o.dir === 'S' ? a : 1 - a;
+      if (os === 'N') return [t, 0.06]; if (os === 'S') return [t, 0.94]; if (os === 'W') return [0.06, t]; return [0.94, t];
+    };
+    const pa = end(0), pb2 = end(1);
+    const za = (o.dir === 'E' || o.dir === 'S') ? z0 : z1, zb = (o.dir === 'E' || o.dir === 'S') ? z1 : z0;
+    const fa = (o.dir === 'E' || o.dir === 'S') ? k * H / 3 : (k + 1) * H / 3, fb = (o.dir === 'E' || o.dir === 'S') ? (k + 1) * H / 3 : k * H / 3;
+    line(g, this.P(pa[0], pa[1], fa + 0.1), this.P(pa[0], pa[1], za), '#5a3e24', 2);
+    line(g, this.P(pa[0], pa[1], za), this.P(pb2[0], pb2[1], zb), '#6a4a2c', 2.5);
+    line(g, this.P(U.lerp(pa[0], pb2[0], 0.5), U.lerp(pa[1], pb2[1], 0.5), (fa + fb) / 2 + 0.1), this.P(U.lerp(pa[0], pb2[0], 0.5), U.lerp(pa[1], pb2[1], 0.5), (za + zb) / 2), '#5a3e24', 1.5);
+  },
+  // the solid block under the top landing (a little cupboard under the stairs)
+  d_landing(o) {
+    const H = WALL_H;
+    this.box(0.02, 0.02, 0, 0.98, 0.98, H, '#8a6a48');
+    const b = [0.02, 0.02, 0, 0.98, 0.98, H];
+    const fr = OPP[o.ws] === 'S' || OPP[o.ws] === 'E' ? OPP[o.ws] : (o.dir === 'S' || o.dir === 'E' ? null : (o.dir === 'N' ? 'S' : 'E'));
+    for (const face of ['S', 'E']) {
+      for (let k = 1; k < 4; k++) this.faceRect(face, b, 0, 1, k * H / 4, k * H / 4 + 0.02, '#6a4e34');
+    }
+    if (fr) { this.faceRect(fr, b, 0.25, 0.75, 0.05, 1.7, '#7a5a3c', '#4a3422'); this.faceRect(fr, b, 0.62, 0.68, 0.85, 0.95, '#c8b070'); }
+  },
+  // balustrade round the stairwell opening upstairs
+  d_railing(o) {
+    const g = this.g, h = 0.9;
+    const sides = [OPP[o.ws] || 'S'];
+    if (o.part === 0) sides.push(OPP[o.dir]);
+    const seg = (s) => s === 'N' ? [[0, 0.04], [1, 0.04]] : s === 'S' ? [[0, 0.96], [1, 0.96]] : s === 'W' ? [[0.04, 0], [0.04, 1]] : [[0.96, 0], [0.96, 1]];
+    for (const sd of sides) {
+      const [a, b] = seg(sd);
+      for (let k = 0; k <= 4; k++) {
+        const u = U.lerp(a[0], b[0], k / 4), v = U.lerp(a[1], b[1], k / 4);
+        line(g, this.P(u, v, 0), this.P(u, v, h), '#6a4a2c', k % 4 === 0 ? 2.5 : 1.5);
+      }
+      line(g, this.P(a[0], a[1], h), this.P(b[0], b[1], h), '#7a5634', 3);
+      line(g, this.P(a[0], a[1], 0.02), this.P(b[0], b[1], 0.02), '#5a3e24', 2);
+    }
+  },
+  // top of the flight: the balustrade continues along the open side up to the landing
+  d_stairtop(o) { this.d_railing(Object.assign({}, o, { part: 2 })); },
   d_wardrobe(o) {
     const b = this.inset(o.dir, 0.62, 0.05);
     this.shadow(b[0], b[1], b[3], b[4]);

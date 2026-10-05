@@ -528,9 +528,21 @@ const Actions = {
   },
   demolishObj(x, y) {
     let nt = 0;
-    return this.mk('Smashing', 7 * (1.1 - Player.skill('Strength') * 0.04), () => {
+    const o0 = World.obj(x, y), isStair = o0 && o0.sx !== undefined;
+    return this.mk(isStair ? 'Smashing the stairs' : 'Smashing', (isStair ? 16 : 7) * (1.1 - Player.skill('Strength') * 0.04), () => {
       const o = World.obj(x, y);
       if (!o) return;
+      if (o.sx !== undefined) {
+        World.removeStairs(x, y);
+        for (let k = 0; k < 4; k++) World.dropItem(x + 0.5, y + 0.5, Items.make('Plank'));
+        Fx.shards(x + 0.5, y + 0.5, 0.8, 20, '#8a6a48');
+        Noise.emit(x + 0.5, y + 0.5, 22, 'crash');
+        Sfx.play('woodbreak', x + 0.5, y + 0.5);
+        G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.2);
+        Player.say('The stairs are gone. I need a sheet rope now.', '#ccc');
+        UI.refresh();
+        return;
+      }
       if (o.c && o.c.items) for (const it of o.c.items) World.dropItem(x + 0.5, y + 0.5, it);
       if (o.part !== undefined) for (const [dx, dy] of DIR4) { const n = World.obj(x + dx, y + dy); if (n && n.t === o.t && n.part !== undefined && n.part !== o.part) { World.setObj(x + dx, y + dy, null); break; } }
       World.setObj(x, y, null);

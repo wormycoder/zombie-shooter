@@ -62,7 +62,7 @@ const Zombie = {
   spawnAll(avoidX, avoidY) {
     G.zombies = [];
     const w = Wd;
-    const okTile = (x, y) => World.inb(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && U.dist(x, y, avoidX, avoidY) > 22;
+    const okTile = (x, y) => World.inb(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && World.lvDist(x, y, avoidX, avoidY) > 22;
     const pop = G.sb ? G.sb.pop : 1;
     for (const zn of w.zones) {
       let n = Math.round(zn.n * pop), tries = 0;
@@ -126,7 +126,7 @@ const Zombie = {
     let chasing = 0;
     for (const z of G.zombies) {
       if (z.dead) { if (z.lie < 1) z.lie = Math.min(1, z.lie + dt * 2.5); continue; }
-      const d = U.dist(z.x, z.y, px, py);
+      const d = World.lvDist(z.x, z.y, px, py);
       if (d > 60) { z.far = (z.far || 0) + dt; if (z.far > 1) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
       this.update(z, dt, px, py, d);
       if (z.st === 'chase' || z.st === 'attack') chasing++;
@@ -140,7 +140,7 @@ const Zombie = {
   },
   farUpdate(z, dt) {
     if (z.st === 'investigate') {
-      const dx = z.tx - z.x, dy = z.ty - z.y, d = Math.sqrt(dx * dx + dy * dy);
+      const dx = World.lvX(z, z.tx) - z.x, dy = z.ty - z.y, d = Math.sqrt(dx * dx + dy * dy);
       if (d < 1) { z.st = 'idle'; return; }
       const step = Math.min(d, z.speed * 0.7 * dt);
       World.move(z, dx / d * step, dy / d * step, z.r);
@@ -240,7 +240,7 @@ const Zombie = {
     const target = p.inCar || p;
     let see = false;
     const sr = p.inCar ? 22 : this.sightRange(z, p);
-    if (d < sr) {
+    if (d < sr && (z.x >= LV.W0) === (px >= LV.W0)) {
       const ad = Math.abs(U.angDiff(z.a, Math.atan2(py - z.y, px - z.x)));
       const fov = (z.st === 'chase') ? Math.PI : 1.25;
       if ((ad < fov || d < 1.6) && World.lineClear(z.x, z.y, px, py, 'sight')) see = true;
@@ -264,7 +264,9 @@ const Zombie = {
     }
   },
   moveToward(z, dt, speed, dPlayer) {
-    const dx = z.tx - z.x, dy = z.ty - z.y;
+    // a target on the other floor is steered toward from directly below/above until a path is found
+    const cross = (z.x >= LV.W0) !== (z.tx >= LV.W0);
+    const dx = World.lvX(z, z.tx) - z.x, dy = z.ty - z.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 0.4 && z.st !== 'chase') {
       z.st = 'idle'; z.path = null; z.idleT = R.f(3, 10);
@@ -273,7 +275,8 @@ const Zombie = {
     let mx, my;
     z.pathT -= dt;
     let direct;
-    if (dist < 1.2) direct = World.lineClear(z.x, z.y, z.tx, z.ty, 'move');
+    if (cross) direct = false;
+    else if (dist < 1.2) direct = World.lineClear(z.x, z.y, z.tx, z.ty, 'move');
     else { z.dcT = (z.dcT || 0) - dt; if (z.dcT <= 0) { z.dcT = 0.4; z.dcOk = World.pathClear(z.x, z.y, z.tx, z.ty, z.r * 0.8); } direct = z.dcOk; }
     if (direct) {
       z.path = null;
@@ -295,7 +298,7 @@ const Zombie = {
         }
         if (z.pi >= z.path.length) { z.path = null; mx = dx / dist; my = dy / dist; }
         else {
-          const [wx, wy] = z.path[z.pi];
+          const wy = z.path[z.pi][1], wx = World.lvX(z, z.path[z.pi][0]);
           // blocked edge between current tile and next waypoint?
           const cx = Math.floor(z.x), cy = Math.floor(z.y);
           if (Math.abs(wx - cx) + Math.abs(wy - cy) === 1) {
@@ -427,7 +430,7 @@ const Zombie = {
     if (z.dead) alpha = 1;
     if (alpha < 0.02) return;
     if (z.dead && !World.isVis(Math.floor(z.x), Math.floor(z.y)) && !Wd.seen[Math.floor(z.y) * Wd.w + Math.floor(z.x)]) return;
-    const X = (z.x - z.y) * HTW, Y = (z.x + z.y) * HTH;
+    const [X, Y] = Render.epos(z);
     const s = Math.max(0.12, Render.shadeSmooth(z.x, z.y));
     const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03 };
     if (z.st === 'attack') { pose.reach = 1 - Math.max(0, z.atkT) / 0.8; pose.lean = 0.3; }
@@ -449,14 +452,19 @@ const Noise = {
     const p = G.player;
     const rainMask = G.weather.rain > 0.6 ? 0.8 : 1;
     radius *= rainMask;
-    for (const z of Zombie.near(x, y, radius)) {
+    // sound carries between floors, muffled
+    const ox = x >= LV.W0 ? x - LV.W0 : x + LV.W0;
+    const heard = Zombie.near(x, y, radius);
+    if (ox < Wd.w && Wd.stairs.length) for (const z of Zombie.near(ox, y, radius * 0.6)) heard.push(z);
+    for (const z of heard) {
       if (z.dead || z.st === 'down' || z.st === 'getup' || z.st === 'climb') continue;
       if (z.st === 'chase' && z.canSee) continue;
       if (z.st === 'thump' && kind !== 'gun' && kind !== 'alarm') continue;
-      const d = U.dist(x, y, z.x, z.y);
-      // walls muffle
+      const d = World.lvDist(x, y, z.x, z.y);
+      // walls and floors muffle
       let r = radius;
-      if (kind === 'step' && !World.lineClear(x, y, z.x, z.y, 'sight')) r *= 0.5;
+      if ((z.x >= LV.W0) !== (x >= LV.W0)) r *= kind === 'step' ? 0.35 : 0.6;
+      else if (kind === 'step' && !World.lineClear(x, y, z.x, z.y, 'sight')) r *= 0.5;
       if (d > r) continue;
       const err = d * 0.12;
       z.tx = x + R.f(-err, err); z.ty = y + R.f(-err, err);

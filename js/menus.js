@@ -71,7 +71,7 @@ const Menu = {
     this.t += dt;
     const k = (Math.sin(this.t * 0.012) + 1) / 2;
     this.cam.x = U.lerp(70, 170, k); this.cam.y = U.lerp(95, 150, (Math.cos(this.t * 0.009) + 1) / 2);
-    Render.cam.x = this.cam.x; Render.cam.y = this.cam.y;
+    Render.cam.x = this.cam.x; Render.cam.y = this.cam.y; Render.cam.z = 0;
     G.player.x = this.cam.x; G.player.y = this.cam.y;
     G.light.amb = 0.38; G.light.flash = 0; G.time = 20.6 * 60;
     Zombie.updateAll(dt);

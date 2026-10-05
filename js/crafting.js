@@ -6,6 +6,7 @@ const RECIPES = [
   { id: 'bandage', n: 'Bandage', cat: 'Medical', in: [['RippedSheets', 2]], out: [['Bandage', 1]], time: 3, xp: { FirstAid: 2 } },
   { id: 'sterile', n: 'Sterilized Bandage', cat: 'Medical', in: [['Bandage', 1], ['@uses:Disinfectant', 1]], out: [['SterileBandage', 1]], time: 3, xp: { FirstAid: 2 } },
   { id: 'rags', n: 'Ripped Sheets (from Sheet)', cat: 'Medical', in: [['Sheet', 1]], out: [['RippedSheets', 4]], time: 3 },
+  { id: 'sheetrope', n: 'Sheet Rope', cat: 'Survival', in: [['Sheet', 2]], out: [['SheetRope', 1]], time: 5 },
   { id: 'planks', n: 'Saw Log into Planks', cat: 'Carpentry', in: [['Log', 1]], tools: ['saw'], out: [['Plank', 3]], time: 8, xp: { Carpentry: 3 } },
   { id: 'spear', n: 'Crafted Spear', cat: 'Weapons', in: [['@any:Plank|TreeBranch', 1]], tools: ['cut'], out: [['Spear', 1]], time: 6, xp: { Carpentry: 2, Spear: 2 } },
   { id: 'spikedbat', n: 'Spiked Baseball Bat', cat: 'Weapons', in: [['BaseballBat', 1], ['Nails', 5]], tools: ['hammer'], out: [['SpikedBat', 1]], time: 6, xp: { Carpentry: 2 } },
@@ -118,7 +119,7 @@ const Build = {
     UI.hint('Left-click to place ' + rec.n + (rec.build === 'wall' ? ' · R to rotate' : '') + ' · Esc to cancel');
   },
   target() {
-    const [wx, wy] = Render.toWorld(Input.mx, Input.my);
+    const [wx, wy] = Render.mouseWorld();
     let tx = Math.floor(wx), ty = Math.floor(wy), d = G.build.d & 1;
     if (G.build.rec.build === 'wall') {
       // choose the edge nearest to the mouse
@@ -165,7 +166,7 @@ const Build = {
     const b = G.build;
     const [x, y, d] = this.target();
     const ok = this.valid(b.rec, x, y, d) && Crafting.has(b.rec);
-    const X = (x - y) * HTW, Y = (x + y) * HTH;
+    const [X, Y] = Render.P(x, y, 0);
     ctx.globalAlpha = 0.55;
     if (b.rec.build === 'obj') {
       const rec = Spr.obj(MapGen.mkObj(b.rec.obj, 'S'));

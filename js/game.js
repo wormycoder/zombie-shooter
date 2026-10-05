@@ -124,7 +124,7 @@ const Game = {
     if (G.sb.utilities === 0) { G.events.powerAt = G.time + R.int(60, 600); G.events.waterAt = G.time + R.int(60, 600); }
     G.weather = { rain: 0, target: 0, fog: 0, fogT: 0, temp: 24, next: G.time + R.int(180, 600), storm: false, thunderT: 0 };
     G.speed = 1; G.paused = false;
-    Render.cam.x = sx; Render.cam.y = sy;
+    Render.cam.x = vxOf(sx); Render.cam.y = sy; Render.cam.z = sx >= LV.W0 ? WALL_H : 0;
     for (const it of p.inv) void it;
     Player.fov(1);
     this.lastSave = G.time;
@@ -263,12 +263,12 @@ const Game = {
     // helicopter
     if (!ev.heliDone && !ev.heli && G.time >= ev.heliAt) {
       const a = R.f(0, Math.PI * 2);
-      ev.heli = { x: p.x + Math.cos(a) * 80, y: p.y + Math.sin(a) * 80, end: G.time + R.int(90, 150), pulse: 0, leaving: false, la: a };
+      ev.heli = { x: vxOf(p.x) + Math.cos(a) * 80, y: p.y + Math.sin(a) * 80, end: G.time + R.int(90, 150), pulse: 0, leaving: false, la: a };
       Player.say('Is that... a helicopter?', '#ccc');
     }
     if (ev.heli) {
       const hl = ev.heli;
-      let tx = p.x + Math.cos(G.time / 25) * 6, ty = p.y + Math.sin(G.time / 25) * 6;
+      let tx = vxOf(p.x) + Math.cos(G.time / 25) * 6, ty = p.y + Math.sin(G.time / 25) * 6;
       if (G.time > hl.end) { hl.leaving = true; tx = hl.x + Math.cos(hl.la) * 100; ty = hl.y + Math.sin(hl.la) * 100; }
       const dx = tx - hl.x, dy = ty - hl.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
       const sp = Math.min(d, (hl.leaving ? 10 : 5) * dt);
@@ -276,13 +276,13 @@ const Game = {
       hl.pulse -= dt;
       if (hl.pulse <= 0) { hl.pulse = 4; Noise.emit(hl.x, hl.y, 45, 'heli'); }
       Sfx.heli(hl);
-      if (hl.leaving && U.dist(hl.x, hl.y, p.x, p.y) > 90) { ev.heli = null; ev.heliDone = true; Sfx.heli(null); }
+      if (hl.leaving && U.dist(hl.x, hl.y, vxOf(p.x), p.y) > 90) { ev.heli = null; ev.heliDone = true; Sfx.heli(null); }
     }
     // meta events: distant noises that move hordes
     if (G.time >= ev.metaAt) {
       ev.metaAt = G.time + R.int(40, 140);
       const a = R.f(0, Math.PI * 2), d = R.f(35, 70);
-      const mx = U.clamp(p.x + Math.cos(a) * d, 2, Wd.w - 2), my = U.clamp(p.y + Math.sin(a) * d, 2, Wd.h - 2);
+      const mx = U.clamp(vxOf(p.x) + Math.cos(a) * d, 2, (Wd.gw || Wd.w) - 2), my = U.clamp(p.y + Math.sin(a) * d, 2, Wd.h - 2);
       Noise.emit(mx, my, 28, 'meta');
       if (!p.asleep) Sfx.distant(R.pick(['gunshots', 'scream', 'crash', 'dog']), mx, my);
     }
@@ -453,7 +453,7 @@ const Save = {
       v: 1, time: G.time, seed: G.seed, events: G.events, weather: G.weather, alarms: G.alarms, sb: G.sb,
       uid: _uid, zid: _zid, cid: _carId, kills: p.kills,
       world: {
-        w: w.w, h: w.h, floor: u8(w.floor), fvar: u8(w.fvar), deco: u8(w.deco), wallN: u8(w.wallN), wallW: u8(w.wallW), room: u8(w.room), seen: u8(w.seen),
+        w: w.w, h: w.h, gw: w.gw, stairs: w.stairs, floor: u8(w.floor), fvar: u8(w.fvar), deco: u8(w.deco), wallN: u8(w.wallN), wallW: u8(w.wallW), room: u8(w.room), seen: u8(w.seen),
         objs, items: [...w.items.entries()], feat: [...w.feat.entries()], edgeHp: [...w.edgeHp.entries()],
         buildings: w.buildings, rooms: w.rooms, decals: w.decals.slice(-200), forage: [...w.forage.entries()], labels: w.labels, zones: w.zones,
       },
@@ -491,7 +491,8 @@ const Save = {
     } else json = raw.slice(1);
     const s = JSON.parse(json);
     const sw = s.world;
-    const w = World.create(sw.w, sw.h);
+    const w = World.create(sw.w, sw.h, sw.gw);
+    w.stairs = sw.stairs || [];
     const into = (arr, b64) => { const b = Bin.fromB64(b64); new Uint8Array(arr.buffer).set(b); };
     into(w.floor, sw.floor); into(w.fvar, sw.fvar); into(w.deco, sw.deco); into(w.wallN, sw.wallN); into(w.wallW, sw.wallW); into(w.room, sw.room); into(w.seen, sw.seen);
     for (const [i, o] of sw.objs) w.obj[i] = o;
@@ -520,7 +521,7 @@ const Save = {
     G.player = p;
     G.speed = 1; G.paused = false; G.corpse = false; G.build = null; G.hover = null;
     Combat.projs = []; Combat.sources = []; Fx.parts = []; Fx.fires = []; Fx.floats = [];
-    Render.cam.x = p.x; Render.cam.y = p.y;
+    Render.cam.x = vxOf(p.x); Render.cam.y = p.y; Render.cam.z = p.x >= LV.W0 && !p.inCar ? WALL_H : 0;
     Zombie.rebuildGrid();
     Player.fov(1);
     Game.lastSave = G.time;

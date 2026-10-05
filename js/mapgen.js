@@ -14,19 +14,20 @@ const OPP = { N: 'S', S: 'N', W: 'E', E: 'W' };
 function vecDir(dx, dy) { return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N'); }
 
 const MapGen = {
-  W: 240, H: 240,
+  W: 480, GW: 240, H: 240,
   RP: [45, 75, 105, 135, 165, 195],
 
   generate(seed) {
     const W = this.W, H = this.H;
     this.rng = new RNG(seed);
-    const w = this.w = World.create(W, H);
+    const w = this.w = World.create(W, H, this.GW);
     World.use(w);
     w.seed = seed;
     w.carSpots = [];
     w.zones = [];
     w.spawnHouses = [];
     this.used = new Uint8Array(W * H);
+    this.resv = new Set();
     this.roadCnt = new Uint8Array(W * H);
     this.nA = makeNoise(seed + 11); this.nB = makeNoise(seed + 23); this.nC = makeNoise(seed + 37);
     this.terrain();
@@ -68,11 +69,15 @@ const MapGen = {
 
   // ---------------------------------------------------------------- terrain
   terrain() {
-    const W = this.W, H = this.H, r = this.rng;
+    const W = this.W, GW = this.GW, H = this.H, r = this.rng;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (x >= GW) { this.sf(x, y, FL.VOID, 0); continue; }
       const n = this.nA(x / 14, y / 14, 3);
       this.sf(x, y, n > 0.58 ? FL.GRASS2 : FL.GRASS, r.int(0, 3));
     }
+    // invisible barrier between the ground map and the upper-floor layer
+    for (let y = 0; y < H; y++) World.setWall(GW, y, 1, WT.BOUND);
+    this.mark(GW, 0, W - 1, H - 1, 2);
   },
   lake(cx, cy, rad) {
     const r = this.rng;
@@ -94,7 +99,7 @@ const MapGen = {
     const RP = this.RP, W = this.W, H = this.H;
     const a = RP[0], b = RP[5] + 3;
     const rects = [];
-    for (const y of RP) rects.push({ h: true, p: y, s: (y === 105 ? 0 : a), e: (y === 105 ? W - 1 : b), side: true });
+    for (const y of RP) rects.push({ h: true, p: y, s: (y === 105 ? 0 : a), e: (y === 105 ? this.GW - 1 : b), side: true });
     for (const x of RP) rects.push({ h: false, p: x, s: (x === 135 ? 0 : a), e: (x === 135 ? H - 1 : b), side: true });
     const inTown = (x, y) => x >= a - 1 && x <= b + 1 && y >= a - 1 && y <= b + 1;
     // pass 1: sidewalks
@@ -199,8 +204,9 @@ const MapGen = {
     return room;
   },
   bOfRoom(rid) { return rid < 0 ? -1 : this.w.rooms[rid].b; },
-  buildWalls(b) {
-    for (let y = b.y0; y <= b.y1 + 1; y++) for (let x = b.x0; x <= b.x1 + 1; x++) {
+  buildWalls(b, ox) {
+    ox = ox || 0;
+    for (let y = b.y0; y <= b.y1 + 1; y++) for (let x = b.x0 + ox; x <= b.x1 + 1 + ox; x++) {
       if (!World.inb(x, y)) continue;
       // N edge
       let ra = World.room(x, y - 1), rb = World.room(x, y);
@@ -270,6 +276,9 @@ const MapGen = {
     let placed = 0;
     for (const c of cands) {
       if (World.feat(c.ex, c.ey, c.ed)) continue;
+      const so = this.w.obj[c.y * this.W + c.x];
+      if (so && so.sx !== undefined) continue;
+      if (this.resv.has(c.y * this.W + c.x) && c.x >= LV.W0) continue;
       // keep distance from other features on the same wall line
       let near = false;
       for (const dd of [-1, 1]) {
@@ -281,7 +290,7 @@ const MapGen = {
       if (opts.dense || this.rng.chance(opts.p || 0.45)) { this.setWindow(c, opts.win); placed++; }
     }
     if (!placed && !opts.none) {
-      const c = cands.find(c => !World.feat(c.ex, c.ey, c.ed));
+      const c = cands.find(c => !World.feat(c.ex, c.ey, c.ed) && !(this.w.obj[c.y * this.W + c.x] && this.w.obj[c.y * this.W + c.x].sx !== undefined));
       if (c) this.setWindow(c, opts.win);
     }
   },
@@ -296,6 +305,7 @@ const MapGen = {
     return 3;
   },
   reserved(x, y) {
+    if (this.resv.has(y * this.W + x)) return true;
     for (const s of ['N', 'S', 'W', 'E']) if (this.wallKind(x, y, s) === 3) return true;
     return false;
   },
@@ -448,6 +458,11 @@ const MapGen = {
         this.place(rm, 'lamp');
         break;
       }
+      case 'hall':
+        if (r.chance(0.5)) this.place(rm, 'dresser');
+        if (r.chance(0.35)) this.place(rm, 'bookshelf');
+        if (r.chance(0.5)) this.place(rm, 'lamp');
+        break;
       case 'garage':
         this.place(rm, 'toolcab');
         this.place(rm, 'toolcab');
@@ -576,6 +591,8 @@ const MapGen = {
         b.backDoor = c;
       }
     }
+    // some bigger houses get an upstairs
+    if (!opts.oneStorey && b.type === 'house' && rooms.living && rooms.living.type === 'living' && hw >= 7 && hh >= 7 && r.chance(0.42)) this.secondFloor(b, rooms.living);
     // windows
     for (const rid of b.rooms) {
       const rm = this.w.rooms[rid];
@@ -585,6 +602,104 @@ const MapGen = {
     for (const rid of b.rooms) this.furnishRoom(this.w.rooms[rid]);
     b.keyId = b.id;
     return b;
+  },
+  // ---------------------------------------------------------------- upstairs
+  // Upper floors live at x + LV.W0. A staircase of 3 steps runs along a plain wall of the living
+  // room; the tile past the top step is the landing (solid downstairs, floor upstairs).
+  secondFloor(b, liv) {
+    const r = this.rng, W = this.W;
+    const cands = [];
+    for (const s of ['N', 'S', 'W', 'E']) {
+      const horiz = s === 'N' || s === 'S';
+      const line = s === 'N' ? liv.y0 : s === 'S' ? liv.y1 : s === 'W' ? liv.x0 : liv.x1;
+      const a0 = horiz ? liv.x0 : liv.y0, a1 = horiz ? liv.x1 : liv.y1;
+      for (let a = a0; a + 3 <= a1; a++) {
+        let ok = true;
+        for (let k = 0; k < 4 && ok; k++) {
+          const x = horiz ? a + k : line, y = horiz ? line : a + k;
+          if (this.w.obj[y * W + x] || this.reserved(x, y) || this.wallKind(x, y, s) !== 1) ok = false;
+          // keep the walkway along the open side free of doors too
+          const [ox, oy] = DIRV[OPP[s]];
+          if (ok && this.reserved(x + ox, y + oy) && k < 3) ok = false;
+        }
+        if (ok) for (const sgn of [1, -1]) cands.push({ s, horiz, line, a, sgn });
+      }
+    }
+    r.shuffle(cands);
+    for (const c of cands) if (this.tryStairs(b, liv, c)) return true;
+    return false;
+  },
+  tryStairs(b, liv, c) {
+    const W = this.W, W0 = LV.W0;
+    const dx = c.horiz ? c.sgn : 0, dy = c.horiz ? 0 : c.sgn;
+    const at = (k) => {
+      const a = c.sgn > 0 ? c.a + k : c.a + 3 - k;
+      return c.horiz ? [a, c.line] : [c.line, a];
+    };
+    const T = [at(0), at(1), at(2), at(3)];
+    const [ox, oy] = DIRV[OPP[c.s]];
+    // entry: the tile before the bottom step, or beside it
+    const [ex, ey] = [T[0][0] - dx, T[0][1] - dy];
+    const dir = vecDir(dx, dy);
+    const top = T[2];
+    const base = { dir, ws: c.s, sx: top[0], sy: top[1], ddx: dx, ddy: dy };
+    for (let k = 0; k < 3; k++) this.w.obj[T[k][1] * W + T[k][0]] = Object.assign({ t: 'stairs', part: k }, base);
+    this.w.obj[T[3][1] * W + T[3][0]] = Object.assign({ t: 'landing' }, base);
+    if (!this.connected(liv)) { for (const [x, y] of T) this.w.obj[y * W + x] = null; return false; }
+    if (this.inRoom(liv, ex, ey)) this.resv.add(ey * W + ex);
+    for (const [x, y] of T) if (this.inRoom(liv, x + ox, y + oy)) this.resv.add((y + oy) * W + x + ox);
+    this.w.stairs.push({ x: top[0], y: top[1], dx, dy });
+    // ---- upper floor layout: a 2-wide hall band through the stairwell, rooms on either side
+    let ya, yc, xa, xc;
+    if (c.horiz) { ya = Math.min(c.line, c.line + oy); yc = Math.max(c.line, c.line + oy); if (ya - b.y0 === 1) ya = b.y0; if (b.y1 - yc === 1) yc = b.y1; }
+    else { xa = Math.min(c.line, c.line + ox); xc = Math.max(c.line, c.line + ox); if (xa - b.x0 === 1) xa = b.x0; if (b.x1 - xc === 1) xc = b.x1; }
+    const hallR = c.horiz ? [b.x0, ya, b.x1, yc] : [xa, b.y0, xc, b.y1];
+    const zones = [];
+    if (c.horiz) { if (ya > b.y0) zones.push([b.x0, b.y0, b.x1, ya - 1]); if (yc < b.y1) zones.push([b.x0, yc + 1, b.x1, b.y1]); }
+    else { if (xa > b.x0) zones.push([b.x0, b.y0, xa - 1, b.y1]); if (xc < b.x1) zones.push([xc + 1, b.y0, b.x1, b.y1]); }
+    const rects = [];
+    for (const z of zones) {
+      const L = c.horiz ? z[2] - z[0] + 1 : z[3] - z[1] + 1;
+      let parts;
+      if (L >= 11) { const a = Math.floor((L - 3) / 2); parts = [[a, false], [3, true], [L - a - 3, false]]; }
+      else if (L >= 7) parts = this.rng.chance(0.5) ? [[L - 3, false], [3, true]] : [[3, true], [L - 3, false]];
+      else parts = [[L, false]];
+      let o = 0;
+      for (const [len, small] of parts) {
+        const rc = c.horiz ? [z[0] + o, z[1], z[0] + o + len - 1, z[3]] : [z[0], z[1] + o, z[2], z[1] + o + len - 1];
+        rects.push({ rc, small, area: (rc[2] - rc[0] + 1) * (rc[3] - rc[1] + 1) });
+        o += len;
+      }
+    }
+    let bath = rects.find(q => q.small);
+    if (!bath && rects.length >= 2) bath = rects.reduce((m, q) => (q.area < m.area ? q : m));
+    const fl = () => this.rng.chance(0.55) ? FL.WOOD : FL.CARPET;
+    const up = (rc) => [rc[0] + W0, rc[1], rc[2] + W0, rc[3]];
+    const hall = this.addRoom(b, 'hall', ...up(hallR), FL.WOOD);
+    const upRooms = [];
+    for (const q of rects) upRooms.push(this.addRoom(b, q === bath ? 'bathroom' : 'bedroom', ...up(q.rc), q === bath ? FL.TILE : fl()));
+    // the open stairwell and the landing upstairs
+    const hole = new Set();
+    for (let k = 0; k < 3; k++) {
+      const [x, y] = T[k];
+      this.w.obj[y * W + x + W0] = Object.assign({ t: k < 2 ? 'railing' : 'stairtop', part: k }, base);
+      hole.add(y * W + x + W0);
+    }
+    this.resv.add(T[3][1] * W + T[3][0] + W0);
+    for (const [x, y] of T) if (World.inb(x + ox + W0, y + oy)) this.resv.add((y + oy) * W + x + ox + W0);
+    this.buildWalls(b, W0);
+    for (const rm of upRooms) {
+      let cs = this.borderEdges(rm, (x, y) => World.room(x, y) === hall.id && !hole.has(y * W + x) && !this.w.obj[y * W + x]);
+      const good = cs.filter(q => !q.corner);
+      if (good.length) cs = good;
+      if (!cs.length) continue;
+      const q = cs[Math.floor(cs.length / 2)];
+      this.setDoor(q, { style: 'wood', col: '#c8b8a0' });
+      this.resv.add(q.ny * W + q.nx);
+    }
+    b.floors = 2;
+    b.stair = this.w.stairs[this.w.stairs.length - 1];
+    return true;
   },
   // simple one/two-room cabin
   cabin(hx, hy, hw, hh, f) {
@@ -1131,7 +1246,7 @@ const MapGen = {
   forest() {
     const r = this.rng, W = this.W, H = this.H;
     const a = this.RP[0] - 4, b = this.RP[5] + 8;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < this.GW; x++) {
       const i = y * W + x;
       if (this.used[i] || this.w.obj[i] || this.w.room[i] >= 0) continue;
       const f = this.w.floor[i];
@@ -1156,7 +1271,7 @@ const MapGen = {
     this.w.zones.push({ x0: RP[0], y0: RP[0], x1: RP[5] + 3, y1: RP[5] + 3, n: 300 });
     this.w.zones.push({ x0: RP[0], y0: 100, x1: RP[5] + 3, y1: 140, n: 90 });
     this.w.zones.push({ x0: 200, y0: 90, x1: 232, y1: 125, n: 22 });
-    this.w.zones.push({ x0: 0, y0: 0, x1: this.W - 1, y1: this.H - 1, n: 70 });
+    this.w.zones.push({ x0: 0, y0: 0, x1: this.GW - 1, y1: this.H - 1, n: 70 });
     this.w.zones.push({ x0: 2, y0: 145, x1: 44, y1: 232, n: 18 });
     // indoor zombies per building
     for (const b of this.w.buildings) {

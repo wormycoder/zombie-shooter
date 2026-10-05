@@ -4,9 +4,9 @@
 // ---------------------------------------------------------------------------
 let Wd = null; // current world
 const World = {
-  create(w, h) {
+  create(w, h, gw) {
     return {
-      w, h,
+      w, h, gw: gw || w, stairs: [],
       floor: new Uint8Array(w * h),
       fvar: new Uint8Array(w * h),
       deco: new Uint8Array(w * h),
@@ -26,7 +26,48 @@ const World = {
       labels: [],
     };
   },
-  use(w) { Wd = w; this._initScratch(); },
+  use(w) { Wd = w; if (!w.stairs) w.stairs = []; this._initScratch(); this.indexStairs(); },
+  // ------------------------------------------------------------------ stairs between levels
+  // each stair: {x, y, dx, dy} = top step (level 0) and climbing direction
+  indexStairs() {
+    this.stUp = new Map(); this.stDown = new Map(); this.stLinks = new Map();
+    if (!Wd) return;
+    for (const s of Wd.stairs) {
+      const top = s.y * Wd.w + s.x, beyond = (s.y + s.dy) * Wd.w + s.x + s.dx;
+      const land = beyond + LV.W0, above = top + LV.W0;
+      this.stUp.set(beyond, top);
+      this.stDown.set(above, { land, dx: s.dx, dy: s.dy });
+      this.stLinks.set(top, land);
+      this.stLinks.set(land, top);
+    }
+  },
+  // remove the stair whose parts include tile (x,y) (either level)
+  removeStairs(x, y) {
+    const o = this.obj(x, y);
+    if (!o || o.sx === undefined) return false;
+    const s = Wd.stairs.find(st => st.x === o.sx && st.y === o.sy);
+    if (!s) return false;
+    for (let k = -1; k < 3; k++) {
+      const px = s.x - s.dx * k, py = s.y - s.dy * k;
+      this.setObj(px, py, null);
+      if (k >= 0) { this.setObj(px + LV.W0, py, null); Wd.floor[py * Wd.w + px + LV.W0] = FL.VOID; }
+    }
+    Wd.stairs.splice(Wd.stairs.indexOf(s), 1);
+    this.indexStairs();
+    return true;
+  },
+  // stair object at tile (x,y) on level 0, or null
+  stairAt(x, y) { const o = Wd.obj[y * Wd.w + x]; return o && o.t === 'stairs' ? o : null; },
+  // height above the floor for an entity standing on stairs
+  stairZ(e) {
+    if (e.x >= LV.W0) return 0;
+    const o = this.stairAt(Math.floor(e.x), Math.floor(e.y));
+    if (!o) return 0;
+    let u;
+    if (o.ddx) u = o.ddx > 0 ? (e.x - (o.sx - 2)) / 3 : ((o.sx + 3) - e.x) / 3;
+    else u = o.ddy > 0 ? (e.y - (o.sy - 2)) / 3 : ((o.sy + 3) - e.y) / 3;
+    return U.clamp(u, 0, 1) * WALL_H;
+  },
   inb(x, y) { return x >= 0 && y >= 0 && x < Wd.w && y < Wd.h; },
   idx(x, y) { return y * Wd.w + x; },
   ek(x, y, d) { return ((y * Wd.w + x) << 1) | d; },
@@ -104,11 +145,11 @@ const World = {
   tileSolid(x, y) {
     if (!this.inb(x, y)) return true;
     const fl = Wd.floor[y * Wd.w + x];
-    if (fl === FL.WATER || fl === FL.DEEPWATER) return true;
+    if (fl === FL.WATER || fl === FL.DEEPWATER || fl === FL.VOID) return true;
     const o = Wd.obj[y * Wd.w + x];
     if (!o) return false;
     const s = OBJ[o.t].solid;
-    return s === true || (s === 'circle' && o.t === 'tree');
+    return s === true || s === 'portal' || (s === 'circle' && o.t === 'tree');
   },
 
   // ------------------------------------------------------------------ collision
@@ -116,12 +157,57 @@ const World = {
   move(e, dx, dy, r) {
     const len = Math.max(Math.abs(dx), Math.abs(dy));
     const steps = Math.max(1, Math.ceil(len / 0.12));
+    const st = this.stUp.size > 0;
+    if (st && this.stUp.has(Math.floor(e.y) * Wd.w + Math.floor(e.x))) e.x += LV.W0; // stuck under a landing
     let hit = false;
     for (let s = 0; s < steps; s++) {
+      const ptx = Math.floor(e.x), pty = Math.floor(e.y);
       e.x += dx / steps; e.y += dy / steps;
+      if (st && this._stairStep(e, ptx, pty, dx / steps, dy / steps)) hit = true;
       if (this.resolve(e, r)) hit = true;
     }
     return hit;
+  },
+  // stairs: walking off the top step lifts the entity to the landing upstairs; stepping onto the
+  // stair opening upstairs drops it onto the top step. The landing block itself is only enterable from the top step.
+  _stairStep(e, ptx, pty, sx, sy) {
+    let tx = Math.floor(e.x), ty = Math.floor(e.y);
+    let ni = ty * Wd.w + tx;
+    if (tx !== ptx || ty !== pty) {
+      const pi = pty * Wd.w + ptx;
+      const top = this.stUp.get(ni);
+      const sd = top === undefined ? this.stDown.get(ni) : null;
+      if (top !== undefined || sd) {
+        if (top !== undefined && top === pi) { e.x += LV.W0; return false; }
+        if (sd && sd.land === pi) return false;
+        // the landing block is only entered from the top step, the opening only from the landing
+        if (tx !== ptx) e.x -= sx;
+        tx = Math.floor(e.x); ni = ty * Wd.w + tx;
+        if (this.stUp.has(ni) || this.stDown.has(ni)) e.y -= sy;
+        return true;
+      }
+    }
+    // walking down into the opening: drop onto the top step once past the edge (hysteresis)
+    const sd = this.stDown.get(ni);
+    if (sd) {
+      let depth;
+      if (sd.dx) depth = sd.dx > 0 ? tx + 1 - e.x : e.x - tx;
+      else depth = sd.dy > 0 ? ty + 1 - e.y : e.y - ty;
+      if (depth > 0.3) e.x -= LV.W0;
+    }
+    return false;
+  },
+  // x of a waypoint/target projected onto the level entity e is on
+  lvX(e, x) {
+    const a = e.x >= LV.W0, b = x >= LV.W0;
+    return a === b ? x : b ? x - LV.W0 : x + LV.W0;
+  },
+  // distance ignoring level, plus a penalty when on different floors
+  lvDist(ax, ay, bx, by) {
+    const W0 = LV.W0;
+    const la = ax >= W0, lb = bx >= W0;
+    const dx = (la ? ax - W0 : ax) - (lb ? bx - W0 : bx), dy = ay - by;
+    return Math.sqrt(dx * dx + dy * dy) + (la !== lb ? 4 : 0);
   },
   resolve(e, r) {
     let hit = false;
@@ -134,7 +220,7 @@ const World = {
           if (Wd.wallN[i] && this.edgeBlocksMove(x, y, 0)) { if (this._pushSeg(e, x, y, x + 1, y, r)) hit = true; }
           if (Wd.wallW[i] && this.edgeBlocksMove(x, y, 1)) { if (this._pushSeg(e, x, y, x, y + 1, r)) hit = true; }
           const fl = Wd.floor[i];
-          if (fl === FL.WATER || fl === FL.DEEPWATER) { if (this._pushBox(e, x, y, x + 1, y + 1, r)) hit = true; continue; }
+          if (fl === FL.WATER || fl === FL.DEEPWATER || fl === FL.VOID) { if (this._pushBox(e, x, y, x + 1, y + 1, r)) hit = true; continue; }
           const o = Wd.obj[i];
           if (o) {
             const s = OBJ[o.t].solid;
@@ -270,10 +356,21 @@ const World = {
     this.pfClosed = new Uint32Array(n);
     this.pfGen = 1;
   },
-  isVis(x, y) { return this.inb(x, y) && this.visGen[y * Wd.w + x] === this.gen; },
+  // from upstairs the ground is seen through the open air above it
+  isVis(x, y) {
+    if (!this.inb(x, y)) return false;
+    if (this.fovLv && x < LV.W0) {
+      const i1 = y * Wd.w + x + LV.W0;
+      if (Wd.floor[i1] !== FL.VOID) { const o = Wd.obj[i1]; if (!o || (o.t !== 'railing' && o.t !== 'stairtop')) return false; }
+      return this.visGen[i1] === this.gen;
+    }
+    return this.visGen[y * Wd.w + x] === this.gen;
+  },
+  fovLv: 0,
   // cast rays from (px,py); tiles within cone (or close) are marked visible
   computeFOV(px, py, facing, halfCone, radius, nearR) {
     this.gen++;
+    this.fovLv = px >= LV.W0 ? 1 : 0;
     this.wallLit.clear();
     const g = this.gen, W = Wd.w, H = Wd.h;
     const N = 900;
@@ -313,6 +410,7 @@ const World = {
         }
         this.visGen[i] = g;
         Wd.seen[i] = 1;
+        if (nx >= LV.W0) Wd.seen[i - LV.W0] = 1;
         cx = nx; cy = ny;
       }
     }
@@ -349,7 +447,9 @@ const World = {
       }
       return top;
     };
-    const h = (x, y) => { const dx = Math.abs(x - tx), dy = Math.abs(y - ty); return (dx + dy) + (1.414 - 2) * Math.min(dx, dy); };
+    const W0 = LV.W0, tvx = tx >= W0 ? tx - W0 : tx, tlv = tx >= W0 ? 1 : 0;
+    const h = (x, y) => { const vx = x >= W0 ? x - W0 : x; const dx = Math.abs(vx - tvx), dy = Math.abs(y - ty); return (dx + dy) + (1.414 - 2) * Math.min(dx, dy) + ((x >= W0 ? 1 : 0) !== tlv ? 3 : 0); };
+    const links = this.stLinks, down = this.stDown;
     const si = sy * W + sx, ti = ty * W + tx;
     stamp[si] = gen; G_[si] = 0; from[si] = -1;
     push(h(sx, sy), si);
@@ -364,12 +464,18 @@ const World = {
       const cx = ci % W, cy = (ci / W) | 0;
       const hh = h(cx, cy);
       if (hh < bestH) { bestH = hh; best = ci; }
+      const li = links.get(ci);
+      if (li !== undefined && closed[li] !== gen) {
+        const ng = G_[ci] + 2;
+        if (stamp[li] !== gen || ng < G_[li]) { stamp[li] = gen; G_[li] = ng; from[li] = ci; push(ng + h(li % W, (li / W) | 0) * 1.05, li); }
+      }
       for (let k = 0; k < 8; k++) {
         const ddx = DIR8[k][0], ddy = DIR8[k][1];
         const nx = cx + ddx, ny = cy + ddy;
         if (nx < 0 || ny < 0 || nx >= W || ny >= Wd.h) continue;
         const ni = ny * W + nx;
         if (closed[ni] === gen) continue;
+        if (down.has(ni)) continue;
         let cost;
         if (ddx === 0 || ddy === 0) {
           cost = this._stepCost(cx, cy, nx, ny, who);
@@ -378,6 +484,7 @@ const World = {
         } else {
           // diagonal: both orthogonal routes must be free
           if (this.tileSolid(nx, ny) || this.tileSolid(cx + ddx, cy) || this.tileSolid(cx, cy + ddy)) continue;
+          if (down.size && (down.has(cy * W + cx + ddx) || down.has((cy + ddy) * W + cx))) continue;
           const a1 = this._stepCost(cx, cy, cx + ddx, cy, who), a2 = this._stepCost(cx + ddx, cy, nx, ny, who);
           const b1 = this._stepCost(cx, cy, cx, cy + ddy, who), b2 = this._stepCost(cx, cy + ddy, nx, ny, who);
           if (a1 !== 1 || a2 !== 1 || b1 !== 1 || b2 !== 1) continue;
@@ -459,8 +566,9 @@ const World = {
   // ------------------------------------------------------------------ power & water
   hasPower(x, y) {
     if (!G.events.powerOff) return true;
+    const vx = vxOf(x);
     for (const g of Wd.powerGens) {
-      if (g.on && g.fuel > 0 && Math.abs(g.x - x) <= 10 && Math.abs(g.y - y) <= 10) return true;
+      if (g.on && g.fuel > 0 && Math.abs(vxOf(g.x) - vx) <= 10 && Math.abs(g.y - y) <= 10) return true;
     }
     return false;
   },
