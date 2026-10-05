@@ -46,7 +46,9 @@ const Humanoid = {
     else { ctx.beginPath(); ctx.ellipse(px, py, 10, 5, 0, 0, Math.PI * 2); ctx.fill(); }
 
     const cr = pose.crouch || 0;
-    const hip = 0.86 - cr * 0.3;
+    // limping: the bad leg takes short steps and the body dips onto it
+    const limp = pose.limp || 0, ls_ = pose.limpSide || 1;
+    const hip = 0.86 - cr * 0.3 - limp * 0.07 * (pose.amp || 0) * Math.max(0, Math.sin((pose.walk || 0) + (ls_ > 0 ? Math.PI : 0)));
     const lean = (pose.lean || 0) + cr * 0.12;
     const ph = pose.walk || 0, amp = pose.amp || 0;
     const t = pose.t || 0;
@@ -56,8 +58,9 @@ const Humanoid = {
     const legs = [];
     for (const side of [-1, 1]) {
       const p = side < 0 ? ph : ph + Math.PI;
-      const ff = Math.sin(p) * 0.27 * amp + cr * 0.12;
-      const fz = Math.max(0, Math.cos(p)) * 0.11 * amp;
+      const la = limp && side === ls_ ? 1 - limp * 0.6 : 1;
+      const ff = Math.sin(p) * 0.27 * amp * la + cr * 0.12;
+      const fz = Math.max(0, Math.cos(p)) * 0.11 * amp * (la < 1 ? la * 0.5 : 1);
       const H = [0, side * 0.1, hip], Ft = [ff, side * 0.11, fz + 0.04];
       const dx = Ft[0] - H[0], dz = Ft[2] - H[2];
       const d = Math.sqrt(dx * dx + dz * dz);

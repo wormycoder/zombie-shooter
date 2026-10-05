@@ -778,6 +778,11 @@ const Player = {
       if (an === 'squat') { pose.arms = 'shove'; pose.swingT = 0.5; pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42; }
     }
     if (p.climb) { pose.arms = 'climb'; pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4; }
+    for (const pt of LEG_PARTS) {
+      const b = p.body[pt], w = b.w;
+      const lv = w.fracture ? (b.splint ? 0.6 : 1) : (w.deep || w.bite) ? 0.5 : w.cut ? 0.3 : 0;
+      if (lv > (pose.limp || 0)) { pose.limp = lv; pose.limpSide = pt.endsWith('L') ? -1 : 1; }
+    }
     if (p.sitting) pose.crouch = 0.8;
     if (p.asleep || p.dead) {
       pose.lie = p.dead ? Math.min(1, (p.deadT || 0) * 2) : 1;

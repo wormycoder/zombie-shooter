@@ -20,6 +20,8 @@ const Zombie = {
     };
     z.look = this.computeLook(z);
     z.maxhp = z.hp;
+    // some of the dead drag a ruined leg
+    if (R.chance(0.22)) { z.limp = R.f(0.35, 0.85); z.limpSide = R.chance(0.5) ? 1 : -1; z.speed *= 1 - z.limp * 0.18; }
     return z;
   },
   rollSpeed() {
@@ -436,7 +438,7 @@ const Zombie = {
     if (z.dead && !World.isVis(Math.floor(z.x), Math.floor(z.y)) && !Wd.seen[Math.floor(z.y) * Wd.w + Math.floor(z.x)]) return;
     const [X, Y] = Render.epos(z);
     const s = Math.max(0.12, Render.shadeSmooth(z.x, z.y));
-    const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03 };
+    const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1 };
     if (z.st === 'attack') { pose.reach = 1 - Math.max(0, z.atkT) / 0.8; pose.lean = 0.3; }
     if (z.thumping > 0) { z.thumping -= 0.016; pose.reach = 1; pose.lean = 0.3; }
     if (z.st === 'climb') { pose.arms = 'climb'; pose.crouch = Math.sin(z.climbT / z.climbDur * Math.PI) * 0.5; }
