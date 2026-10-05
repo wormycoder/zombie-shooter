@@ -26,7 +26,7 @@ const World = {
       labels: [],
     };
   },
-  use(w) { Wd = w; if (!w.stairs) w.stairs = []; this._initScratch(); this.indexStairs(); },
+  use(w) { Wd = w; LV.W0 = w.gw || w.w; if (!w.stairs) w.stairs = []; this._initScratch(); this.indexStairs(); },
   // ------------------------------------------------------------------ stairs between levels
   // each stair: {x, y, dx, dy} = top step (level 0) and climbing direction
   indexStairs() {

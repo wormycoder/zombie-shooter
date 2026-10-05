@@ -196,6 +196,9 @@ Cl('MilitaryJacket', 'Military Jacket', 1.2, ['jacket', '#4a5a3a'], { slot: 'jac
 Cl('BulletVest', 'Bulletproof Vest', 2.5, ['vest', '#2a2a30'], { slot: 'vest', cover: ['torso'], sc: 80, bi: 70, ins: 0.15, bullet: true, cols: ['#2a2a30', '#3a4a3a'] });
 Cl('Jeans', 'Jeans', 0.6, ['pants', '#3a5a8a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 20, bi: 8, ins: 0.2, cols: ['#3a5a8a', '#2a3a5a', '#506a90', '#202530'] });
 Cl('Trousers', 'Trousers', 0.5, ['pants', '#3a3a3a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 12, bi: 4, ins: 0.2, cols: ['#3a3a3a', '#5a4a3a', '#2a2a40', '#7a6a50'] });
+Cl('Scrubs', 'Scrubs Top', 0.2, ['tshirt', '#4a9a9a'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 6, bi: 0, ins: 0.08, cols: ['#4a9a9a', '#5a7ab0', '#7aa0c0'] });
+Cl('ScrubPants', 'Scrubs Trousers', 0.3, ['pants', '#4a9a9a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 8, bi: 2, ins: 0.1, cols: ['#4a9a9a', '#5a7ab0', '#7aa0c0'] });
+Cl('LabCoat', 'Lab Coat', 0.6, ['jacket', '#f0f0f0'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms', 'groin'], sc: 15, bi: 4, ins: 0.15, cols: ['#f0f0f0'] });
 Cl('Shorts', 'Shorts', 0.3, ['shorts', '#7a6a50'], { slot: 'pants', cover: ['groin', 'ulegs'], sc: 8, bi: 2, ins: 0.05, cols: ['#7a6a50', '#3a5a8a', '#202020', '#8a2a2a'] });
 Cl('CargoPants', 'Cargo Pants', 0.7, ['pants', '#5a5a40'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 25, bi: 10, ins: 0.25, cols: ['#5a5a40', '#4a5a3a', '#3a3a3a'] });
 Cl('FirePants', 'Firefighter Pants', 1.5, ['pants', '#a08030'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 60, bi: 40, ins: 0.4, cols: ['#a08030'] });

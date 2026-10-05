@@ -34,11 +34,15 @@ const Zombie = {
     const mk = (id) => { const it = Items.make(id); if (it) { it.worn = ITEMS[id].slot; it.cond = R.f(0.3, 1); if (R.chance(0.6)) it.bloody = true; out.push(it); } };
     if (kind === 'military') { mk('MilitaryJacket'); mk('CargoPants'); mk('Boots'); if (R.chance(0.3)) mk('HardHat'); return out; }
     if (kind === 'police') { mk('PoliceShirt'); mk('PolicePants'); mk('Boots'); if (R.chance(0.4)) mk('PoliceCap'); if (R.chance(0.2)) mk('BulletVest'); return out; }
-    mk(R.pick(['TShirt', 'TShirt', 'Shirt', 'TankTop', 'Shirt']));
-    if (R.chance(0.35)) mk(R.pick(['Hoodie', 'DenimJacket', 'Sweater', 'LeatherJacket', 'WinterCoat']));
-    mk(female && R.chance(0.3) ? 'Shorts' : R.pick(['Jeans', 'Jeans', 'Trousers', 'Shorts', 'CargoPants']));
-    if (R.chance(0.85)) mk(R.pick(['Sneakers', 'Sneakers', 'Boots', 'DressShoes']));
-    if (R.chance(0.15)) mk(R.pick(['BaseballCap', 'Beanie']));
+    if (kind === 'medic') { mk('Scrubs'); mk('ScrubPants'); mk('Sneakers'); if (R.chance(0.5)) mk('LabCoat'); return out; }
+    // people dressed for the weather when they turned
+    const cold = Season.tree === 'b' || Season.snow > 0.2 || Season.tree === 's', warm = Season.tree === 'g';
+    mk(cold ? R.pick(['Shirt', 'Shirt', 'TShirt', 'Sweater']) : R.pick(['TShirt', 'TShirt', 'Shirt', 'TankTop', 'Shirt']));
+    if (R.chance(cold ? 0.8 : warm ? 0.25 : 0.5)) mk(cold ? R.pick(['WinterCoat', 'WinterCoat', 'Hoodie', 'LeatherJacket', 'DenimJacket']) : R.pick(['Hoodie', 'DenimJacket', 'Sweater', 'LeatherJacket', 'WinterCoat']));
+    mk(female && warm && R.chance(0.3) ? 'Shorts' : cold ? R.pick(['Jeans', 'Jeans', 'Trousers', 'CargoPants']) : R.pick(['Jeans', 'Jeans', 'Trousers', 'Shorts', 'CargoPants']));
+    if (R.chance(0.85)) mk(cold ? R.pick(['Boots', 'Boots', 'Sneakers']) : R.pick(['Sneakers', 'Sneakers', 'Boots', 'DressShoes']));
+    if (R.chance(cold ? 0.45 : 0.15)) mk(cold ? R.pick(['Beanie', 'Beanie', 'BaseballCap']) : R.pick(['BaseballCap', 'Beanie']));
+    if (cold && R.chance(0.25)) mk(R.pick(['Gloves', 'Scarf']));
     if (R.chance(0.06)) { const b = Items.make(R.pick(['SchoolBag', 'HikingBag', 'DuffelBag'])); b.worn = 'back'; b.items = Loot.zombiePockets(); out.push(b); }
     return out;
   },
@@ -88,7 +92,7 @@ const Zombie = {
         const rm = w.rooms[rid];
         for (let t = 0; t < 10; t++) {
           const x = R.int(rm.x0, rm.x1), y = R.int(rm.y0, rm.y1);
-          if (okTile(x, y)) { G.zombies.push(this.create(x + 0.5, y + 0.5, b.type === 'police' ? 'police' : null)); break; }
+          if (okTile(x, y)) { G.zombies.push(this.create(x + 0.5, y + 0.5, b.type === 'police' ? 'police' : b.type === 'clinic' ? 'medic' : null)); break; }
         }
       }
     }

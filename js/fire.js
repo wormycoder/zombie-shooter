@@ -175,7 +175,7 @@ const Fire = {
         // corpses in the flames char and burn away (the classic way to deal with corpse piles)
         if (has && m.has(Math.floor(z.y) * W + Math.floor(z.x))) {
           z.charT = (z.charT || 0) + dt;
-          if (z.charT > 5 && !z.charred) { z.charred = true; z.look = Object.assign({}, z.look, { skin: '#2a2420', shirt: '#2a2420', pants: '#221c18', jacket: z.look.jacket ? '#2a2420' : null, hair: '#1a1410' }); }
+          if (z.charT > 5 && !z.charred) { z.charred = true; z.keepLook = true; z.look = Object.assign({}, z.look, { skin: '#2a2420', shirt: '#2a2420', pants: '#221c18', jacket: z.look.jacket ? '#2a2420' : null, hair: '#1a1410' }); }
           if (z.charT > 14) { z.gone = true; gone = true; Fx.scorch(z.x, z.y, 1.2); }
         }
         continue;

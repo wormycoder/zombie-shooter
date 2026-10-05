@@ -67,6 +67,8 @@ const Game = {
     G.sb = cfg.sb || sandboxValues({});
     MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
     G.seed = (Math.random() * 1e9) | 0;
+    G.time = 0; G.weather = { rain: 0, snow: 0, temp: 20 };
+    Season.update();
     const w = MapGen.generate(G.seed);
     World.use(w);
     G.conts = new Set();
@@ -95,7 +97,8 @@ const Game = {
     if (!gear.some(g => ITEMS[g].slot === 'pants')) addWear(R.pick(['Jeans', 'Trousers', 'Jeans']), cfg.look.pantsCol);
     if (!gear.some(g => ITEMS[g].slot === 'shoes')) addWear('Sneakers');
     for (const g of gear) addWear(g);
-    if (R.chance(0.4)) addWear('Hoodie');
+    const coldStart = Season.tree === 'b' || Season.tree === 's';
+    if (coldStart) addWear(R.pick(['WinterCoat', 'Hoodie', 'Sweater'])); else if (R.chance(0.4)) addWear('Hoodie');
     addWear('DigitalWatch');
     if (Player.hasTrait('shortsighted')) addWear('Glasses');
     const key = Items.make('HouseKey', { set: { keyId: home.keyId, keyName: 'Key to your house' } });
@@ -227,6 +230,7 @@ const Game = {
       const z = Zombie.create(p.x, p.y);
       z.wear = p.inv.filter(it => it.worn);
       z.look = Object.assign(Player.look(), { zombie: true, skin: Col.mix(p.look.skin, ZSKIN, 0.5), blood: 0.8, hair: p.look.hair, hairStyle: p.look.hairStyle });
+      z.keepLook = true;
       z.lie = 1; z.st = 'getup'; z.va = 1;
       G.zombies.push(z);
       G.corpse = false;
@@ -240,7 +244,7 @@ const Game = {
     Weather.update(dt, gm);
     this.tickAcc = (this.tickAcc || 0) + gm;
     if (this.tickAcc >= 1) { this.worldTick(this.tickAcc); this.tickAcc = 0; }
-    if (!p.dead && G.time - this.lastSave > 60 && !p.asleep && G.mode === 'play') { this.lastSave = G.time; Save.save(true); }
+    if (!p.dead && G.time - this.lastSave > 30 && !p.asleep && G.mode === 'play') { this.lastSave = G.time; Save.save(true); }
   },
   updateLight(dt) {
     const h = this.hour();
@@ -491,7 +495,14 @@ const Save = {
     for (let i = 0; i < w.obj.length; i++) if (w.obj[i]) objs.push([i, w.obj[i]]);
     const u8 = (a) => Bin.toB64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
     const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null });
-    const zs = G.zombies.map(z => { const o = Object.assign({}, z); delete o.path; delete o.obE; delete o.obTo; delete o.cFrom; return o; });
+    const rd = (v) => Math.round(v * 100) / 100;
+    const zs = G.zombies.map(z => {
+      const o = Object.assign({}, z);
+      delete o.path; delete o.obE; delete o.obTo; delete o.cFrom; delete o.dcOk;
+      if (!o.keepLook) delete o.look; // rebuilt from clothes on load
+      o.x = rd(o.x); o.y = rd(o.y); o.tx = rd(o.tx); o.ty = rd(o.ty); o.a = rd(o.a); o.ph = rd(o.ph || 0); o.hp = rd(o.hp);
+      return o;
+    });
     return {
       v: 1, time: G.time, seed: G.seed, events: G.events, weather: G.weather, alarms: G.alarms, sb: G.sb,
       uid: _uid, zid: _zid, cid: _carId, kills: p.kills,
@@ -559,7 +570,7 @@ const Save = {
     G.cars = s.cars;
     Vehicles.active = null;
     G.zombies = s.zombies;
-    for (const z of G.zombies) { if (z.st === 'thump' || z.st === 'climb') z.st = 'idle'; z.path = null; }
+    for (const z of G.zombies) { if (z.st === 'thump' || z.st === 'climb') z.st = 'idle'; z.path = null; if (!z.look) z.look = Zombie.computeLook(z); }
     const p = s.player;
     p.inCar = p.inCar ? G.cars.find(c => c.id === p.inCar) || null : null;
     p.action = null; p.queue = []; p.halo = []; p.fovT = 0;

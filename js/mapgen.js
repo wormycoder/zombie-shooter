@@ -14,8 +14,10 @@ const OPP = { N: 'S', S: 'N', W: 'E', E: 'W' };
 function vecDir(dx, dy) { return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N'); }
 
 const MapGen = {
-  W: 480, GW: 240, H: 240,
+  W: 800, GW: 400, H: 400,
   RP: [45, 75, 105, 135, 165, 195],
+  // second town: Millbrook, to the south-east
+  RX2: [270, 300, 330, 360], RY2: [255, 285, 315, 345],
 
   generate(seed) {
     const W = this.W, H = this.H;
@@ -34,9 +36,13 @@ const MapGen = {
     this.lake(212, 30, 16);
     this.roads();
     this.town();
+    this.town2();
     this.outskirts();
+    this.outskirts2();
     this.forest();
     this.finalize();
+    // keep saves compact
+    for (const o of w.obj) if (o && o.sz) o.sz = Math.round(o.sz * 100) / 100;
     return w;
   },
 
@@ -98,10 +104,15 @@ const MapGen = {
   roads() {
     const RP = this.RP, W = this.W, H = this.H;
     const a = RP[0], b = RP[5] + 3;
+    const RX2 = this.RX2, RY2 = this.RY2;
+    const a2x = RX2[0], b2x = RX2[RX2.length - 1] + 3, a2y = RY2[0], b2y = RY2[RY2.length - 1] + 3;
     const rects = [];
     for (const y of RP) rects.push({ h: true, p: y, s: (y === 105 ? 0 : a), e: (y === 105 ? this.GW - 1 : b), side: true });
     for (const x of RP) rects.push({ h: false, p: x, s: (x === 135 ? 0 : a), e: (x === 135 ? H - 1 : b), side: true });
-    const inTown = (x, y) => x >= a - 1 && x <= b + 1 && y >= a - 1 && y <= b + 1;
+    // Millbrook grid; one street runs west to Main Street, one north to the highway
+    for (const y of RY2) rects.push({ h: true, p: y, s: (y === 315 ? 135 : a2x), e: b2x, side: true });
+    for (const x of RX2) rects.push({ h: false, p: x, s: (x === 300 ? 105 : a2y), e: b2y, side: true });
+    const inTown = (x, y) => (x >= a - 1 && x <= b + 1 && y >= a - 1 && y <= b + 1) || (x >= a2x - 1 && x <= b2x + 1 && y >= a2y - 1 && y <= b2y + 1);
     // pass 1: sidewalks
     for (const R_ of rects) {
       for (let t = R_.s; t <= R_.e; t++) {
@@ -158,6 +169,9 @@ const MapGen = {
     this.dirtPath([[28, 109], [28, 232]], 3);
     this.dirtPath([[44, 47], [17, 47], [17, 26]], 2);
     this.dirtPath([[199, 58], [212, 58]], 2);
+    this.dirtPath([[109, 253], [134, 253]], 2);
+    this.dirtPath([[364, 120], [364, 40]], 2);
+    this.dirtPath([[138, 372], [196, 372]], 2);
   },
   dirtPath(pts, wd) {
     for (let i = 0; i < pts.length - 1; i++) {
@@ -840,7 +854,7 @@ const MapGen = {
     const brick = ['police', 'firestation', 'bank', 'warehouse', 'school', 'church'].includes(type) || r.chance(0.5);
     const b = this.newBuilding(type, x0, y0, x0 + w - 1, y0 + h - 1, { wallType: brick ? WT.BRICK : WT.EXT, roof: 'flat', roofCol: r.pick(PAL.roofFlat), name, alarm: r.chance(0.5), front: f });
     const M = this.mapper(x0, y0, w, h, f);
-    const fl = { grocery: FL.LINO, hardware: FL.CONCRETE, gunstore: FL.WOOD, pharmacy: FL.LINO, restaurant: FL.TILE, bar: FL.WOOD, clothing: FL.CARPET, bookstore: FL.WOOD, office: FL.CARPET, firestation: FL.CONCRETE, police: FL.LINO, laundromat: FL.TILE, gasstation: FL.LINO, warehouse: FL.CONCRETE }[type] || FL.LINO;
+    const fl = { clinic: FL.TILE, grocery: FL.LINO, hardware: FL.CONCRETE, gunstore: FL.WOOD, pharmacy: FL.LINO, restaurant: FL.TILE, bar: FL.WOOD, clothing: FL.CARPET, bookstore: FL.WOOD, office: FL.CARPET, firestation: FL.CONCRETE, police: FL.LINO, laundromat: FL.TILE, gasstation: FL.LINO, warehouse: FL.CONCRETE }[type] || FL.LINO;
     const sd = M.D >= 9 ? 3 : 0;
     const sales = this.addRoom(b, type, ...M.rect(0, 0, M.W - 1, M.D - 1 - sd), fl, r.int(0, 7));
     let back = null;
@@ -955,6 +969,19 @@ const MapGen = {
       case 'warehouse':
         for (let v = 2; v < sv; v += 3) for (let u = 1; u < W_ - 1; u++) if (u % 5 !== 0) P(u, v, r.chance(0.5) ? 'shelf' : 'crate', 'F');
         break;
+      case 'clinic':
+        // waiting room up front, treatment beds and supply cabinets at the back
+        for (let u = 2; u < W_ - 2; u++) if (u !== Math.floor(W_ / 2) && u !== Math.floor(W_ / 2) - 1) P(u, 1, 'chair', 'F');
+        P(W_ - 2, sv - 1, 'desk', 'F'); P(W_ - 2, sv - 2, 'chair', 'B');
+        P(1, sv, 'shelf', 'F'); P(2, sv, 'medcab', 'F'); P(3, sv, 'shelf', 'F');
+        for (let v = 3; v < sv - 1; v++) P(0, v, 'medcab', 'R');
+        if (back) {
+          back.type = 'clinic';
+          for (let k = 0; k < 3; k++) this.place(back, 'bed', { two: 'perp', extra: { col: '#e8e8f0' } });
+          for (let k = 0; k < 3; k++) this.place(back, 'medcab');
+          this.place(back, 'sink'); this.place(back, 'counter');
+        }
+        break;
     }
     if (name) this.w.labels.push({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, text: name });
     b.keyId = b.id;
@@ -1040,6 +1067,53 @@ const MapGen = {
     }
     this.w.labels.push({ x: 120, y: 120, text: 'Hollow Creek' });
   },
+  // ---------------------------------------------------------------- Millbrook
+  town2() {
+    const RX = this.RX2, RY = this.RY2, r = this.rng;
+    const names = { grocery: 'Millbrook Market', clinic: 'Millbrook Clinic', diner: "Dot's Diner", hardware: 'Feed & Supply', bar: 'The Last Stop', pharmacy: 'Millbrook Drugs', office: 'County Records', laundromat: 'Wash World' };
+    const plans = new Map();
+    plans.set('0,0,N', [['grocery', 24]]);
+    plans.set('1,0,N', [['clinic', 12], ['diner', 12]]);
+    plans.set('2,1,N', [[r.pick(['hardware', 'pharmacy']), 12], [r.pick(['bar', 'laundromat', 'office']), 12]]);
+    plans.set('1,2,S', [['house', 12], [r.pick(['pharmacy', 'bar', 'office']), 12]]);
+    for (let bi = 0; bi < RX.length - 1; bi++) for (let bj = 0; bj < RY.length - 1; bj++) {
+      const x0 = RX[bi] + 5, x1 = RX[bi + 1] - 2, y0 = RY[bj] + 5, y1 = RY[bj + 1] - 2;
+      this.mark(x0, y0, x1, y1, 1);
+      if (bi === 1 && bj === 1) { this.park(x0, y0, x1, y1, 'Millbrook Green'); continue; }
+      if (bi === 0 && bj === 1) { this.church(x0, y0, x1, y0 + 11, 'Grace Baptist Church'); this.houseRow(x0, y0 + 12, x1, y1, 'S'); continue; }
+      const nk = bi + ',' + bj + ',N', sk = bi + ',' + bj + ',S';
+      if (plans.has(nk)) this.commercialRow(x0, y0, x1, y0 + 11, 'N', plans.get(nk), names); else this.houseRow(x0, y0, x1, y0 + 11, 'N');
+      if (plans.has(sk)) this.commercialRow(x0, y0 + 12, x1, y1, 'S', plans.get(sk), names); else this.houseRow(x0, y0 + 12, x1, y1, 'S');
+      const ft = r.weighted([[WT.WOODFENCE, 5], [WT.CHAIN, 2], [WT.PICKET, 1], [0, 2]]);
+      if (ft) this.fenceLine(x0, y0 + 12, x1 - x0 + 1, 0, ft, 0.06);
+    }
+    const a2x = RX[0], b2x = RX[RX.length - 1] + 3, a2y = RY[0], b2y = RY[RY.length - 1] + 3;
+    for (const p of RY) for (let t = a2x; t <= b2x; t += 9) for (const [x, y] of [[t, p - 1], [t + 4, p + 4]]) this.lamp(x, y);
+    for (const p of RX) for (let t = a2y; t <= b2y; t += 9) for (const [x, y] of [[p - 1, t + 2], [p + 4, t + 6]]) this.lamp(x, y);
+    this.w.labels.push({ x: (a2x + b2x) / 2, y: (a2y + b2y) / 2 - 12, text: 'Millbrook' });
+  },
+  lamp(x, y) { if (World.inb(x, y) && this.w.floor[y * this.W + x] === FL.SIDEWALK && !this.w.obj[y * this.W + x] && this.roadCnt[y * this.W + x] === 0) this.put(x, y, 'lamppost', 'S'); },
+  // single-wide mobile home
+  trailer(hx, hy, f) {
+    const r = this.rng;
+    const horiz = f === 'N' || f === 'S';
+    const hw = horiz ? 8 : 4, hh = horiz ? 4 : 8;
+    const b = this.newBuilding('trailer', hx, hy, hx + hw - 1, hy + hh - 1, { wallType: WT.EXT, extCol: r.pick(['#d8d8d0', '#c8d0d8', '#e0d8c0', '#a8b8a8', '#d0c0b0']), roofCol: '#8a8a88', roof: 'flat', front: f });
+    const M = this.mapper(hx, hy, hw, hh, f);
+    const main = this.addRoom(b, 'living', ...M.rect(0, 0, 4, M.D - 1), FL.LINO, r.int(0, 7));
+    const bath = this.addRoom(b, 'bathroom', ...M.rect(5, 0, 5, M.D - 1), FL.LINO, 2);
+    const bed = this.addRoom(b, 'bedroom', ...M.rect(6, 0, 7, M.D - 1), FL.CARPET, r.int(0, 7));
+    this.buildWalls(b);
+    this.doorBetween(main, bath); this.doorBetween(main, bed);
+    this.exteriorDoor(main, M.dir('F'), { locked: r.chance(0.5), b: b.id, ext: true });
+    this.windows(main, { p: 0.5, win: { b: b.id } }); this.windows(bed, { p: 0.5, win: { b: b.id } });
+    this.place(main, 'counter'); this.place(main, 'stove'); this.place(main, 'fridge'); this.place(main, 'sofa', { two: 'along', extra: { col: r.pick(['#7a6a50', '#5a4a3a', '#6a7a5a']) } }) || this.place(main, 'armchair');
+    this.place(main, 'tv');
+    this.place(bath, 'toilet'); this.place(bath, 'sink');
+    this.place(bed, 'bed', { two: 'along', extra: { col: r.pick(['#a05050', '#5060a0', '#d0c0a0']) } }); this.place(bed, 'dresser');
+    b.keyId = b.id;
+    return b;
+  },
   houseRow(x0, y0, x1, y1, f) {
     const r = this.rng;
     const width = x1 - x0 + 1;
@@ -1078,7 +1152,7 @@ const MapGen = {
       x += w;
     }
   },
-  park(x0, y0, x1, y1) {
+  park(x0, y0, x1, y1, label) {
     const r = this.rng;
     const cx = Math.floor((x0 + x1) / 2), cy = Math.floor((y0 + y1) / 2);
     this.fill(x0, cy, x1, cy + 1, FL.SIDEWALK, 1);
@@ -1098,7 +1172,7 @@ const MapGen = {
     for (let t = y0 + 2; t <= y1 - 2; t += 4) { if (this.free(cx - 1, t)) this.put(cx - 1, t, 'bench', 'E'); if (this.free(cx + 2, t)) this.put(cx + 2, t, 'bench', 'W'); }
     this.put(cx - 1, cy - 1, 'lamppost', 'S'); this.put(cx + 2, cy + 2, 'lamppost', 'S');
     this.put(cx + 2, cy - 1, 'trash', 'S');
-    this.w.labels.push({ x: cx, y: cy, text: 'Town Park' });
+    this.w.labels.push({ x: cx, y: cy, text: label || 'Town Park' });
   },
   school(x0, y0, x1, y1) {
     const r = this.rng;
@@ -1143,9 +1217,9 @@ const MapGen = {
     this.fenceLine(x0, y0, x1 - x0 + 1, 0, WT.CHAIN, 0.08);
     for (let k = 0; k < 6; k++) { const x = r.int(x0, x1), y = r.int(y0, y1); if (this.free(x, y)) this.put(x, y, 'crate', 'S', {}); }
   },
-  church(x0, y0, x1, y1) {
+  church(x0, y0, x1, y1, name) {
     const r = this.rng;
-    const b = this.newBuilding('church', x0 + 1, y0 + 1, x0 + 10, y1 - 1, { wallType: WT.EXT, extCol: '#e8e4dc', roofCol: '#4a3a3a', name: "St. Agnes Church", front: 'N' });
+    const b = this.newBuilding('church', x0 + 1, y0 + 1, x0 + 10, y1 - 1, { wallType: WT.EXT, extCol: '#e8e4dc', roofCol: '#4a3a3a', name: name || "St. Agnes Church", front: 'N' });
     const nave = this.addRoom(b, 'church', x0 + 1, y0 + 1, x0 + 10, y1 - 1, FL.WOOD, 5);
     this.buildWalls(b);
     this.exteriorDoor(nave, 'N', { locked: false, b: b.id, ext: true });
@@ -1243,16 +1317,77 @@ const MapGen = {
       if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430' });
     }
   },
+  outskirts2() {
+    const r = this.rng;
+    // --- trailer park on the road to Millbrook
+    this.mark(196, 296, 252, 312, 1);
+    this.fill(196, 304, 250, 305, FL.GRAVEL, 0);
+    this.fill(196, 306, 197, 314, FL.GRAVEL, 0);
+    for (let k = 0; k < 6; k++) { const hx = 199 + k * 9; this.trailer(hx, 297, 'S'); if (r.chance(0.5)) this.w.carSpots.push({ x: hx + 4.5, y: 307.6, a: 0 }); }
+    for (let k = 0; k < 5; k++) { const hx = 199 + k * 10; this.trailer(hx, 308, 'N'); }
+    this.w.labels.push({ x: 224, y: 304, text: 'Pine Rest Trailer Park' });
+    // --- second farm off Main Street, south of town
+    this.mark(84, 236, 131, 300, 1);
+    const fh = this.house(112, 240, 10, 8, 'E', { noGarage: true, type: 'farmhouse' });
+    fh.name = 'Farmhouse';
+    const barn = this.newBuilding('barn', 98, 240, 108, 250, { wallType: WT.EXT, extCol: '#7a2a20', roofCol: '#4a4038', front: 'E' });
+    const bRoom = this.addRoom(barn, 'barn', 98, 240, 108, 250, FL.DIRT, 0);
+    this.buildWalls(barn);
+    const be = this.borderEdges(bRoom, (x, y) => World.room(x, y) < 0).filter(c => c.dir === 'E' && !c.corner);
+    const bm = Math.floor(be.length / 2);
+    for (let k = bm - 1; k <= bm; k++) if (be[k]) this.setDoor(be[k], { style: 'garage', col: '#7a2a20', b: barn.id });
+    for (let k = 0; k < 6; k++) this.place(bRoom, 'hay');
+    for (let k = 0; k < 3; k++) this.place(bRoom, 'crate');
+    this.place(bRoom, 'toolcab');
+    this.w.carSpots.push({ x: 110.5, y: 254.5, a: 0, kind: 'pickup' });
+    const crop = r.pick(Object.keys(CROPS));
+    for (let y = 258; y <= 296; y++) for (let x = 88; x <= 128; x++) {
+      if (World.room(x, y) >= 0) continue;
+      this.w.obj[y * this.W + x] = null;
+      if ((x - 88) % 3 === 2) { this.sf(x, y, FL.DIRT, 1); continue; }
+      this.sf(x, y, FL.FURROW, 0);
+      if (r.chance(0.8)) this.w.obj[y * this.W + x] = { t: 'crop', dir: 'S', crop, stage: r.int(2, 4), water: 0.5, grow: r.f(0, 1), dead: r.chance(0.1) };
+    }
+    this.fenceLine(87, 257, 43, 0, WT.PICKET, 0.04); this.fenceLine(87, 297, 43, 0, WT.PICKET, 0.04);
+    this.w.labels.push({ x: 108, y: 276, text: 'McCoy Farm' });
+    this.w.zones.push({ x0: 84, y0: 236, x1: 131, y1: 300, n: 12 });
+    // --- gas station where the Millbrook road meets the highway
+    this.fill(304, 92, 326, 101, FL.CONCRETE, 1);
+    this.mark(302, 90, 328, 102, 1);
+    this.store('gasstation', 308, 91, 10, 6, 'S', 'Gulf Stop');
+    for (const x of [308, 312, 316, 320]) this.put(x, 99, 'pump', 'S');
+    this.w.carSpots.push({ x: 314.5, y: 98.6, a: 0 });
+    // --- remote cabins
+    this.cabin(356, 34, 7, 6, 'S');
+    this.cabin(306, 190, 7, 6, 'W');
+    this.cabin(40, 330, 7, 6, 'E');
+    this.cabin(196, 365, 7, 6, 'S');
+    this.cabin(250, 150, 7, 6, 'N');
+    // --- east roadblock where the highway leaves the county
+    for (let y = 98; y <= 114; y++) if (y < 104 || y > 109) World.setWall(392, y, 1, WT.CHAIN);
+    for (const [x, y] of [[394, 100], [395, 100], [394, 112], [396, 112], [396, 101]]) this.put(x, y, 'crate', 'S', { c: { type: 'crate', cap: 40, items: null, loot: 'military' } });
+    for (const [x, y] of [[390, 104], [390, 109], [389, 104], [389, 109]]) this.put(x, y, 'hay', 'S', { sandbag: true });
+    this.w.labels.push({ x: 394, y: 106, text: 'Roadblock' });
+    // wrecks on the long roads
+    for (let k = 0; k < 10; k++) {
+      const pick = r.int(0, 2);
+      const x = pick === 0 ? r.int(240, 380) : pick === 1 ? 300 + r.int(0, 3) : r.int(150, 260);
+      const y = pick === 0 ? 105 + r.int(0, 3) : pick === 1 ? r.int(120, 240) : 315 + r.int(0, 3);
+      if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430' });
+    }
+  },
   forest() {
     const r = this.rng, W = this.W, H = this.H;
     const a = this.RP[0] - 4, b = this.RP[5] + 8;
+    const c0x = this.RX2[0] - 4, c1x = this.RX2[this.RX2.length - 1] + 8, c0y = this.RY2[0] - 4, c1y = this.RY2[this.RY2.length - 1] + 8;
     for (let y = 0; y < H; y++) for (let x = 0; x < this.GW; x++) {
       const i = y * W + x;
       if (this.used[i] || this.w.obj[i] || this.w.room[i] >= 0) continue;
       const f = this.w.floor[i];
       if (f !== FL.GRASS && f !== FL.GRASS2) continue;
       const dx = x < a ? a - x : x > b ? x - b : 0, dy = y < a ? a - y : y > b ? y - b : 0;
-      const td = Math.max(dx, dy);
+      const ex = x < c0x ? c0x - x : x > c1x ? x - c1x : 0, ey = y < c0y ? c0y - y : y > c1y ? y - c1y : 0;
+      const td = Math.min(Math.max(dx, dy), Math.max(ex, ey));
       const wild = U.clamp((td - 2) / 10, 0, 1);
       const n = this.nC(x / 22, y / 22, 3);
       const dens = wild * U.clamp((n - 0.32) * 2.6, 0, 1);
@@ -1271,11 +1406,14 @@ const MapGen = {
     this.w.zones.push({ x0: RP[0], y0: RP[0], x1: RP[5] + 3, y1: RP[5] + 3, n: 300 });
     this.w.zones.push({ x0: RP[0], y0: 100, x1: RP[5] + 3, y1: 140, n: 90 });
     this.w.zones.push({ x0: 200, y0: 90, x1: 232, y1: 125, n: 22 });
-    this.w.zones.push({ x0: 0, y0: 0, x1: this.GW - 1, y1: this.H - 1, n: 70 });
+    this.w.zones.push({ x0: 0, y0: 0, x1: this.GW - 1, y1: this.H - 1, n: 170 });
+    this.w.zones.push({ x0: this.RX2[0], y0: this.RY2[0], x1: this.RX2[3] + 3, y1: this.RY2[3] + 3, n: 150 });
+    this.w.zones.push({ x0: 196, y0: 296, x1: 252, y1: 330, n: 16 });
+    this.w.zones.push({ x0: 380, y0: 96, x1: 399, y1: 116, n: 10, outfit: 'military' });
     this.w.zones.push({ x0: 2, y0: 145, x1: 44, y1: 232, n: 18 });
     // indoor zombies per building
     for (const b of this.w.buildings) {
-      const n = { house: 1, farmhouse: 1, cabin: 0.5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2 }[b.type];
+      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2 }[b.type];
       b.zIndoor = n === undefined ? 2 : n;
     }
   },

@@ -73,8 +73,8 @@ const FL = {
   CONCRETE: 10, GRAVEL: 11, FOREST: 12, FURROW: 13, LINO: 14, DEEPWATER: 15, PARKING: 16, VOID: 17, BURNT: 18,
 };
 const FLOOR_NAMES = ['Grass', 'Grass', 'Dirt', 'Asphalt', 'Sidewalk', 'Wooden Floor', 'Tiles', 'Carpet', 'Water', 'Sand', 'Concrete', 'Gravel', 'Forest Floor', 'Furrow', 'Linoleum', 'Deep Water', 'Parking Lot', 'Open air', 'Burnt Ground'];
-// Upper floors live in a second copy of the map to the east: x + LV.W0 is the tile above x.
-const LV = { W0: 240 };
+// Upper floors live in a second copy of the map to the east: x + LV.W0 is the tile above x (W0 = ground map width).
+const LV = { W0: 400 };
 function lvOf(x) { return x >= LV.W0 ? 1 : 0; }
 function vxOf(x) { return x >= LV.W0 ? x - LV.W0 : x; }
 // Wall types

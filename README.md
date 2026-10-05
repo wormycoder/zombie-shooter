@@ -6,7 +6,7 @@ All graphics and audio are generated procedurally at runtime — there are no as
 **Play:** open `index.html` in a modern browser (or serve the folder with any static server).
 
 ## Features
-- Procedurally generated town: houses with real floor plans (some with an upstairs), stores, police station, school, church, motel, gas station, warehouses, farm, cabins, lake, forests
+- Procedurally generated county (400×400 tiles): the town of Hollow Creek and the village of Millbrook joined by highway and back roads, houses with real floor plans (some with an upstairs), stores, clinic, police and fire stations, school, churches, motel, gas stations, warehouses, a trailer park, two farms, remote cabins, a lake, forests and military roadblocks
 - Two-storey houses with stairs: zombies follow you up, you can smash the stairs, tie a sheet rope to a window or jump out, and shoot or throw from upstairs windows
 - Isometric renderer with wall cut-aways, roofs, vision cone & line-of-sight fog, day/night cycle, street lights, flashlights, headlights, rain, fog and storms
 - Spreading fire: molotovs, gasoline, stoves and campfires start fires that spread through grass, forests and wooden houses, burn down roofs and collapse upper floors; zombies catch fire; fight it with water or extinguishers

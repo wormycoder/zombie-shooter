@@ -69,4 +69,6 @@ window.addEventListener('load', () => {
   }
   requestAnimationFrame((t) => { Game.last = t; Game.loop(t); });
 });
+// tab hidden (switching away or closing): start a compressed save while we still can
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && G.mode === 'play' && G.player && !G.player.dead) Save.save(true); });
 window.addEventListener('beforeunload', () => { if (G.mode === 'play' && G.player && !G.player.dead) { try { const json = JSON.stringify(Save.serialize()); localStorage.setItem(Save.KEY, 'J' + json); } catch (e) { /* quota */ } } });
