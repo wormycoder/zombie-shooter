@@ -1417,7 +1417,7 @@ const MapGen = {
     // indoor zombies per building
     for (const b of this.w.buildings) {
       const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2 }[b.type];
-      b.zIndoor = n === undefined ? 2 : n;
+      if (b.zIndoor === undefined) b.zIndoor = n === undefined ? 2 : n;
     }
   },
 };

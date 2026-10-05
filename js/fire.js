@@ -14,6 +14,8 @@ const FIRE_OBJ = {
   register: 10, shelf: 25, toolcab: 15, locker: 5, crop: 6, stairs: 40, landing: 40, railing: 10, stairtop: 5, sign: 10, mailbox: 4,
 };
 const BURN_WALL = { 1: true, 2: true, 4: true, 5: true, 7: true, 8: true };
+// objects defined elsewhere can declare their own fuel: OBJ[t].fuel
+for (const t in OBJ) if (OBJ[t].fuel && FIRE_OBJ[t] === undefined) FIRE_OBJ[t] = OBJ[t].fuel;
 
 const Fire = {
   acc: 0, MAX: 900,
@@ -108,8 +110,8 @@ const Fire = {
     if (o && FIRE_OBJ[o.t]) {
       if (o.t === 'tree') { o.stump = true; o.burnt = true; }
       else if (o.sx !== undefined) World.removeStairs(x, y);
-      else if (o.t === 'crop' || o.t === 'bush' || o.t === 'mailbox' || o.t === 'sign') w.obj[i] = null;
-      else w.obj[i] = { t: 'ash', dir: 'S', v: R.int(0, 3), big: ['bed', 'sofa', 'wardrobe', 'bookshelf', 'counter', 'counterbar', 'shelf', 'pew', 'hay', 'logwall'].includes(o.t) };
+      else if (o.t === 'crop' || o.t === 'bush' || o.t === 'mailbox' || o.t === 'sign' || (OBJ[o.t] && OBJ[o.t].burnGone)) w.obj[i] = null;
+      else w.obj[i] = { t: 'ash', dir: 'S', v: R.int(0, 3), big: ['bed', 'sofa', 'wardrobe', 'bookshelf', 'counter', 'counterbar', 'shelf', 'pew', 'hay', 'logwall'].includes(o.t) || !!(OBJ[o.t] && OBJ[o.t].burnBig) };
     }
     const items = w.items.get(i);
     if (items) { const keep = items.filter(() => R.chance(0.25)); if (keep.length) w.items.set(i, keep); else w.items.delete(i); }
