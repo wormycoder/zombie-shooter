@@ -172,6 +172,7 @@ const Interact = {
       return;
     }
     const [tx, ty] = t.tile;
+    this.fireOptions(tx, ty, add);
     if (t.edge) this.edgeOptions(t.edge, add);
     if (t.car) this.carOptions(t.car, add);
     if (t.corpse) add('Loot corpse', () => this.goDo(t.corpse.x, t.corpse.y, () => UI.openLoot(), 1.4));
@@ -387,6 +388,21 @@ const Interact = {
       add('Dig furrow', () => this.goDo(tx + 0.5, ty + 0.5, () => Actions.queue(Actions.dig(tx, ty)), 1.5), { disabled: !Player.findTag('dig') });
     }
     if (!water && !World.obj(tx, ty) && !t.corpse && World.floorItems(tx, ty)) add('Pick up items here', () => this.goDo(tx + 0.5, ty + 0.5, () => UI.openLoot('floor'), 1.4));
+  },
+  fireOptions(tx, ty, add) {
+    if (!World.inb(tx, ty)) return;
+    const e = Fire.at(tx, ty);
+    const go = (fn) => this.goDo(tx + 0.5, ty + 0.5, fn, 1.7);
+    if (e) {
+      const ext = Player.find(i => i.id === 'FireExtinguisher' && i.uses > 0);
+      if (ext) add('Use fire extinguisher', () => go(() => Actions.queue(Actions.extinguish(tx, ty, ext))));
+      const wat = Player.find(i => ITEMS[i.id].fluid && i.fl >= 0.2);
+      add('Throw water on the fire', () => go(() => Actions.queue(Actions.douse(tx, ty, wat))), { disabled: !wat });
+      add('Fire! (' + Math.round(e.i * 100) + '%)', null, { info: true });
+      return;
+    }
+    const can = Player.find(i => i.id === 'GasCan' && i.fl >= 0.15);
+    if (can && Player.findTag('lighter') && !World.isWater(tx, ty) && World.floor(tx, ty) !== FL.VOID) add('Pour gas and light it', () => go(() => Actions.queue(Actions.setFire(tx, ty, can))));
   },
   carOptions(car, add) {
     const p = G.player;

@@ -440,6 +440,12 @@ const Zombie = {
     if (z.crawl && !z.dead && z.st !== 'down') { pose.lie = 1; pose.lieDir = -1; pose.arms = 'zombie'; }
     void p; void flat;
     Humanoid.draw(ctx, X, Y, z.a, z.look, pose, s, alpha);
+    if (z.fire > 0 && alpha > 0.3) {
+      const t = performance.now() / 1000 + z.id;
+      const ly = z.lie > 0.5 ? 4 : 24;
+      Fx.drawFlame(ctx, X - 3, Y - ly, t, 0.9); Fx.drawFlame(ctx, X + 4, Y - ly + 8, t + 1.3, 0.7);
+      if (R.chance(0.15)) Fx.smoke(z.x, z.y, 1.8, true);
+    }
   },
 };
 

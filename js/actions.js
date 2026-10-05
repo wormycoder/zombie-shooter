@@ -132,6 +132,42 @@ const Actions = {
       UI.refresh();
     }, { anim: 'work', check: () => Water.near(src) });
   },
+  // ---- fire fighting
+  extinguish(tx, ty, ext) {
+    return this.mk('Spraying the fire', 2.0, () => {
+      if (!ext || ext.uses <= 0) return;
+      ext.uses--;
+      for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) Fire.douse(x, y, x === tx && y === ty ? 2 : 1.2);
+      for (let k = 0; k < 14; k++) Fx.parts.push({ x: tx + 0.5 + R.f(-1, 1), y: ty + 0.5 + R.f(-1, 1), z: R.f(0.2, 1.2), vx: R.f(-0.3, 0.3), vy: R.f(-0.3, 0.3), vz: 0.4, life: 1.4, max: 1.4, col: '#e8e8e8', size: R.f(4, 8), smoke: true });
+      if (ext.uses <= 0) Player.say('The extinguisher is empty.', '#ccc');
+      UI.refresh();
+    }, { anim: 'aim', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.6, begin: () => { Actions.face(tx, ty); Sfx.play('spray', tx + 0.5, ty + 0.5); } });
+  },
+  douse(tx, ty, cont) {
+    return this.mk('Throwing water on the fire', 1.3, () => {
+      if (!cont || cont.fl < 0.2) return;
+      const amt = Math.min(cont.fl, 0.75);
+      cont.fl -= amt;
+      Fire.douse(tx, ty, 0.9 + amt);
+      for (const [dx, dy] of DIR4) Fire.douse(tx + dx, ty + dy, amt * 0.4);
+      Fx.smoke(tx + 0.5, ty + 0.5, 0.3); Fx.smoke(tx + 0.5, ty + 0.5, 0.5);
+      Sfx.play('splash', tx + 0.5, ty + 0.5);
+      UI.refresh();
+    }, { anim: 'shove', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.4, begin: () => Actions.face(tx, ty) });
+  },
+  setFire(tx, ty, can) {
+    return this.mk('Pouring gasoline', 2.5, () => {
+      const l = Player.findTag('lighter');
+      if (!can || can.fl < 0.15 || !l) return;
+      can.fl -= 0.15;
+      if (l.uses !== undefined) { l.uses--; if (l.uses <= 0) Player.removeItem(l); }
+      Fire.ignite(tx, ty, 0.8, 12);
+      Sfx.play('fire', tx + 0.5, ty + 0.5);
+      Player.say('Burn it all.', '#f99');
+      UI.refresh();
+    }, { anim: 'work', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.2, begin: () => Actions.face(tx, ty) });
+  },
+  face(tx, ty) { const p = G.player; p.angle = Math.atan2(ty + 0.5 - p.y, tx + 0.5 - p.x); },
   pour(it) {
     return this.mk('Emptying', 1.5, () => { it.fl = 0; it.taint = false; UI.refresh(); Sfx.play('fill'); });
   },

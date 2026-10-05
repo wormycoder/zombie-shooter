@@ -232,11 +232,6 @@ const Combat = {
       if (s.pulse <= 0) { s.pulse = 2.5; Noise.emit(s.x, s.y, 26, 'alarm'); Sfx.play('beep', s.x, s.y); }
       if (s.t <= 0) { this.sources.splice(i, 1); }
     }
-    // fire damage
-    for (const f of Fx.fires) {
-      for (const z of Zombie.near(f.x, f.y, 1.4)) if (!z.dead) { z.burnT = (z.burnT || 0) + dt; if (z.burnT > 0.7) { z.burnT = 0; Zombie.hit(z, R.f(0.2, 0.5), undefined, { stag: 0.1, push: 0.1 }); } }
-      if (p && !p.dead && U.dist(p.x, p.y, f.x, f.y) < 1.1) { p.burnT = (p.burnT || 0) + dt; if (p.burnT > 1) { p.burnT = 0; Player.addWound(R.pick(['FootL', 'FootR', 'LowerLegL', 'LowerLegR']), 'burn'); } }
-    }
   },
   land(pr) {
     // out of an upstairs window: it falls to the ground below
@@ -244,7 +239,10 @@ const Combat = {
     if (pr.kind === 'fire') {
       Sfx.play('glass', pr.x, pr.y);
       Sfx.play('fire', pr.x, pr.y);
-      for (let k = 0; k < 5; k++) Fx.fires.push({ x: pr.x + R.f(-0.8, 0.8), y: pr.y + R.f(-0.8, 0.8), t: R.f(10, 18) });
+      // burning fuel splashes over a few tiles
+      const cx = Math.floor(pr.x), cy = Math.floor(pr.y);
+      Fire.ignite(cx, cy, 1, 14);
+      for (const [dx, dy] of DIR8) if (R.chance(0.7) && World.lineClear(pr.x, pr.y, cx + dx + 0.5, cy + dy + 0.5, 'sight')) Fire.ignite(cx + dx, cy + dy, 0.7, R.f(5, 10));
       Noise.emit(pr.x, pr.y, 14, 'glass');
     } else if (pr.kind === 'noise') {
       Sfx.play('thud', pr.x, pr.y);

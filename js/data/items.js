@@ -142,6 +142,7 @@ const T = (id, n, w, ic, o) => idef(id, Object.assign({ n, cat: 'Tool', w, ic },
 T('Saw', 'Saw', 0.8, ['saw', '#c0c8d0', '#c03020'], { tags: ['saw'] });
 T('CanOpener', 'Can Opener', 0.2, ['canopener', '#a0a8b0', '#c03020'], { tags: ['canopener'] });
 T('Lighter', 'Lighter', 0.1, ['lighter', '#d03030', '#e0e0e0'], { tags: ['lighter'], uses: 30 });
+T('FireExtinguisher', 'Fire Extinguisher', 3.5, ['gascan', '#d02020', '#303030'], { tags: ['extinguisher'], uses: 12, desc: 'Puts out fires in a small area. Right-click a fire to use it.' });
 T('Matches', 'Box of Matches', 0.1, ['matches', '#c08030', '#c02020'], { tags: ['lighter'], uses: 15 });
 T('Flashlight', 'Flashlight', 0.6, ['flashlight', '#2a2a30', '#f0e080'], { power: 1.0, light: 1, tags: ['light'] });
 T('Battery', 'Battery', 0.1, ['battery', '#202020', '#d0a020'], { power: 1.0 });

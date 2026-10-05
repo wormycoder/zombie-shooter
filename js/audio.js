@@ -33,6 +33,7 @@ const Sfx = {
     // loops
     this.rainSrc = this.loopNoise(this.noise, 'lowpass', 3500);
     this.windSrc = this.loopNoise(this.brown, 'lowpass', 500);
+    this.fireSrc = this.loopNoise(this.brown, 'lowpass', 900);
     this.on = true;
     Music.init();
   },
@@ -146,6 +147,8 @@ const Sfx = {
       case 'page': this.nz(t, 0.2, 'highpass', 3000, 1, 0.06, pan, { a: 0.05 }); break;
       case 'craft': this.nz(t, 0.1, 'bandpass', 1200, 2, 0.12, pan); this.tn(t + 0.1, 0.05, 'triangle', 800, 700, 0.08, pan); break;
       case 'fill': this.nz(t, 0.9, 'bandpass', 1100, 1.5, 0.1, pan, { a: 0.1 }); break;
+      case 'spray': this.nz(t, 1.8, 'highpass', 3000, 0.7, 0.18 * G_, pan, { a: 0.05 }); break;
+      case 'splash': this.nz(t, 0.5, 'bandpass', 700, 0.8, 0.25 * G_, pan, { a: 0.01 }); this.nz(t + 0.05, 0.9, 'highpass', 2500, 1, 0.12 * G_, pan, { a: 0.1 }); break;
       case 'splash': this.nz(t, 0.5, 'lowpass', 1500, 1, 0.25 * G_, pan); break;
       case 'dig': this.nz(t, 0.25, 'lowpass', 700, 1, 0.25, pan, { brown: true }); break;
       case 'switch': this.tn(t, 0.02, 'square', 2600, 2000, 0.1, pan); break;
@@ -228,6 +231,17 @@ const Sfx = {
     this.rainSrc.g.gain.setTargetAtTime(level * (indoor ? 0.12 : 0.3), t, 0.5);
     this.rainSrc.fl.frequency.setTargetAtTime(indoor ? 900 : 3500, t, 0.5);
     this.windSrc.g.gain.setTargetAtTime(0.06 + level * 0.12, t, 1);
+  },
+  // roar and crackle of nearby fires (level: summed intensity nearby)
+  fire(level) {
+    if (!this.on) return;
+    const c = this.ctx, t = c.currentTime;
+    const g = Math.min(0.5, level * 0.035);
+    this.fireSrc.g.gain.setTargetAtTime(g, t, 0.4);
+    if (level > 0.2 && Math.random() < Math.min(0.6, level * 0.05)) {
+      const n = 1 + (Math.random() * 3 | 0);
+      for (let k = 0; k < n; k++) this.nz(t + Math.random() * 0.2, 0.02 + Math.random() * 0.03, 'highpass', 1800 + Math.random() * 2500, 1, Math.min(0.25, 0.04 + level * 0.01), Math.random() * 1.2 - 0.6);
+    }
   },
   engine(car) {
     if (!this.on) return;

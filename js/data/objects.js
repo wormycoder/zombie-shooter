@@ -56,6 +56,7 @@ const OBJ = {
   landing: { n: 'Stairs', solid: 'portal', h: 2.45 },
   railing: { n: 'Stairwell', solid: true, h: 0.9 },
   stairtop: { n: 'Stairs', solid: false, h: 0.3 },
+  ash: { n: 'Burnt Remains', solid: false, h: 0.35 },
 };
 
 // Crop types for farming
@@ -69,9 +70,9 @@ const CROPS = {
 // Floor types
 const FL = {
   GRASS: 0, GRASS2: 1, DIRT: 2, ASPHALT: 3, SIDEWALK: 4, WOOD: 5, TILE: 6, CARPET: 7, WATER: 8, SAND: 9,
-  CONCRETE: 10, GRAVEL: 11, FOREST: 12, FURROW: 13, LINO: 14, DEEPWATER: 15, PARKING: 16, VOID: 17,
+  CONCRETE: 10, GRAVEL: 11, FOREST: 12, FURROW: 13, LINO: 14, DEEPWATER: 15, PARKING: 16, VOID: 17, BURNT: 18,
 };
-const FLOOR_NAMES = ['Grass', 'Grass', 'Dirt', 'Asphalt', 'Sidewalk', 'Wooden Floor', 'Tiles', 'Carpet', 'Water', 'Sand', 'Concrete', 'Gravel', 'Forest Floor', 'Furrow', 'Linoleum', 'Deep Water', 'Parking Lot', 'Open air'];
+const FLOOR_NAMES = ['Grass', 'Grass', 'Dirt', 'Asphalt', 'Sidewalk', 'Wooden Floor', 'Tiles', 'Carpet', 'Water', 'Sand', 'Concrete', 'Gravel', 'Forest Floor', 'Furrow', 'Linoleum', 'Deep Water', 'Parking Lot', 'Open air', 'Burnt Ground'];
 // Upper floors live in a second copy of the map to the east: x + LV.W0 is the tile above x.
 const LV = { W0: 240 };
 function lvOf(x) { return x >= LV.W0 ? 1 : 0; }

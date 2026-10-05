@@ -6,7 +6,7 @@ let Wd = null; // current world
 const World = {
   create(w, h, gw) {
     return {
-      w, h, gw: gw || w, stairs: [],
+      w, h, gw: gw || w, stairs: [], fire: new Map(), charred: new Set(),
       floor: new Uint8Array(w * h),
       fvar: new Uint8Array(w * h),
       deco: new Uint8Array(w * h),

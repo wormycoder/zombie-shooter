@@ -228,6 +228,17 @@ const Render = {
     }
     const pl = live ? p : null;
     const upReady = openB ? this.prepUpFloor(openB, dec1) : false;
+    const FM = w.fire && w.fire.size ? w.fire : null;
+    // fires inside closed-up buildings show as flames breaking through the roof
+    const roofFire = new Map();
+    if (FM) for (const [i, e] of FM) {
+      if (e.i < 0.45) continue;
+      const r = w.room[i];
+      if (r < 0) continue;
+      const bid = w.rooms[r].b;
+      let a = roofFire.get(bid); if (!a) { a = []; roofFire.set(bid, a); }
+      if (a.length < 24) a.push([i % W_ >= W0 ? i % W_ - W0 : i % W_, (i / W_) | 0, e, i]);
+    }
     const dMin = minX + minY, dMax = maxX + maxY;
     for (let d = dMin; d <= dMax; d++) {
       const xa = Math.max(minX, d - maxY), xb = Math.min(maxX, d - minY);
@@ -241,11 +252,12 @@ const Render = {
         const bk = buckets.get(i);
         if (inOpen) {
           if (!see.has(i)) continue;
-          if (w.wallN[i] || w.wallW[i] || w.obj[i]) {
+          if (w.wallN[i] || w.wallW[i] || w.obj[i] || (FM && FM.has(i))) {
             ctx.save(); ctx.clip(openPath);
             if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
             if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
             if (w.obj[i]) this.drawObj(w.obj[i], x, y, X, Y, pl, t, x);
+            if (FM && FM.has(i)) Fire.drawFlames(ctx, X, Y, FM.get(i), t, i * 0.37);
             ctx.restore();
           }
           if (bk) for (const [k, e] of bk) {
@@ -263,6 +275,7 @@ const Render = {
         if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
         const o = w.obj[i];
         if (o) this.drawObj(o, x, y, X, Y, pl, t, x);
+        if (FM) { const fe = FM.get(i); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i * 0.37); }
         if (bk) {
           if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
           for (const [k, e] of bk) this.drawEnt(ctx, k, e);
@@ -278,7 +291,7 @@ const Render = {
           const y = d - x;
           const i1 = y * W_ + x + W0;
           const wn = w.wallN[i1], ww = w.wallW[i1], o = w.obj[i1], bk = buckets.get(i1);
-          if (!wn && !ww && !o && !bk) continue;
+          if (!wn && !ww && !o && !bk && !(FM && FM.has(i1))) continue;
           const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
           if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 200) continue;
           if (wn && wn !== WT.BOUND) {
@@ -291,6 +304,7 @@ const Render = {
           }
           if (!openB || x < openB.x0 || x > openB.x1 || y < openB.y0 || y > openB.y1) continue;
           if (o) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
+          if (FM) { const fe = FM.get(i1); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i1 * 0.37); }
           if (bk) {
             if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
             for (const [k, e] of bk) this.drawEnt(ctx, k, e);
@@ -298,7 +312,16 @@ const Render = {
         }
       }
       const rl = roofs.get(d);
-      if (rl) for (const b of rl) this.drawRoof(b, p);
+      if (rl) for (const b of rl) {
+        if (!b.roofGone) this.drawRoof(b, p);
+        const rf = roofFire.get(b.id);
+        if (rf) for (const [fx, fy, fe, fi] of rf) {
+          if (b.roofGone && fi % W_ < W0) continue;
+          const zz = b.roofGone ? WALL_H : WALL_H * (b.floors || 1) + 0.6;
+          Fire.drawFlames(ctx, (fx - fy) * HTW, (fx + fy) * HTH - zz * ZU, fe, t, fi * 0.37);
+          if (R.chance(0.08)) Fx.smoke(fx + 0.5, fy + 0.5, zz + 0.3, true);
+        }
+      }
     }
     // ---------------- overlays in world space
     Fx.draw(ctx);
@@ -318,7 +341,7 @@ const Render = {
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
     const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);
-    const rec = Spr.blood(d.v);
+    const rec = d.k ? Spr.scorch(d.v) : Spr.blood(d.v);
     ctx.globalAlpha = U.clamp(1 - d.age / 400, 0.25, 1) * (d.a || 1);
     const s = d.s || 1;
     ctx.drawImage(rec.c, X - rec.ax * s, Y - (rec.ay + 16) * s, rec.c.width * s, rec.c.height * s);
@@ -442,6 +465,18 @@ const Render = {
       }
     }
     for (const f of Fx.fires) lights.push({ x: f.x, y: f.y, r: 6, p: 0.9 });
+    if (w.fire && w.fire.size) {
+      const fl = [];
+      for (const [i, e] of w.fire) {
+        const fx = i % W_, fy = (i / W_) | 0, vx = fx >= W0 ? fx - W0 : fx;
+        if (vx < vx0 - 4 || vx > vx0 + vw + 4 || fy < vy0 - 4 || fy > vy0 + vh + 4) continue;
+        fl.push([e.i, fx, fy]);
+      }
+      if (fl.length > 48) { fl.sort((a, b) => b[0] - a[0]); fl.length = 48; }
+      const fk = 0.9 + Math.sin(performance.now() / 70) * 0.06;
+      for (const [fi, fx, fy] of fl) lights.push({ x: fx + 0.5, y: fy + 0.5, r: 3.5 + fi * 3.5, p: (0.35 + fi * 0.55) * fk, fire: true });
+    }
+    for (const z of G.zombies) if (z.fire > 0 && Math.abs(vxOf(z.x) - (vx0 + vw / 2)) < vw && Math.abs(z.y - (vy0 + vh / 2)) < vh) lights.push({ x: z.x, y: z.y, r: 4, p: 0.6, fire: true });
     for (const fl of Fx.flashes) lights.push({ x: fl.x, y: fl.y, r: fl.r, p: fl.p * (fl.t / fl.max) });
     for (const c of G.cars) if (c.lightsOn && c.engine) {
       const ca = Math.cos(c.a), sa = Math.sin(c.a);
@@ -474,7 +509,7 @@ const Render = {
           if (d > 1.2) { if (ad > lt.cw) continue; f *= 1 - Math.pow(ad / lt.cw, 2) * 0.6; }
           if (lt.vis && World.visGen[idx] !== World.gen) continue;
           if (lt.ox !== undefined && !World.lineClear(lt.ox, lt.oy, ax + 0.5, y + 0.5, 'sight')) continue;
-        } else if (!lt.out && lt.room === undefined && d > 1.5 && !World.lineClear(lt.x, lt.y, ax + 0.5, y + 0.5, 'sight')) continue;
+        } else if (!lt.out && lt.room === undefined && d > 1.5 && !(lt.fire && d < 2.6) && !World.lineClear(lt.x, lt.y, ax + 0.5, y + 0.5, 'sight')) continue;
         const k = (y - vy0) * vw + (x - vx0);
         LB[k] = Math.min(1.15, LB[k] + f);
       }
@@ -544,6 +579,7 @@ const Render = {
 
   // ------------------------------------------------------------------ walls
   wallColor(x, y, d, t) {
+    if (Wd.charred && Wd.charred.size && Wd.charred.has(World.ek(x, y, d))) return '#3a322e';
     if (t === WT.BUILT) return '#b89a6a';
     if (WALL_INFO[t].fence) return '#888888';
     const r = World.room(x, y);
@@ -792,6 +828,11 @@ const Fx = {
     }
     if (G.world && R.chance(0.7)) this.decal(x + R.f(-0.4, 0.4), y + R.f(-0.4, 0.4));
   },
+  scorch(x, y, s) {
+    const w = Wd;
+    w.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 5), age: -2000, s: s || R.f(0.8, 1.3), k: 1 });
+    if (w.decals.length > 450) w.decals.shift();
+  },
   decal(x, y, s) {
     const w = Wd;
     w.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 7), age: 0, s: s || R.f(0.6, 1.1) });
@@ -803,7 +844,11 @@ const Fx = {
       this.parts.push({ x, y, z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: R.f(0.5, 2.5), life: 1.0, max: 1.0, col, size: R.f(1.5, 2.5), g: true });
     }
   },
-  smoke(x, y, z) { this.parts.push({ x, y, z, vx: R.f(-0.1, 0.1), vy: R.f(-0.1, 0.1), vz: 0.6, life: 1.6, max: 1.6, col: '#909090', size: R.f(3, 6), smoke: true }); },
+  smoke(x, y, z, dark) {
+    if (this.parts.length > 1400) return;
+    if (dark) this.parts.push({ x, y, z, vx: R.f(-0.15, 0.25), vy: R.f(-0.25, 0.15), vz: R.f(0.8, 1.3), life: R.f(2.5, 4), max: 4, col: '#303030', size: R.f(5, 9), smoke: true, dark: true });
+    else this.parts.push({ x, y, z, vx: R.f(-0.1, 0.1), vy: R.f(-0.1, 0.1), vz: 0.6, life: 1.6, max: 1.6, col: '#909090', size: R.f(3, 6), smoke: true });
+  },
   tracer(x0, y0, z0, x1, y1, z1) { this.tracers.push({ x0, y0, z0, x1, y1, z1, t: 0.07 }); },
   flash(x, y, r, p, t) { this.flashes.push({ x, y, r: r || 6, p: p || 0.8, t: t || 0.08, max: t || 0.08 }); },
   text(x, y, txt, col, dur) { this.floats.push({ x, y, z: 2.0, txt, col: col || '#fff', t: dur || 1.5, max: dur || 1.5 }); },
@@ -835,7 +880,7 @@ const Fx = {
     for (const p of this.parts) {
       const s = P(p.x, p.y, p.z);
       const a = Math.min(1, p.life / p.max * 2);
-      if (p.smoke) { ctx.fillStyle = 'rgba(140,140,140,' + (0.35 * p.life / p.max).toFixed(3) + ')'; ctx.beginPath(); ctx.arc(s[0], s[1], p.size, 0, 7); ctx.fill(); continue; }
+      if (p.smoke) { const sa = (p.dark ? 0.42 : 0.35) * p.life / p.max; ctx.fillStyle = (p.dark ? 'rgba(40,38,36,' : 'rgba(140,140,140,') + sa.toFixed(3) + ')'; ctx.beginPath(); ctx.arc(s[0], s[1], p.size, 0, 7); ctx.fill(); continue; }
       ctx.globalAlpha = a;
       ctx.fillStyle = p.col; ctx.fillRect(s[0] - p.size / 2, s[1] - p.size / 2, p.size, p.size);
     }

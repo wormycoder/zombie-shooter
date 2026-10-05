@@ -15,6 +15,7 @@ const SANDBOX_OPTS = {
   loot: { n: 'Loot', opts: [['Extremely rare', 0.4], ['Rare', 0.7], ['Normal', 1], ['Common', 1.4], ['Abundant', 2]], def: 2 },
   utilities: { n: 'Power & water shutoff', opts: [['Instant', 0], ['Within a week', 1], ['Within two weeks', 2], ['Within a month', 3], ['Never', 4]], def: 2 },
   start: { n: 'Start time', opts: [['7 AM', 7], ['9 AM', 9], ['Noon', 12], ['5 PM', 17], ['9 PM', 21], ['2 AM', 2]], def: 1 },
+  fire: { n: 'Fire spread', opts: [['On', 1], ['Off', 0]], def: 0 },
 };
 const SANDBOX_PRESETS = {
   Apocalypse: { pop: 2, speed: 0, day: 1, loot: 2, utilities: 2, start: 1 },
@@ -231,6 +232,7 @@ const Game = {
     Zombie.updateAll(dt);
     Vehicles.update(dt);
     Combat.update(dt);
+    Fire.update(dt);
     this.updateEvents(dt, gm);
     Weather.update(dt, gm);
     this.tickAcc = (this.tickAcc || 0) + gm;
@@ -317,7 +319,11 @@ const Game = {
       for (let i = 0; i < Wd.obj.length; i++) {
         const o = Wd.obj[i];
         if (!o) continue;
-        if ((o.t === 'campfire' || o.t === 'bbq') && o.lit) { o.fuel -= sg; if (o.fuel <= 0 || (rain > 0.6 && o.t === 'campfire' && R.chance(0.1))) { o.fuel = Math.max(0, o.fuel); o.lit = false; } }
+        if ((o.t === 'campfire' || o.t === 'bbq') && o.lit) {
+          o.fuel -= sg;
+          if (o.fuel <= 0 || (rain > 0.6 && o.t === 'campfire' && R.chance(0.1))) { o.fuel = Math.max(0, o.fuel); o.lit = false; }
+          else if (o.t === 'campfire' && rain < 0.05 && R.chance(0.012 * sg / 5)) { const [dx, dy] = R.pick(DIR4); Fire.ignite(i % Wd.w + dx, ((i / Wd.w) | 0) + dy, 0.3); }
+        }
         else if (o.t === 'crop' && o.crop && !o.dead) {
           const cd = CROPS[o.crop];
           if (World.room(i % Wd.w, (i / Wd.w) | 0) < 0 && rain > 0.1) o.water = Math.min(1, (o.water || 0) + rain * sg / 60 * 0.5);
@@ -366,7 +372,12 @@ const Game = {
       if (d.cook && !it.burnt) {
         it.cookT = (it.cookT || 0) + gm;
         if (!it.cooked && it.cookT >= d.cook) { it.cooked = true; if (G.player && c && c.px !== undefined && U.dist(G.player.x, G.player.y, c.px, c.py) < 8) { Player.say(ITEMS[it.id].n + ' is cooked.', '#8f8'); Player.xp('Cooking', 3); } }
-        if (it.cookT >= d.cook * 2.6) { it.burnt = true; if (G.player && c && c.px !== undefined && U.dist(G.player.x, G.player.y, c.px, c.py) < 8) Player.say('Something is burning!', '#f99'); }
+        if (it.cookT >= d.cook * 2.6) {
+          it.burnt = true;
+          if (G.player && c && c.px !== undefined && U.dist(G.player.x, G.player.y, c.px, c.py) < 8) Player.say('Something is burning!', '#f99');
+          // forgotten food on a hot stove can start a kitchen fire
+          if (c && c.px !== undefined && R.chance(0.3)) { const o = World.obj(c.px, c.py); if (o && o.t === 'stove') Fire.ignite(c.px, c.py, 0.5, 10); }
+        }
       }
       if (d.fluid && it.fl > 0 && it.taint) { it.boilT = (it.boilT || 0) + gm; if (it.boilT >= 6) { it.taint = false; it.boilT = 0; } }
     }
@@ -403,6 +414,8 @@ const Weather = {
       }
     }
     Sfx.rain(w.rain, G.player && !World.outdoor(G.player.x, G.player.y));
+    this.fireT = (this.fireT || 0) - dt;
+    if (this.fireT <= 0) { this.fireT = 0.25; const p = G.player; Sfx.fire(p && !p.dead && Wd.fire && Wd.fire.size ? Fire.near(p.x, p.y, 7) : 0); }
   },
   drawScreen(ctx, W, H, dt) {
     const w = G.weather;
@@ -455,6 +468,7 @@ const Save = {
       world: {
         w: w.w, h: w.h, gw: w.gw, stairs: w.stairs, floor: u8(w.floor), fvar: u8(w.fvar), deco: u8(w.deco), wallN: u8(w.wallN), wallW: u8(w.wallW), room: u8(w.room), seen: u8(w.seen),
         objs, items: [...w.items.entries()], feat: [...w.feat.entries()], edgeHp: [...w.edgeHp.entries()],
+        fire: w.fire ? [...w.fire.entries()] : [], charred: w.charred ? [...w.charred] : [],
         buildings: w.buildings, rooms: w.rooms, decals: w.decals.slice(-200), forage: [...w.forage.entries()], labels: w.labels, zones: w.zones,
       },
       player: pl, zombies: zs, cars: G.cars,
@@ -499,6 +513,7 @@ const Save = {
     w.items = new Map(sw.items); w.feat = new Map(sw.feat); w.edgeHp = new Map(sw.edgeHp);
     w.buildings = sw.buildings; w.rooms = sw.rooms; w.decals = sw.decals; w.forage = new Map(sw.forage); w.labels = sw.labels; w.zones = sw.zones;
     w.powerGens = [];
+    w.fire = new Map(sw.fire || []); w.charred = new Set(sw.charred || []);
     World.use(w);
     G.conts = new Set();
     for (let i = 0; i < w.obj.length; i++) {

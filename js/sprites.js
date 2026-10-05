@@ -18,6 +18,7 @@ FLOOR_COL[FL.SAND] = ['#cbb88e', '#c8b48a', '#cfbc92', '#c4b088'];
 FLOOR_COL[FL.WATER] = ['#3a6a8a', '#3c6c8c', '#386888', '#3e6e8e'];
 FLOOR_COL[FL.DEEPWATER] = ['#2a4c6c', '#2c4e6e', '#284a6a', '#2e5070'];
 FLOOR_COL[FL.GRAVEL] = ['#8a8478', '#86807a', '#8e887c', '#827c72'];
+FLOOR_COL[FL.BURNT] = ['#2c2725', '#302a27', '#28231f', '#332c28'];
 FLOOR_COL[FL.FURROW] = ['#5a4632', '#5c4834', '#584430', '#5e4a36'];
 const PAL_WOOD = ['#8a6040', '#a07850', '#6a4a30', '#b08a60', '#7a5a3a', '#9a7048', '#5e4632', '#c09a70'];
 const PAL_CARPET = ['#7a3a3a', '#3a4a6a', '#5a6a4a', '#8a7a5a', '#6a5a7a', '#a08a6a', '#4a6a6a', '#8a5a40'];
@@ -144,6 +145,12 @@ const Spr = {
           for (let i = 0; i < 6; i++) { const p = P(rng.next(), rng.next()); g.strokeStyle = Col.rgba(lt, 0.6); g.lineWidth = 1; g.beginPath(); g.moveTo(p[0] - 4, p[1]); g.quadraticCurveTo(p[0], p[1] - 2, p[0] + 4, p[1]); g.stroke(); }
           break;
         }
+        case FL.BURNT: {
+          speck(70, ['#1a1614', '#4a4440', '#5a524c', '#221d1a', '#3a332e'], 2);
+          for (let i = 0; i < 3; i++) { const a = P(rng.next(), rng.next()); g.strokeStyle = '#161210'; g.lineWidth = 1; g.beginPath(); g.moveTo(a[0], a[1]); for (let k = 0; k < 3; k++) g.lineTo(a[0] + rng.f(-8, 8), a[1] + rng.f(-4, 4)); g.stroke(); }
+          if (rng.chance(0.3)) speck(4, ['#6a3a20', '#4a2a18'], 2);
+          break;
+        }
         case FL.FURROW: {
           for (let k = 0; k < 3; k++) {
             poly(g, [P(0, k / 3 + 0.05), P(1, k / 3 + 0.05), P(1, k / 3 + 0.2), P(0, k / 3 + 0.2)], Col.mix(base, '#fff', 0.12));
@@ -210,6 +217,19 @@ const Spr = {
     });
   },
 
+  // soot / scorch marks left by fire
+  scorch(v) {
+    return this.get('scorch' + v, 80, 44, 40, 6, (g, ax, ay) => {
+      const rng = new RNG(v * 4241 + 11);
+      for (let i = 0; i < 7; i++) {
+        const p = isoP(ax, ay, rng.f(0.2, 0.8), rng.f(0.2, 0.8), 0);
+        const r = rng.f(4, 10);
+        g.fillStyle = 'rgba(12,10,9,' + rng.f(0.35, 0.6).toFixed(2) + ')';
+        g.beginPath(); g.ellipse(p[0], p[1], r * 1.6, r * 0.8, 0, 0, Math.PI * 2); g.fill();
+      }
+      for (let i = 0; i < 18; i++) { const p = isoP(ax, ay, rng.f(0, 1), rng.f(0, 1), 0); g.fillStyle = rng.chance(0.5) ? 'rgba(90,84,78,0.7)' : 'rgba(20,18,16,0.8)'; g.fillRect(p[0], p[1], 2, 1); }
+    });
+  },
   // ------------------------------------------------------------ walls
   wallKey(type, d, col, f, cut) {
     let fk = '';
@@ -602,6 +622,18 @@ const ObjArt = {
     const b = this.inset(o.dir, 0.86, 0.03);
     this.box(b[0], b[1], 0, b[3], b[4], 0.55, '#f2f2f0');
     poly(this.g, [this.P(b[0] + 0.08, b[1] + 0.08, 0.551), this.P(b[3] - 0.08, b[1] + 0.08, 0.551), this.P(b[3] - 0.08, b[4] - 0.08, 0.551), this.P(b[0] + 0.08, b[4] - 0.08, 0.551)], '#c8d8e0');
+  },
+  // charred furniture remains
+  d_ash(o) {
+    const g = this.g, rng = new RNG((o.v || 0) * 71 + (o.big ? 13 : 3));
+    poly(g, [this.P(0.08, 0.1, 0), this.P(0.92, 0.12, 0), this.P(0.9, 0.9, 0), this.P(0.1, 0.92, 0)], 'rgba(20,16,14,0.55)');
+    const n = o.big ? 7 : 4;
+    for (let k = 0; k < n; k++) {
+      const u = rng.f(0.12, 0.7), v = rng.f(0.12, 0.7), l = rng.f(0.15, 0.4), h = rng.f(0.05, o.big ? 0.35 : 0.2);
+      if (rng.chance(0.5)) this.box(u, v, 0, Math.min(0.95, u + l), Math.min(0.95, v + 0.08), h, rng.pick(['#2a2420', '#3a322c', '#1e1a18']), false);
+      else this.box(u, v, 0, Math.min(0.95, u + 0.08), Math.min(0.95, v + l), h, rng.pick(['#2a2420', '#3a322c', '#1e1a18']), false);
+    }
+    for (let k = 0; k < 10; k++) { const p = this.P(rng.f(0.1, 0.9), rng.f(0.1, 0.9), 0.02); g.fillStyle = rng.pick(['#6a625a', '#8a827a', '#4a4440']); g.fillRect(p[0], p[1], 2, 1); }
   },
   // ---- staircase: 3 tiles of 4 steps each, climbing toward o.dir, wall on side o.ws
   d_stairs(o) {

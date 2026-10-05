@@ -21,7 +21,7 @@ for (const [sk] of SKILL_BOOKS) for (let i = 1; i <= 3; i++) LOOT_GROUPS['skillb
 
 const LOOT = {
   // --- residential
-  'kitchen.counter': { n: [1, 4], empty: 0.2, items: [['@canned', 30], ['@snack', 18], ['KitchenKnife', 6], ['CanOpener', 7], ['FryingPan', 3], ['Pot', 4], ['RollingPin', 2], ['Lighter', 3], ['Matches', 4], ['WaterBottle', 6], ['GarbageBag', 5], ['Flashlight', 2], ['Battery', 3], ['Coffee', 3], ['Bucket', 1], ['PlasticBag', 3], ['Whiskey', 1], ['Wine', 2], ['Scissors', 1], ['DuctTape', 1]] },
+  'kitchen.counter': { n: [1, 4], empty: 0.2, items: [['@canned', 30], ['@snack', 18], ['KitchenKnife', 6], ['CanOpener', 7], ['FryingPan', 3], ['Pot', 4], ['RollingPin', 2], ['Lighter', 3], ['Matches', 4], ['WaterBottle', 6], ['GarbageBag', 5], ['Flashlight', 2], ['Battery', 3], ['Coffee', 3], ['Bucket', 1], ['PlasticBag', 3], ['Whiskey', 1], ['Wine', 2], ['Scissors', 1], ['DuctTape', 1], ['FireExtinguisher', 0.4]] },
   'kitchen.fridge': { n: [2, 6], empty: 0.1, items: [['@fridge', 1]] },
   'kitchen.oven': { n: [0, 1], empty: 0.6, items: [['Pot', 3], ['FryingPan', 2], ['FrozenPizza', 1]] },
   'bathroom.medcab': { n: [1, 4], empty: 0.2, items: [['@meds', 1]] },
@@ -60,7 +60,7 @@ const LOOT = {
   'grocery.fridge': { n: [4, 9], empty: 0.05, items: [['@fridge', 1]] },
   'grocery.cooler': { n: [4, 8], empty: 0.05, items: [['@drink', 4], ['Milk', 2], ['Beer', 2]] },
   'grocery.crate': { n: [2, 6], empty: 0.1, items: [['@canned', 6], ['@snack', 4], ['Apple', 2], ['Orange', 2], ['Potato', 2], ['Cabbage', 1]] },
-  'hardware.shelf': { n: [2, 6], empty: 0.1, items: [['Hammer', 6], ['Saw', 5], ['Screwdriver', 5], ['NailsBox', 8], ['DuctTape', 4], ['Glue', 3], ['Crowbar', 2], ['Axe', 2], ['HandAxe', 2], ['Shovel', 3], ['Trowel', 3], ['@seeds', 6], ['WateringCan', 2], ['Bucket', 2], ['GasCan', 3], ['Flashlight', 3], ['Battery', 5], ['Sledgehammer', 1], ['PipeWrench', 2], ['GarbageBag', 2], ['Toolbox', 1.5], ['WoodAxe', 1], ['LeatherGloves', 2], ['Generator', 0.5], ['BookCarpentry1', 1], ['BookFarming1', 1]] },
+  'hardware.shelf': { n: [2, 6], empty: 0.1, items: [['Hammer', 6], ['Saw', 5], ['Screwdriver', 5], ['NailsBox', 8], ['DuctTape', 4], ['Glue', 3], ['Crowbar', 2], ['Axe', 2], ['HandAxe', 2], ['Shovel', 3], ['Trowel', 3], ['@seeds', 6], ['WateringCan', 2], ['Bucket', 2], ['GasCan', 3], ['Flashlight', 3], ['Battery', 5], ['Sledgehammer', 1], ['PipeWrench', 2], ['GarbageBag', 2], ['Toolbox', 1.5], ['WoodAxe', 1], ['LeatherGloves', 2], ['Generator', 0.5], ['BookCarpentry1', 1], ['BookFarming1', 1], ['FireExtinguisher', 1.5]] },
   'hardware.crate': { n: [2, 5], empty: 0.15, items: [['Plank', 6], ['NailsBox', 5], ['Log', 2], ['GasCan', 1], ['Generator', 0.6]] },
   'gunstore.shelf': { n: [1, 4], empty: 0.15, items: [['Pistol', 4], ['Revolver', 3], ['Shotgun', 3], ['HuntingRifle', 2], ['Box9mm', 6], ['Box38', 5], ['BoxShells', 6], ['Box308', 4], ['HuntingKnife', 3], ['MilitaryBag', 1], ['MilitaryJacket', 1], ['CargoPants', 1], ['Boots', 1]] },
   'gunstore.crate': { n: [1, 3], empty: 0.3, items: [['Box9mm', 3], ['BoxShells', 3], ['Box308', 2], ['Box556', 1], ['AssaultRifle', 0.6], ['BulletVest', 0.5]] },
@@ -89,7 +89,7 @@ const LOOT = {
   'school.locker': { n: [0, 3], empty: 0.25, items: [['SchoolBag', 4], ['@books', 4], ['@snack', 3], ['@clothes', 2], ['BaseballBat', 1], ['JuiceBox', 2]] },
   'school.desk': { n: [0, 2], empty: 0.4, items: [['@books', 4], ['Scissors', 1], ['Newspaper', 1], ['@snack', 1]] },
   'church.shelf': { n: [0, 2], empty: 0.5, items: [['Novel', 2], ['Newspaper', 1], ['Matches', 1], ['WaterBottle', 1]] },
-  'firestation.locker': { n: [1, 3], empty: 0.15, items: [['FireJacket', 3], ['FirePants', 3], ['FireHelmet', 2], ['Axe', 3], ['Boots', 2], ['Flashlight', 2], ['Bandage', 2], ['Crowbar', 1]] },
+  'firestation.locker': { n: [1, 3], empty: 0.15, items: [['FireJacket', 3], ['FirePants', 3], ['FireHelmet', 2], ['Axe', 3], ['Boots', 2], ['Flashlight', 2], ['Bandage', 2], ['Crowbar', 1], ['FireExtinguisher', 3]] },
   'motel.dresser': { n: [0, 3], empty: 0.3, items: [['@clothes', 4], ['@books', 2], ['Cigarettes', 1], ['Pistol', 0.3], ['DuffelBag', 1], ['Whiskey', 1]] },
   'military.crate': { n: [2, 5], empty: 0.05, items: [['AssaultRifle', 2], ['Box556', 5], ['Pistol', 2], ['Box9mm', 3], ['MilitaryBag', 2], ['MilitaryJacket', 2], ['BulletVest', 2], ['CargoPants', 2], ['Boots', 2], ['@canned', 3], ['SterileBandage', 2], ['Antibiotics', 1]] },
 };
