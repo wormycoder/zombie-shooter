@@ -467,6 +467,11 @@ const Render = {
             else if (o.t === 'lamp' && r >= 0 && w.rooms[r].lights && (powered || World.hasPower(x, y))) lights.push({ x: x + 0.5, y: y + 0.5, r: 4, p: 0.4, room: r });
             else if ((o.t === 'campfire' && o.lit) || (o.t === 'bbq' && o.lit)) lights.push({ x: x + 0.5, y: y + 0.5, r: 6, p: 0.85 + Math.sin(performance.now() / 90) * 0.06, warm: true });
             else if (o.t === 'tv' && o.on) lights.push({ x: x + 0.5, y: y + 0.5, r: 3, p: 0.3 });
+            else {
+              // generic emitters: OBJ[t].emit(o, x, y, amb, powered, room) -> light | null
+              const em = OBJ[o.t] && OBJ[o.t].emit;
+              if (em) { const lt = em(o, x, y, amb, powered, r); if (lt) lights.push(lt); }
+            }
           }
         }
       }
@@ -719,6 +724,9 @@ const Render = {
       gr.addColorStop(0, 'rgba(255,240,190,0.9)'); gr.addColorStop(1, 'rgba(255,240,190,0)');
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(h[0], h[1], 16, 0, 7); ctx.fill();
     }
+    // per-type animated overlay: ObjArt.a_<type>(ctx, o, X, Y, t, shade, x, y)
+    const an = ObjArt['a_' + o.t];
+    if (an) an.call(ObjArt, ctx, o, X, Y, t, s, x, y);
     if (o.t === 'generator' && o.on && o.fuel > 0) { const c = isoP(X, Y, 0.3, 0.3, 0.9); ctx.fillStyle = 'rgba(120,120,120,0.4)'; ctx.beginPath(); ctx.arc(c[0] + Math.sin(t * 9) * 2, c[1] - (t * 20 % 12), 3, 0, 7); ctx.fill(); }
   },
 

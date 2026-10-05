@@ -39,6 +39,9 @@ const MapGen = {
     this.town2();
     this.outskirts();
     this.outskirts2();
+    // detail passes (street furniture, yards) - defined in street.js / yard.js
+    if (this.streetPass) this.streetPass();
+    if (this.yardPass) this.yardPass();
     this.forest();
     this.finalize();
     // keep saves compact

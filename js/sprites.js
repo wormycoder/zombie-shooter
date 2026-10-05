@@ -35,6 +35,9 @@ function poly(g, pts, fill, stroke, lw) {
 }
 function line(g, a, b, col, w) { g.strokeStyle = col; g.lineWidth = w || 1; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
 
+// floor decal painters registered by other modules: DECO_ART[code] = (g, P, ax, ay) => {...}
+// codes: 1-9 road markings (sprites.js), 10-49 street details (street.js), 50-89 yards (yard.js)
+const DECO_ART = {};
 const Spr = {
   cache: new Map(),
   get(key, w, h, ax, ay, draw) {
@@ -164,11 +167,12 @@ const Spr = {
       g.restore();
     });
   },
-  // road markings and other floor decals
+  // road markings and other floor decals (codes 1-9 here; other modules register painters in DECO_ART)
   deco(t) {
     return this.get('deco' + t, 66, 34, 33, 1, (g, ax, ay) => {
       const P = (u, v) => isoP(ax, ay, u, v, 0);
-      if (t === 1) poly(g, [P(0.1, 0.9), P(0.9, 0.9), P(0.9, 1), P(0.1, 1)], 'rgba(220,180,40,0.85)');
+      if (DECO_ART[t]) DECO_ART[t](g, P, ax, ay);
+      else if (t === 1) poly(g, [P(0.1, 0.9), P(0.9, 0.9), P(0.9, 1), P(0.1, 1)], 'rgba(220,180,40,0.85)');
       else if (t === 2) poly(g, [P(0.9, 0.1), P(1, 0.1), P(1, 0.9), P(0.9, 0.9)], 'rgba(220,180,40,0.85)');
       else if (t === 3) { for (const v0 of [0.12, 0.62]) poly(g, [P(0.05, v0), P(0.95, v0), P(0.95, v0 + 0.26), P(0.05, v0 + 0.26)], 'rgba(225,225,220,0.75)'); }
       else if (t === 4) { for (const u0 of [0.12, 0.62]) poly(g, [P(u0, 0.05), P(u0 + 0.26, 0.05), P(u0 + 0.26, 0.95), P(u0, 0.95)], 'rgba(225,225,220,0.75)'); }
@@ -446,9 +450,14 @@ const Spr = {
     if (o.t === 'barrel') key += '|' + Math.round((o.water || 0) * 4);
     if (o.t === 'bush') key += '|' + (o.berries ? 1 : 0);
     if (o.t === 'hay') key += o.sandbag ? 's' : '';
+    // optional per-type cache-key extension: ObjArt.k_<type>(o) -> string
+    const kf = ObjArt['k_' + o.t];
+    if (kf) key += '|' + kf.call(ObjArt, o);
     let w = 110, h = (d.h + 1.6) * ZU + 30, ax = 55, ay = (d.h + 0.6) * ZU + 14;
     if (o.t === 'tree') { w = 200; h = 260; ax = 100; ay = 220; }
     if (o.t === 'lamppost') { w = 110; h = 200; ax = 55; ay = 170; }
+    // optional canvas override for big sprites: OBJ[t].spr = { w, h, ax, ay }
+    if (d.spr) { w = d.spr.w; h = d.spr.h; ax = d.spr.ax; ay = d.spr.ay; }
     return this.get(key, w, h, ax, ay, (g) => ObjArt.draw(g, ax, ay, o));
   },
 };
