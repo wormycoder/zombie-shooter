@@ -387,6 +387,7 @@ const UI = {
     if (d.cat === 'Literature' && !d.mapItem) { Actions.queue(Actions.read(it)); return; }
     if (d.mapItem) { MapView.reveal(); this.open('map'); return; }
     if (d.boxOf) { Actions.queue(Actions.openBox(it)); return; }
+    if (d.bag && d.bag.hand && !d.wpn) { if (it.equipped) Player.unequip(it); else Player.equip(it, 'secondary'); this.refresh(); return; }
     if (d.wpn || d.gun || d.tags.length || d.light || d.throwable || d.generator) { if (it.equipped) Player.unequip(it); else Player.equip(it, d.light ? 'secondary' : 'primary'); this.refresh(); return; }
     void pk;
   },
@@ -579,7 +580,8 @@ const UI = {
     const occ = OCCUPATIONS.find(o => o.id === p.occ);
     const days = Math.floor(p.minutesAlive / 1440), hrs = Math.floor((p.minutesAlive % 1440) / 60);
     const traits = p.traits.map(t => { const d = traitDef(t); return d ? `<span class="trait ${d.cost < 0 ? 'pos' : d.cost > 0 ? 'neg' : ''}" title="${U.esc(d.desc)}">${d.n}</span>` : ''; }).join('');
-    let html = `<div class="cinfo"><canvas class="cprev" width="70" height="90"></canvas><div><div class="cname">${U.esc(p.name)}</div><div>${occ ? occ.n : ''}</div><div class="sml">Survived ${days} days, ${hrs} hours · Zombies killed: ${p.kills}</div><div class="traits">${traits}</div></div></div><div class="skills">`;
+    let html = `<div class="cinfo"><canvas class="cprev" width="70" height="90"></canvas><div><div class="cname">${U.esc(p.name)}</div><div>${occ ? occ.n : ''}</div><div class="sml">Survived ${days} days, ${hrs} hours · Zombies killed: ${p.kills}</div><div class="traits">${traits}</div>
+      <div class="exr"><span class="sml">Exercise:</span><span class="btn xs" data-ex="squats">Squats</span><span class="btn xs" data-ex="pushups">Push-ups</span><span class="btn xs" data-ex="situps">Sit-ups</span></div></div></div><div class="skills">`;
     for (const [grp, list] of SKILL_GROUPS) {
       html += `<div class="sgrp">${grp}</div>`;
       for (const sk of list) {
@@ -594,6 +596,10 @@ const UI = {
     }
     html += '</div>';
     P.body.innerHTML = html;
+    if (!P.bound2) {
+      P.bound2 = true;
+      P.body.addEventListener('click', (e) => { const b = e.target.closest('[data-ex]'); if (b) { Actions.queue(Actions.exercise(b.dataset.ex)); } });
+    }
     const cv = P.body.querySelector('.cprev');
     const g = cv.getContext('2d');
     g.save(); g.translate(35, 78); g.scale(1.1, 1.1);

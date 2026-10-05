@@ -162,10 +162,11 @@ const Player = {
     const L = Object.assign({}, p.look);
     const w = (s) => this.worn(s);
     const shirt = w('shirt'), jacket = w('jacket'), pants = w('pants'), shoes = w('shoes'), hat = w('hat'), back = w('back'), vest = w('vest'), gloves = w('gloves');
-    L.shirt = shirt ? shirt.col : L.skin;
+    const bl = (it) => it.bloody ? Col.mix(it.col, '#4a0a08', 0.35) : it.col;
+    L.shirt = shirt ? bl(shirt) : L.skin;
     L.sleeves = shirt ? (ITEMS[shirt.id].cover.includes('farms') ? 'long' : ITEMS[shirt.id].id === 'TankTop' ? 'none' : 'short') : 'none';
-    L.jacket = jacket ? jacket.col : null;
-    L.pants = pants ? pants.col : L.skin;
+    L.jacket = jacket ? bl(jacket) : null;
+    L.pants = pants ? bl(pants) : L.skin;
     L.shorts = pants ? !ITEMS[pants.id].cover.includes('llegs') : true;
     L.shoes = shoes ? shoes.col : L.skin;
     L.hat = hat ? { type: ITEMS[hat.id].hatType || 'cap', col: hat.col } : null;
@@ -728,7 +729,14 @@ const Player = {
       else { pose.arms = 'swing'; pose.swingT = p.swing.t; pose.stab = pd && pd.wpn && (pd.wpn.sk === 'ShortBlade' || pd.wpn.sk === 'Spear'); }
     } else if (p.aiming && pd && pd.gun) pose.arms = 'aim';
     else if (p.aiming) pose.arms = 'swing', pose.swingT = 0.2;
-    else if (p.action && p.action.anim) { pose.arms = p.action.anim; if (p.action.anim === 'loot' || p.action.anim === 'craft') pose.arms = 'work'; if (p.action.anim === 'kneel') { pose.arms = 'work'; pose.crouch = 0.7; } if (p.action.anim === 'sit') pose.crouch = 0.8; }
+    else if (p.action && p.action.anim) {
+      const an = p.action.anim;
+      pose.arms = an;
+      if (an === 'loot' || an === 'craft') pose.arms = 'work';
+      if (an === 'kneel') { pose.arms = 'work'; pose.crouch = 0.7; }
+      if (an === 'sit') pose.crouch = 0.8;
+      if (an === 'squat') { pose.arms = 'shove'; pose.swingT = 0.5; pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42; }
+    }
     if (p.climb) { pose.arms = 'climb'; pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4; }
     if (p.sitting) pose.crouch = 0.8;
     if (p.asleep || p.dead) {

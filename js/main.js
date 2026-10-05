@@ -42,7 +42,7 @@ Input.handleGameKeys = function () {
   if (Input.hit('q')) {
     Player.say(R.pick(['Hey!', 'Over here!', 'HEY!']), '#fff');
     Noise.emit(p.x, p.y, 20, 'shout');
-    Sfx.play('hurt');
+    Sfx.play('shout');
   }
   if (Input.hit('z')) { p.sitting = !p.sitting; if (p.sitting) Actions.cancel(); }
 };

@@ -154,6 +154,18 @@ const Sfx = {
       case 'zhit': this.nz(t, 0.18, 'bandpass', 1500, 1, 0.2, 0); this.groanAt(t, 0.4, 110, 0.2, pan); break;
       case 'zattack': this.groanAt(t, 0.45, r(110, 150), 0.22 * G_, pan, true); break;
       case 'scream': this.tn(t, 1.0, 'sawtooth', 700, 400, 0.15, 0, { lp: 2500, vib: 8 }); break;
+      case 'shout': {
+        const f0 = G.player && G.player.look.female ? 300 : 175;
+        for (const [fq, q, gg] of [[750, 6, 0.5], [1900, 8, 0.3], [2700, 9, 0.15]]) {
+          const c2 = this.ctx, o = c2.createOscillator(); o.type = 'sawtooth';
+          o.frequency.setValueAtTime(f0 * 1.25, t); o.frequency.linearRampToValueAtTime(f0, t + 0.35);
+          const bp = c2.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(fq * 0.7, t); bp.frequency.linearRampToValueAtTime(fq, t + 0.12); bp.Q.value = q;
+          const g = this.out(0, true); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gg * 0.6, t + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+          o.connect(bp); bp.connect(g); o.start(t); o.stop(t + 0.45);
+        }
+        this.nz(t, 0.08, 'highpass', 3000, 1, 0.08, 0);
+        break;
+      }
       case 'death': this.tn(t, 2.5, 'sine', 110, 55, 0.25, 0, { verb: true }); break;
       case 'engineStart': this.tn(t, 0.6, 'sawtooth', 40, 70, 0.12 * G_, pan, { lp: 400 }); this.nz(t, 0.5, 'lowpass', 300, 1, 0.2 * G_, pan, { brown: true }); break;
       case 'crank': for (let k = 0; k < 4; k++) this.tn(t + k * 0.18, 0.12, 'sawtooth', 50, 40, 0.1 * G_, pan, { lp: 300 }); break;

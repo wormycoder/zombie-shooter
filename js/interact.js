@@ -220,7 +220,9 @@ const Interact = {
     } else if (t && WALL_INFO[t].climb) {
       add('Climb over ' + WALL_INFO[t].n.toLowerCase(), () => go(() => this.climb(e)));
     }
+    if (t && this.hasSledge()) add('Destroy with sledgehammer', () => go(() => Actions.queue(Actions.demolishEdge(e))));
   },
+  hasSledge() { const it = Player.primary(); return !!(it && Items.has(it, 'sledge') && it.cond > 0); },
   insideOf(f) {
     const p = G.player;
     const b = World.building(Math.floor(p.x), Math.floor(p.y));
@@ -274,6 +276,7 @@ const Interact = {
     if (o.t === 'pump') { const can = Player.find(i => i.id === 'GasCan' && i.fl < 0.99); if (can) add('Fill gas can', () => go(() => Actions.queue(Actions.pumpGas(can)))); }
     const wood = ['bed', 'table', 'chair', 'wardrobe', 'dresser', 'nightstand', 'bookshelf', 'crate', 'woodcrate', 'desk', 'counter', 'pew', 'bench', 'sofa', 'armchair', 'toolcab'];
     if (wood.includes(o.t)) add('Disassemble', () => go(() => Actions.queue(Actions.disassemble(x, y))), { disabled: !(Player.findTag('hammer') || Player.findTag('saw') || Player.findTag('screwdriver')) });
+    if (this.hasSledge() && o.t !== 'tree' && o.t !== 'crop') add('Destroy with sledgehammer', () => go(() => Actions.queue(Actions.demolishObj(x, y))));
   },
   groundOptions(tx, ty, add, t) {
     const p = G.player;
@@ -344,7 +347,7 @@ const Interact = {
       if (t && WALL_INFO[t].climb) { this.climb(eArr); return; }
     }
     // containers -> loot
-    UI.openLoot();
+    if (this.nearby().some(c => c.items.length || c.kind !== 'floor')) UI.openLoot();
   },
   toggleDoor(f, e) {
     const p = G.player;

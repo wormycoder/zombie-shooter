@@ -145,6 +145,7 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 12px;
 /* ---------------- skills */
 .cinfo { display: flex; gap: 10px; padding: 8px; border-bottom: 1px solid var(--line); }
 .cname { font-size: 15px; font-weight: bold; color: #f0e8c8; }
+.exr { margin-top: 6px; display: flex; align-items: center; gap: 2px; }
 .traits { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
 .trait { font-size: 10px; padding: 1px 5px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); }
 .trait.pos { background: rgba(80, 160, 80, 0.3); }

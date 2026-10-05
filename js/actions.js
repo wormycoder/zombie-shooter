@@ -500,6 +500,67 @@ const Actions = {
       Noise.emit(x, y, 12, 'hammer'); Sfx.play('wood'); UI.refresh();
     }, { anim: 'hammer', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 });
   },
+  demolishEdge(e) {
+    const [x, y, d] = e;
+    let nt = 0;
+    const t0 = World.wall(x, y, d);
+    const info = WALL_INFO[t0];
+    const dur = info && info.fence ? 6 : 14;
+    return this.mk('Demolishing', dur * (1.1 - Player.skill('Strength') * 0.04), () => {
+      if (!World.wall(x, y, d)) return;
+      const f = World.feat(x, y, d);
+      World.setWall(x, y, d, 0);
+      World.setFeat(x, y, d, null);
+      Wd.edgeHp.delete(World.ek(x, y, d));
+      const [mx, my] = Interact.edgeMid(e);
+      if (f && f.barricade) for (let k = 0; k < f.barricade; k++) if (R.chance(0.5)) World.dropItem(mx, my, Items.make('Plank'));
+      if (t0 === WT.BUILT || t0 === WT.WOODFENCE || t0 === WT.PICKET) for (let k = 0; k < R.int(0, 2); k++) World.dropItem(mx, my, Items.make('Plank'));
+      Fx.shards(mx, my, 1.2, 16, '#8a7a6a');
+      Noise.emit(mx, my, 22, 'crash');
+      Sfx.play('woodbreak', mx, my);
+      Player.xp('Strength', 4);
+      const it = Player.primary(); if (it && R.chance(0.5)) it.cond--;
+      G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.15);
+    }, {
+      anim: 'hammer', check: () => Interact.nearEdge(e, 1.8) && Interact.hasSledge(),
+      tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.4; const [mx, my] = Interact.edgeMid(e); Sfx.play('thump', mx, my); Noise.emit(mx, my, 16, 'crash'); } },
+    });
+  },
+  demolishObj(x, y) {
+    let nt = 0;
+    return this.mk('Smashing', 7 * (1.1 - Player.skill('Strength') * 0.04), () => {
+      const o = World.obj(x, y);
+      if (!o) return;
+      if (o.c && o.c.items) for (const it of o.c.items) World.dropItem(x + 0.5, y + 0.5, it);
+      if (o.part !== undefined) for (const [dx, dy] of DIR4) { const n = World.obj(x + dx, y + dy); if (n && n.t === o.t && n.part !== undefined && n.part !== o.part) { World.setObj(x + dx, y + dy, null); break; } }
+      World.setObj(x, y, null);
+      if (o.t === 'generator') Wd.powerGens = Wd.powerGens.filter(g => g !== o);
+      Fx.shards(x + 0.5, y + 0.5, 0.8, 14, '#8a7a6a');
+      Noise.emit(x + 0.5, y + 0.5, 18, 'crash');
+      Sfx.play('woodbreak', x + 0.5, y + 0.5);
+      G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.08);
+      UI.refresh();
+    }, {
+      anim: 'hammer', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 && Interact.hasSledge(),
+      tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.3; Sfx.play('thump', x + 0.5, y + 0.5); } },
+    });
+  },
+  exercise(kind) {
+    const p = G.player;
+    if (p.st.endurance < 0.3) { Player.say("I'm too tired to exercise.", '#ccc'); return null; }
+    const names = { squats: 'Doing squats', pushups: 'Doing push-ups', situps: 'Doing sit-ups' };
+    return this.mk(names[kind], 30 / MIN_PER_SEC * 0.5, () => {
+      Player.say('Good workout.', '#8f8');
+      p.st.boredom = Math.max(0, p.st.boredom - 15);
+    }, {
+      anim: kind === 'squats' ? 'squat' : 'kneel', fun: 10,
+      tick: (dt) => {
+        p.st.endurance = Math.max(0, p.st.endurance - dt * 0.006);
+        Player.xp(kind === 'pushups' ? 'Strength' : 'Fitness', dt * 0.9);
+        if (p.st.endurance < 0.12) { Actions.cancel(); Player.say("I'm exhausted.", '#ccc'); }
+      },
+    });
+  },
   addFuel(o, it) {
     const fv = { Plank: 60, Log: 120, TreeBranch: 40, Twigs: 15, Newspaper: 8, Magazine: 8, Novel: 15, RippedSheets: 6, Sheet: 15, ComicBook: 8 }[it.id] || 10;
     return this.mk('Adding fuel', 1.5, () => { Player.removeItem(it); o.fuel = (o.fuel || 0) + fv; UI.refresh(); Sfx.play('wood'); }, { anim: 'work' });
