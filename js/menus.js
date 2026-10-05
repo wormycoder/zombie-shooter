@@ -255,6 +255,7 @@ const Menu = {
     m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox wide"><h2>How to play</h2>
       <div class="ctrls">${rows.map(r => `<div><kbd>${r[0]}</kbd><span>${r[1]}</span></div>`).join('')}</div>
       <div class="sml" style="margin:10px 0">Survive as long as you can. Watch your moodles (right side). Eat, drink and sleep. Zombies hunt by sight and sound — noise travels, light gives you away at night. Bites are fatal. Barricade, scavenge, and keep moving. The power and water will not last.</div>
+      <div class="sml" style="margin:0 0 10px">Survival tips: upstairs rooms are safer — smash the stairs with a sledgehammer and come and go by a sheet rope tied to a window (or jump, and hurt your legs). Fire spreads: keep water or an extinguisher handy, and never leave food burning on the stove. Winter is cold in a house without power — find a coat, light a fire. Baited traps in the woods catch small game while you're away.</div>
       <div class="btn big" data-m="back">Back</div></div></div>`;
     m.onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; if (inGame) { m.innerHTML = ''; UI.togglePause(); } else this.show(); };
   },
