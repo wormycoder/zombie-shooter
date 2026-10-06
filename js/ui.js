@@ -650,7 +650,7 @@ const UI = {
     m.innerHTML = `<div class="modal pausing"><div class="mbox"><h2>Paused</h2>
       <div class="btn big" data-m="resume">Resume</div>
       <div class="btn big" data-m="save">Save game</div>
-      <div class="btn big" data-m="options">Options</div>
+      <div class="btn big" data-m="options">Settings</div>
       <div class="btn big" data-m="controls">Controls</div>
       <div class="btn big" data-m="quit">Save &amp; quit to menu</div></div></div>`;
     m.onclick = (e) => {

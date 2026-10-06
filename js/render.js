@@ -69,9 +69,9 @@ const Render = {
   shadeAt(x, y) {
     let B = this.shadeB;
     if (x >= LV.W0) { x -= LV.W0; B = this.shadeB1; if (!this.has1) return 0.3; }
-    const i = Math.floor(x) - this.vx0, j = Math.floor(y) - this.vy0;
-    if (i < 0 || j < 0 || i >= this.vw || j >= this.vh) return 0.3;
-    return B[j * this.vw + i];
+    const i = Math.floor(x) - this.lx0, j = Math.floor(y) - this.ly0;
+    if (i < 0 || j < 0 || i >= this.lw || j >= this.lh) return 0.3;
+    return B[j * this.lw + i];
   },
   shadeSmooth(x, y) {
     const fx = x - 0.5, fy = y - 0.5;
@@ -82,9 +82,9 @@ const Render = {
   lightAt(x, y) {
     let B = this.lightB;
     if (x >= LV.W0) { x -= LV.W0; B = this.lightB1; if (!this.has1) return 0.3; }
-    const i = Math.floor(x) - this.vx0, j = Math.floor(y) - this.vy0;
-    if (i < 0 || j < 0 || i >= this.vw || j >= this.vh) return 0.3;
-    return B[j * this.vw + i];
+    const i = Math.floor(x) - this.lx0, j = Math.floor(y) - this.ly0;
+    if (i < 0 || j < 0 || i >= this.lw || j >= this.lh) return 0.3;
+    return B[j * this.lw + i];
   },
   // building id an upstairs wall edge belongs to, and whether it is an outside wall
   edgeB(x, y, d) {
@@ -135,7 +135,14 @@ const Render = {
     let any2 = false;
     for (const b of w.buildings) if (b.floors === 2 && !(b.x1 < minX - 2 || b.x0 > maxX || b.y1 < minY - 2 || b.y0 > maxY)) { any2 = true; break; }
     this.has1 = any2;
-    this.computeLight();
+    // facade sprite caches age by frame; a few roofs may be painted per frame
+    Facade.tick++; Facade.rbudget = 3;
+    // lighting runs at the configured rate (Settings.v.lightHz), and at once when the view leaves the lit area
+    const lnow = performance.now(), lhz = Settings.v.lightHz || 60;
+    if (!this.lw || this.vx0 < this.lx0 || this.vy0 < this.ly0 || this.vx0 + this.vw > this.lx0 + this.lw || this.vy0 + this.vh > this.ly0 + this.lh
+      || any2 !== this.lHas1 || this.lWorld !== w || lhz >= 60 || lnow - (this.lightT || 0) >= 1000 / lhz - 1) {
+      this.computeLight(); this.lightT = lnow; this.lightDirty = true; this.lHas1 = any2; this.lWorld = w; this.lightN = (this.lightN || 0) + 1;
+    }
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     // ---------------- floor pass (cached 8x8-tile ground chunks; water animates live)
     const W_ = w.w;
@@ -472,7 +479,7 @@ const Render = {
     g.save();
     g.clip(clip);
     const s = dpr * z;
-    g.setTransform(s * HTW, s * HTH, -s * HTW, s * HTH, dpr * (this.ox + z * (this.vx0 - this.vy0) * HTW), dpr * (this.oy + z * ((this.vx0 + this.vy0) * HTH - HH * ZU)));
+    g.setTransform(s * HTW, s * HTH, -s * HTW, s * HTH, dpr * (this.ox + z * (this.lx0 - this.ly0) * HTW), dpr * (this.oy + z * ((this.lx0 + this.ly0) * HTH - HH * ZU)));
     g.drawImage(this.lcv1, 0, 0);
     g.restore();
     return true;
@@ -509,14 +516,18 @@ const Render = {
   // ------------------------------------------------------------------ lighting
   computeLight() {
     const w = Wd, p = G.player;
-    const n = this.vw * this.vh;
+    // when lighting is throttled, cover a margin around the view so camera moves between updates stay lit
+    const M = (Settings.v.lightHz || 60) >= 60 ? 0 : 6, GW = w.gw || w.w;
+    this.lx0 = Math.max(0, this.vx0 - M); this.ly0 = Math.max(0, this.vy0 - M);
+    this.lw = Math.min(GW, this.vx0 + this.vw + M) - this.lx0; this.lh = Math.min(w.h, this.vy0 + this.vh + M) - this.ly0;
+    const n = this.lw * this.lh;
     if (this.lightB.length < n) {
       const m = n * 1.3 | 0;
       this.lightB = new Float32Array(m); this.shadeB = new Float32Array(m);
       this.lightB1 = new Float32Array(m); this.shadeB1 = new Float32Array(m);
     }
     const amb = G.light.amb;
-    const vx0 = this.vx0, vy0 = this.vy0, vw = this.vw, vh = this.vh, W_ = w.w, W0 = LV.W0;
+    const vx0 = this.lx0, vy0 = this.ly0, vw = this.lw, vh = this.lh, W_ = w.w, W0 = LV.W0;
     const powered = !G.events.powerOff;
     const lights = [];
     const layers = this.has1 ? 2 : 1;
@@ -552,8 +563,6 @@ const Render = {
       }
     }
     for (const f of Fx.fires) lights.push({ x: f.x, y: f.y, r: 6, p: 0.9 });
-    // facade sprite caches age by frame; a few roofs may be painted per frame
-    Facade.tick++; Facade.rbudget = 3;
     // porch lanterns beside house doors, on after dark while the grid is up
     if (amb < 0.6 && powered) for (const L of Facade.lamps()) {
       if (L.x < vx0 - 4 || L.x > vx0 + vw + 4 || L.y < vy0 - 4 || L.y > vy0 + vh + 4 || L.b.roofGone) continue;
@@ -670,8 +679,8 @@ const Render = {
     }
   },
   drawLightOverlay() {
-    const vw = this.vw, vh = this.vh;
-    for (let lv = 0; lv < (this.has1 ? 2 : 1); lv++) {
+    const vw = this.lw, vh = this.lh;
+    if (this.lightDirty) for (let lv = 0; lv < (this.has1 ? 2 : 1); lv++) {
       const cv = lv ? this.lcv1 : this.lcv, cx = lv ? this.lctx1 : this.lctx, key = lv ? 'limg1' : 'limg';
       if (cv.width !== vw || cv.height !== vh) { cv.width = vw; cv.height = vh; this[key] = null; }
       if (!this[key]) this[key] = cx.createImageData(vw, vh);
@@ -683,11 +692,12 @@ const Render = {
       }
       cx.putImageData(this[key], 0, 0);
     }
+    this.lightDirty = false;
     const z = this.cam.zoom, dpr = this.dpr;
     const ctx = this.ctx;
     ctx.save();
     const s = dpr * z;
-    ctx.setTransform(s * HTW, s * HTH, -s * HTW, s * HTH, dpr * (this.ox + z * (this.vx0 - this.vy0) * HTW), dpr * (this.oy + z * (this.vx0 + this.vy0) * HTH));
+    ctx.setTransform(s * HTW, s * HTH, -s * HTW, s * HTH, dpr * (this.ox + z * (this.lx0 - this.ly0) * HTW), dpr * (this.oy + z * (this.lx0 + this.ly0) * HTH));
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.lcv, 0, 0);
     ctx.restore();
@@ -860,7 +870,7 @@ const Render = {
     // a roof far less than the street below it), never pitch black
     const amb = G.light.amb, cap = amb + 0.32;
     let s = Math.max(0.12, amb * 0.8);
-    const vw = this.vw, vh = this.vh, SB = this.shadeB, vx0 = this.vx0, vy0 = this.vy0;
+    const vw = this.lw, vh = this.lh, SB = this.shadeB, vx0 = this.lx0, vy0 = this.ly0;
     const smp = (sx, sy) => { const i = sx - vx0, j = sy - vy0; if (i >= 0 && j >= 0 && i < vw && j < vh) { const l = Math.min(cap, SB[j * vw + i]); if (l > s) s = l; } };
     smp(b.x1 + 1, b.y1 + 1); smp(b.x0 - 1, b.y1 + 1); smp(b.x1 + 1, b.y0 - 1); smp((b.x0 + b.x1) >> 1, b.y1 + 1); smp(b.x1 + 1, (b.y0 + b.y1) >> 1);
     if (s > 1) s = 1;

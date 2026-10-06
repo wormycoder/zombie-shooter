@@ -23,6 +23,8 @@ const SANDBOX_OPTS = {
   alarms: { n: 'House alarms', opts: [['Never', 0], ['Extremely rare', 0.01], ['Rare', 0.03], ['Sometimes', 0.07], ['Often', 0.15]], def: 2 },
   carAlarms: { n: 'Car alarms', opts: [['Never', 0], ['Extremely rare', 0.01], ['Rare', 0.03], ['Sometimes', 0.08], ['Often', 0.2]], def: 2 },
 };
+// world objects that change over time (see Game.worldTick)
+const TICK_OBJ = { campfire: 1, bbq: 1, crop: 1, barrel: 1, trap: 1 };
 const SANDBOX_PRESETS = {
   Apocalypse: { pop: 2, speed: 0, day: 1, loot: 2, utilities: 2, start: 1 },
   Survivor: { pop: 1, speed: 0, day: 2, loot: 3, utilities: 3, start: 1 },
@@ -71,10 +73,12 @@ const Game = {
   newGame(cfg) {
     G.sb = cfg.sb || sandboxValues({});
     MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
-    G.seed = (Math.random() * 1e9) | 0;
+    G.seed = cfg.world ? cfg.seed : (Math.random() * 1e9) | 0;
     G.time = 0; G.weather = { rain: 0, snow: 0, temp: 20 };
     Season.update();
-    const w = MapGen.generate(G.seed);
+    // a world pre-generated while the player was on the character screen saves the wait
+    const w = cfg.world || MapGen.generate(G.seed);
+    delete cfg.world;
     World.use(w);
     G.conts = new Set();
     G.corpse = false; G.chasing = 0;
@@ -201,6 +205,7 @@ const Game = {
 
   // ------------------------------------------------------------------ main loop
   last: 0, acc: 0, fpsN: 0, fpsT: 0,
+  pf: { sim: 0, steps: 0, rend: 0, ui: 0, uiMs: 0, frame: 0 },
   loop(ts) {
     requestAnimationFrame((t) => this.loop(t));
     // frame rate cap (settings): skip this display refresh if the last frame was too recent
@@ -214,15 +219,22 @@ const Game = {
       if (G.mode === 'play' && !G.paused && !UI.modalPause()) {
         const sim = dt * G.speed;
         const steps = Math.min(60, Math.max(1, Math.ceil(sim / (1 / 30))));
+        const t0 = performance.now();
         for (let i = 0; i < steps; i++) this.step(sim / steps);
+        this.pf.sim += performance.now() - t0; this.pf.steps += steps;
         Input.handleGameKeys();
       } else if (G.mode === 'dead') {
         this.step(dt);
       }
       Fx.update(dt);
       this.updateLight(dt);
+      const t1 = performance.now();
       Render.frame(dt);
-      UI.update(dt);
+      const t2 = performance.now();
+      this.pf.rend += t2 - t1;
+      // HUD and panels refresh at the configured rate
+      this.uiAcc = (this.uiAcc || 0) + dt;
+      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); this.uiAcc = 0; this.pf.ui++; this.pf.uiMs += performance.now() - t2; }
       Music.update(dt);
     } else if (G.mode === 'menu' || G.mode === 'create') {
       Menu.drawBackground(dt);
@@ -230,16 +242,29 @@ const Game = {
     Input.endFrame();
     this.fpsMeter(ts);
   },
+  // frame rate counter (settings: off / FPS / detailed)
   fpsMeter(ts) {
     this.fpsN++;
     if (ts - this.fpsT < 500) return;
-    const fps = this.fpsN * 1000 / (ts - this.fpsT);
+    const sec = (ts - this.fpsT) / 1000, n = this.fpsN, pf = this.pf;
+    const fps = n / sec;
     this.fpsN = 0; this.fpsT = ts;
     let el = document.getElementById('fps');
-    if (!Settings.v.fpsShow) { if (el) el.style.display = 'none'; return; }
-    if (!el) { el = document.createElement('div'); el.id = 'fps'; el.style.cssText = 'position:fixed;left:8px;top:6px;z-index:30;font:11px Verdana,sans-serif;color:#e8e0c0;background:rgba(0,0,0,0.5);padding:1px 6px;border-radius:3px;pointer-events:none'; document.body.appendChild(el); }
+    const mode = Settings.v.fpsShow;
+    if (!mode) { if (el) el.style.display = 'none'; Render.lightN = 0; return; }
+    if (!el) { el = document.createElement('div'); el.id = 'fps'; el.style.cssText = 'position:fixed;left:8px;top:6px;z-index:30;font:11px/1.45 Verdana,sans-serif;color:#e8e0c0;background:rgba(0,0,0,0.55);padding:2px 7px;border-radius:3px;pointer-events:none;white-space:pre'; document.body.appendChild(el); }
     el.style.display = 'block';
-    el.textContent = Math.round(fps) + ' FPS';
+    const col = fps >= 50 ? '#9be08a' : fps >= 28 ? '#e8d070' : '#f08a6a';
+    let txt = '<b style="color:' + col + '">' + Math.round(fps) + ' FPS</b>';
+    if (mode === 2) {
+      const zs = G.zombies || [];
+      txt += '\nframe ' + (1000 / Math.max(1, fps)).toFixed(1) + ' ms · render ' + (pf.rend / n).toFixed(1) + ' ms\nsim ' + (pf.sim / n).toFixed(1) + ' ms · ' + Math.round(pf.steps / sec) + ' steps/s'
+        + '\nlight ' + Math.round((Render.lightN || 0) / sec) + '/s · UI ' + Math.round(pf.ui / sec) + '/s (' + (pf.uiMs / Math.max(1, pf.ui)).toFixed(1) + ' ms)'
+        + '\nzombies ' + zs.length + ' · near ' + (Zombie.nearN || 0) + ' · updated ' + (Zombie.updN || 0)
+        + '\nground chunks ' + Render.chunks.size + ' · sprites ' + Spr.cache.size;
+    }
+    el.innerHTML = txt;
+    pf.sim = pf.steps = pf.rend = pf.ui = pf.uiMs = 0; Render.lightN = 0;
   },
   step(dt) {
     const gm = dt * MIN_PER_SEC;
@@ -328,27 +353,57 @@ const Game = {
     }
   },
   // ------------------------------------------------------------------ world tick (game minutes)
+  // 0 within 6 chunks (16x16 tiles) of the player, 1 within 12, 2 beyond
+  chunkTier(x, y) {
+    const p = G.player;
+    if (!p) return 0;
+    const q = p.inCar || p;
+    const cd = Math.max(Math.abs(Math.floor(vxOf(x) / 16) - Math.floor(vxOf(q.x) / 16)), Math.abs(Math.floor(y / 16) - Math.floor(q.y / 16)));
+    return cd >= 12 ? 2 : cd >= 6 ? 1 : 0;
+  },
   worldTick(gm) {
     const p = G.player;
     const powered = !G.events.powerOff;
     // containers: spoilage & cooking
+    const lazy = Settings.v.chunkLazy;
+    this.wtick = (this.wtick || 0) + 1;
     for (const c of G.conts) {
       if (!c.items || !c.items.length) continue;
+      // lazy chunks: far containers age at half rate / not at all, catching up when the player comes back
+      let g = gm;
+      if (lazy && c.px !== undefined) {
+        const tier = this.chunkTier(c.px, c.py);
+        if (tier) { c.ag = (c.ag || 0) + gm; if (tier === 2 || (this.wtick & 1)) continue; g = c.ag; c.ag = 0; }
+        else if (c.ag) { g += c.ag; c.ag = 0; }
+      }
       let cold = false, heat = false;
       const o = (c.px !== undefined) ? World.obj(c.px, c.py) : null;
       if (o && OBJ[o.t].cold && (powered || World.hasPower(c.px, c.py))) cold = true;
       if (o && ((o.t === 'stove' && o.on && (powered || World.hasPower(c.px, c.py))) || ((o.t === 'campfire' || o.t === 'bbq') && o.lit))) heat = true;
-      for (const it of c.items) this.ageItem(it, gm, cold, heat, c);
+      for (const it of c.items) this.ageItem(it, g, cold, heat, c);
     }
     for (const it of p.inv) { this.ageItem(it, gm, false, false); if (it.items) for (const s of it.items) this.ageItem(s, gm, false, false); }
     // fires & generators
     this.slowAcc = (this.slowAcc || 0) + gm;
     if (this.slowAcc >= 5) {
-      const sg = this.slowAcc; this.slowAcc = 0;
+      const sg0 = this.slowAcc; this.slowAcc = 0;
       const rain = G.weather.rain;
-      for (let i = 0; i < Wd.obj.length; i++) {
+      this.stick = (this.stick || 0) + 1;
+      // ticking objects (fires, crops, barrels, traps, regrowing bushes) are indexed every 20 game minutes
+      if (!this.tickList || this.tickWorld !== Wd || this.stick % 4 === 0) {
+        const L = [];
+        for (let i = 0; i < Wd.obj.length; i++) { const o = Wd.obj[i]; if (o && (TICK_OBJ[o.t] || (o.t === 'bush' && o.berryDay !== undefined))) L.push(i); }
+        this.tickList = L; this.tickWorld = Wd;
+      }
+      for (const i of this.tickList) {
         const o = Wd.obj[i];
         if (!o) continue;
+        let sg = sg0;
+        if (lazy) {
+          const tier = this.chunkTier(i % Wd.w, (i / Wd.w) | 0);
+          if (tier) { o.tg = (o.tg || 0) + sg0; if (tier === 2 || (this.stick & 1)) continue; sg = o.tg; o.tg = 0; }
+          else if (o.tg) { sg += o.tg; o.tg = 0; }
+        }
         if ((o.t === 'campfire' || o.t === 'bbq') && o.lit) {
           o.fuel -= sg;
           if (o.fuel <= 0 || (rain > 0.6 && o.t === 'campfire' && R.chance(0.1))) { o.fuel = Math.max(0, o.fuel); o.lit = false; }
@@ -367,7 +422,7 @@ const Game = {
         else if (o.t === 'trap') this.trapTick(o, i, sg);
         else if (o.t === 'bush' && o.berryDay !== undefined && this.day() - o.berryDay >= 3 && Season.doy >= 150 && Season.doy < 300) { o.berries = true; delete o.berryDay; }
       }
-      for (const g of Wd.powerGens) if (g.on) { g.fuel -= sg / (60 * 14); if (g.fuel <= 0) { g.fuel = 0; g.on = false; } else Noise.emit(g.x + 0.5, g.y + 0.5, 16, 'gen'); }
+      for (const g of Wd.powerGens) if (g.on) { g.fuel -= sg0 / (60 * 14); if (g.fuel <= 0) { g.fuel = 0; g.on = false; } else Noise.emit(g.x + 0.5, g.y + 0.5, 16, 'gen'); }
     }
     // TV / radio broadcasts
     this.bcAcc = (this.bcAcc || 0) + gm;

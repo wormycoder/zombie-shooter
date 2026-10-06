@@ -126,18 +126,41 @@ const Zombie = {
     return out;
   },
   // ------------------------------------------------------------------ update
+  // Level of detail (settings): by 16x16-tile chunk distance from the player - near chunks every step,
+  // 3-5 chunks every other step (unless chasing or on screen), 6-11 a coarse update every ~2 s, 12+ frozen.
+  // With a crowd close by, adaptive physics updates each crowd zombie every other step instead.
   updateAll(dt) {
     this.rebuildGrid();
     const p = G.player;
     const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
-    let chasing = 0;
-    for (const z of G.zombies) {
+    const lazy = Settings.v.zLazy, crowd = Settings.v.zAdapt && (this.nearN || 0) > 120;
+    const pcx = Math.floor(vxOf(px) / 16), pcy = Math.floor(py / 16);
+    const tick = this.tick = (this.tick || 0) + 1;
+    let chasing = 0, nearN = 0, upd = 0;
+    const zs = G.zombies;
+    for (let k = 0; k < zs.length; k++) {
+      const z = zs[k];
       if (z.dead) { if (z.lie < 1) z.lie = Math.min(1, z.lie + dt * 2.5); continue; }
       const d = World.lvDist(z.x, z.y, px, py);
-      if (d > 60) { z.far = (z.far || 0) + dt; if (z.far > 1) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
-      this.update(z, dt, px, py, d);
+      if (d < 32) nearN++;
+      let zdt = dt;
+      if (lazy) {
+        const cd = Math.max(Math.abs(Math.floor(vxOf(z.x) / 16) - pcx), Math.abs(Math.floor(z.y / 16) - pcy));
+        if (cd >= 12) { z.va = 0; continue; }
+        if (cd >= 6 || d > 60) { z.far = (z.far || 0) + dt; if (z.far > (cd >= 6 ? 2 : 1)) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
+        const busy = z.st === 'chase' || z.st === 'attack' || z.va > 0.01;
+        const rate = (!busy && cd >= 3) || (crowd && d < 32 && z.st !== 'attack') ? 2 : 1;
+        if (rate > 1) {
+          z.acc = (z.acc || 0) + dt;
+          if ((tick + k) % rate) continue;
+          zdt = z.acc; z.acc = 0;
+        } else if (z.acc) { zdt += z.acc; z.acc = 0; }
+      } else if (d > 60) { z.far = (z.far || 0) + dt; if (z.far > 1) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
+      this.update(z, zdt, px, py, d);
+      upd++;
       if (z.st === 'chase' || z.st === 'attack') chasing++;
     }
+    this.nearN = nearN; this.updN = upd;
     G.chasing = chasing;
     // corpse cleanup
     if (G.zombies.length > 900) {

@@ -64,9 +64,12 @@ const Fire = {
     const step = this.acc; this.acc = 0;
     const rain = G.weather.rain, W = Wd.w, W0 = LV.W0;
     const spread = !G.sb || G.sb.fire === undefined || G.sb.fire ? 1 : 0;
-    const add = [];
+    const add = [], lazy = Settings.v.chunkLazy;
+    this.ft = (this.ft || 0) + 1;
     for (const [i, e] of m) {
       const x = i % W, y = (i / W) | 0;
+      // lazy chunks: fires 6+ chunks away burn at half speed, 12+ chunks away pause
+      if (lazy) { const tier = Game.chunkTier(x, y); if (tier === 2 || (tier === 1 && (this.ft & 1))) continue; }
       const outdoor = Wd.room[i] < 0;
       if (outdoor && rain > 0.25) e.i -= rain * 0.3 * step;
       e.i = Math.min(1, e.i + step * (e.fuel > e.max * 0.25 ? 0.14 : -0.25));

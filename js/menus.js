@@ -31,7 +31,8 @@ const Menu = {
   },
   show() {
     G.mode = 'menu';
-    this.prepareBg();
+    // first visit: put the menu up at once and build the background town right after
+    if (this.bgWorld) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
     const meta = Save.meta();
     $('#menu').className = '';
     $('#menu').innerHTML = `<div class="modal title"><div class="tbox">
@@ -39,7 +40,7 @@ const Menu = {
       <div class="tag">There is no cure. There is no rescue.<br>There is only how long you last.</div>
       ${meta ? `<div class="btn big" data-m="continue">Continue <span class="sml">— ${U.esc(meta.name)}, Day ${meta.day} ${meta.time}</span></div>` : ''}
       <div class="btn big" data-m="new">New Game</div>
-      <div class="btn big" data-m="options">Options</div>
+      <div class="btn big" data-m="options">Settings</div>
       <div class="btn big" data-m="controls">How to Play</div>
       <div class="foot">An isometric zombie survival sandbox · all art and audio generated procedurally</div>
     </div></div>`;
@@ -108,9 +109,26 @@ const Menu = {
   },
   // ------------------------------------------------------------------ character creation
   cfg: null,
+  // build the game world in the background while the player designs a character
+  pregen(sb) {
+    const key = JSON.stringify(sb);
+    if (this.pre && this.pre.key === key) return;
+    this.pre = null;
+    setTimeout(() => {
+      if (G.mode !== 'create') return;
+      const keep = Wd, sb0 = G.sb;
+      G.sb = sb;
+      const seed = (Math.random() * 1e9) | 0;
+      const w = MapGen.generate(seed);
+      G.sb = sb0;
+      World.use(keep);
+      this.pre = { key, seed, w };
+    }, 400);
+  },
   create() {
     if (!this.bgWorld || Wd !== this.bgWorld) this.prepareBg();
     G.mode = 'create';
+    this.pregen(sandboxValues(this.sbSel || {}));
     const r = R;
     const female = r.chance(0.5);
     this.cfg = this.cfg || {
@@ -211,6 +229,8 @@ const Menu = {
     if (!cfg.name.trim()) cfg.name = 'Survivor';
     cfg.sb = sandboxValues(this.sbSel || {});
     this.cfg = null;
+    if (this.pre && this.pre.key === JSON.stringify(cfg.sb)) { cfg.world = this.pre.w; cfg.seed = this.pre.seed; }
+    this.pre = null;
     $('#menu').innerHTML = '<div class="modal loading"><div class="ltext">Generating Hollow Creek...</div></div>';
     setTimeout(() => {
       Save.wipe();
@@ -230,24 +250,27 @@ const Menu = {
     setTimeout(end, 6500);
   },
   // ------------------------------------------------------------------ options & controls
+  // Settings screen: Display / Performance / Audio / Controls tabs
+  setTab: 'display',
   options(inGame) {
     const m = $('#menu');
-    const v = Sfx.vol, S = Settings.v, pn = Settings.presetName();
-    const rows = Object.keys(SETTINGS_OPTS).map(k => {
+    const v = Sfx.vol, S = Settings.v, pn = Settings.presetName(), tab = this.setTab;
+    const rows = (t) => Object.keys(SETTINGS_OPTS).filter(k => SETTINGS_OPTS[k].tab === t).map(k => {
       const o = SETTINGS_OPTS[k];
-      return `<div class="opt" title="${o.tip || ''}"><span>${o.n}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
+      return `<div class="opt" data-tip="${o.tip || ''}"><span>${o.n}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     }).join('');
-    const presets = Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm${n === pn ? ' on' : ''}" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0' : ''}">${n}</span>`).join('');
-    m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox wide"><h2>Options</h2>
-      <div style="display:flex;gap:28px;align-items:flex-start">
-      <div style="flex:1;min-width:240px"><div class="sml" style="margin-bottom:6px">Audio</div>
-      <div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
+    const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('') + '</div>';
+    const tabs = [['display', 'Display'], ['perf', 'Performance'], ['audio', 'Audio'], ['controls', 'Controls']]
+      .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
+    let body = '';
+    if (tab === 'display' || tab === 'perf') body = presets + rows(tab) + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
+    else if (tab === 'audio') body = `<div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
-      <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div></div>
-      <div style="flex:1.3;min-width:300px"><div class="sml" style="margin-bottom:6px">Graphics &amp; performance${pn ? '' : ' (custom)'}</div>
-      <div style="margin-bottom:6px">${presets}</div>
-      ${rows}
-      <div class="sml" id="setTip" style="min-height:28px;margin-top:4px;max-width:360px;color:#a89c80"></div></div></div>
+      <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>`;
+    else body = `<div class="ctrls">${this.controlRows().map(r => `<div><kbd>${r[0]}</kbd><span>${r[1]}</span></div>`).join('')}</div>`;
+    m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox wide"><h2>Settings</h2>
+      <div style="margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px">${tabs}</div>
+      <div style="min-height:330px">${body}</div>
       <div class="btn big" data-m="back">Back</div></div></div>`;
     m.oninput = (e) => { const k = e.target.dataset.v; if (k) { Sfx.init(); Sfx.setVol(k, +e.target.value); try { localStorage.setItem('hc_vol', JSON.stringify(Sfx.vol)); } catch (er) { /* */ } } };
     m.onchange = (e) => {
@@ -256,17 +279,18 @@ const Menu = {
       Settings.set(k, SETTINGS_OPTS[k].opts[+e.target.value][1]);
       this.options(inGame);
     };
-    m.onmouseover = (e) => { const r = e.target.closest('.opt[title]'); const tip = $('#setTip'); if (tip) tip.textContent = r ? r.title : ''; };
+    m.onmouseover = (e) => { const r = e.target.closest('.opt[data-tip]'); const tip = $('#setTip'); if (tip) tip.textContent = r ? r.dataset.tip : ''; };
     m.onclick = (e) => {
+      const tb = e.target.closest('[data-tab]');
+      if (tb) { this.setTab = tb.dataset.tab; this.options(inGame); return; }
       const gp = e.target.closest('[data-gpre]');
       if (gp) { Settings.usePreset(gp.dataset.gpre); this.options(inGame); return; }
       const b = e.target.closest('[data-m]'); if (!b) return;
       if (inGame) { m.innerHTML = ''; UI.togglePause(); } else this.show();
     };
   },
-  controls(inGame) {
-    const m = $('#menu');
-    const rows = [
+  controlRows() {
+    return [
       ['W A S D', 'Move'], ['Shift', 'Run'], ['Alt / X', 'Sprint'], ['C', 'Toggle sneaking'], ['Mouse', 'Look / face direction'],
       ['Right mouse (hold)', 'Aim'], ['Left mouse', 'Attack / shoot'], ['Space', 'Shove (stomp a downed zombie)'], ['R', 'Reload'],
       ['Right click (tap)', 'Context menu on doors, windows, furniture, ground'], ['E', 'Open doors & windows, climb, enter/exit cars, loot'],
@@ -275,6 +299,10 @@ const Menu = {
       ['1 - 5', 'Hotbar'], ['Mouse wheel', 'Zoom'], ['P / , / .', 'Pause / slower / faster time'], ['Esc', 'Menu / cancel'],
       ['Shift + click item', 'Quick transfer'], ['Double-click item', 'Use / equip / take'], ['Drag item', 'Move between containers'],
     ];
+  },
+  controls(inGame) {
+    const m = $('#menu');
+    const rows = this.controlRows();
     m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox wide"><h2>How to play</h2>
       <div class="ctrls">${rows.map(r => `<div><kbd>${r[0]}</kbd><span>${r[1]}</span></div>`).join('')}</div>
       <div class="sml" style="margin:10px 0">Survive as long as you can. Watch your moodles (right side). Eat, drink and sleep. Zombies hunt by sight and sound — noise travels, light gives you away at night. Bites are fatal. Barricade, scavenge, and keep moving. The power and water will not last.</div>
