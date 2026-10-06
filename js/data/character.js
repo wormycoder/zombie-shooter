@@ -24,7 +24,7 @@ const XP_TABLE_PASSIVE = [1500, 3000, 6000, 9000, 18000, 30000, 60000, 90000, 12
 
 const OCCUPATIONS = [
   { id: 'unemployed', n: 'Unemployed', pts: 8, sk: {}, desc: 'No particular skills, but plenty of points to spend on traits.' },
-  { id: 'police', n: 'Police Officer', pts: -4, sk: { Aiming: 3, Reloading: 2, Nimble: 1 }, gear: ['PoliceShirt', 'PolicePants', 'Boots', 'PoliceCap'], desc: 'Trained with firearms.' },
+  { id: 'police', n: 'Police Officer', pts: -4, sk: { Aiming: 3, Reloading: 2, Nimble: 1 }, gear: ['PoliceShirt', 'PolicePants', 'Boots', 'PoliceCap', 'Holster'], desc: 'Trained with firearms.' },
   { id: 'fireofficer', n: 'Fire Officer', pts: 0, sk: { Axe: 1, Fitness: 1, Sprinting: 1, Strength: 1 }, desc: 'Fit, strong and handy with an axe.' },
   { id: 'ranger', n: 'Park Ranger', pts: -4, sk: { Axe: 1, Carpentry: 1, Foraging: 2 }, desc: 'Knows the woods.' },
   { id: 'construction', n: 'Construction Worker', pts: -2, sk: { ShortBlunt: 3, Carpentry: 1 }, gear: ['HardHat', 'Boots'], desc: 'Swings a hammer like nobody else.' },

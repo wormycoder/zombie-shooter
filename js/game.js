@@ -109,6 +109,7 @@ const Game = {
     const coldStart = Season.tree === 'b' || Season.tree === 's';
     if (coldStart) addWear(R.pick(['WinterCoat', 'Hoodie', 'Sweater'])); else if (R.chance(0.4)) addWear('Hoodie');
     addWear('DigitalWatch');
+    addWear('Belt');
     if (Player.hasTrait('shortsighted')) addWear('Glasses');
     const key = Items.make('HouseKey', { set: { keyId: home.keyId, keyName: 'Key to your house' } });
     p.inv.push(key);
@@ -681,6 +682,7 @@ const Save = {
     p.inCar = p.inCar ? G.cars.find(c => c.id === p.inCar) || null : null;
     p.action = null; p.queue = []; p.halo = []; p.fovT = 0;
     for (const sk in SKILL_NAMES) if (!p.skills[sk]) p.skills[sk] = { lv: 0, xp: 0 };
+    if (!p.att) Hotbar.migrate(p);
     G.player = p;
     G.speed = 1; G.paused = false; G.corpse = false; G.build = null; G.hover = null;
     Combat.projs = []; Combat.sources = []; Fx.parts = []; Fx.fires = []; Fx.floats = [];

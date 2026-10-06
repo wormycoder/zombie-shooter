@@ -297,8 +297,8 @@ const Menu = {
       ['Right click (tap)', 'Context menu on doors, windows, furniture, ground'], ['E', 'Open doors & windows, climb, enter/exit cars, loot'],
       ['F', 'Toggle flashlight / headlights'], ['Q', 'Shout (attracts zombies) / horn'], ['Z', 'Sit down and rest'], ['V', 'Radial menu: vehicle controls / quick actions'],
       ['I or Tab', 'Inventory & loot'], ['H', 'Health'], ['B', 'Crafting & building'], ['K', 'Character & skills'], ['M', 'Map'],
-      ['1 - 5', 'Hotbar'], ['Mouse wheel', 'Zoom'], ['P / , / .', 'Pause / slower / faster time'], ['Esc', 'Menu / cancel'],
-      ['Shift + click item', 'Quick transfer'], ['Double-click item', 'Use / equip / take'], ['Drag item', 'Move between containers'],
+      ['1 - 4', 'Hotbar: draw or put away the item in that slot'], ['Mouse wheel', 'Zoom'], ['P / , / .', 'Pause / slower / faster time'], ['Esc', 'Menu / cancel'],
+      ['Ctrl + click item', 'Add to / remove from the selection'], ['Shift + click item', 'Select a range of items'], ['Double-click item', 'Use / equip / take'], ['Drag items', 'Move between containers, onto a hotbar slot, or onto the world to drop them'],
     ];
   },
   controls(inGame) {

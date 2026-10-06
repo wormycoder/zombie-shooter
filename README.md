@@ -14,7 +14,8 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Seasons: pick a start month — autumn foliage, bare winter trees, snow cover and snowfall, shorter winter days, cold unheated houses, frost that kills crops
 - Zombies that see and hear, shamble, lunge, thump doors, smash and climb through windows, climb fences, get knocked down, crawl, and play dead
 - Moodles (hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, wetness, temperature...), body-part injuries incl. fractures & splints, infection and reanimation
-- Inventory with weight, bags, containers, timed actions, drag & drop; loot tables per room/store type
+- Project Zomboid-style inventory: player and loot windows with container buttons down the side, sortable Type / Category / Weight columns, collapsible stacks, multi-select (Ctrl / Shift + click), markers for held, worn, hotbar and favorite items, Loot all / Transfer all, drag & drop between containers, onto the hotbar or onto the world to drop; weight, bags, timed actions; loot tables per room/store type
+- Hotbar built from what you wear: a long weapon slung on your back, two belt slots for small weapons, tools and a flashlight, a holster for a pistol; number keys draw and put away, and the gear shows on your 3D character
 - Melee & firearms, shoving & stomping, weapon durability, skills & XP, skill books, occupations & traits
 - Barricading, carpentry & building, moving furniture (pick up beds, shelves, fridges... and place them with rotation), crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
 - Detailed towns: house facades (clapboard, vinyl, brick, stucco, log, metal siding, trim, shutters, window boxes, porch lanterns, house numbers), shingled and metal roofs with chimneys, antennas and snow, store fronts with awnings and neon signs; streets with power lines, traffic lights, stop and street-name signs, hydrants, bus stops, payphones, newspaper boxes, gas station canopies, parking lots, abandoned traffic jams and roadblocks
@@ -27,5 +28,5 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Save/load (permadeath)
 
 ## Controls
-WASD move · Shift run · Alt/X sprint · C sneak · hold Right mouse aim · Left click attack · Space shove/stomp · R reload ·
+WASD move · Shift run · Alt/X sprint · C sneak · hold Right mouse aim · Left click attack · Space shove/stomp · R reload · 1-4 hotbar ·
 Right-click (tap) context menu · E interact · F flashlight · Q shout · V radial menu · I inventory · H health · B crafting · K skills · M map · Esc menu

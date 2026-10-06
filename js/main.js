@@ -33,7 +33,7 @@ Input.handleGameKeys = function () {
     return;
   }
   if (p.inCar) return;
-  for (let i = 0; i < 5; i++) if (Input.hit(String(i + 1))) UI.useHotbar(i);
+  for (let i = 0; i < 9; i++) if (Input.hit(String(i + 1))) UI.useHotbar(i);
   if (Input.hit('e')) Interact.interactFront();
   if (Input.hit('f')) {
     let fl = [Player.primary(), Player.secondary()].find(it => it && ITEMS[it.id].light);

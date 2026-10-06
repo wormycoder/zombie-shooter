@@ -247,6 +247,8 @@ Cl('Gloves', 'Winter Gloves', 0.1, ['gloves', '#3a3a3a'], { slot: 'gloves', cove
 Cl('LeatherGloves', 'Leather Gloves', 0.2, ['gloves', '#4a3020'], { slot: 'gloves', cover: ['hands'], sc: 45, bi: 20, ins: 0.2, cols: ['#4a3020', '#202020'] });
 Cl('Scarf', 'Scarf', 0.1, ['scarf', '#8a2a2a'], { slot: 'neck', cover: ['neck'], sc: 25, bi: 10, ins: 0.2, cols: ['#8a2a2a', '#2a4a7a', '#c0a040', '#3a6a3a'] });
 Cl('Glasses', 'Glasses', 0.05, ['glasses', '#303030'], { slot: 'eyes', cover: [], sc: 0, bi: 0, ins: 0, cols: ['#303030'] });
+Cl('Belt', 'Belt', 0.2, ['belt', '#5a3a20', '#c8b060'], { slot: 'waist', cover: [], sc: 0, bi: 0, ins: 0, attach: ['beltL', 'beltR'], cols: ['#5a3a20', '#2a2420', '#7a5a3a'], desc: 'Two hotbar slots on the hips for small weapons, tools and a flashlight.' });
+Cl('Holster', 'Belt Holster', 0.3, ['holster', '#2a2220', '#8a7a5a'], { slot: 'holster', cover: [], sc: 0, bi: 0, ins: 0, attach: ['holster'], cols: ['#2a2220', '#4a3020'], desc: 'A hotbar slot for a pistol or revolver.' });
 Cl('DigitalWatch', 'Digital Watch', 0.05, ['watch', '#202020', '#80c080'], { slot: 'wrist', cover: [], sc: 0, bi: 0, ins: 0, watch: true, cols: ['#202020'] });
 
 // ----- BAGS --------------------------------------------------------------
@@ -372,7 +374,7 @@ const Items = {
     const lines = [];
     lines.push('Weight: ' + U.fmt2(this.weight(it)));
     if (d.carPart && d.size) lines.push('Size: ' + (d.size === 'heavy' ? 'Heavy' : 'Regular') + (it.pc !== undefined && it.id !== 'EngineParts' ? ' · Condition ' + Math.round(it.pc) + '%' : ''));
-    if (d.desc && (d.carPart || d.tags.includes('lugwrench') || d.tags.includes('jack'))) lines.push(d.desc);
+    if (d.desc && (d.carPart || d.attach || d.tags.includes('lugwrench') || d.tags.includes('jack'))) lines.push(d.desc);
     if (d.wpn) {
       lines.push('Condition: ' + Math.max(0, it.cond) + '/' + d.wpn.cond);
       lines.push('Damage: ' + d.wpn.dmg[0] + ' - ' + d.wpn.dmg[1]);

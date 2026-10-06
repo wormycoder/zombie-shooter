@@ -27,10 +27,7 @@ const UI = {
       const s = +b.dataset.speed;
       if (s === 0) G.paused = !G.paused; else { G.paused = false; if (!G.player.asleep) G.speed = s; }
     });
-    $('#equip').addEventListener('click', (e) => {
-      const s = e.target.closest('[data-hot]');
-      if (s) this.useHotbar(+s.dataset.hot);
-    });
+    this.bindHotbar();
     $('#equip').addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const s = e.target.closest('[data-slot]');
@@ -45,6 +42,38 @@ const UI = {
     });
     $('#moodles').addEventListener('mouseleave', () => this.hideTip());
     window.addEventListener('mousemove', (e) => { Input.overUI = e.target !== Render.cv; });
+  },
+  bindHotbar() {
+    const hb = $('#hotbar');
+    hb.addEventListener('click', (e) => { const s = e.target.closest('[data-hs]'); if (s) Hotbar.use(s.dataset.hs); });
+    hb.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const s = e.target.closest('[data-hs]');
+      if (!s) return;
+      const slot = s.dataset.hs, it = Hotbar.item(slot);
+      if (!it) return;
+      this.showContext(e.clientX, e.clientY, [
+        { label: it.equipped ? 'Put away' : 'Equip', fn: () => Hotbar.use(slot) },
+        { label: 'Detach from ' + HOTBAR_SLOTS[slot].n.toLowerCase(), fn: () => Hotbar.detach(slot) },
+        { label: Items.name(it), info: true },
+      ]);
+    });
+    hb.addEventListener('mousemove', (e) => {
+      const s = e.target.closest('[data-hs]');
+      if (!s) { this.hideTip(); return; }
+      const slot = s.dataset.hs, it = Hotbar.item(slot), S = HOTBAR_SLOTS[slot], k = Hotbar.slots().indexOf(slot) + 1;
+      this.showTip(e.clientX, e.clientY, it ? `<b>${U.esc(Items.name(it))}</b><br>${S.n}${it.equipped ? ' · in your hands' : ''}<br><span class="sml">Press ${k} or click to ${it.equipped ? 'put it back' : 'draw it'}. Right-click to detach.</span>` : `<b>${S.n}</b><br><span class="sml">Empty. Drag ${S.what} here from the inventory.</span>`);
+    });
+    hb.addEventListener('mouseleave', () => this.hideTip());
+    hb.addEventListener('dragover', (e) => { if (this.drag && e.target.closest('[data-hs]')) e.preventDefault(); });
+    hb.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const s = e.target.closest('[data-hs]'), dr = this.drag;
+      this.drag = null;
+      if (!s || !dr) return;
+      const it = this.dragItems(dr)[0];
+      if (it) this.attachItem(it, s.dataset.hs);
+    });
   },
   sideIcon(g, k) {
     g.strokeStyle = '#d8d0c0'; g.fillStyle = '#d8d0c0'; g.lineWidth = 2; g.lineJoin = 'round';
@@ -140,28 +169,37 @@ const UI = {
       return `<div class="eslot" data-slot="${k}" title="${U.esc(Items.name(it))}"><img src="${Icons.url(it)}">${bar}${ammo}<span class="lbl">${label}</span></div>`;
     };
     const pr = Player.primary(), se = Player.secondary();
-    let html = slot(pr, 'p', 'Primary') + (pr && pr === se ? '' : slot(se, 's', 'Secondary'));
-    html += '<div class="hotbar">';
-    for (let i = 0; i < 5; i++) {
-      const it = p.hotbar[i] ? Player.find(x => x.uid === p.hotbar[i]) : null;
-      html += `<div class="hslot" data-hot="${i}">${it ? `<img src="${Icons.url(it)}" title="${U.esc(Items.name(it))}">` : ''}<span>${i + 1}</span></div>`;
-    }
-    html += '</div>';
+    let html = slot(pr, 'p', pr && pr === se ? 'Both hands' : 'Primary') + (pr && pr === se ? '' : slot(se, 's', 'Secondary'));
     const wt = Player.weight(), cap = Player.capacity();
     html += `<div class="estat"><span class="${wt > cap ? 'bad' : ''}">${U.fmt1(wt)} / ${U.fmt1(cap)} kg</span> · Kills: ${p.kills} · Day ${Game.day() + 1}</div>`;
     if (html !== this._eq) { $('#equip').innerHTML = html; this._eq = html; }
+    this.renderHotbar();
+  },
+  // PZ-style hotbar: one slot per attachment point on the worn gear, bottom centre
+  renderHotbar() {
+    const p = G.player, el = $('#hotbar');
+    if (!el || !p) return;
+    Hotbar.prune();
+    if (p.inCar || p.dead) { if (this._hb !== '') { el.innerHTML = ''; this._hb = ''; el.classList.add('hidden'); } return; }
+    let html = '';
+    Hotbar.slots().forEach((s, i) => {
+      const it = Hotbar.item(s);
+      html += `<div class="hs ${it ? 'full' : ''} ${it && it.equipped ? 'inhand' : ''}" data-hs="${s}"><span class="hk">${i + 1}</span>${it ? `<img src="${Icons.url(it)}">` : ''}<span class="hl">${HOTBAR_SLOTS[s].short}</span></div>`;
+    });
+    if (html !== this._hb) { el.innerHTML = html; this._hb = html; el.classList.remove('hidden'); }
   },
   useHotbar(i) {
-    const p = G.player;
-    const it = p.hotbar[i] ? Player.find(x => x.uid === p.hotbar[i]) : null;
-    if (!it) return;
-    const d = ITEMS[it.id];
-    if (d.cat === 'Food' && !d.fluid) Actions.queue(Actions.eat(it));
-    else if (d.fluid) Actions.queue(Actions.drink(it));
-    else if (d.pill) Actions.queue(Actions.pills(it));
-    else if (it.equipped) Player.unequip(it);
-    else Player.equip(it, d.light || (d.bag && d.bag.hand && !d.wpn) ? 'secondary' : 'primary');
-    this.refresh();
+    const s = Hotbar.slots()[i];
+    if (s) Hotbar.use(s);
+  },
+  // attach an item dragged or picked from anywhere in reach (loot comes into the main inventory first)
+  attachItem(it, slot) {
+    const src = this.containerOfItem(it);
+    if (!Hotbar.fits(it, slot)) { Player.say("That won't fit there.", '#ccc'); return; }
+    if (src && src.kind !== 'inv' && src.kind !== 'bag') {
+      Actions.queue(Actions.transfer(it, src, Cont.inv()));
+      Actions.queue({ name: '', dur: 0, done: () => { if (G.player.inv.includes(it)) Hotbar.attach(it, slot); }, anim: 'work' });
+    } else Hotbar.attach(it, slot);
   },
 
   // ------------------------------------------------------------------ panels
@@ -231,23 +269,34 @@ const UI = {
     const key = Interact.nearby().map(c => c.key + ':' + c.items.length).join('|');
     if (key !== this._lootKey) { this._lootKey = key; this.renderPanel('loot'); }
   },
-  // ---------------- container lists
+  // ---------------- container lists (PZ style: list with sortable columns, container buttons down the right edge)
   renderContainers(P, conts, mine) {
     P.conts = conts;
     if (!P.tab || !conts.find(c => c.key === P.tab)) {
       const ne = !mine ? conts.find(c => c.items.length && c.kind !== 'floor') || conts.find(c => c.items.length) : null;
       P.tab = (ne || conts[0] || {}).key;
     }
+    if (!P.exp) P.exp = new Set();
+    if (!P.sel) P.sel = new Set();
     const cur = conts.find(c => c.key === P.tab);
     const tabs = conts.map(c => {
       const ic = c.kind === 'inv' ? 'inv' : c.kind === 'bag' ? null : c.kind;
       const img = c.kind === 'bag' ? `<img src="${Icons.url(c.bag)}">` : `<canvas width="26" height="26" data-cic="${ic}${c.kind === 'obj' ? ':' + c.obj.t : ''}"></canvas>`;
       return `<div class="tab ${c.key === P.tab ? 'on' : ''}" data-tab="${c.key}" title="${U.esc(c.name)}">${img}${c.items.length ? '' : '<i class="empty"></i>'}</div>`;
     }).join('');
-    let head = '', list = '';
+    let head = '', cols = '', list = '';
+    P.rows = [];
     if (cur) {
-      const w = Cont.weight(cur), cap = Cont.cap(cur);
-      head = `<div class="ihead"><span class="cn">${U.esc(cur.name)}</span><span class="cw ${w > cap ? 'bad' : ''}">${U.fmt1(w)}${cap < 9999 ? ' / ' + U.fmt1(cap) : ''}</span>${!mine && cur.items.length ? '<span class="btn sm" data-act="lootall">Loot all</span>' : ''}${mine && cur.kind === 'inv' ? '' : ''}</div>`;
+      // the main inventory is measured against what you can carry without being weighed down
+      const w = Cont.weight(cur), cap = cur.kind === 'inv' ? Player.capacity() : Cont.cap(cur), lim = cap < 9999;
+      const loot = this.panels.loot;
+      const xfer = mine && loot && loot.open && loot.conts && loot.conts.find(c => c.key === loot.tab);
+      const acts = !mine ? (cur.items.length ? '<span class="btn xs" data-act="lootall" title="Take everything">Loot all</span>' : '')
+        : (xfer && cur.items.length ? `<span class="btn xs" data-act="xferall" title="Move everything you are not wearing, holding, carrying on the hotbar or keeping as a favorite into ${U.esc(xfer.name)}">Transfer all</span>` : '');
+      head = `<div class="ihead"><span class="cn">${U.esc(cur.name)}</span>${acts}<span class="cw ${w > cap ? 'bad' : ''}">${U.fmt1(w)}${lim ? ' / ' + U.fmt1(cap) : ''}</span></div>`;
+      if (lim) { const k = Math.min(1, w / cap); head += `<div class="capbar"><i class="${w > cap ? 'over' : k > 0.85 ? 'hi' : ''}" style="width:${(k * 100).toFixed(1)}%"></i></div>`; }
+      const sk = P.sort || 'cat', dir = P.sdir || 1, ar = (k) => sk === k ? (dir > 0 ? ' ▴' : ' ▾') : '';
+      cols = `<div class="icols"><span class="c-type" data-sort="name">Type${ar('name')}</span><span class="c-cat" data-sort="cat">Category${ar('cat')}</span><span class="c-wt" data-sort="wt">Weight${ar('wt')}</span></div>`;
       const groups = new Map();
       for (const it of cur.items) {
         const k = Items.stackKey(it);
@@ -256,101 +305,217 @@ const UI = {
         g.items.push(it);
       }
       P.groups = groups;
-      const sorted = [...groups.values()].sort((a, b) => {
-        const A = a.items[0], B = b.items[0];
-        const wa = (A.equipped || A.worn) ? 0 : 1, wb = (B.equipped || B.worn) ? 0 : 1;
-        if (wa !== wb) return wa - wb;
-        const ca = ITEMS[A.id].cat, cb = ITEMS[B.id].cat;
-        if (ca !== cb) return ca < cb ? -1 : 1;
-        return Items.name(A) < Items.name(B) ? -1 : 1;
+      const pinned = (it) => (it.equipped || it.worn) ? 0 : 1;
+      const sorted = [...groups.values()].sort((A0, B0) => {
+        const A = A0.items[0], B = B0.items[0];
+        if (mine && pinned(A) !== pinned(B)) return pinned(A) - pinned(B);
+        let r = 0;
+        if (sk === 'cat') r = ITEMS[A.id].cat < ITEMS[B.id].cat ? -1 : ITEMS[A.id].cat > ITEMS[B.id].cat ? 1 : 0;
+        else if (sk === 'wt') r = Items.weight(A) * A0.items.length - Items.weight(B) * B0.items.length;
+        if (!r) r = Items.name(A) < Items.name(B) ? -1 : Items.name(A) > Items.name(B) ? 1 : 0;
+        return r * dir;
       });
-      list = sorted.map(g => this.rowHtml(g, cur)).join('') || '<div class="emptyl">Empty</div>';
+      // drop stale selections
+      const live = new Set(cur.items.map(it => it.uid));
+      for (const u of [...P.sel]) if (!live.has(u)) P.sel.delete(u);
+      let n = 0;
+      for (const g of sorted) {
+        const open = g.items.length > 1 && P.exp.has(g.key);
+        list += this.rowHtml(g, null, open, n++ & 1, P);
+        P.rows.push({ g: g.key, u: null });
+        if (open) for (const it of g.items) { list += this.rowHtml(g, it, false, n++ & 1, P); P.rows.push({ g: g.key, u: it.uid }); }
+      }
+      if (!list) list = '<div class="emptyl">Empty</div>';
     }
-    const scroll = P.body.querySelector('.ilist') ? P.body.querySelector('.ilist').scrollTop : 0;
-    P.body.innerHTML = `<div class="inv"><div class="tabs">${tabs}</div><div class="iwrap">${head}<div class="ilist" data-cont="${cur ? cur.key : ''}">${list}</div></div></div>`;
+    const ol = P.body.querySelector('.ilist'), scroll = ol ? ol.scrollTop : 0;
+    P.body.innerHTML = `<div class="inv"><div class="iwrap">${head}${cols}<div class="ilist" data-cont="${cur ? cur.key : ''}">${list}</div></div><div class="tabs">${tabs}</div></div>`;
     P.body.querySelector('.ilist').scrollTop = scroll;
     for (const c of P.body.querySelectorAll('canvas[data-cic]')) ContIcons.draw(c.getContext('2d'), c.dataset.cic);
     P.el.querySelector('.pt').textContent = mine ? 'Inventory' : (cur ? cur.name : 'Loot');
   },
-  rowHtml(g, cont) {
-    const it = g.items[0], d = ITEMS[it.id];
-    const n = g.items.length;
-    let badge = '';
-    if (it.equipped) badge = '<span class="bdg eq">' + (it.equipped === 'both' ? 'Both hands' : it.equipped === 'primary' ? 'Primary' : 'Secondary') + '</span>';
-    if (it.worn) badge = '<span class="bdg wo">Worn</span>';
+  // a stack row (it = null) or one item of an expanded stack
+  rowHtml(g, one, open, odd, P) {
+    const it = one || g.items[0], d = ITEMS[it.id];
+    const n = one ? 1 : g.items.length, items = one ? [one] : g.items;
+    const sel = items.every(x => P.sel.has(x.uid));
+    // gutter marks: in hand, worn, on the hotbar, favorite
+    let gut = '';
+    const eq = items.find(x => x.equipped), wo = items.find(x => x.worn), at = G.player && items.map(x => Hotbar.slotOf(x)).find(Boolean), fv = items.some(x => x.fav);
+    if (eq) gut += `<i class="gi eq" title="${eq.equipped === 'both' ? 'In both hands' : eq.equipped === 'primary' ? 'In primary hand' : 'In secondary hand'}">${eq.equipped === 'both' ? '2H' : eq.equipped === 'primary' ? 'P' : 'S'}</i>`;
+    if (wo) gut += '<i class="gi wo" title="Worn">W</i>';
+    if (at) gut += `<i class="gi at" title="On the hotbar: ${HOTBAR_SLOTS[at].n}">${Hotbar.slots().indexOf(at) + 1}</i>`;
+    if (fv) gut += '<i class="gi fv" title="Favorite">★</i>';
     const fs = Items.freshState(it);
-    const cls = fs === 2 ? 'rotten' : fs === 1 ? 'stale' : '';
+    const cls = (fs === 2 ? 'rotten' : fs === 1 ? 'stale' : '') + (sel ? ' sel' : '') + (odd ? ' odd' : '') + (one ? ' child' : '');
     let bar = '';
-    if (d.wpn || d.gun) bar = `<div class="cbar"><i style="width:${Math.max(0, it.cond / (d.wpn || d.gun).cond * 100)}%"></i></div>`;
-    else if (d.fluid) bar = `<div class="cbar fl"><i style="width:${it.fl / d.fluid * 100}%"></i></div>`;
-    else if (d.gas !== undefined) bar = `<div class="cbar gs"><i style="width:${it.fl / d.gas * 100}%"></i></div>`;
-    else if (d.power !== undefined) bar = `<div class="cbar pw"><i style="width:${it.pow * 100}%"></i></div>`;
-    else if (d.uses && n === 1) bar = `<div class="cbar us"><i style="width:${it.uses / d.uses * 100}%"></i></div>`;
-    else if (it.readP) bar = `<div class="cbar fl"><i style="width:${it.readP * 100}%"></i></div>`;
+    if (n === 1 || one) {
+      if (d.wpn || d.gun) bar = `<div class="cbar"><i style="width:${Math.max(0, it.cond / (d.wpn || d.gun).cond * 100)}%"></i></div>`;
+      else if (d.fluid) bar = `<div class="cbar fl"><i style="width:${it.fl / d.fluid * 100}%"></i></div>`;
+      else if (d.gas !== undefined) bar = `<div class="cbar gs"><i style="width:${it.fl / d.gas * 100}%"></i></div>`;
+      else if (d.power !== undefined) bar = `<div class="cbar pw"><i style="width:${it.pow * 100}%"></i></div>`;
+      else if (d.uses) bar = `<div class="cbar us"><i style="width:${it.uses / d.uses * 100}%"></i></div>`;
+      else if (it.readP) bar = `<div class="cbar fl"><i style="width:${it.readP * 100}%"></i></div>`;
+    }
+    const exp = !one && n > 1 ? `<span class="exp" data-exp="1">${open ? '▾' : '▸'}</span>` : '<span class="exp"></span>';
     const w = n * Items.weight(it);
-    return `<div class="row ${cls}" draggable="true" data-g="${U.esc(g.key)}"><img src="${Icons.url(it)}"><span class="nm">${U.esc(Items.name(it))}${n > 1 ? ' <b>×' + n + '</b>' : ''}${badge}</span>${bar}<span class="ct">${d.cat}</span><span class="wt">${U.fmt2(w)}</span></div>`;
+    return `<div class="row ${cls}" draggable="true" data-g="${U.esc(g.key)}"${one ? ` data-u="${one.uid}"` : ''}><span class="gut">${gut}</span>${exp}<img src="${Icons.url(it)}"><span class="nm">${U.esc(Items.name(it))}${n > 1 ? ' <b>(' + n + ')</b>' : ''}</span>${bar}<span class="ct">${d.cat}</span><span class="wt">${U.fmt2(w)}</span></div>`;
+  },
+  paintSel(P) {
+    for (const row of P.body.querySelectorAll('.row')) {
+      const items = this.rowItems(P, row);
+      row.classList.toggle('sel', items.length > 0 && items.every(x => P.sel.has(x.uid)));
+    }
+  },
+  // the items a row stands for
+  rowItems(P, row) {
+    const g = P.groups && P.groups.get(row.dataset.g);
+    if (!g) return [];
+    if (row.dataset.u !== undefined) { const it = g.items.find(x => x.uid === +row.dataset.u); return it ? [it] : []; }
+    return g.items.slice();
+  },
+  // items a drag carries, still in their source container
+  dragItems(dr) {
+    const src = this.panels[dr.from], from = src && src.conts && src.conts.find(c => c.key === dr.tab);
+    if (!from) return [];
+    return dr.uids.map(u => from.items.find(x => x.uid === u)).filter(Boolean);
+  },
+  dragFrom(dr) { const src = this.panels[dr.from]; return src && src.conts ? src.conts.find(c => c.key === dr.tab) : null; },
+  selected(P) {
+    const cur = P.conts && P.conts.find(c => c.key === P.tab);
+    return cur ? cur.items.filter(it => P.sel.has(it.uid)) : [];
   },
   bindPanel(P) {
     const body = P.body;
     body.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-tab]');
-      if (tab) { P.tab = tab.dataset.tab; this.renderPanel(P.k); return; }
+      if (tab) { P.tab = tab.dataset.tab; P.sel && P.sel.clear(); this.renderPanel(P.k); return; }
       const act = e.target.closest('[data-act]');
       if (act) { this.panelAction(P, act.dataset.act, act); return; }
+      const so = e.target.closest('[data-sort]');
+      if (so) { const k = so.dataset.sort; if (P.sort === k || (!P.sort && k === 'cat')) P.sdir = -(P.sdir || 1); else { P.sort = k; P.sdir = 1; } this.renderPanel(P.k); return; }
       const row = e.target.closest('.row');
-      if (row && e.shiftKey && P.groups) {
-        const g = P.groups.get(row.dataset.g);
-        const cur = P.conts.find(c => c.key === P.tab);
-        this.quickMove(g, cur, P.k);
+      if (!row || !P.groups) return;
+      if (e.target.closest('[data-exp]')) { const k = row.dataset.g; if (P.exp.has(k)) P.exp.delete(k); else P.exp.add(k); this.renderPanel(P.k); return; }
+      // selection: click selects, ctrl toggles, shift selects a range
+      const idx = P.rows.findIndex(r => r.g === row.dataset.g && String(r.u === null ? '' : r.u) === (row.dataset.u || ''));
+      const items = this.rowItems(P, row);
+      if (e.shiftKey && P.anchor !== undefined && P.anchor >= 0) {
+        if (!e.ctrlKey && !e.metaKey) P.sel.clear();
+        const [i0, i1] = [Math.min(P.anchor, idx), Math.max(P.anchor, idx)];
+        for (let i = i0; i <= i1; i++) {
+          const r = P.rows[i], g = P.groups.get(r.g);
+          if (!g) continue;
+          for (const x of r.u === null ? g.items : g.items.filter(y => y.uid === r.u)) P.sel.add(x.uid);
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        const all = items.every(x => P.sel.has(x.uid));
+        for (const x of items) { if (all) P.sel.delete(x.uid); else P.sel.add(x.uid); }
+        P.anchor = idx;
+      } else {
+        P.sel.clear();
+        for (const x of items) P.sel.add(x.uid);
+        P.anchor = idx;
       }
+      // restyle in place: rebuilding the list here would swallow the second click of a double-click
+      this.paintSel(P);
     });
     body.addEventListener('dblclick', (e) => {
       const row = e.target.closest('.row');
-      if (!row || !P.groups) return;
-      const g = P.groups.get(row.dataset.g);
+      if (!row || !P.groups || e.target.closest('[data-exp]')) return;
+      const items = this.rowItems(P, row);
       const cur = P.conts.find(c => c.key === P.tab);
-      if (g) this.defaultAction(g.items[0], cur, g, P.k);
+      if (items.length) this.defaultAction(items[0], cur, { items, key: row.dataset.g }, P.k);
     });
     body.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const row = e.target.closest('.row');
       if (!row || !P.groups) return;
-      const g = P.groups.get(row.dataset.g);
       const cur = P.conts.find(c => c.key === P.tab);
-      if (g) this.itemMenu(e.clientX, e.clientY, g.items[0], cur, g);
+      let items = this.rowItems(P, row);
+      if (!items.length) return;
+      // right-click inside a multi-selection acts on all of it
+      const sel = this.selected(P);
+      if (sel.length > 1 && items.every(x => P.sel.has(x.uid)) && sel.some(x => Items.stackKey(x) !== row.dataset.g)) { this.selMenu(e.clientX, e.clientY, P, sel, cur); return; }
+      if (!items.every(x => P.sel.has(x.uid))) { P.sel.clear(); for (const x of items) P.sel.add(x.uid); this.paintSel(P); }
+      this.itemMenu(e.clientX, e.clientY, items[0], cur, { items, key: row.dataset.g });
     });
     body.addEventListener('mousemove', (e) => {
       const row = e.target.closest('.row');
       if (row && P.groups) {
-        const g = P.groups.get(row.dataset.g);
-        if (g) { const it = g.items[0]; this.showTip(e.clientX, e.clientY, `<b>${U.esc(Items.name(it))}</b><br>${Items.description(it).map(U.esc).join('<br>')}`); return; }
+        const it = this.rowItems(P, row)[0];
+        if (it) {
+          const at = Hotbar.slotOf(it), extra = [];
+          if (at) extra.push('On the hotbar: ' + HOTBAR_SLOTS[at].n);
+          if (it.fav) extra.push('Favorite');
+          this.showTip(e.clientX, e.clientY, `<b>${U.esc(Items.name(it))}</b><br>${Items.description(it).concat(extra).map(U.esc).join('<br>')}`);
+          return;
+        }
       }
-      const part = e.target.closest('[data-part]');
-      if (part) return;
       this.hideTip();
     });
     body.addEventListener('mouseleave', () => this.hideTip());
     body.addEventListener('dragstart', (e) => {
       const row = e.target.closest('.row');
-      if (!row) return;
-      this.drag = { from: P.k, g: row.dataset.g, tab: P.tab };
+      if (!row || !P.groups) return;
+      let items = this.rowItems(P, row);
+      // dragging a selected row carries the whole selection
+      if (items.every(x => P.sel.has(x.uid))) items = this.selected(P);
+      this.drag = { from: P.k, tab: P.tab, uids: items.map(x => x.uid) };
       e.dataTransfer.setData('text/plain', 'item');
       e.dataTransfer.effectAllowed = 'move';
     });
+    body.addEventListener('dragend', () => { setTimeout(() => { this.drag = null; }, 0); });
     P.el.addEventListener('dragover', (e) => { if (this.drag) e.preventDefault(); });
     P.el.addEventListener('drop', (e) => {
       e.preventDefault();
       const dr = this.drag; this.drag = null;
-      if (!dr) return;
-      const src = this.panels[dr.from];
-      const g = src.groups && src.groups.get(dr.g);
-      const from = src.conts && src.conts.find(c => c.key === dr.tab);
-      if (!g || !from || !P.conts) return;
+      if (!dr || !P.conts) return;
+      const from = this.dragFrom(dr), items = this.dragItems(dr);
+      if (!from || !items.length) return;
       const tabEl = e.target.closest('[data-tab]');
       const to = P.conts.find(c => c.key === (tabEl ? tabEl.dataset.tab : P.tab));
       if (!to || to.key === from.key) return;
-      for (const it of g.items) Actions.queue(Actions.transfer(it, from, to));
+      this.moveItems(items, from, to);
     });
+    // items dragged out of the windows onto the world land on the floor at your feet
+    if (!this.worldDrop) {
+      this.worldDrop = true;
+      Render.cv.addEventListener('dragover', (e) => { if (this.drag) e.preventDefault(); });
+      Render.cv.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const dr = this.drag; this.drag = null;
+        if (!dr) return;
+        const from = this.dragFrom(dr), items = this.dragItems(dr), p = G.player;
+        if (!from || !items.length || from.kind === 'floor') return;
+        this.moveItems(items, from, Cont.floor(Math.floor(p.x), Math.floor(p.y)));
+      });
+    }
+  },
+  // queue transfers, skipping what is worn or held unless it is a single item the player chose
+  moveItems(items, from, to) {
+    const mine = from.kind === 'inv' || from.kind === 'bag';
+    const list = mine && items.length > 1 ? items.filter(it => !it.worn && !it.equipped) : items;
+    for (const it of list) Actions.queue(Actions.transfer(it, from, to));
+  },
+  // context menu for a multi-item selection
+  selMenu(x, y, P, items, cont) {
+    const p = G.player, mine = cont.kind === 'inv' || cont.kind === 'bag', n = items.length;
+    const opts = [];
+    const loose = items.filter(it => !it.worn && !it.equipped);
+    if (!mine) {
+      opts.push({ label: 'Grab ' + n + ' items', fn: () => this.moveItems(items, cont, Cont.inv()) });
+      for (const b of Player.bags()) opts.push({ label: 'Put ' + n + ' items in ' + Items.name(b), fn: () => this.moveItems(items, cont, Cont.bag(b)) });
+    } else {
+      const loot = this.panels.loot, to = loot && loot.open && loot.conts && loot.conts.find(c => c.key === loot.tab);
+      if (to && to.key !== cont.key) opts.push({ label: 'Transfer ' + loose.length + ' items to ' + to.name, fn: () => this.moveItems(loose, cont, to), disabled: !loose.length });
+      for (const b of Player.bags()) if (!items.includes(b) && cont.bag !== b) opts.push({ label: 'Put ' + loose.length + ' items in ' + Items.name(b), fn: () => this.moveItems(loose, cont, Cont.bag(b)), disabled: !loose.length });
+      if (cont.kind === 'bag') opts.push({ label: 'Move to main inventory', fn: () => this.moveItems(items, cont, Cont.inv()) });
+      opts.push({ label: 'Drop ' + loose.length + ' items', fn: () => this.moveItems(loose, cont, Cont.floor(Math.floor(p.x), Math.floor(p.y))), disabled: !loose.length });
+      const allFav = items.every(it => it.fav);
+      opts.push({ label: allFav ? 'Unfavorite' : 'Favorite', fn: () => { for (const it of items) { if (allFav) delete it.fav; else it.fav = true; } this.refresh(); } });
+    }
+    opts.push({ label: n + ' items selected', info: true });
+    this.showContext(x, y, opts);
   },
   quickMove(g, cur, pk) {
     if (!g || !cur) return;
@@ -361,13 +526,17 @@ const UI = {
       to = loot && loot.open && loot.conts ? loot.conts.find(c => c.key === loot.tab) : Cont.floor(Math.floor(G.player.x), Math.floor(G.player.y));
     }
     if (!to || to.key === cur.key) return;
-    for (const it of g.items) Actions.queue(Actions.transfer(it, cur, to));
+    this.moveItems(g.items, cur, to);
   },
   panelAction(P, act) {
-    if (act === 'lootall') {
-      const cur = P.conts.find(c => c.key === P.tab);
-      if (!cur) return;
-      for (const it of cur.items.slice()) Actions.queue(Actions.transfer(it, cur, Cont.inv()));
+    const cur = P.conts && P.conts.find(c => c.key === P.tab);
+    if (!cur) return;
+    if (act === 'lootall') for (const it of cur.items.slice()) Actions.queue(Actions.transfer(it, cur, Cont.inv()));
+    if (act === 'xferall') {
+      const loot = this.panels.loot, to = loot && loot.open && loot.conts && loot.conts.find(c => c.key === loot.tab);
+      if (!to || to.key === cur.key) return;
+      const keep = (it) => it.worn || it.equipped || it.fav || Hotbar.slotOf(it) || ITEMS[it.id].key || it.keyId !== undefined;
+      for (const it of cur.items.slice()) if (!keep(it)) Actions.queue(Actions.transfer(it, cur, to));
     }
   },
   containerOfItem(it) {
@@ -447,10 +616,15 @@ const UI = {
     }
     if (d.throwable === 'noise' && mine) add('Set alarm and place here', () => { Player.removeItem(it); Combat.sources.push({ x: p.x, y: p.y, t: 45, pulse: 6 }); World.dropItem(p.x, p.y, it); this.refresh(); Player.say('Alarm set.', '#ccc'); });
     if (d.throwable) add('Equip to throw', via(() => Actions.equip(it, 'primary')));
+    if (!it.worn && Hotbar.slots().some(s => Hotbar.fits(it, s))) {
+      const at = mine ? Hotbar.slotOf(it) : null;
+      if (at) add('Detach from ' + HOTBAR_SLOTS[at].n.toLowerCase(), () => Hotbar.detach(at));
+      const sub = Hotbar.slots().filter(s => s !== at && Hotbar.fits(it, s)).map(s => { const o = Hotbar.item(s); return { label: HOTBAR_SLOTS[s].n + (o ? ' (swap out ' + Items.name(o) + ')' : ''), fn: () => this.attachItem(it, s) }; });
+      if (sub.length) add(at ? 'Move on hotbar' : 'Attach to hotbar', null, { sub });
+    }
     if (mine) {
-      const sub = [];
-      for (let i = 0; i < 5; i++) sub.push({ label: 'Slot ' + (i + 1), fn: () => { p.hotbar[i] = it.uid; this.refresh(); } });
-      add('Add to hotbar', null, { sub });
+      const fav = (g ? g.items : [it]).every(x => x.fav);
+      add(fav ? 'Unfavorite' : 'Favorite', () => { for (const x2 of (g ? g.items : [it])) { if (fav) delete x2.fav; else x2.fav = true; } this.refresh(); });
       for (const b of Player.bags()) if (b !== it && !b.items.includes(it)) add('Put in ' + Items.name(b), () => { for (const x2 of (g ? g.items : [it])) Actions.queue(Actions.transfer(x2, cont, Cont.bag(b))); });
       if (cont.kind === 'bag') add('Move to main inventory', () => { for (const x2 of (g ? g.items : [it])) Actions.queue(Actions.transfer(x2, cont, Cont.inv())); });
       add(n > 1 ? 'Drop one' : 'Drop', () => { Actions.queue(Actions.transfer(it, cont, Cont.floor(Math.floor(p.x), Math.floor(p.y)))); });

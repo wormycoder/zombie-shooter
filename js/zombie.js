@@ -35,8 +35,8 @@ const Zombie = {
   outfit(kind, female) {
     const out = [];
     const mk = (id) => { const it = Items.make(id); if (it) { it.worn = ITEMS[id].slot; it.cond = R.f(0.3, 1); if (R.chance(0.6)) it.bloody = true; out.push(it); } };
-    if (kind === 'military') { mk('MilitaryJacket'); mk('CargoPants'); mk('Boots'); if (R.chance(0.3)) mk('HardHat'); return out; }
-    if (kind === 'police') { mk('PoliceShirt'); mk('PolicePants'); mk('Boots'); if (R.chance(0.4)) mk('PoliceCap'); if (R.chance(0.2)) mk('BulletVest'); return out; }
+    if (kind === 'military') { mk('MilitaryJacket'); mk('CargoPants'); mk('Boots'); if (R.chance(0.3)) mk('HardHat'); mk('Belt'); return out; }
+    if (kind === 'police') { mk('PoliceShirt'); mk('PolicePants'); mk('Boots'); if (R.chance(0.4)) mk('PoliceCap'); if (R.chance(0.2)) mk('BulletVest'); mk('Belt'); if (R.chance(0.5)) mk('Holster'); return out; }
     if (kind === 'medic') { mk('Scrubs'); mk('ScrubPants'); mk('Sneakers'); if (R.chance(0.5)) mk('LabCoat'); return out; }
     // people dressed for the weather when they turned
     const cold = Season.tree === 'b' || Season.snow > 0.2 || Season.tree === 's', warm = Season.tree === 'g';
@@ -46,6 +46,7 @@ const Zombie = {
     if (R.chance(0.85)) mk(cold ? R.pick(['Boots', 'Boots', 'Sneakers']) : R.pick(['Sneakers', 'Sneakers', 'Boots', 'DressShoes']));
     if (R.chance(cold ? 0.45 : 0.15)) mk(cold ? R.pick(['Beanie', 'Beanie', 'BaseballCap']) : R.pick(['BaseballCap', 'Beanie']));
     if (cold && R.chance(0.25)) mk(R.pick(['Gloves', 'Scarf']));
+    if (R.chance(0.3)) mk('Belt');
     if (R.chance(0.06)) { const b = Items.make(R.pick(['SchoolBag', 'HikingBag', 'DuffelBag'])); b.worn = 'back'; b.items = Loot.zombiePockets(); out.push(b); }
     return out;
   },

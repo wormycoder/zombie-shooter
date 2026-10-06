@@ -16,7 +16,7 @@ const WOUND = {
 };
 const LEG_PARTS = ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR'];
 const ARM_PARTS = ['UpperArmL', 'UpperArmR', 'ForeArmL', 'ForeArmR', 'HandL', 'HandR'];
-const WEAR_SLOTS = ['hat', 'eyes', 'neck', 'shirt', 'jacket', 'vest', 'gloves', 'pants', 'shoes', 'wrist', 'back', 'belt'];
+const WEAR_SLOTS = ['hat', 'eyes', 'neck', 'shirt', 'jacket', 'vest', 'gloves', 'pants', 'shoes', 'wrist', 'back', 'belt', 'waist', 'holster'];
 const FISTS = { sk: null, dmg: [0.1, 0.25], range: 0.85, arc: 0.6, swing: 0.55, hits: 1, knock: 0.12, crit: 0.05, end: 0.012, model: null };
 
 const Player = {
@@ -26,7 +26,7 @@ const Player = {
       name: o.name, occ: o.occ, traits: o.traits.slice(),
       skills: {}, bookMult: {},
       look: o.look,
-      inv: [], hotbar: [null, null, null, null, null],
+      inv: [], att: {},
       st: { hunger: 0.06, thirst: 0.06, fatigue: 0.1, endurance: 1, panic: 0, stress: 0, boredom: 0, unhappy: 0, foodSick: 0, wet: 0, temp: 37, drunk: 0, smokeT: 0, cold: 0, coldT: 0, painkill: 0, beta: 0, antidep: 0, antibio: 0, poison: 0 },
       body: {}, health: 100, infection: null,
       moveMode: 'walk', sneak: false,
@@ -89,8 +89,8 @@ const Player = {
   },
   unflag(it) {
     delete it.equipped; delete it.worn;
-    const p = G.player;
-    for (let i = 0; i < 5; i++) if (p.hotbar[i] === it.uid) p.hotbar[i] = null;
+    const a = G.player.att;
+    if (a) for (const s in a) if (a[s] === it.uid) delete a[s];
   },
   addItem(it) { G.player.inv.push(it); },
   capacity() { return 8 + this.skill('Strength') * 0.55; },
@@ -198,6 +198,7 @@ const Player = {
     L.vest = vest ? vest.col : null;
     L.gloves = gloves ? gloves.col : null;
     L.glasses = !!w('eyes');
+    L.att = Hotbar.visual();
     return L;
   },
 

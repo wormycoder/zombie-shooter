@@ -242,33 +242,22 @@ const Char3D = {
       if (side > 0) hR = Hp; else hL = Hp;
     }
     // ---- weapon in the right hand, flashlight in the left
-    if (pose.weapon && hR) {
-      const W = WEAPON_MODELS[pose.weapon] || WEAPON_MODELS.generic;
-      const wd = T.norm(arms.wdir || [0.35, 0.1, -0.85]);
-      let sd = [-wd[1], wd[0], 0];
-      if (Math.abs(sd[0]) + Math.abs(sd[1]) < 1e-3) sd = T.mv(Rb, [0, 1, 0]);
-      sd = T.norm(sd);
-      const up = [wd[1] * sd[2] - wd[2] * sd[1], wd[2] * sd[0] - wd[0] * sd[2], wd[0] * sd[1] - wd[1] * sd[0]];
-      const at = (k, a, c) => [hR[0] + wd[0] * k + up[0] * a + sd[0] * c, hR[1] + wd[1] * k + up[1] * a + sd[1] * c, hR[2] + wd[2] * k + up[2] * a + sd[2] * c];
-      const blade = pose.weapon === 'knife' || pose.weapon === 'machete' || pose.weapon === 'katana';
-      // a piece of the weapon from k0 to k1 along it: half width w (sideways) and h (up)
-      const piece = (k0, k1, w, h, col, a) => { const c = at((k0 + k1) / 2, a || 0, 0), l = (k1 - k0) / 2; boxes.push([c, [wd[0] * l, wd[1] * l, wd[2] * l], [sd[0] * w, sd[1] * w, sd[2] * w], [up[0] * h, up[1] * h, up[2] * h], col]); };
-      const k0 = W.w0 * 0.013, k1 = W.w1 * 0.013, col = this.rgb(W.col);
-      const ws = (k) => W.gun ? k * 0.7 : blade ? 0.008 : k, wu = (k) => W.gun ? k * 1.25 : k;
-      if (W.stock) piece(-0.28, 0.02, 0.03, 0.045, this.rgb(W.stock));
-      else if (W.grip) piece(-(W.gripLen || 0.08), 0.02, 0.022, 0.022, this.rgb(W.grip));
-      const g0 = W.stock || W.grip ? 0.02 : -0.08;
-      if (k1 > k0 * 1.3) { const m = (g0 + W.len) / 2; piece(g0, m, ws(k0), wu(k0), col); piece(m, W.len, ws(k1), wu(k1), col); }
-      else piece(g0, W.len, ws((k0 + k1) / 2), wu((k0 + k1) / 2), col);
-      const L = W.len, steel = this.rgb('#9aa2aa');
-      if (W.head === 'axe') piece(L - 0.21, L - 0.03, 0.012, 0.09, steel, 0.11);
-      else if (W.head === 'hammer') piece(L - 0.035, L + 0.035, 0.035, 0.08, this.rgb('#707880'), 0.01);
-      else if (W.head === 'sledge') piece(L - 0.06, L + 0.06, 0.06, 0.12, this.rgb('#606870'));
-      else if (W.head === 'pan') piece(L, L + 0.2, 0.1, 0.016, this.rgb('#303438'));
-      else if (W.head === 'shovel') piece(L - 0.05, L + 0.27, 0.08, 0.012, this.rgb('#80888f'));
-      else if (W.head === 'spear') piece(L, L + 0.16, 0.025, 0.01, this.rgb('#c8ccd0'));
-      else if (W.head === 'club') piece(L - 0.08, L, 0.03, 0.03, this.rgb('#a0a8b0'), -0.02);
-      if (pose.flash && W.gun) piece(L + 0.02, L + 0.14, 0.05, 0.05, [1, 0.85, 0.4]);
+    if (pose.weapon && hR) this.weapon(boxes, pose.weapon, hR, T.norm(arms.wdir || [0.35, 0.1, -0.85]), Rb, pose.flash);
+    // ---- gear on the hotbar: a long weapon slung across the back, tools on the belt, a pistol in the holster
+    if (look.att) for (const [slot, model] of look.att) {
+      const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
+      let hand, wd;
+      if (slot === 'back') {
+        // grip up behind the right shoulder, head down by the left hip
+        wd = T.norm(T.mv(Rb, [0, -0.5, -0.86]));
+        const c = T.add(torsoC, T.mv(Rb, [-(0.105 * bw * (look.jacket ? 1.12 : 1) + (look.bag ? 0.16 : 0) + 0.035), 0, 0.02]));
+        hand = T.add(c, wd.map(v => -v * W.len * 0.5));
+      } else {
+        const side = slot === 'beltL' ? -1 : 1, f = slot === 'holster' ? 0.07 : slot === 'beltR' ? -0.05 : 0;
+        hand = T.add(pel, T.mv(Rb, [f, side * 0.165 * bw, 0.1]));
+        wd = T.norm(T.mv(Rb, [0.18, side * 0.08, -1]));
+      }
+      this.weapon(boxes, model, hand, wd, Rb, false);
     }
     if (pose.offhand && hL) {
       const od = T.mv(Rb, [0.95, -0.05, -0.1]), e = T.add(hL, od.map(v => v * 0.2));
@@ -284,6 +273,34 @@ const Char3D = {
     const RW = lie > 0 ? T.mm(Ry, Rl) : Ry, offW = T.mv(Ry, off);
     for (const b of boxes) { b[0] = T.add(T.mv(RW, b[0]), offW); b[1] = T.mv(RW, b[1]); b[2] = T.mv(RW, b[2]); b[3] = T.mv(RW, b[3]); }
     return boxes;
+  },
+  // a weapon model held at hand, pointing along wd (unit vector)
+  weapon(boxes, key, hand, wd, Rb, flash) {
+    const T = this, W = WEAPON_MODELS[key] || WEAPON_MODELS.generic;
+    let sd = [-wd[1], wd[0], 0];
+    if (Math.abs(sd[0]) + Math.abs(sd[1]) < 1e-3) sd = T.mv(Rb, [0, 1, 0]);
+    sd = T.norm(sd);
+    const up = [wd[1] * sd[2] - wd[2] * sd[1], wd[2] * sd[0] - wd[0] * sd[2], wd[0] * sd[1] - wd[1] * sd[0]];
+    const at = (k, a, c) => [hand[0] + wd[0] * k + up[0] * a + sd[0] * c, hand[1] + wd[1] * k + up[1] * a + sd[1] * c, hand[2] + wd[2] * k + up[2] * a + sd[2] * c];
+    const blade = key === 'knife' || key === 'machete' || key === 'katana';
+    // a piece of the weapon from k0 to k1 along it: half width w (sideways) and h (up)
+    const piece = (k0, k1, w, h, col, a) => { const c = at((k0 + k1) / 2, a || 0, 0), l = (k1 - k0) / 2; boxes.push([c, [wd[0] * l, wd[1] * l, wd[2] * l], [sd[0] * w, sd[1] * w, sd[2] * w], [up[0] * h, up[1] * h, up[2] * h], col]); };
+    const k0 = W.w0 * 0.013, k1 = W.w1 * 0.013, col = this.rgb(W.col);
+    const ws = (k) => W.gun ? k * 0.7 : blade ? 0.008 : k, wu = (k) => W.gun ? k * 1.25 : k;
+    if (W.stock) piece(-0.28, 0.02, 0.03, 0.045, this.rgb(W.stock));
+    else if (W.grip) piece(-(W.gripLen || 0.08), 0.02, 0.022, 0.022, this.rgb(W.grip));
+    const g0 = W.stock || W.grip ? 0.02 : -0.08;
+    if (k1 > k0 * 1.3) { const m = (g0 + W.len) / 2; piece(g0, m, ws(k0), wu(k0), col); piece(m, W.len, ws(k1), wu(k1), col); }
+    else piece(g0, W.len, ws((k0 + k1) / 2), wu((k0 + k1) / 2), col);
+    const L = W.len, steel = this.rgb('#9aa2aa');
+    if (W.head === 'axe') piece(L - 0.21, L - 0.03, 0.012, 0.09, steel, 0.11);
+    else if (W.head === 'hammer') piece(L - 0.035, L + 0.035, 0.035, 0.08, this.rgb('#707880'), 0.01);
+    else if (W.head === 'sledge') piece(L - 0.06, L + 0.06, 0.06, 0.12, this.rgb('#606870'));
+    else if (W.head === 'pan') piece(L, L + 0.2, 0.1, 0.016, this.rgb('#303438'));
+    else if (W.head === 'shovel') piece(L - 0.05, L + 0.27, 0.08, 0.012, this.rgb('#80888f'));
+    else if (W.head === 'spear') piece(L, L + 0.16, 0.025, 0.01, this.rgb('#c8ccd0'));
+    else if (W.head === 'club') piece(L - 0.08, L, 0.03, 0.03, this.rgb('#a0a8b0'), -0.02);
+    if (flash && W.gun) piece(L + 0.02, L + 0.14, 0.05, 0.05, [1, 0.85, 0.4]);
   },
   norm(v) { const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; },
   // two-bone IK: elbow and hand for a limb from S toward target Hd (segment lengths a, b; elbow bends toward pole)

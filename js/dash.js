@@ -21,10 +21,12 @@ const Dash = {
   update() {
     const p = G.player, c = p && !p.dead ? p.inCar : null;
     const cv = this.el();
-    if (!c) { if (this.shown) { cv.style.display = 'none'; this.shown = false; } return; }
-    if (!this.shown) { cv.style.display = 'block'; this.shown = true; }
+    if (!c) { if (this.shown) { cv.style.display = 'none'; this.shown = false; this.hud(false); } return; }
+    if (!this.shown) { cv.style.display = 'block'; this.shown = true; this.hud(true); }
     this.draw(c);
   },
+  // messages move up out of the dashboard's way while driving
+  hud(on) { const h = document.getElementById('hud'); if (h) h.classList.toggle('driving', on); },
   draw(c) {
     const g = this.g, W = this.W, H = this.H;
     const T = CAR_TYPES[c.type] || CAR_TYPES.sedan, tm = Vehicles.tmp ? Vehicles.tmp(c) : {};

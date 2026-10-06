@@ -137,6 +137,8 @@ const Icons = {
       case 'gloves': PL([[8, 26], [8, 12], [10, 6], [12, 12], [13, 5], [15, 12], [17, 6], [18, 13], [21, 9], [22, 16], [20, 26]], c1); break;
       case 'scarf': LO(5, 10, 27, 10, c1, 6); LO(20, 10, 22, 27, c1, 5); break;
       case 'glasses': g.strokeStyle = c1; g.lineWidth = 2; g.strokeRect(4, 12, 10, 8); g.strokeRect(18, 12, 10, 8); L(14, 15, 18, 15, c1, 2); break;
+      case 'belt': g.strokeStyle = O; g.lineWidth = 7; g.beginPath(); g.arc(16, 11, 12, 0.2, Math.PI - 0.2); g.stroke(); g.strokeStyle = c1; g.lineWidth = 5; g.beginPath(); g.arc(16, 11, 12, 0.2, Math.PI - 0.2); g.stroke(); R_(11, 18, 10, 8, c2); R_(13.5, 20.5, 5, 3, c1, false); break;
+      case 'holster': PL([[9, 4], [23, 4], [22, 19], [17, 28], [11, 26], [10, 17]], c1); R_(8, 3, 16, 4, c2); L(12, 10, 20, 10, Col.mix(c1, '#fff', 0.25), 1); break;
       case 'watch': R_(12, 3, 8, 26, '#303030'); R_(9, 10, 14, 12, c1); R_(11, 12, 10, 8, c2, false); break;
       case 'plasticbag': PL([[7, 11], [25, 11], [26, 28], [6, 28]], 'rgba(240,240,240,0.9)'); g.strokeStyle = O; g.lineWidth = 1.5; g.beginPath(); g.arc(12, 11, 3, Math.PI, 0); g.arc(20, 11, 3, Math.PI, 0); g.stroke(); break;
       case 'backpack': R_(7, 7, 18, 21, c1); R_(9, 17, 14, 8, c2); g.strokeStyle = O; g.lineWidth = 2; g.beginPath(); g.arc(16, 7, 4, Math.PI, 0); g.stroke(); break;
