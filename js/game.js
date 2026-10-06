@@ -200,9 +200,12 @@ const Game = {
   },
 
   // ------------------------------------------------------------------ main loop
-  last: 0, acc: 0,
+  last: 0, acc: 0, fpsN: 0, fpsT: 0,
   loop(ts) {
     requestAnimationFrame((t) => this.loop(t));
+    // frame rate cap (settings): skip this display refresh if the last frame was too recent
+    const cap = Settings.v.fps;
+    if (cap && this.last && ts - this.last < 1000 / cap - 2.5) return;
     let dt = (ts - this.last) / 1000;
     this.last = ts;
     if (!(dt > 0)) dt = 0.016;
@@ -225,6 +228,18 @@ const Game = {
       Menu.drawBackground(dt);
     }
     Input.endFrame();
+    this.fpsMeter(ts);
+  },
+  fpsMeter(ts) {
+    this.fpsN++;
+    if (ts - this.fpsT < 500) return;
+    const fps = this.fpsN * 1000 / (ts - this.fpsT);
+    this.fpsN = 0; this.fpsT = ts;
+    let el = document.getElementById('fps');
+    if (!Settings.v.fpsShow) { if (el) el.style.display = 'none'; return; }
+    if (!el) { el = document.createElement('div'); el.id = 'fps'; el.style.cssText = 'position:fixed;left:8px;top:6px;z-index:30;font:11px Verdana,sans-serif;color:#e8e0c0;background:rgba(0,0,0,0.5);padding:1px 6px;border-radius:3px;pointer-events:none'; document.body.appendChild(el); }
+    el.style.display = 'block';
+    el.textContent = Math.round(fps) + ' FPS';
   },
   step(dt) {
     const gm = dt * MIN_PER_SEC;
@@ -478,7 +493,7 @@ const Weather = {
     if (w.rain < 0.03) this.drops.length = 0;
     else if (w.temp < 1) {
       // snowfall: slow drifting flakes
-      const n = Math.floor(w.rain * 320);
+      const n = Math.floor(w.rain * 320 * Settings.v.weather);
       while (this.drops.length < n) this.drops.push({ x: Math.random() * W, y: Math.random() * H, l: R.f(1.2, 2.8), v: R.f(40, 90), ph: R.f(0, 6) });
       if (this.drops.length > n) this.drops.length = n;
       ctx.fillStyle = 'rgba(240,244,250,' + ((indoor ? 0.25 : 0.8) * (0.45 + G.light.amb * 0.55)).toFixed(3) + ')';
@@ -491,7 +506,7 @@ const Weather = {
         ctx.fillRect(d.x, d.y, d.l, d.l);
       }
     } else {
-      const n = Math.floor(w.rain * 260);
+      const n = Math.floor(w.rain * 260 * Settings.v.weather);
       while (this.drops.length < n) this.drops.push({ x: Math.random() * W, y: Math.random() * H, l: R.f(10, 22), v: R.f(700, 1000) });
       if (this.drops.length > n) this.drops.length = n;
       ctx.strokeStyle = 'rgba(170,190,215,' + ((indoor ? 0.12 : 0.32) * (0.4 + G.light.amb * 0.6)).toFixed(3) + ')';

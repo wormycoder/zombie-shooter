@@ -20,10 +20,11 @@ const Render = {
     this.lightB1 = new Float32Array(1);
     this.shadeB1 = new Float32Array(1);
     window.addEventListener('resize', () => this.resize());
+    Settings.onChange(() => { this.resize(); this.chunks.clear(); });
     this.resize();
   },
   resize() {
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.dpr = Settings.dpr();
     this.W = window.innerWidth; this.H = window.innerHeight;
     this.cv.width = Math.floor(this.W * this.dpr); this.cv.height = Math.floor(this.H * this.dpr);
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
@@ -136,38 +137,12 @@ const Render = {
     this.has1 = any2;
     this.computeLight();
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
-    // ---------------- floor pass
+    // ---------------- floor pass (cached 8x8-tile ground chunks; water animates live)
     const W_ = w.w;
     const t = performance.now() / 1000;
     const gs = Season.grass === 'g' ? '' : Season.grass;
-    const snowA = Math.min(1, Season.snow * 1.15) * 0.94;
-    for (let y = minY; y <= maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        const X = (x - y) * HTW, Y = (x + y) * HTH;
-        if (X < L - 40 || X > Rr + 40 || Y < T - 40 || Y > B + 10) continue;
-        const i = y * W_ + x;
-        const f = w.floor[i];
-        let vx = (x * 7 + y * 13) & 3;
-        if (f === FL.WATER || f === FL.DEEPWATER) vx = (vx + Math.floor(t * 1.5 + (x + y) * 0.3)) & 3;
-        const rec = Spr.floor(f, w.fvar[i], vx, gs && (f === FL.GRASS || f === FL.GRASS2 || f === FL.FOREST) ? gs : '');
-        ctx.drawImage(rec.c, X - rec.ax, Y - rec.ay);
-        const dc = w.deco[i];
-        if (dc) { const r2 = Spr.deco(dc); ctx.drawImage(r2.c, X - r2.ax, Y - r2.ay); }
-        if (HARD_FLOORS[f] && w.room[i] < 0) {
-          for (let dn = 0; dn < 4; dn++) {
-            const nx = x + FR_DX[dn], ny = y + FR_DY[dn];
-            if (nx < 0 || ny < 0 || nx >= GW || ny >= w.h) continue;
-            const nf = w.floor[ny * W_ + nx];
-            if (nf === FL.GRASS || nf === FL.GRASS2 || nf === FL.FOREST) { const r3 = Spr.fringe(dn, nf, vx, gs); ctx.drawImage(r3.c, X - r3.ax, Y - r3.ay); }
-          }
-        }
-        if (snowA > 0.02 && w.room[i] < 0 && f !== FL.WATER && f !== FL.DEEPWATER) {
-          ctx.globalAlpha = f === FL.ASPHALT || f === FL.PARKING ? snowA * 0.68 : f === FL.SIDEWALK ? snowA * 0.85 : snowA;
-          const rs = Spr.snow(vx); ctx.drawImage(rs.c, X - rs.ax, Y - rs.ay);
-          ctx.globalAlpha = 1;
-        }
-      }
-    }
+    const snowA = Math.round(Math.min(1, Season.snow * 1.15) * 0.94 * 20) / 20;
+    this.drawGround(ctx, minX, minY, maxX, maxY, L, Rr, T, B, t, gs, snowA);
     // decals
     const dec1 = new Map();
     for (const d of w.decals) {
@@ -350,6 +325,97 @@ const Render = {
     if (k === 'p') Player.draw(ctx);
     else if (k === 'z') Zombie.draw(ctx, e, false);
     else if (k === 'c') Vehicles.draw(ctx, e);
+  },
+  // one ground tile: floor, markings, grass creeping over hard edges, snow. water: animate (else skipped)
+  groundTile(g, x, y, X, Y, t, gs, snowA, detail, water) {
+    const w = Wd, W_ = w.w, GW = w.gw, i = y * W_ + x, f = w.floor[i];
+    let vx = (x * 7 + y * 13) & 3;
+    const wet = f === FL.WATER || f === FL.DEEPWATER;
+    if (wet) { if (!water) return; vx = (vx + Math.floor(t * 1.5 + (x + y) * 0.3)) & 3; }
+    const rec = Spr.floor(f, w.fvar[i], vx, gs && (f === FL.GRASS || f === FL.GRASS2 || f === FL.FOREST) ? gs : '');
+    g.drawImage(rec.c, X - rec.ax, Y - rec.ay);
+    if (!detail) return;
+    const dc = w.deco[i];
+    if (dc) { const r2 = Spr.deco(dc); g.drawImage(r2.c, X - r2.ax, Y - r2.ay); }
+    if (HARD_FLOORS[f] && w.room[i] < 0) {
+      for (let dn = 0; dn < 4; dn++) {
+        const nx = x + FR_DX[dn], ny = y + FR_DY[dn];
+        if (nx < 0 || ny < 0 || nx >= GW || ny >= w.h) continue;
+        const nf = w.floor[ny * W_ + nx];
+        if (nf === FL.GRASS || nf === FL.GRASS2 || nf === FL.FOREST) { const r3 = Spr.fringe(dn, nf, vx, gs); g.drawImage(r3.c, X - r3.ax, Y - r3.ay); }
+      }
+    }
+    if (snowA > 0.02 && w.room[i] < 0 && !wet) {
+      g.globalAlpha = f === FL.ASPHALT || f === FL.PARKING ? snowA * 0.68 : f === FL.SIDEWALK ? snowA * 0.85 : snowA;
+      const rs = Spr.snow(vx); g.drawImage(rs.c, X - rs.ax, Y - rs.ay);
+      g.globalAlpha = 1;
+    }
+  },
+  // signature of everything a chunk's pixels depend on (its tiles plus a 1-tile border for grass edges)
+  chunkSig(x0, y0, gs, snowA, detail) {
+    const w = Wd, W_ = w.w, GW = w.gw, CH = 8;
+    let h = (snowA * 100) | 0, wet = 0;
+    h = (h * 31 + (gs ? gs.charCodeAt(0) : 0)) | 0; h = (h * 31 + detail) | 0;
+    for (let y = Math.max(0, y0 - 1); y <= Math.min(w.h - 1, y0 + CH); y++) {
+      let i = y * W_ + Math.max(0, x0 - 1);
+      for (let x = Math.max(0, x0 - 1), x1 = Math.min(GW - 1, x0 + CH); x <= x1; x++, i++) {
+        const f = w.floor[i];
+        h = (Math.imul(h, 31) + f * 7919 + w.fvar[i] * 131 + w.deco[i] * 17 + (w.room[i] < 0 ? 1 : 2)) | 0;
+        if ((f === FL.WATER || f === FL.DEEPWATER) && x >= x0 && x < x0 + CH && y >= y0 && y < y0 + CH) wet = 1;
+      }
+    }
+    return [h, wet];
+  },
+  chunks: new Map(), chunkWorld: null, chunkTick: 0,
+  drawGround(ctx, minX, minY, maxX, maxY, L, Rr, T, B, t, gs, snowA) {
+    const w = Wd, CH = 8, detail = Settings.v.detail;
+    if (this.noChunks) {
+      // reference path (debug): every tile drawn directly
+      for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
+        const X = (x - y) * HTW, Y = (x + y) * HTH;
+        if (X < L - 40 || X > Rr + 40 || Y < T - 40 || Y > B + 10) continue;
+        this.groundTile(ctx, x, y, X, Y, t, gs, snowA, detail, true);
+      }
+      return;
+    }
+    if (this.chunkWorld !== w) { this.chunks.clear(); this.chunkWorld = w; }
+    const tick = ++this.chunkTick;
+    let budget = 6;
+    const cx0 = Math.floor(minX / CH), cy0 = Math.floor(minY / CH), cx1 = Math.floor(maxX / CH), cy1 = Math.floor(maxY / CH);
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      const x0 = cx * CH, y0 = cy * CH;
+      if (x0 >= w.gw || y0 >= w.h) continue;
+      const ox = (x0 - y0 - CH) * HTW - 1, oy = (x0 + y0) * HTH - 1;
+      if (ox + 2 * CH * HTW + 2 < L - 40 || ox > Rr + 40 || oy + 2 * CH * HTH + 2 < T - 40 || oy > B + 10) continue;
+      const key = cy * 4096 + cx;
+      const [sig, wet] = this.chunkSig(x0, y0, gs, snowA, detail);
+      let ch = this.chunks.get(key);
+      if (!ch || ch.sig !== sig) {
+        if (budget > 0) {
+          budget--;
+          if (!ch) { ch = { c: mkCanvas(2 * CH * HTW + 2, 2 * CH * HTH + 2), sig: 0, used: 0, wet: 0 }; this.chunks.set(key, ch); }
+          const g = ch.c.getContext('2d');
+          g.clearRect(0, 0, ch.c.width, ch.c.height);
+          for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(g, x, y, (x - y) * HTW - ox, (x + y) * HTH - oy, t, gs, snowA, detail, false);
+          ch.sig = sig; ch.wet = wet;
+        } else {
+          // over this frame's build budget: draw the tiles directly
+          for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(ctx, x, y, (x - y) * HTW, (x + y) * HTH, t, gs, snowA, detail, true);
+          continue;
+        }
+      }
+      ch.used = tick;
+      ctx.drawImage(ch.c, ox, oy);
+      if (ch.wet) for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) {
+        const f = w.floor[y * w.w + x];
+        if (f === FL.WATER || f === FL.DEEPWATER) this.groundTile(ctx, x, y, (x - y) * HTW, (x + y) * HTH, t, gs, snowA, detail, true);
+      }
+    }
+    // keep the cache bounded (least recently drawn chunks go first)
+    if (this.chunks.size > 140) {
+      const arr = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used);
+      for (let k = 0; k < arr.length - 110; k++) this.chunks.delete(arr[k][0]);
+    }
   },
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
@@ -939,6 +1005,7 @@ function pointInPoly(pt, vs) {
 const Fx = {
   parts: [], tracers: [], floats: [], flashes: [], fires: [],
   blood(x, y, n, dirA) {
+    n = Math.max(1, Math.round(n * Settings.v.particles));
     for (let i = 0; i < n; i++) {
       const a = (dirA !== undefined ? dirA + R.f(-0.8, 0.8) : R.f(0, Math.PI * 2));
       const sp = R.f(0.5, 2.5);
@@ -957,13 +1024,15 @@ const Fx = {
     if (w.decals.length > 450) w.decals.shift();
   },
   shards(x, y, z, n, col) {
+    n = Math.max(1, Math.round(n * Settings.v.particles));
     for (let i = 0; i < n; i++) {
       const a = R.f(0, Math.PI * 2), sp = R.f(0.5, 2.2);
       this.parts.push({ x, y, z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: R.f(0.5, 2.5), life: 1.0, max: 1.0, col, size: R.f(1.5, 2.5), g: true });
     }
   },
   smoke(x, y, z, dark) {
-    if (this.parts.length > 1400) return;
+    const pq = Settings.v.particles;
+    if (this.parts.length > 1400 * pq || (pq < 1 && Math.random() > pq)) return;
     if (dark) this.parts.push({ x, y, z, vx: R.f(-0.15, 0.25), vy: R.f(-0.25, 0.15), vz: R.f(0.8, 1.3), life: R.f(2.5, 4), max: 4, col: '#303030', size: R.f(5, 9), smoke: true, dark: true });
     else this.parts.push({ x, y, z, vx: R.f(-0.1, 0.1), vy: R.f(-0.1, 0.1), vz: 0.6, life: 1.6, max: 1.6, col: '#909090', size: R.f(3, 6), smoke: true });
   },

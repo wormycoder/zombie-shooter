@@ -16,11 +16,14 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Inventory with weight, bags, containers, timed actions, drag & drop; loot tables per room/store type
 - Melee & firearms, shoving & stomping, weapon durability, skills & XP, skill books, occupations & traits
 - Barricading, carpentry & building, moving furniture (pick up beds, shelves, fridges... and place them with rotation), crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
-- Drivable cars with keys, hotwiring, fuel, trunks, alarms, crash damage; police car and fire truck sirens that lure every zombie for miles
+- Detailed towns: house facades (clapboard, vinyl, brick, stucco, log, metal siding, trim, shutters, window boxes, porch lanterns, house numbers), shingled and metal roofs with chimneys, antennas and snow, store fronts with awnings and neon signs; streets with power lines, traffic lights, stop and street-name signs, hydrants, bus stops, payphones, newspaper boxes, gas station canopies, parking lots, abandoned traffic jams and roadblocks
+- Drivable cars (sedans, hatchbacks, wagons, sports cars, SUVs, pickups, vans, taxis, police cars, ambulances, fire trucks, school buses, military trucks) with detailed models, damage states, working head/tail/brake lights and light bars; keys, hotwiring, fuel, trunks, alarms, crash damage; sirens that lure every zombie for miles
+- Radial menu (V): vehicle controls inside or next to a car, quick actions on foot
 - Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
-- Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread, infection transmission, zombie toughness, door-opening zombies
+- Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread, infection transmission, zombie toughness, door-opening zombies, house and car alarm frequency
+- Graphics & performance options (Low / Medium / High / Ultra presets): render resolution, frame-rate cap, world detail, particles, rain & snow, FPS counter; cached ground chunks and trimmed sprites keep frames light
 - Save/load (permadeath)
 
 ## Controls
 WASD move · Shift run · Alt/X sprint · C sneak · hold Right mouse aim · Left click attack · Space shove/stomp · R reload ·
-Right-click (tap) context menu · E interact · F flashlight · Q shout · I inventory · H health · B crafting · K skills · M map · Esc menu
+Right-click (tap) context menu · E interact · F flashlight · Q shout · V radial menu · I inventory · H health · B crafting · K skills · M map · Esc menu

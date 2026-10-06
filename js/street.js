@@ -533,8 +533,9 @@ Object.assign(ObjArt, {
   },
   k_st_pole: (o) => (o.tr ? 't' : '') + (o.lt || '') + (o.lean ? 'x' + o.lean : ''),
   a_st_pole(ctx, o, X, Y, t, s, x, y) {
-    if (o.lx !== undefined) Street.wire(ctx, o, X, Y, o.lx, o.ly, s, x, y);
-    if (o.nx !== undefined && !Street.drawn(x + o.nx, y + o.ny, X + (o.nx - o.ny) * HTW, Y + (o.nx + o.ny) * HTH)) Street.wire(ctx, o, X, Y, o.nx, o.ny, s, x, y);
+    // wires are skipped at low world detail (settings)
+    if (Settings.v.detail && o.lx !== undefined) Street.wire(ctx, o, X, Y, o.lx, o.ly, s, x, y);
+    if (Settings.v.detail && o.nx !== undefined && !Street.drawn(x + o.nx, y + o.ny, X + (o.nx - o.ny) * HTW, Y + (o.nx + o.ny) * HTH)) Street.wire(ctx, o, X, Y, o.nx, o.ny, s, x, y);
     if (o.lt && Street.night() && !G.events.powerOff) {
       const d = ST_DV[o.lt], h = isoP(X, Y, 0.5 + d[0] * 0.62, 0.5 + d[1] * 0.62, 4.24);
       if (o.lean) h[0] += o.lean * 3.2 * 4.24;

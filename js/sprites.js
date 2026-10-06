@@ -46,9 +46,34 @@ const Spr = {
     const c = mkCanvas(w, h);
     const g = c.getContext('2d');
     draw(g, ax, ay);
-    rec = { c, ax, ay, sil: null };
+    rec = (!this.noTrim && this.trim(c, ax, ay)) || { c, ax, ay, sil: null };
     this.cache.set(key, rec);
     return rec;
+  },
+  // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory)
+  trim(c, ax, ay) {
+    const W = c.width, H = c.height;
+    if (W * H < 4000) return null;
+    let d;
+    try { d = c.getContext('2d').getImageData(0, 0, W, H).data; } catch (e) { return null; }
+    let x0 = W, y0 = -1, x1 = -1, y1 = -1;
+    for (let y = 0; y < H; y++) {
+      let row = -1, rowEnd = -1;
+      for (let x = 0, k = y * W * 4 + 3; x < W; x++, k += 4) if (d[k]) { if (row < 0) row = x; rowEnd = x; }
+      if (row < 0) continue;
+      if (y0 < 0) y0 = y;
+      y1 = y;
+      if (row < x0) x0 = row;
+      if (rowEnd > x1) x1 = rowEnd;
+    }
+    if (y0 < 0) return { c: mkCanvas(1, 1), ax: 0, ay: 0, sil: null };
+    // one pixel of margin keeps edge antialiasing intact
+    x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); x1 = Math.min(W - 1, x1 + 1); y1 = Math.min(H - 1, y1 + 1);
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    if (bw * bh > W * H * 0.85) return null;
+    const c2 = mkCanvas(bw, bh);
+    c2.getContext('2d').drawImage(c, -x0, -y0);
+    return { c: c2, ax: ax - x0, ay: ay - y0, sil: null };
   },
   draw(ctx, rec, sx, sy, s) { this.drawShaded(ctx, rec, sx - rec.ax, sy - rec.ay, s, 1); },
   // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light)

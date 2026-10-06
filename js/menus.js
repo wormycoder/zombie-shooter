@@ -232,14 +232,37 @@ const Menu = {
   // ------------------------------------------------------------------ options & controls
   options(inGame) {
     const m = $('#menu');
-    const v = Sfx.vol;
-    m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox"><h2>Options</h2>
+    const v = Sfx.vol, S = Settings.v, pn = Settings.presetName();
+    const rows = Object.keys(SETTINGS_OPTS).map(k => {
+      const o = SETTINGS_OPTS[k];
+      return `<div class="opt" title="${o.tip || ''}"><span>${o.n}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
+    }).join('');
+    const presets = Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm${n === pn ? ' on' : ''}" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0' : ''}">${n}</span>`).join('');
+    m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox wide"><h2>Options</h2>
+      <div style="display:flex;gap:28px;align-items:flex-start">
+      <div style="flex:1;min-width:240px"><div class="sml" style="margin-bottom:6px">Audio</div>
       <div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
-      <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>
+      <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div></div>
+      <div style="flex:1.3;min-width:300px"><div class="sml" style="margin-bottom:6px">Graphics &amp; performance${pn ? '' : ' (custom)'}</div>
+      <div style="margin-bottom:6px">${presets}</div>
+      ${rows}
+      <div class="sml" id="setTip" style="min-height:28px;margin-top:4px;max-width:360px;color:#a89c80"></div></div></div>
       <div class="btn big" data-m="back">Back</div></div></div>`;
     m.oninput = (e) => { const k = e.target.dataset.v; if (k) { Sfx.init(); Sfx.setVol(k, +e.target.value); try { localStorage.setItem('hc_vol', JSON.stringify(Sfx.vol)); } catch (er) { /* */ } } };
-    m.onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; if (inGame) { m.innerHTML = ''; UI.togglePause(); } else this.show(); };
+    m.onchange = (e) => {
+      const k = e.target.dataset.set;
+      if (!k) return;
+      Settings.set(k, SETTINGS_OPTS[k].opts[+e.target.value][1]);
+      this.options(inGame);
+    };
+    m.onmouseover = (e) => { const r = e.target.closest('.opt[title]'); const tip = $('#setTip'); if (tip) tip.textContent = r ? r.title : ''; };
+    m.onclick = (e) => {
+      const gp = e.target.closest('[data-gpre]');
+      if (gp) { Settings.usePreset(gp.dataset.gpre); this.options(inGame); return; }
+      const b = e.target.closest('[data-m]'); if (!b) return;
+      if (inGame) { m.innerHTML = ''; UI.togglePause(); } else this.show();
+    };
   },
   controls(inGame) {
     const m = $('#menu');
