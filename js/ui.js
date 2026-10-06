@@ -613,7 +613,7 @@ const UI = {
     const cv = P.body.querySelector('.cprev');
     const g = cv.getContext('2d');
     g.save(); g.translate(35, 78); g.scale(1.1, 1.1);
-    Humanoid.draw(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 }, 1);
+    if (!Char3D.preview(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 })) Humanoid.draw(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 }, 1);
     g.restore();
   },
   // ------------------------------------------------------------------ crafting

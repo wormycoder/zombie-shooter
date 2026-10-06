@@ -143,6 +143,8 @@ const Render = {
       || any2 !== this.lHas1 || this.lWorld !== w || lhz >= 60 || lnow - (this.lightT || 0) >= 1000 / lhz - 1) {
       this.computeLight(); this.lightT = lnow; this.lightDirty = true; this.lHas1 = any2; this.lWorld = w; this.lightN = (this.lightN || 0) + 1;
     }
+    // 3D characters: pose and render everyone who may be drawn this frame into the GL atlas
+    Char3D.prepare(minX, minY, maxX, maxY);
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     // ---------------- floor pass (cached 8x8-tile ground chunks; water animates live)
     const W_ = w.w;

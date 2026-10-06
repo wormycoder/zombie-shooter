@@ -219,7 +219,7 @@ const Menu = {
       g.clearRect(0, 0, cv.width, cv.height);
       g.fillStyle = 'rgba(255,255,255,0.04)'; g.beginPath(); g.ellipse(90, 170, 60, 22, 0, 0, 7); g.fill();
       g.setTransform(2, 0, 0, 2, 90, 168);
-      Humanoid.draw(g, 0, 0, t / 1400, look, { t: t / 1000, amp: 0 }, 1);
+      if (!Char3D.preview(g, 0, 0, t / 1400, look, { t: t / 1000, amp: 0 })) Humanoid.draw(g, 0, 0, t / 1400, look, { t: t / 1000, amp: 0 }, 1);
       requestAnimationFrame(draw);
     };
     requestAnimationFrame(draw);
@@ -256,8 +256,9 @@ const Menu = {
     const m = $('#menu');
     const v = Sfx.vol, S = Settings.v, pn = Settings.presetName(), tab = this.setTab;
     const rows = (t) => Object.keys(SETTINGS_OPTS).filter(k => SETTINGS_OPTS[k].tab === t).map(k => {
-      const o = SETTINGS_OPTS[k];
-      return `<div class="opt" data-tip="${o.tip || ''}"><span>${o.n}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
+      const o = SETTINGS_OPTS[k], na = k === 'chars3d' && !GL3D.ok();
+      const tip = (o.tip || '') + (na ? ' Not available in this browser (WebGL missing or running without GPU acceleration), so the 2D figures are used.' : '');
+      return `<div class="opt" data-tip="${tip}"><span>${o.n}${na ? ' <span style="color:#c08060;font-size:11px">(unavailable: no GPU)</span>' : ''}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     }).join('');
     const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('') + '</div>';
     const tabs = [['display', 'Display'], ['perf', 'Performance'], ['audio', 'Audio'], ['controls', 'Controls']]

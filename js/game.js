@@ -73,7 +73,7 @@ const Game = {
   newGame(cfg) {
     G.sb = cfg.sb || sandboxValues({});
     MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
-    G.seed = cfg.world ? cfg.seed : (Math.random() * 1e9) | 0;
+    G.seed = cfg.world || cfg.seed !== undefined ? cfg.seed : (Math.random() * 1e9) | 0;
     G.time = 0; G.weather = { rain: 0, snow: 0, temp: 20 };
     Season.update();
     // a world pre-generated while the player was on the character screen saves the wait

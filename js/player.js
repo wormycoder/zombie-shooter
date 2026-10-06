@@ -797,14 +797,21 @@ const Player = {
     }
     return pose;
   },
-  draw(ctx) {
+  // facing and light level the player is drawn with (null when not drawn)
+  drawInfo() {
     const p = G.player;
-    if (p.inCar) return;
-    const [X, Y] = Render.epos(p);
+    if (p.inCar) return null;
     const s = Math.max(0.35, Render.shadeSmooth(p.x, p.y));
     let ang = p.angle;
     if (p.asleep && p.sleepBed) ang = p.sleepAng || ang;
-    Humanoid.draw(ctx, X, Y, ang, this.look(), this.pose(), s);
+    return { ang, s };
+  },
+  draw(ctx) {
+    const p = G.player, d = this.drawInfo();
+    if (!d) return;
+    const [X, Y] = Render.epos(p);
+    if (Char3D.draw(ctx, p, X, Y, d.s, 1)) return;
+    Humanoid.draw(ctx, X, Y, d.ang, this.look(), this.pose(), d.s);
   },
   drawOverlay(ctx) {
     const p = G.player;

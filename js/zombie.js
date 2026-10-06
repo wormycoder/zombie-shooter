@@ -460,24 +460,31 @@ const Zombie = {
   // 0 = fresh .. 1 = badly decomposed (game days since death)
   rot(z) { const days = (G.time - (z.diedAt === undefined ? G.time - 2880 : z.diedAt)) / 1440; return U.clamp((days - 0.6) / 4, 0, 1); },
   // ------------------------------------------------------------------ draw
-  draw(ctx, z, flat) {
-    const p = G.player;
+  // pose, light level and fade a zombie is drawn with (null when it is not drawn)
+  drawInfo(z) {
     let alpha = z.va;
     if (z.dead) alpha = 1;
-    if (alpha < 0.02) return;
-    if (z.dead && !World.isVis(Math.floor(z.x), Math.floor(z.y)) && !Wd.seen[Math.floor(z.y) * Wd.w + Math.floor(z.x)]) return;
-    const [X, Y] = Render.epos(z);
+    if (alpha < 0.02) return null;
+    if (z.dead && !World.isVis(Math.floor(z.x), Math.floor(z.y)) && !Wd.seen[Math.floor(z.y) * Wd.w + Math.floor(z.x)]) return null;
     let s = Math.max(0.12, Render.shadeSmooth(z.x, z.y));
     const rot = z.dead ? this.rot(z) : 0;
     if (rot > 0) s *= 1 - rot * 0.35;
     const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1 };
     if (z.st === 'attack') { pose.reach = 1 - Math.max(0, z.atkT) / 0.8; pose.lean = 0.3; }
-    if (z.thumping > 0) { z.thumping -= 0.016; pose.reach = 1; pose.lean = 0.3; }
+    if (z.thumping > 0) { pose.reach = 1; pose.lean = 0.3; }
     if (z.st === 'climb') { pose.arms = 'climb'; pose.crouch = Math.sin(z.climbT / z.climbDur * Math.PI) * 0.5; }
     if (z.lie > 0 || z.dead) { pose.lie = z.lie; pose.lieDir = z.lieDir; pose.amp = z.crawl && !z.dead ? z.amp : 0; pose.arms = z.dead ? 'idle' : 'zombie'; pose.lieOff = 0; }
     if (z.crawl && !z.dead && z.st !== 'down') { pose.lie = 1; pose.lieDir = -1; pose.arms = 'zombie'; }
-    void p; void flat;
-    Humanoid.draw(ctx, X, Y, z.a, z.look, pose, s, alpha);
+    return { pose, s, alpha, rot };
+  },
+  draw(ctx, z, flat) {
+    void flat;
+    const d = this.drawInfo(z);
+    if (z.thumping > 0) z.thumping -= 0.016;
+    if (!d) return;
+    const [X, Y] = Render.epos(z);
+    const alpha = d.alpha, rot = d.rot;
+    if (!Char3D.draw(ctx, z, X, Y, d.s, alpha)) Humanoid.draw(ctx, X, Y, z.a, z.look, d.pose, d.s, alpha);
     if (rot > 0.15 && z.dead && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
       // flies buzzing over a rotting body
       const t = performance.now() / 1000;
