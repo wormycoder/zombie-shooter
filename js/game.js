@@ -20,6 +20,8 @@ const SANDBOX_OPTS = {
   tough: { n: 'Zombie toughness', opts: [['Fragile', 0.6], ['Normal', 1], ['Tough', 1.6]], def: 1 },
   smart: { n: 'Zombie cognition', opts: [['Bash doors', 0], ['Open doors', 1]], def: 0 },
   month: { n: 'Start month', opts: [['July (summer)', 7], ['September', 9], ['October (autumn)', 10], ['November', 11], ['December (winter)', 12], ['January', 1], ['April (spring)', 4]], def: 0 },
+  alarms: { n: 'House alarms', opts: [['Never', 0], ['Extremely rare', 0.01], ['Rare', 0.03], ['Sometimes', 0.07], ['Often', 0.15]], def: 2 },
+  carAlarms: { n: 'Car alarms', opts: [['Never', 0], ['Extremely rare', 0.01], ['Rare', 0.03], ['Sometimes', 0.08], ['Often', 0.2]], def: 2 },
 };
 const SANDBOX_PRESETS = {
   Apocalypse: { pop: 2, speed: 0, day: 1, loot: 2, utilities: 2, start: 1 },

@@ -192,12 +192,14 @@ const MapGen = {
   },
 
   // ---------------------------------------------------------------- buildings
+  // chance that a house has a burglar alarm (sandbox option; stores are a few times likelier)
+  alarmP() { const v = G.sb && G.sb.alarms; return v === undefined ? 0.03 : v; },
   newBuilding(type, x0, y0, x1, y1, o) {
     const r = this.rng;
     const b = Object.assign({
       id: this.w.buildings.length, type, x0, y0, x1, y1, rooms: [],
       wallType: WT.EXT, extCol: r.pick(PAL.ext), roofCol: r.pick(PAL.roof), roof: 'gable',
-      alarm: r.chance(0.12), name: null,
+      alarm: r.chance(this.alarmP()), name: null,
     }, o || {});
     if (b.wallType === WT.BRICK && !(o && o.extCol)) b.extCol = r.pick(PAL.brick);
     this.w.buildings.push(b);
@@ -855,7 +857,7 @@ const MapGen = {
   store(type, x0, y0, w, h, f, name) {
     const r = this.rng;
     const brick = ['police', 'firestation', 'bank', 'warehouse', 'school', 'church'].includes(type) || r.chance(0.5);
-    const b = this.newBuilding(type, x0, y0, x0 + w - 1, y0 + h - 1, { wallType: brick ? WT.BRICK : WT.EXT, roof: 'flat', roofCol: r.pick(PAL.roofFlat), name, alarm: r.chance(0.5), front: f });
+    const b = this.newBuilding(type, x0, y0, x0 + w - 1, y0 + h - 1, { wallType: brick ? WT.BRICK : WT.EXT, roof: 'flat', roofCol: r.pick(PAL.roofFlat), name, alarm: r.chance(Math.min(0.9, this.alarmP() * 4)), front: f });
     const M = this.mapper(x0, y0, w, h, f);
     const fl = { clinic: FL.TILE, grocery: FL.LINO, hardware: FL.CONCRETE, gunstore: FL.WOOD, pharmacy: FL.LINO, restaurant: FL.TILE, bar: FL.WOOD, clothing: FL.CARPET, bookstore: FL.WOOD, office: FL.CARPET, firestation: FL.CONCRETE, police: FL.LINO, laundromat: FL.TILE, gasstation: FL.LINO, warehouse: FL.CONCRETE }[type] || FL.LINO;
     const sd = M.D >= 9 ? 3 : 0;
@@ -992,7 +994,7 @@ const MapGen = {
   },
   police(x0, y0, w, h, f) {
     const r = this.rng;
-    const b = this.newBuilding('police', x0, y0, x0 + w - 1, y0 + h - 1, { wallType: WT.BRICK, roof: 'flat', roofCol: '#5a5a60', name: 'Police Station', alarm: true, front: f });
+    const b = this.newBuilding('police', x0, y0, x0 + w - 1, y0 + h - 1, { wallType: WT.BRICK, roof: 'flat', roofCol: '#5a5a60', name: 'Police Station', alarm: this.alarmP() > 0, front: f });
     const M = this.mapper(x0, y0, w, h, f);
     const fd = Math.floor(M.D / 2);
     const lobby = this.addRoom(b, 'police', ...M.rect(0, 0, 7, fd - 1), FL.LINO, 3);
@@ -1179,7 +1181,7 @@ const MapGen = {
   },
   school(x0, y0, x1, y1) {
     const r = this.rng;
-    const b = this.newBuilding('school', x0 + 1, y0 + 2, x1 - 1, y0 + 15, { wallType: WT.BRICK, roof: 'flat', roofCol: '#606060', name: 'Hollow Creek Elementary', alarm: true, front: 'N' });
+    const b = this.newBuilding('school', x0 + 1, y0 + 2, x1 - 1, y0 + 15, { wallType: WT.BRICK, roof: 'flat', roofCol: '#606060', name: 'Hollow Creek Elementary', alarm: this.alarmP() > 0, front: 'N' });
     const bw = x1 - x0 - 1;
     const hallY0 = y0 + 8, hallY1 = y0 + 9;
     const hall = this.addRoom(b, 'school', x0 + 1, hallY0, x1 - 1, hallY1, FL.LINO, 4);

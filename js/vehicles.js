@@ -30,7 +30,7 @@ const Vehicles = {
         id: _carId++, type, x: sp.x, y: sp.y, a: sp.a, v: 0, steer: 0,
         col: R.pick(T.cols), gas: sp.crashed ? R.f(0, 0.2) : R.f(0.05, 0.75), hp: sp.crashed ? R.f(15, 45) : R.f(55, 100),
         locked: R.chance(0.65), keyIn: R.chance(sp.crashed ? 0.3 : 0.08), engine: false, lightsOn: false, winBroken: false,
-        alarm: R.chance(0.2), trunkOpen: false,
+        alarm: R.chance(G.sb && G.sb.carAlarms !== undefined ? G.sb.carAlarms : 0.03), trunkOpen: false,
         trunk: { type: 'trunk', cap: T.trunk, items: null }, glove: { type: 'glovebox', cap: 5, items: null },
       };
       if (c.keyIn) c.locked = false;

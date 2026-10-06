@@ -86,8 +86,8 @@ const Menu = {
     this.sbSel = this.sbSel || Object.assign({}, SANDBOX_PRESETS.Apocalypse);
     const sel = this.sbSel;
     const rows = Object.keys(SANDBOX_OPTS).map(k => {
-      const o = SANDBOX_OPTS[k];
-      return `<div class="opt"><span>${o.n}</span><select data-sb="${k}">${o.opts.map((op, i) => `<option value="${i}" ${i === sel[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
+      const o = SANDBOX_OPTS[k], cur = sel[k] === undefined ? o.def : sel[k];
+      return `<div class="opt"><span>${o.n}</span><select data-sb="${k}">${o.opts.map((op, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     }).join('');
     const presets = Object.keys(SANDBOX_PRESETS).map(n => `<span class="btn sm" data-preset="${n}">${n}</span>`).join('');
     $('#menu').innerHTML = `<div class="modal"><div class="mbox"><h2>World settings</h2>
