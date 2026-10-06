@@ -247,7 +247,7 @@ const Menu = {
       ['W A S D', 'Move'], ['Shift', 'Run'], ['Alt / X', 'Sprint'], ['C', 'Toggle sneaking'], ['Mouse', 'Look / face direction'],
       ['Right mouse (hold)', 'Aim'], ['Left mouse', 'Attack / shoot'], ['Space', 'Shove (stomp a downed zombie)'], ['R', 'Reload'],
       ['Right click (tap)', 'Context menu on doors, windows, furniture, ground'], ['E', 'Open doors & windows, climb, enter/exit cars, loot'],
-      ['F', 'Toggle flashlight / headlights'], ['Q', 'Shout (attracts zombies) / horn'], ['Z', 'Sit down and rest'],
+      ['F', 'Toggle flashlight / headlights'], ['Q', 'Shout (attracts zombies) / horn'], ['Z', 'Sit down and rest'], ['V', 'Radial menu: vehicle controls / quick actions'],
       ['I or Tab', 'Inventory & loot'], ['H', 'Health'], ['B', 'Crafting & building'], ['K', 'Character & skills'], ['M', 'Map'],
       ['1 - 5', 'Hotbar'], ['Mouse wheel', 'Zoom'], ['P / , / .', 'Pause / slower / faster time'], ['Esc', 'Menu / cancel'],
       ['Shift + click item', 'Quick transfer'], ['Double-click item', 'Use / equip / take'], ['Drag item', 'Move between containers'],

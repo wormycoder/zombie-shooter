@@ -5,6 +5,7 @@
 Input.handleGameKeys = function () {
   const p = G.player;
   if (!p || p.dead || UI.typing) return;
+  if (Radial.open) { Radial.keys(); return; }
   if (Input.hit('Escape')) {
     if (UI.ctxOpen) UI.closeContext();
     else if (G.build) { G.build = null; UI.hint('Building cancelled', 2); }
@@ -26,6 +27,7 @@ Input.handleGameKeys = function () {
   if (Input.hit('p')) G.paused = !G.paused;
   if (Input.hit('.')) { const sp = [1, 3, 8, 20]; const i = sp.indexOf(G.speed); if (!p.asleep) G.speed = sp[Math.min(sp.length - 1, i + 1)]; G.paused = false; }
   if (Input.hit(',')) { const sp = [1, 3, 8, 20]; const i = sp.indexOf(G.speed); if (!p.asleep) G.speed = sp[Math.max(0, i - 1)]; }
+  if (Input.hit('v')) Radial.toggle();
   if (p.asleep) {
     if (Input.hit('e') || Input.hit('w') || Input.hit('a') || Input.hit('s') || Input.hit('d')) Player.wakeUp('I got up.');
     return;
