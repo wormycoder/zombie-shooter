@@ -525,7 +525,10 @@ const Render = {
     for (const z of G.zombies) if (z.fire > 0 && Math.abs(vxOf(z.x) - (vx0 + vw / 2)) < vw && Math.abs(z.y - (vy0 + vh / 2)) < vh) lights.push({ x: z.x, y: z.y, r: 4, p: 0.6, fire: true });
     for (const fl of Fx.flashes) lights.push({ x: fl.x, y: fl.y, r: fl.r, p: fl.p * (fl.t / fl.max) });
     for (const c of G.cars) if (c.siren && c.engine && Math.floor(performance.now() / 200) % 2) lights.push({ x: c.x, y: c.y, r: 6, p: 0.45, out: true });
-    for (const c of G.cars) if (c.lightsOn && c.engine) {
+    for (const c of G.cars) if (c.lightsOn && c.engine && !c.burnt) {
+      // no beam when both headlamps are broken or missing
+      const pt = c.parts, lamp = (k) => !pt || typeof pt[k] !== 'number' || pt[k] >= 10;
+      if (!lamp('lightFL') && !lamp('lightFR')) continue;
       const ca = Math.cos(c.a), sa = Math.sin(c.a);
       lights.push({ x: c.x + ca * 1.6, y: c.y + sa * 1.6, r: 11, p: 0.9, cone: c.a, cw: 0.5, ox: c.x + ca * 1.2, oy: c.y + sa * 1.2 });
     }

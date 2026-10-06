@@ -1317,7 +1317,7 @@ const MapGen = {
       const onH = r.chance(0.5);
       const x = onH ? r.pick([r.int(12, 38), r.int(200, 236)]) : 135 + r.int(0, 3);
       const y = onH ? 105 + r.int(0, 3) : r.pick([r.int(4, 38), r.int(202, 236)]);
-      if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430' });
+      if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430', kind: ['sedan', 'wagon', 'pickup', 'van', 'hatchback', 'suv'][(x * 7 + y * 13) % 6] });
     }
   },
   outskirts2() {
@@ -1376,7 +1376,7 @@ const MapGen = {
       const pick = r.int(0, 2);
       const x = pick === 0 ? r.int(240, 380) : pick === 1 ? 300 + r.int(0, 3) : r.int(150, 260);
       const y = pick === 0 ? 105 + r.int(0, 3) : pick === 1 ? r.int(120, 240) : 315 + r.int(0, 3);
-      if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430' });
+      if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430', kind: ['sedan', 'wagon', 'pickup', 'van', 'hatchback', 'suv'][(x * 7 + y * 13) % 6] });
     }
   },
   forest() {
