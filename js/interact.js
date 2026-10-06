@@ -14,7 +14,7 @@ const Cont = {
   corpse(z) { if (!z.loot) z.loot = []; return { kind: 'corpse', z, items: z.loot, name: 'Corpse', key: 'z' + z.id }; },
   car(car, slot) {
     const c = car[slot];
-    if (c.items === null) c.items = Loot.roll('car', c.type, 0);
+    if (c.items === null) c.items = car.burnt ? [] : Loot.roll(slot === 'trunk' && car.loot ? car.loot : 'car', c.type, 0);
     return { kind: 'car', car, slot, items: c.items, name: slot === 'trunk' ? 'Trunk' : 'Glove Box', key: 'car' + car.id + slot, cap: c.cap };
   },
   has(c, it) {
@@ -85,8 +85,9 @@ const Interact = {
     }
     for (const z of Zombie.near(p.x, p.y, 1.6)) if (z.dead) out.push(Cont.corpse(z));
     for (const car of G.cars) {
-      const rx = car.x - Math.cos(car.a) * 1.4, ry = car.y - Math.sin(car.a) * 1.4;
-      if (U.dist(p.x, p.y, rx, ry) < 1.3 && car.trunkOpen) out.push(Cont.car(car, 'trunk'));
+      const T = CAR_TYPES[car.type] || CAR_TYPES.sedan, rb = T.len / 2 + 0.25;
+      const rx = car.x - Math.cos(car.a) * rb, ry = car.y - Math.sin(car.a) * rb;
+      if (U.dist(p.x, p.y, rx, ry) < 1.5 && (car.trunkOpen || (car.parts && car.parts.trunkLid < 0))) out.push(Cont.car(car, 'trunk'));
     }
     return out;
   },
@@ -165,12 +166,7 @@ const Interact = {
     const opts = [];
     const add = (label, fn, o) => opts.push(Object.assign({ label, fn }, o || {}));
     if (p.inCar) {
-      add('Exit vehicle', () => Vehicles.exit(p.inCar));
-      add('Open glove box', () => UI.openLoot());
-      if (!p.inCar.engine) add(Vehicles.hasKey(p.inCar) ? 'Start engine' : 'Hotwire', () => Vehicles.tryStart(p.inCar));
-      else add('Turn off engine', () => { p.inCar.engine = false; });
-      add((p.inCar.lightsOn ? 'Headlights off' : 'Headlights on'), () => { p.inCar.lightsOn = !p.inCar.lightsOn; });
-      if (CAR_TYPES[p.inCar.type].lightbar && p.inCar.engine) add(p.inCar.siren ? 'Siren off' : 'Siren on (attracts every zombie for miles)', () => { p.inCar.siren = !p.inCar.siren; });
+      Mechanics.menu(p.inCar, add, true);
       UI.showContext(sx, sy, opts, t);
       return;
     }
@@ -467,17 +463,7 @@ const Interact = {
     if (can && Player.findTag('lighter') && !World.isWater(tx, ty) && World.floor(tx, ty) !== FL.VOID) add('Pour gas and light it', () => go(() => Actions.queue(Actions.setFire(tx, ty, can))));
   },
   carOptions(car, add) {
-    const p = G.player;
-    const go = (fn) => this.goDo(car.x, car.y, fn, 2.4);
-    add('Enter vehicle', () => go(() => Vehicles.enter(car)));
-    add(car.trunkOpen ? 'Close trunk' : 'Open trunk', () => go(() => { if (car.locked && !Vehicles.hasKey(car)) { Player.say("It's locked.", '#ccc'); return; } car.trunkOpen = !car.trunkOpen; Sfx.play(car.trunkOpen ? 'doorOpen' : 'doorClose'); if (car.trunkOpen) UI.openLoot('car' + car.id + 'trunk'); }));
-    if (car.locked && !car.winBroken) add('Smash window', () => go(() => Vehicles.smashWindow(car)));
-    const can = Player.find(i => i.id === 'GasCan' && i.fl > 0.05);
-    if (can) add('Refuel with gas can', () => go(() => Actions.queue(Actions.refuelCar(car, can))));
-    const can2 = Player.find(i => i.id === 'GasCan' && i.fl < 0.95);
-    if (can2 && car.gas > 0.02) add('Siphon gas', () => go(() => Actions.queue(Actions.siphon(car, can2))));
-    add(Vehicles.typeName(car) + ' — Gas ' + Math.round(car.gas * 100) + '%, Condition ' + Math.round(car.hp) + '%', null, { info: true });
-    void p;
+    Mechanics.menu(car, add, false);
   },
   // ---------------------------------------------------------------- E key
   interactFront() {

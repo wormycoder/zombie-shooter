@@ -416,8 +416,22 @@ Object.assign(CarArt, {
     }
     return rec;
   },
+  // the car being driven is rendered at its exact heading (no 64-step snapping or stale headings while
+  // turning); the render is reused while heading, state and steering stay the same
+  liveSprite(c, mk, bk, st) {
+    const L = this.live;
+    if (L && L.id === c.id && L.mk === mk && L.st === st && Math.abs(U.angDiff(L.a, c.a)) < 0.003) return L.rec;
+    let M = this.models.get(mk);
+    try {
+      if (!M) { M = this.build(mk); this.models.set(mk, M); this.stats.models++; }
+      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1);
+      rec.live = true;
+      this.live = { id: c.id, mk, st, a: c.a, rec };
+      return rec;
+    } catch (e) { return this.sprite(c, mk, bk, st); }
+  },
   // drop every cached sprite and model (e.g. after loading a save)
-  flush() { this.cache.clear(); this.models.clear(); this.bytes = 0; },
+  flush() { this.cache.clear(); this.models.clear(); this.bytes = 0; this.live = null; },
   // never let one broken model stop the frame: fall back to a plain sedan of the same colour
   fallback(c, mk, e) {
     if (!this.warned) { this.warned = true; console.warn('CarArt: model failed for ' + mk, e); }
@@ -457,7 +471,7 @@ Object.assign(CarArt, {
       const c = mkCanvas(rec.c.width, rec.c.height), g = c.getContext('2d');
       g.drawImage(rec.c, 0, 0);
       g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, c.width, c.height);
-      rec.sil = c; this.bytes += rec.bytes;
+      rec.sil = c; if (!rec.live) this.bytes += rec.bytes;
     }
     return rec.sil;
   },
@@ -482,7 +496,7 @@ Object.assign(CarArt, {
     const mk = this.mkey(c);
     const bk = ((Math.round((Number.isFinite(c.a) ? c.a : 0) / (Math.PI * 2) * CA_NB) % CA_NB) + CA_NB) % CA_NB;
     const st = c.steer > 0.15 ? 2 : c.steer < -0.15 ? 0 : 1;
-    const rec = this.sprite(c, mk, bk, st), M = rec.M;
+    const rec = G.player && G.player.inCar === c ? this.liveSprite(c, mk, bk, st) : this.sprite(c, mk, bk, st), M = rec.M;
     const X = (c.x - c.y) * HTW, Y = (c.x + c.y) * HTH;
     const x0 = X - rec.ax / CA_SC, y0 = Y - rec.ay / CA_SC, w = rec.c.width / CA_SC, h = rec.c.height / CA_SC;
     const lit = !!(c.engine && !c.burnt), night = 1 - U.clamp((G.light.amb - 0.25) / 0.5, 0, 1);

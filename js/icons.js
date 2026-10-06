@@ -147,6 +147,22 @@ const Icons = {
       case 'magazine': PL([[7, 4], [25, 4], [25, 28], [7, 28]], c1); R_(9, 7, 14, 6, c2, false); R_(9, 16, 8, 8, Col.mix(c1, '#fff', 0.3), false); break;
       case 'newspaper': PL([[5, 6], [27, 6], [27, 26], [5, 26]], c1); for (let k = 0; k < 5; k++) L(8, 10 + k * 3.5, 24, 10 + k * 3.5, c2, 1); break;
       case 'book': R_(7, 4, 18, 24, c1); R_(7, 4, 3, 24, Col.mix(c1, '#000', 0.3), false); R_(12, 9, 10, 3, c2, false); break;
+      // ---- vehicle parts & tools
+      case 'tire': C(16, 16, 13, c1); g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; g.beginPath(); g.moveTo(16 + Math.cos(a) * 10, 16 + Math.sin(a) * 10); g.lineTo(16 + Math.cos(a) * 12.5, 16 + Math.sin(a) * 12.5); g.stroke(); } C(16, 16, 7.5, c2); C(16, 16, 3, Col.mix(c2, '#000', 0.35)); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; C(16 + Math.cos(a) * 5, 16 + Math.sin(a) * 5, 0.9, '#333', false); } break;
+      case 'carbattery': R_(4, 10, 24, 17, c1); R_(4, 10, 24, 4, Col.mix(c1, '#fff', 0.15)); R_(7, 6, 5, 4, c2); R_(20, 6, 5, 4, '#2a2a2e'); L(8, 20, 12, 20, '#e0e0e0', 1.5); L(10, 18, 10, 22, '#e0e0e0', 1.5); L(19, 20, 23, 20, '#e0e0e0', 1.5); break;
+      case 'cardoor': PL([[4, 5], [22, 5], [28, 14], [28, 28], [4, 28]], c1); PL([[7, 8], [21, 8], [25, 14], [7, 14]], c2); L(18, 19, 23, 19, '#202020', 2); break;
+      case 'windshield': PL([[3, 25], [7, 8], [25, 8], [29, 25]], c1, c2); L(9, 12, 13, 21, 'rgba(255,255,255,0.55)', 1.5); L(14, 11, 16, 15, 'rgba(255,255,255,0.4)', 1); break;
+      case 'carwindow': PL([[5, 26], [5, 10], [14, 5], [27, 5], [27, 26]], c1, c2); L(10, 12, 15, 20, 'rgba(255,255,255,0.55)', 1.5); break;
+      case 'headlight': E(16, 16, 11, 9, c2); E(16, 16, 8.5, 6.5, c1); E(13, 14, 3, 2, 'rgba(255,255,255,0.7)', false); break;
+      case 'brakepads': g.fillStyle = c1; g.beginPath(); g.arc(16, 22, 13, Math.PI * 1.1, Math.PI * 1.9); g.arc(16, 22, 6, Math.PI * 1.9, Math.PI * 1.1, true); g.closePath(); g.fill(); g.strokeStyle = O; g.stroke(); g.fillStyle = c2; g.beginPath(); g.arc(16, 22, 8, Math.PI * 1.15, Math.PI * 1.85); g.arc(16, 22, 6, Math.PI * 1.85, Math.PI * 1.15, true); g.closePath(); g.fill(); break;
+      case 'suspension': LO(16, 3, 16, 29, '#9aa2aa', 3); g.strokeStyle = c1; g.lineWidth = 3; g.beginPath(); for (let k = 0; k <= 8; k++) g.lineTo(k & 1 ? 23 : 9, 7 + k * 2.4); g.stroke(); R_(11, 2, 10, 4, c2); R_(11, 26, 10, 4, c2); break;
+      case 'muffler': LO(2, 22, 8, 18, '#6a6e74', 3); E(16, 16, 10, 6.5, c1); E(16, 16, 10, 6.5, Col.mix(c1, '#fff', 0.15)); L(8, 13, 24, 13, 'rgba(255,255,255,0.35)', 1); LO(25, 14, 30, 11, '#6a6e74', 3); break;
+      case 'hood': PL([[4, 24], [8, 6], [24, 6], [28, 24]], c1); L(16, 8, 16, 22, Col.mix(c1, '#000', 0.25), 1.5); L(6, 24, 26, 24, '#303030', 2); break;
+      case 'trunklid': PL([[4, 8], [28, 8], [26, 24], [6, 24]], c1); R_(12, 14, 8, 4, '#e8e4ce'); L(6, 8, 26, 8, '#303030', 2); break;
+      case 'gastank': R_(4, 9, 24, 16, c1); R_(4, 9, 24, 3, Col.mix(c1, '#fff', 0.15), false); C(22, 9, 2.5, c2); L(6, 18, 26, 18, 'rgba(0,0,0,0.3)', 1); break;
+      case 'engineparts': C(11, 12, 7, c1); C(11, 12, 3, '#303030'); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; R_(11 + Math.cos(a) * 8 - 1.5, 12 + Math.sin(a) * 8 - 1.5, 3, 3, c1, false); } E(22, 23, 7, 4, c2); E(22, 23, 4, 2, '#00000000'); LO(20, 6, 27, 13, '#9aa2aa', 2); break;
+      case 'lugwrench': LO(4, 28, 28, 4, c1, 3); LO(4, 4, 28, 28, c1, 3); C(4, 28, 2.5, c2); C(28, 4, 2.5, c2); C(4, 4, 2.5, c2); C(28, 28, 2.5, c2); break;
+      case 'jack': R_(3, 24, 26, 5, c2); PL([[8, 24], [16, 12], [24, 24]], c1); R_(12, 8, 8, 4, c2); LO(16, 18, 30, 18, '#9aa2aa', 1.5); break;
       default: R_(8, 8, 16, 16, c1); break;
     }
   },

@@ -171,12 +171,31 @@ const Sfx = {
         break;
       }
       case 'death': this.tn(t, 2.5, 'sine', 110, 55, 0.25, 0, { verb: true }); break;
-      case 'engineStart': this.tn(t, 0.6, 'sawtooth', 40, 70, 0.12 * G_, pan, { lp: 400 }); this.nz(t, 0.5, 'lowpass', 300, 1, 0.2 * G_, pan, { brown: true }); break;
-      case 'crank': for (let k = 0; k < 4; k++) this.tn(t + k * 0.18, 0.12, 'sawtooth', 50, 40, 0.1 * G_, pan, { lp: 300 }); break;
-      case 'horn': this.tn(t, 0.7, 'square', 410, 410, 0.12 * G_, pan, { lp: 1600, a: 0.02 }); this.tn(t, 0.7, 'square', 520, 520, 0.1 * G_, pan, { lp: 1600, a: 0.02 }); break;
-      case 'crash': this.nz(t, 0.6, 'lowpass', 2000, 1, 0.6 * G_, pan, { verb: true }); this.tn(t, 0.5, 'square', 300, 200, 0.08 * G_, pan, { lp: 1500 }); this.tn(t, 0.3, 'sine', 70, 30, 0.6 * G_, pan); break;
-      case 'carHit': this.tn(t, 0.2, 'sine', 90, 40, 0.6 * G_, pan); this.nz(t, 0.15, 'lowpass', 900, 1, 0.4 * G_, pan); break;
-      case 'cardoor': this.tn(t, 0.12, 'sine', 120, 60, 0.4 * G_, pan); this.nz(t, 0.08, 'lowpass', 800, 1, 0.25 * G_, pan); break;
+      // ---- vehicles
+      case 'engineStart': this.tn(t, 0.35, 'sawtooth', 55, 110, 0.1 * G_, pan, { lp: 500, a: 0.05 }); this.tn(t + 0.25, 0.7, 'sawtooth', 110, 46, 0.09 * G_, pan, { lp: 420 }); this.nz(t, 0.8, 'lowpass', 320, 1, 0.22 * G_, pan, { brown: true, a: 0.05 }); break;
+      case 'crank': for (let k = 0; k < 6; k++) { this.tn(t + k * 0.15, 0.13, 'sawtooth', 62, 48, 0.08 * G_, pan, { lp: 360 }); this.nz(t + k * 0.15, 0.1, 'bandpass', 700, 2, 0.05 * G_, pan); } break;
+      case 'crankFail': this.tn(t, 0.25, 'sawtooth', 70, 38, 0.08 * G_, pan, { lp: 300 }); this.nz(t + 0.05, 0.12, 'lowpass', 500, 1, 0.18 * G_, pan, { brown: true }); break;
+      case 'crankDead': for (let k = 0; k < 3; k++) this.tn(t + k * 0.32, 0.03, 'square', 1500, 1100, 0.07 * G_, pan, { lp: 3000 }); break;
+      case 'stall': this.tn(t, 0.5, 'sawtooth', 70, 28, 0.08 * G_, pan, { lp: 360 }); this.nz(t, 0.3, 'lowpass', 300, 1, 0.15 * G_, pan, { brown: true }); break;
+      case 'engineOff': this.tn(t, 0.4, 'sawtooth', 52, 26, 0.06 * G_, pan, { lp: 300 }); break;
+      case 'horn': this.tn(t, 0.6, 'square', 410, 410, 0.1 * G_, pan, { lp: 1600, a: 0.02 }); this.tn(t, 0.6, 'square', 520, 520, 0.08 * G_, pan, { lp: 1600, a: 0.02 }); break;
+      case 'hornSmall': this.tn(t, 0.45, 'square', 560, 560, 0.09 * G_, pan, { lp: 2200, a: 0.015 }); this.tn(t, 0.45, 'square', 690, 690, 0.07 * G_, pan, { lp: 2200, a: 0.015 }); break;
+      case 'hornTruck': this.tn(t, 0.75, 'sawtooth', 290, 290, 0.09 * G_, pan, { lp: 1300, a: 0.03 }); this.tn(t, 0.75, 'sawtooth', 365, 365, 0.07 * G_, pan, { lp: 1300, a: 0.03 }); break;
+      case 'hornBus': this.tn(t, 1.0, 'sawtooth', 220, 220, 0.1 * G_, pan, { lp: 1000, a: 0.05, verb: true }); this.tn(t, 1.0, 'sawtooth', 277, 277, 0.08 * G_, pan, { lp: 1000, a: 0.05 }); this.tn(t, 1.0, 'sawtooth', 330, 330, 0.05 * G_, pan, { lp: 1000, a: 0.05 }); break;
+      case 'crash': this.nz(t, 0.6, 'lowpass', 2000, 1, 0.5 * G_, pan, { verb: true }); this.tn(t, 0.45, 'square', 300, 180, 0.06 * G_, pan, { lp: 1500 }); this.tn(t, 0.3, 'sine', 70, 30, 0.55 * G_, pan); break;
+      case 'crunch':
+        this.nz(t, 0.9, 'lowpass', 2600, 0.8, 0.7 * G_, pan, { verb: true }); this.tn(t, 0.4, 'sine', 60, 25, 0.8 * G_, pan);
+        for (let k = 0; k < 5; k++) this.tn(t + r(0, 0.35), r(0.08, 0.2), 'square', r(180, 420), r(90, 200), 0.05 * G_, pan, { lp: 1800 });
+        this.nz(t + 0.05, 0.4, 'highpass', 3500, 0.7, 0.25 * G_, pan); break;
+      case 'carHit': this.tn(t, 0.2, 'sine', 90, 40, 0.55 * G_, pan); this.nz(t, 0.15, 'lowpass', 900, 1, 0.35 * G_, pan); this.tn(t, 0.12, 'square', 240, 200, 0.04 * G_, pan, { lp: 1200 }); break;
+      case 'cardoor': case 'carDoorClose': this.tn(t, 0.12, 'sine', 120, 55, 0.4 * G_, pan); this.nz(t, 0.08, 'lowpass', 800, 1, 0.25 * G_, pan); this.tn(t + 0.01, 0.05, 'square', 900, 700, 0.03 * G_, pan, { lp: 2500 }); break;
+      case 'carDoorOpen': this.tn(t, 0.04, 'square', 1300, 1000, 0.05 * G_, pan, { lp: 3000 }); this.nz(t + 0.03, 0.15, 'bandpass', 900, 1.5, 0.08 * G_, pan); break;
+      case 'hoodOpen': this.tn(t, 0.05, 'square', 900, 700, 0.06 * G_, pan, { lp: 2500 }); this.tn(t + 0.12, 0.45, 'sawtooth', 210, 160, 0.03 * G_, pan, { lp: 900 }); break;
+      case 'hoodClose': this.tn(t, 0.18, 'sine', 100, 45, 0.5 * G_, pan); this.nz(t, 0.12, 'lowpass', 1200, 1, 0.3 * G_, pan); this.tn(t, 0.25, 'square', 330, 300, 0.04 * G_, pan, { lp: 1500 }); break;
+      case 'lightBreak': this.nz(t, 0.18, 'highpass', 3500, 0.7, 0.25 * G_, pan); this.tn(t, 0.05, 'sine', 2800, 2000, 0.06 * G_, pan); break;
+      case 'tireBurst': this.nz(t, 0.25, 'lowpass', 3000, 0.7, 0.8 * G_, pan, { verb: true }); this.tn(t, 0.12, 'sine', 120, 40, 0.6 * G_, pan); this.nz(t + 0.1, 1.1, 'bandpass', 600, 1, 0.12 * G_, pan, { a: 0.05 }); break;
+      case 'ratchet': for (let k = 0; k < 7; k++) this.tn(t + k * 0.06, 0.02, 'square', 2600, 2200, 0.06 * G_, pan, { lp: 5000 }); break;
+      case 'clunk': this.tn(t, 0.15, 'sine', 160, 70, 0.4 * G_, pan); this.tn(t, 0.2, 'square', 520, 480, 0.04 * G_, pan, { lp: 2000 }); break;
       case 'alarm': for (let k = 0; k < 4; k++) this.tn(t + k * 0.5, 0.48, 'square', k & 1 ? 760 : 960, k & 1 ? 760 : 960, 0.07 * G_, pan, { lp: 2500 }); break;
       case 'beep': for (let k = 0; k < 4; k++) this.tn(t + k * 0.25, 0.1, 'square', 2000, 2000, 0.06 * G_, pan, { lp: 4000 }); break;
       case 'powerdown': this.tn(t, 1.6, 'sawtooth', 120, 30, 0.1, 0, { lp: 600 }); break;
@@ -251,20 +270,61 @@ const Sfx = {
     this.flySrc.g.gain.setTargetAtTime(Math.min(0.09, level * 0.02), t, 0.5);
     this.flySrc.fl.frequency.setTargetAtTime(480 + Math.random() * 120, t, 0.2);
   },
-  engine(car) {
+  // engine note of the car the player drives: rpm 0.15 idle .. 1 redline, th throttle 0/1
+  engine(car, rpm, th) {
     if (!this.on) return;
-    const c = this.ctx;
-    if (!car) { if (this.eng) { this.eng.g.gain.setTargetAtTime(0, c.currentTime, 0.1); } return; }
+    const c = this.ctx, t = c.currentTime;
+    if (!car) { if (this.eng) { this.eng.g.gain.setTargetAtTime(0, t, 0.12); this.eng.ng.gain.setTargetAtTime(0, t, 0.12); } return; }
     if (!this.eng) {
       const o = c.createOscillator(); o.type = 'sawtooth';
-      const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 300;
+      const o2 = c.createOscillator(); o2.type = 'square';
+      const g2 = c.createGain(); g2.gain.value = 0.45;
+      const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 300; fl.Q.value = 2;
       const g = c.createGain(); g.gain.value = 0;
-      o.connect(fl); fl.connect(g); g.connect(this.sfxG); o.start();
-      this.eng = { o, g, fl };
+      // firing pulses: amplitude wobble at the cylinder rate
+      const lfo = c.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 12;
+      const lg = c.createGain(); lg.gain.value = 0.35; const am = c.createGain(); am.gain.value = 0.75;
+      lfo.connect(lg); lg.connect(am.gain);
+      o.connect(fl); o2.connect(g2); g2.connect(fl); fl.connect(am); am.connect(g); g.connect(this.sfxG);
+      const ns = c.createBufferSource(); ns.buffer = this.brown; ns.loop = true;
+      const nf = c.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 220;
+      const ng = c.createGain(); ng.gain.value = 0;
+      ns.connect(nf); nf.connect(ng); ng.connect(this.sfxG);
+      o.start(); o2.start(); lfo.start(); ns.start();
+      this.eng = { o, o2, g, fl, lfo, nf, ng };
     }
-    this.eng.o.frequency.setTargetAtTime(38 + Math.abs(car.v) * 7, c.currentTime, 0.1);
-    this.eng.fl.frequency.setTargetAtTime(250 + Math.abs(car.v) * 40, c.currentTime, 0.1);
-    this.eng.g.gain.setTargetAtTime(0.09, c.currentTime, 0.1);
+    const T = (typeof CAR_TYPES !== 'undefined' && CAR_TYPES[car.type]) || {};
+    const pitch = T.pitch || 1, P = car.parts || {};
+    if (rpm === undefined) rpm = 0.2 + Math.min(0.8, Math.abs(car.v || 0) / 18);
+    const cranking = !car.engine;
+    const loud = P.muffler !== undefined && P.muffler < 0 ? 1.9 : P.muffler !== undefined && P.muffler < 30 ? 1.35 : 1;
+    const rough = P.engine !== undefined && P.engine < 35 ? (35 - P.engine) / 35 : 0;
+    const f = cranking ? 9 + Math.random() * 3 : (24 + rpm * 92) * pitch * (1 + (Math.random() - 0.5) * 0.06 * rough);
+    const e = this.eng;
+    e.o.frequency.setTargetAtTime(f, t, 0.06);
+    e.o2.frequency.setTargetAtTime(f * 0.5, t, 0.06);
+    e.lfo.frequency.setTargetAtTime(cranking ? 6 : f * 0.25 * (1 + rough * 0.4), t, 0.06);
+    e.fl.frequency.setTargetAtTime((cranking ? 260 : 170 + rpm * 900 + (th ? 280 : 0)) * (loud > 1 ? 1.5 : 1), t, 0.08);
+    e.g.gain.setTargetAtTime(Math.min(0.2, (cranking ? 0.05 : 0.055 + rpm * 0.04 + (th ? 0.025 : 0)) * loud), t, 0.08);
+    e.nf.frequency.setTargetAtTime(160 + rpm * 500, t, 0.1);
+    e.ng.gain.setTargetAtTime(cranking ? 0.04 : Math.min(0.16, (0.05 + rpm * 0.06) * loud), t, 0.1);
+  },
+  // tyre squeal (level 0..1) at the loudest skidding car
+  screech(level, x, y) {
+    if (!this.on) return;
+    const c = this.ctx, t = c.currentTime;
+    if (!this.scr) {
+      if (!(level > 0)) return;
+      const s = c.createBufferSource(); s.buffer = this.noise; s.loop = true;
+      const fl = c.createBiquadFilter(); fl.type = 'bandpass'; fl.frequency.value = 1700; fl.Q.value = 9;
+      const lfo = c.createOscillator(); lfo.frequency.value = 7; const lg = c.createGain(); lg.gain.value = 220; lfo.connect(lg); lg.connect(fl.frequency);
+      const g = c.createGain(); g.gain.value = 0;
+      s.connect(fl); fl.connect(g); g.connect(this.sfxG); s.start(); lfo.start();
+      this.scr = { g, fl };
+    }
+    const sp = level > 0 ? this.spatial(x, y, 40) : { g: 0 };
+    this.scr.g.gain.setTargetAtTime(Math.min(0.5, (level || 0) * 0.5 * sp.g), t, level > 0 ? 0.04 : 0.12);
+    if (level > 0) this.scr.fl.frequency.setTargetAtTime(1500 + level * 500, t, 0.1);
   },
   // two-tone wail of the nearest active siren
   siren(c) {

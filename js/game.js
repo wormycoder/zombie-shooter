@@ -234,7 +234,7 @@ const Game = {
       this.pf.rend += t2 - t1;
       // HUD and panels refresh at the configured rate
       this.uiAcc = (this.uiAcc || 0) + dt;
-      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); this.uiAcc = 0; this.pf.ui++; this.pf.uiMs += performance.now() - t2; }
+      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); Dash.update(); this.uiAcc = 0; this.pf.ui++; this.pf.uiMs += performance.now() - t2; }
       Music.update(dt);
     } else if (G.mode === 'menu' || G.mode === 'create') {
       Menu.drawBackground(dt);

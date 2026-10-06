@@ -637,7 +637,7 @@ const Actions = {
     return this.mk('Hotwiring', 9 * (1 - Player.skill('Electrical') * 0.06), () => {
       if (R.chance(0.65 + Player.skill('Electrical') * 0.05 + Player.skill('Mechanics') * 0.03)) { car.hotwired = true; Player.say('Got it!', '#8f8'); Player.xp('Electrical', 5); Player.xp('Mechanics', 3); Vehicles.startEngine(car); }
       else { Player.say("It didn't work.", '#ccc'); Player.xp('Electrical', 1); }
-    }, { anim: 'work', walkOk: false, inCar: true });
+    }, { anim: 'work', walkOk: false, inCar: true, begin: () => Vehicles.soundAlarm(car) });
   },
   refuelCar(car, can) {
     return this.mk('Refueling', 4 + can.fl * 4, () => {

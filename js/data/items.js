@@ -157,6 +157,30 @@ T('Scissors', 'Scissors', 0.1, ['scissors', '#c0c8d0', '#3060c0'], { tags: ['sci
 T('SewingKit', 'Needle and Thread', 0.1, ['needle', '#c0c8d0', '#c03030'], { tags: ['needle'] });
 T('Generator', 'Generator', 22, ['generator', '#c8a020', '#303030'], { generator: true });
 T('CarKey', 'Car Key', 0.05, ['key', '#c0c0c8', '#303030'], { key: true });
+// ----- VEHICLE TOOLS & PARTS ----------------------------------------------
+// part items carry their condition in it.pc (0-100); size: 'regular' or 'heavy' (heavy parts are bulky to carry)
+T('LugWrench', 'Lug Wrench', 1.2, ['lugwrench', '#5a5e64', '#2a2a2e'], { tags: ['lugwrench'], desc: 'Takes the wheel nuts off. Needed with a jack to change tires.' });
+T('CarJack', 'Jack', 3.5, ['jack', '#c8381e', '#3a3a3e'], { tags: ['jack'], desc: 'Lifts a vehicle to work on its wheels and underside.' });
+T('Wrench', 'Wrench', 0.6, ['wrench', '#9aa2aa', '#5a5e64'], { tags: ['wrench'], desc: 'Bolts and nuts: batteries, doors, mufflers, brakes.' });
+const CP = (id, n, w, ic, o) => idef(id, Object.assign({ n, cat: 'Car Part', w, ic, carPart: true, size: w >= 6 ? 'heavy' : 'regular' }, o));
+CP('Tire', 'Tire', 5, ['tire', '#1e1e20', '#a8acb0']);
+CP('TireHD', 'Heavy-Duty Tire', 9, ['tire', '#18181a', '#6a6e72']);
+CP('CarBattery', 'Car Battery', 7, ['carbattery', '#2a2c30', '#c83a2a'], { desc: 'Stores charge for the starter, horn and lights. The alternator recharges it while the engine runs.' });
+CP('CarDoor', 'Car Door', 12, ['cardoor', '#6a7280', '#30465a']);
+CP('Windshield', 'Windshield', 8, ['windshield', '#6a90a8', '#2a2c30']);
+CP('CarWindow', 'Car Window', 2.5, ['carwindow', '#7aa0b8', '#2a2c30']);
+CP('Headlight', 'Headlight', 0.6, ['headlight', '#e4e6d8', '#8a9096']);
+CP('Taillight', 'Taillight', 0.5, ['headlight', '#c02018', '#8a9096']);
+CP('BrakePads', 'Brake Pads', 1.2, ['brakepads', '#7a7e84', '#3a3a3e']);
+CP('BrakePadsHD', 'Heavy-Duty Brakes', 2.5, ['brakepads', '#5a5e64', '#c8381e']);
+CP('Suspension', 'Suspension', 6, ['suspension', '#3a5a9a', '#9aa2aa']);
+CP('SuspensionHD', 'Heavy-Duty Suspension', 10, ['suspension', '#3a3a3e', '#c8a020']);
+CP('Muffler', 'Muffler', 4, ['muffler', '#8a8e94', '#4a4a4e']);
+CP('MufflerHD', 'Heavy-Duty Muffler', 7, ['muffler', '#6a6e74', '#3a3a3e']);
+CP('CarHood', 'Hood', 9, ['hood', '#6a7280', '#3a3a3e']);
+CP('TrunkLid', 'Trunk Lid', 8, ['trunklid', '#6a7280', '#3a3a3e']);
+CP('GasTank', 'Gas Tank', 8, ['gastank', '#5a5e64', '#2a2a2e']);
+CP('EngineParts', 'Spare Engine Parts', 0.5, ['engineparts', '#8a8e94', '#c8a020'], { desc: 'Gaskets, belts and bolts. Used up when repairing an engine.' });
 T('HouseKey', 'Key', 0.05, ['key', '#d0b040', '#806020'], { key: true });
 T('Radio', 'Portable Radio', 0.8, ['radio', '#303438', '#c0c0c0'], { power: 1.0, radio: true, cat: 'Electronics' });
 T('Cigarettes', 'Cigarettes', 0.1, ['cig', '#f0f0f0', '#c03030'], { uses: 20, smoke: true, cat: 'Misc' });
@@ -273,6 +297,7 @@ const Items = {
     if (d.cols) it.col = d.cols[Math.floor(R.next() * d.cols.length)];
     if (d.bag) it.items = [];
     if (d.cat === 'Clothing') it.cond = 1;
+    if (d.carPart && id !== 'EngineParts') it.pc = opts && opts.loot ? (R.chance(0.5) ? R.int(35, 100) : 100) : 100;
     if (opts) Object.assign(it, opts.set || {});
     return it;
   },
@@ -294,6 +319,7 @@ const Items = {
       }
     }
     if (d.gas !== undefined && it.fl <= 0.001) n = 'Empty Gas Can';
+    if (d.carPart && it.pc !== undefined && it.id !== 'EngineParts') n += ' (' + Math.round(it.pc) + '%)';
     if (d.cook || d.raw) {
       if (it.burnt) n = 'Burnt ' + n;
       else if (it.cooked) n = 'Cooked ' + n;
@@ -345,6 +371,8 @@ const Items = {
     const d = ITEMS[it.id];
     const lines = [];
     lines.push('Weight: ' + U.fmt2(this.weight(it)));
+    if (d.carPart && d.size) lines.push('Size: ' + (d.size === 'heavy' ? 'Heavy' : 'Regular') + (it.pc !== undefined && it.id !== 'EngineParts' ? ' · Condition ' + Math.round(it.pc) + '%' : ''));
+    if (d.desc && (d.carPart || d.tags.includes('lugwrench') || d.tags.includes('jack'))) lines.push(d.desc);
     if (d.wpn) {
       lines.push('Condition: ' + Math.max(0, it.cond) + '/' + d.wpn.cond);
       lines.push('Damage: ' + d.wpn.dmg[0] + ' - ' + d.wpn.dmg[1]);
