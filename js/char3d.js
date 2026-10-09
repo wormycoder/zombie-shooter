@@ -101,11 +101,13 @@ c3mesh('HAIR', 0.21, [[-0.012, -0.06, -0.03, 0.05], [0.01, -0.075, -0.012, 0.064
 // cap crown, sitting high on the skull
 c3mesh('CAP', 0.22, [[0.118, -0.108, 0.104, 0.086, 2.4], [0.15, -0.104, 0.1, 0.083, 2.3], [0.175, -0.088, 0.08, 0.07], [0.196, -0.058, 0.044, 0.046], [0.208, -0.022, 0.008, 0.016], [0.211, -0.008, -0.004, 0]], 16);
 // rib cage and shoulders (chest frame), belly (lumbar frame), hips and seat (pelvis frame)
-c3mesh('CHEST', 0.31, [[-0.1, -0.088, 0.086, 0.136, 2.5, 2.3], [-0.03, -0.092, 0.096, 0.146, 2.5, 2.3], [0.05, -0.097, 0.108, 0.156, 2.5, 2.3], [0.13, -0.1, 0.114, 0.164, 2.6, 2.4],
-  [0.195, -0.1, 0.104, 0.172, 2.7, 2.5], [0.24, -0.09, 0.084, 0.17, 2.6, 2.4], [0.272, -0.07, 0.056, 0.13, 2.3], [0.292, -0.052, 0.038, 0.075], [0.3, -0.04, 0.026, 0.05]], 18);
+c3mesh('CHEST', 0.31, [[-0.1, -0.088, 0.086, 0.136, 2.5, 2.3], [-0.03, -0.092, 0.096, 0.146, 2.5, 2.3], [0.05, -0.097, 0.108, 0.156, 2.5, 2.3], [0.13, -0.1, 0.112, 0.164, 2.6, 2.4],
+  [0.19, -0.098, 0.1, 0.17, 2.8, 2.6], [0.24, -0.084, 0.072, 0.176, 3, 2.8], [0.266, -0.066, 0.05, 0.15, 2.8, 2.6], [0.285, -0.052, 0.034, 0.105, 2.6, 2.4], [0.296, -0.042, 0.026, 0.065], [0.3, -0.038, 0.022, 0.045]], 18);
 c3mesh('BELLY', 0.2, [[-0.075, -0.086, 0.084, 0.15, 2.5], [0, -0.085, 0.09, 0.144, 2.5], [0.08, -0.084, 0.09, 0.137, 2.5], [0.15, -0.087, 0.088, 0.137, 2.5], [0.185, -0.088, 0.086, 0.138, 2.5]], 18);
 c3mesh('PELVIS', 0.2, [[-0.115, -0.03, 0.035, 0.045, 2.2], [-0.09, -0.085, 0.065, 0.13, 2.3], [-0.05, -0.11, 0.08, 0.168, 2.4], [-0.005, -0.115, 0.086, 0.176, 2.5],
   [0.05, -0.105, 0.088, 0.166, 2.5], [0.1, -0.092, 0.088, 0.154, 2.5], [0.135, -0.088, 0.086, 0.15, 2.5]], 18);
+// a belt (or any band round the waist): follows the top of the hips
+c3mesh('BAND', 0.2, [[-0.016, -0.095, 0.091, 0.156, 2.5], [0.016, -0.093, 0.09, 0.154, 2.5]], 18);
 // limbs (z from the near joint to the far one, sized per instance): muscle swell near the top, calf behind the shin
 c3mesh('LIMB', 1, [[-1, -0.94, 0.94, 0.94], [-0.8, -1, 1, 1], [-0.45, -1, 1, 0.98], [0, -0.92, 0.92, 0.9], [0.45, -0.8, 0.8, 0.8], [0.8, -0.74, 0.74, 0.74], [1, -0.72, 0.72, 0.72]], 12);
 c3mesh('CALF', 1, [[-1, -0.9, 0.9, 0.9], [-0.72, -1, 0.88, 0.94], [-0.4, -1, 0.86, 0.9], [0, -0.86, 0.74, 0.78], [0.5, -0.66, 0.64, 0.62], [1, -0.6, 0.6, 0.58]], 12);
@@ -195,7 +197,7 @@ const Char3D = {
     // some are heavier set: a fuller belly and hips
     const heavy = r(5) < 0.22 ? 1 + r(6) * 0.16 : 1;
     const D = { H, bw, fem, zomb: !!look.zombie, thigh: 0.435 * H, shin: 0.425 * H, ankH: 0.075, hipW: (fem ? 0.092 : 0.088) * (0.5 + 0.5 * H), ua: 0.3 * H, fa: 0.265 * H,
-      shW: (fem ? 0.172 : 0.19) * bw, sp0: 0.09 * H, sp1: 0.18 * H, shZ: 0.25 * H, neck: 0.125 * H,
+      shW: (fem ? 0.158 : 0.176) * bw, sp0: 0.09 * H, sp1: 0.18 * H, shZ: 0.25 * H, neck: 0.125 * H,
       belly: bw * heavy * (0.5 + 0.5 * H), hips: (0.97 + r(7) * 0.06) * (1 + (heavy - 1) * 0.5) * (0.5 + 0.5 * H), arm: (fem ? 0.88 : 1) * (0.94 + r(8) * 0.1) * (heavy > 1 ? 1.06 : 1),
       hand: fem ? 0.9 : 1, head: (fem ? 0.94 : 0.97) * (0.98 + r(9) * 0.04), foot: fem ? 0.86 : 0.92 + r(10) * 0.05 };
     // standing, the knees are all but straight (an IK knee bends fast as the hip lowers: 0.998 is about 7 degrees)
@@ -984,9 +986,9 @@ const Char3D = {
       hair, brow: this.sc(hair, 0.75), shirt, shirtD: this.sc(shirt, 0.8), bareTop: bare(look.shirt), bareLegs: bare(look.pants), barefoot: bare(look.shoes),
       jacket, jacketD: jacket ? this.sc(jacket, 0.78) : null, pants, pantsD: this.sc(pants, 0.8), belt: [0.17, 0.12, 0.09], buckle: [0.66, 0.64, 0.58],
       shoes, sole: bare(look.shoes) ? this.sc(skin, 0.8) : this.mix(this.sc(shoes, 0.5), [0.85, 0.83, 0.78], look.shoes && this.rgb(look.shoes)[0] > 0.7 ? 0.6 : 0),
-      hand: look.gloves ? rgb(look.gloves) : skin, vest: look.vest ? rgb(look.vest) : null,
+      hand: look.gloves ? rgb(look.gloves) : zomb ? this.mix(skin, [0.3, 0.07, 0.05], 0.12 + blood * 0.3) : skin, vest: look.vest ? rgb(look.vest) : null,
       bag: look.bag ? rgb(look.bag) : null, bagD: look.bag ? this.sc(rgb(look.bag), 0.72) : null, hat: look.hat ? rgb(look.hat.col || '#444') : null,
-      blood: [0.42, 0.04, 0.03], bloodD: [0.24, 0.03, 0.02], wound: [0.36, 0.08, 0.07], glass: [0.08, 0.08, 0.09], bone: [0.78, 0.74, 0.62],
+      blood: [0.4, 0.05, 0.035], bloodD: [0.22, 0.05, 0.035], wound: [0.36, 0.08, 0.07], glass: [0.08, 0.08, 0.09], bone: [0.78, 0.74, 0.62],
     };
     Pl.b0 = look.blood; Pl.bl = blood;
     Pl.top = jacket || shirt;
@@ -1032,11 +1034,22 @@ const Char3D = {
       const nr = Math.floor(r(5) * 3.2);
       for (let k = 0; k < nr; k++) ex.rips.push({ part: r(10 + k) < 0.6 ? 'chest' : 'belly', z: 0.25 + r(14 + k) * 0.5, a: (r(18 + k) - 0.5) * 3.6 + (r(22 + k) < 0.3 ? Math.PI : 0), w: 0.03 + r(26 + k) * 0.03, h: 0.025 + r(30 + k) * 0.035, flesh: r(34 + k) < 0.3 });
     }
-    // blood soaks in clusters, mostly down the front from the mouth and neck
-    const ns = Math.round(bl * (zomb ? 9 : 4));
+    // blood: what ran from the mouth or a bite at the neck streaks down the chest; elsewhere splashes with smaller
+    // drops round them, some running down, soaked into the cloth (dark where it has dried)
+    const add = (part, z, a, w, h, dark) => ex.stains.push({ part, z: U.clamp(z, 0.04, 0.97), a, w, h, dark });
+    if (zomb && bl > 0.3) {
+      const a0 = (r(41) - 0.5) * 0.7, n = 1 + Math.floor(r(42) * 2.4 * bl);
+      for (let k = 0; k < n; k++) add('chest', 0.9 - k * 0.17 - r(44 + k) * 0.05, a0 + (r(47 + k) - 0.5) * 0.25, 0.018 + r(50 + k) * 0.016, 0.045 + bl * 0.035, k > 0);
+      if (r(53) < bl) add('belly', 0.85, a0 + (r(54) - 0.5) * 0.3, 0.015, 0.05, true);
+    }
+    const ns = Math.round(bl * (zomb ? 5 : 3));
     for (let k = 0; k < ns; k++) {
-      const front = r(40 + k) < 0.75, part = r(50 + k) < 0.55 ? 'chest' : r(60 + k) < 0.6 ? 'belly' : 'pelvis';
-      ex.stains.push({ part, z: part === 'chest' ? 0.35 + r(70 + k) * 0.55 : 0.15 + r(70 + k) * 0.7, a: (front ? 0 : Math.PI) + (r(80 + k) - 0.5) * 2.4, w: 0.022 + r(90 + k) * 0.035 * (0.6 + bl), h: 0.03 + r(95 + k) * 0.05 * (0.6 + bl), dark: r(99 + k) < 0.5 });
+      const front = r(60 + k) < 0.7, q = r(66 + k), part = q < 0.45 ? 'chest' : q < 0.75 ? 'belly' : 'pelvis';
+      const z = part === 'chest' ? 0.3 + r(72 + k) * 0.55 : 0.2 + r(72 + k) * 0.65, a = (front ? 0 : Math.PI) + (r(78 + k) - 0.5) * 2.6;
+      const w = 0.018 + r(84 + k) * 0.026 * (0.6 + bl), h = 0.02 + r(90 + k) * 0.03 * (0.6 + bl), dark = r(96 + k) < 0.55;
+      add(part, z, a, w, h, dark);
+      if (r(102 + k) < 0.65) add(part, z + (r(108 + k) - 0.5) * 0.14, a + (r(114 + k) - 0.5) * 0.4, w * 0.5, h * 0.45, !dark);
+      if (r(120 + k) < 0.4) add(part, z - h * 2.2, a + (r(126 + k) - 0.5) * 0.08, w * 0.3, h * 1.5, dark);
     }
     S.ex = ex; S.exK = look.blood;
     return ex;
@@ -1126,11 +1139,11 @@ const Char3D = {
     const tuck = ex.tuck && !jk && !Pl.bareTop;
     c3box(GL3D.BELLY, Lf, 0, 0, tuck || Pl.bareTop ? 0 : -0.035, UB * waS, UB * waS * 1.01, UB * H, Pl.bareTop ? Pl.skin : under);
     if (tuck && det > 0) {
-      c3box(CY, Pf, -0.008, 0, 0.115, 0.097 * hiS, 0.152 * hiS, 0.016, Pl.belt, 1, 1);
-      if (det > 1) c3box(BOX, Pf, 0.092 * hiS, 0, 0.115, 0.008, 0.02, 0.014, Pl.buckle);
+      c3box(GL3D.BAND, Pf, 0, 0, 0.112, C3U.BAND * hiS, C3U.BAND * hiS, C3U.BAND * H, Pl.belt);
+      if (det > 1) c3box(BOX, Pf, 0.092 * hiS, 0, 0.112, 0.006, 0.02, 0.014, Pl.buckle);
     }
     c3box(GL3D.CHEST, Cf, 0, 0, 0, UC * shS * (fem ? 0.97 : 1), UC * shS, UC * H, Pl.bareTop ? Pl.skin : under);
-    if (fem) for (const sd of [-1, 1]) c3box(SP, Cf, 0.072 * shS, sd * 0.052 * shS, 0.1 * H, 0.042, 0.05, 0.046, Pl.bareTop ? Pl.skin : under);
+    if (fem) for (const sd of [-1, 1]) c3box(SP, Cf, 0.07 * shS, sd * 0.048 * shS, 0.115 * H, 0.05, 0.058, 0.055, Pl.bareTop ? Pl.skin : under);
     if (jk) {
       // a jacket over the shirt: bulkier, longer, with a turned-up collar and a darker zip line
       c3box(GL3D.CHEST, Cf, -0.004, 0, 0.004, UC * shS * jx * (fem ? 1 : 1.03), UC * shS * jx, UC * H * 1.01, Pl.jacket);
@@ -1151,10 +1164,17 @@ const Char3D = {
         this.surf(o, ch ? 'CHEST' : 'BELLY', st.z, st.a, (ch ? shS : waS) * sc, (ch ? shS : waS) * sc, H);
         this.patch(F, o, st.w, st.h, st.flesh ? Pl.wound : Pl.skinD, 0.004);
       }
+      // stains soak into the cloth they are on
+      if (ex.pl !== Pl) {
+        ex.pl = Pl;
+        const bt = Pl.bareTop && !jk, top = Pl.vest || (bt ? Pl.skin : Pl.top), mid = Pl.vest || (jk ? Pl.jacket : bt ? Pl.skin : under);
+        ex.bc = {};
+        for (const [k, c] of [['chest', top], ['belly', mid], ['pelvis', Pl.pants]]) ex.bc[k] = [this.mix(c, Pl.blood, 0.82), this.mix(c, Pl.bloodD, 0.85)];
+      }
       for (const st of ex.stains) {
         const F = st.part === 'chest' ? Cf : st.part === 'belly' ? Lf : Pf, sx = st.part === 'chest' ? shS * sc : st.part === 'belly' ? waS * sc : hiS;
         this.surf(o, st.part === 'chest' ? 'CHEST' : st.part === 'belly' ? 'BELLY' : 'PELVIS', st.z, st.a, sx, sx, H);
-        this.patch(F, o, st.w, st.h, st.dark ? Pl.bloodD : Pl.blood, 0.005);
+        this.patch(F, o, st.w, st.h, ex.bc[st.part][st.dark ? 1 : 0], 0.005);
       }
     }
     // backpack with straps
@@ -1174,7 +1194,7 @@ const Char3D = {
     // ---- arms
     const ua = D.ua, fa = D.fa, Wm = Pose.weapon ? WEAPON_MODELS[Pose.weapon] || WEAPON_MODELS.generic : null;
     let handR = null, wd = null;
-    const armR = 0.048 * D.arm;
+    const armR = 0.047 * D.arm;
     for (const side of [1, -1]) {
       const i = side < 0 ? C3.LW : C3.RW;
       const S0 = c3pt(c3S0, Cf, -0.012, side * D.shW, D.shZ);
@@ -1197,35 +1217,56 @@ const Char3D = {
       this.ik(S0, tg, ua, fa, pole[0], pole[1], pole[2], E, Wr);
       const torn = side < 0 ? ex.tornL : ex.tornR;
       const sleeve = torn ? Pl.skin : Pl.sleeve, up = torn ? Pl.skin : Pl.upper, clothed = up !== Pl.skin, longS = sleeve !== Pl.skin;
-      const cl = clothed ? (jk ? 0.012 : 0.006) : 0;
-      // shoulder, upper arm (a short sleeve ends half way), elbow, forearm, cuff, hand
-      c3a[0] = S0[0] + (E[0] - S0[0]) * 0.1; c3a[1] = S0[1] + (E[1] - S0[1]) * 0.1; c3a[2] = S0[2] + (E[2] - S0[2]) * 0.1;
-      c3seg(GL3D.LIMB, c3a, E, armR * 1.04 + cl, armR + cl, longS ? sleeve : Pl.skin, 1, 1, Cf[3], Cf[4], Cf[5]);
-      // the deltoid caps the joint, stretched along the upper arm from the top of the shoulder
-      c3pt(c3a, Cf, -0.012, side * (D.shW - 0.02), D.shZ + 0.035);
-      c3g[0] = S0[0] + (E[0] - S0[0]) * 0.36; c3g[1] = S0[1] + (E[1] - S0[1]) * 0.36; c3g[2] = S0[2] + (E[2] - S0[2]) * 0.36;
-      c3seg(SP, c3a, c3g, armR * 1.12 + cl, armR * 1.18 + cl, up, 1, 1, Cf[6] * side, Cf[7] * side, Cf[8] * side);
+      const cl = clothed ? (jk ? 0.013 : 0.006) : 0;
+      // upper arm direction
+      let ux = E[0] - S0[0], uy = E[1] - S0[1], uz = E[2] - S0[2]; const ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+      const ox = Cf[6] * side, oy = Cf[7] * side, oz = Cf[8] * side;
+      // the deltoid: an ellipsoid over the joint, longest down the arm, rounding the arm into the shoulder line
+      c3a[0] = S0[0] - ux * 0.012; c3a[1] = S0[1] - uy * 0.012; c3a[2] = S0[2] - uz * 0.012;
+      c3g[0] = S0[0] + ux * 0.095; c3g[1] = S0[1] + uy * 0.095; c3g[2] = S0[2] + uz * 0.095;
+      const dR = armR * 1.04 + cl;
+      c3seg(SP, c3a, c3g, dR, dR * 1.06, up, 1, 1, ox, oy, oz);
+      // upper arm, its top hidden in the deltoid; a short sleeve ends half way down with a slight flare
+      c3a[0] = S0[0] + ux * 0.05; c3a[1] = S0[1] + uy * 0.05; c3a[2] = S0[2] + uz * 0.05;
+      c3seg(GL3D.LIMB, c3a, E, armR * 1.02 + cl, armR * 0.98 + cl, longS ? sleeve : Pl.skin, 1, 1, Cf[3], Cf[4], Cf[5]);
       if (clothed && !longS) {
-        c3a[0] = S0[0] + (E[0] - S0[0]) * 0.12; c3a[1] = S0[1] + (E[1] - S0[1]) * 0.12; c3a[2] = S0[2] + (E[2] - S0[2]) * 0.12;
-        c3g[0] = S0[0] + (E[0] - S0[0]) * 0.5; c3g[1] = S0[1] + (E[1] - S0[1]) * 0.5; c3g[2] = S0[2] + (E[2] - S0[2]) * 0.5;
-        c3seg(CY, c3a, c3g, armR * 1.16 + 0.008, armR * 1.12 + 0.008, up, 1, 1.04, Cf[3], Cf[4], Cf[5]);
+        c3a[0] = S0[0] + ux * 0.035; c3a[1] = S0[1] + uy * 0.035; c3a[2] = S0[2] + uz * 0.035;
+        const k = ua * 0.48; c3g[0] = S0[0] + ux * k; c3g[1] = S0[1] + uy * k; c3g[2] = S0[2] + uz * k;
+        c3seg(CY, c3a, c3g, dR, dR * 1.04, up, 0.98, 1.03, Cf[3], Cf[4], Cf[5]);
       }
-      if (torn && det > 0) { c3g[0] = (S0[0] + E[0]) / 2; c3g[1] = (S0[1] + E[1]) / 2; c3g[2] = (S0[2] + E[2]) / 2; c3emit(SP, c3g[0], c3g[1], c3g[2], 0.034, 0, 0, 0, 0.03, 0, 0, 0, 0.045, Pl.wound, 1, 1); }
-      const eR = armR * 0.86 + (longS ? cl : 0);
+      if (torn && det > 0) { c3g[0] = S0[0] + ux * ua * 0.5; c3g[1] = S0[1] + uy * ua * 0.5; c3g[2] = S0[2] + uz * ua * 0.5; c3emit(SP, c3g[0], c3g[1], c3g[2], 0.034, 0, 0, 0, 0.03, 0, 0, 0, 0.045, Pl.wound, 1, 1); }
+      const eR = armR * 0.8 + (longS ? cl : 0);
       c3emit(SP, E[0], E[1], E[2], eR, 0, 0, 0, eR, 0, 0, 0, eR, longS ? sleeve : Pl.skin, 1, 1);
-      c3seg(GL3D.LIMB, E, Wr, armR * 0.94 + (longS ? cl : 0), armR * 0.88 + (longS ? cl : 0), sleeve, 1, 1, Cf[3], Cf[4], Cf[5]);
+      c3seg(GL3D.LIMB, E, Wr, armR * 0.9 + (longS ? cl : 0), armR * 0.84 + (longS ? cl : 0), sleeve, 1, 1, Cf[3], Cf[4], Cf[5]);
       // forearm direction
       let ax = Wr[0] - E[0], ay = Wr[1] - E[1], az = Wr[2] - E[2]; const al = Math.sqrt(ax * ax + ay * ay + az * az) || 1; ax /= al; ay /= al; az /= al;
-      if (longS && det > 1) { c3a[0] = Wr[0] - ax * 0.03; c3a[1] = Wr[1] - ay * 0.03; c3a[2] = Wr[2] - az * 0.03; c3seg(CY, c3a, Wr, armR * 0.8 + cl, armR * 0.8 + cl, jk ? Pl.jacketD : Pl.shirtD, 1, 1, Cf[3], Cf[4], Cf[5]); }
-      // hand: a flat hand hangs palm in; a fist round a grip faces along the weapon
+      if (longS && det > 1) { c3a[0] = Wr[0] - ax * 0.035; c3a[1] = Wr[1] - ay * 0.035; c3a[2] = Wr[2] - az * 0.035; c3seg(CY, c3a, Wr, armR * 0.74 + cl, armR * 0.76 + cl, jk ? Pl.jacketD : Pl.shirtD, 1, 1, Cf[3], Cf[4], Cf[5]); }
+      // hand: n is the back of the hand (outward when hanging), w across the knuckles toward the thumb
       const fist = side > 0 ? !!Wm || T[C3.RE] > 0.9 : T[C3.GR] > 0.5 || T[C3.LH] > 0.5 || (Pose.offhand && T[C3.LW] > 0.2);
-      const hc = side > 0 ? c3HR : c3HC; hc[0] = Wr[0] + ax * 0.045; hc[1] = Wr[1] + ay * 0.045; hc[2] = Wr[2] + az * 0.045;
-      let nx = Cf[6] * side, ny = Cf[7] * side, nz = Cf[8] * side;
+      let nx = ox, ny = oy, nz = oz;
       const nd = nx * ax + ny * ay + nz * az; nx -= ax * nd; ny -= ay * nd; nz -= az * nd; const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; nx /= nl; ny /= nl; nz /= nl;
-      const wx = ay * nz - az * ny, wy = az * nx - ax * nz, wz = ax * ny - ay * nx;
-      const hs = D.hand, th = (fist ? 0.03 : 0.018) * hs, wh = (fist ? 0.036 : 0.04) * hs, ln = (fist ? 0.04 : 0.055) * hs;
-      c3emit(RB, hc[0], hc[1], hc[2], nx * th, ny * th, nz * th, wx * wh, wy * wh, wz * wh, ax * ln, ay * ln, az * ln, Pl.hand, 1, fist ? 0.95 : 0.78);
-      if (!fist && det > 1) c3emit(RB, hc[0] - wx * wh * 0.75 + ax * 0.005, hc[1] - wy * wh * 0.75 + ay * 0.005, hc[2] - wz * wh * 0.75 + az * 0.005, nx * 0.012, ny * 0.012, nz * 0.012, wx * 0.012, wy * 0.012, wz * 0.012, ax * 0.03, ay * 0.03, az * 0.03, Pl.hand, 1, 0.8);
+      const wx = (ay * nz - az * ny) * side, wy = (az * nx - ax * nz) * side, wz = (ax * ny - ay * nx) * side;
+      const hs = D.hand, hc = side > 0 ? c3HR : c3HC, hcol = Pl.hand;
+      if (fist) {
+        // a fist: knuckles, folded fingers and the thumb across the front
+        const c = 0.05 * hs; hc[0] = Wr[0] + ax * c; hc[1] = Wr[1] + ay * c; hc[2] = Wr[2] + az * c;
+        c3emit(RB, hc[0], hc[1], hc[2], nx * 0.027 * hs, ny * 0.027 * hs, nz * 0.027 * hs, wx * 0.041 * hs, wy * 0.041 * hs, wz * 0.041 * hs, ax * 0.046 * hs, ay * 0.046 * hs, az * 0.046 * hs, hcol, 1, 0.95);
+        if (det > 1) c3emit(SP, hc[0] + wx * 0.03 * hs - nx * 0.012, hc[1] + wy * 0.03 * hs - ny * 0.012, hc[2] + wz * 0.03 * hs - nz * 0.012, 0.016 * hs, 0, 0, 0, 0.016 * hs, 0, 0, 0, 0.016 * hs, this.sc(hcol, 0.95), 1, 1);
+      } else {
+        // open and relaxed: palm, then the fingers curling a little toward the palm, thumb alongside
+        const c = 0.045 * hs; hc[0] = Wr[0] + ax * c; hc[1] = Wr[1] + ay * c; hc[2] = Wr[2] + az * c;
+        c3emit(RB, hc[0], hc[1], hc[2], nx * 0.016 * hs, ny * 0.016 * hs, nz * 0.016 * hs, wx * 0.042 * hs, wy * 0.042 * hs, wz * 0.042 * hs, ax * 0.044 * hs, ay * 0.044 * hs, az * 0.044 * hs, hcol, 1, 0.94);
+        if (det > 0) {
+          const cu = 0.42, fx = ax * Math.cos(cu) - nx * Math.sin(cu), fy = ay * Math.cos(cu) - ny * Math.sin(cu), fz = az * Math.cos(cu) - nz * Math.sin(cu);
+          const gx = nx * Math.cos(cu) + ax * Math.sin(cu), gy = ny * Math.cos(cu) + ay * Math.sin(cu), gz = nz * Math.cos(cu) + az * Math.sin(cu), f0 = 0.084 * hs, fl = 0.036 * hs;
+          c3emit(RB, Wr[0] + ax * f0 + fx * fl - nx * 0.004, Wr[1] + ay * f0 + fy * fl - ny * 0.004, Wr[2] + az * f0 + fz * fl - nz * 0.004, gx * 0.012 * hs, gy * 0.012 * hs, gz * 0.012 * hs, wx * 0.038 * hs, wy * 0.038 * hs, wz * 0.038 * hs, fx * fl, fy * fl, fz * fl, hcol, 1, 0.82);
+          if (det > 1) {
+            c3a[0] = Wr[0] + ax * 0.025 + wx * 0.03 - nx * 0.012; c3a[1] = Wr[1] + ay * 0.025 + wy * 0.03 - ny * 0.012; c3a[2] = Wr[2] + az * 0.025 + wz * 0.03 - nz * 0.012;
+            c3g[0] = Wr[0] + ax * 0.085 + wx * 0.046 - nx * 0.022; c3g[1] = Wr[1] + ay * 0.085 + wy * 0.046 - ny * 0.022; c3g[2] = Wr[2] + az * 0.085 + wz * 0.046 - nz * 0.022;
+            c3seg(GL3D.LIMB, c3a, c3g, 0.013 * hs, 0.012 * hs, hcol, 1, 0.8, nx, ny, nz);
+          }
+        }
+      }
       if (side > 0) {
         handR = hc;
         const wl = Math.hypot(T[C3.WD], T[C3.WD + 1], T[C3.WD + 2]) || 1;
@@ -1370,7 +1411,7 @@ const Char3D = {
     if (!this.on()) return false;
     try {
       const m = g.getTransform ? g.getTransform() : null;
-      GL3D.begin(Math.min(4, Math.max(1, m ? Math.hypot(m.a, m.b) : 1)));
+      GL3D.begin(Math.min(8, Math.max(1, m ? Math.hypot(m.a, m.b) : 1)));
       const S = state || this.newState(pose.id || 1, look);
       S.preview = true;
       if (pose.mt !== undefined) { S.mode = pose.mode || 'loco'; S.mt = pose.mt; }
