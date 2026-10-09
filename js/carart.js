@@ -148,7 +148,13 @@ Object.assign(CarArt, {
       gr.addColorStop(0, Col.shade('#f2f6fa', b)); gr.addColorStop(0.45, Col.shade('#9aa2aa', b)); gr.addColorStop(0.55, Col.shade('#6c737a', b)); gr.addColorStop(1, Col.shade('#c8ced4', b));
       return gr;
     }
-    if (m === 'paint' && fc.t !== 'T' && fc.t !== 'D') {
+    if (m === 'paint' && fc.t === 'T' && !fc.flat) {
+      // glossy panels: the far part of a roof / hood mirrors the bright sky, the near part the dark street
+      const bx = this.ybox(pts), gr = g.createLinearGradient(bx[0], bx[1], bx[0] + (bx[2] - bx[0]) * 0.3, bx[3] + 0.01);
+      gr.addColorStop(0, Col.shade(fc.col, b * 1.09)); gr.addColorStop(0.55, Col.shade(fc.col, b * 1.0)); gr.addColorStop(1, Col.shade(fc.col, b * 0.9));
+      return gr;
+    }
+    if (m === 'paint' && fc.t !== 'T' && fc.t !== 'D' && fc.t !== 'bv') {
       // painted sides catch more light near the top: reads as a rounded panel
       const bx = this.ybox(pts), gr = g.createLinearGradient(0, bx[1], 0, bx[3] + 0.01);
       gr.addColorStop(0, Col.shade(fc.col, b * 1.07)); gr.addColorStop(1, Col.shade(fc.col, b * 0.86));
@@ -159,7 +165,7 @@ Object.assign(CarArt, {
   // one face: fill (with window holes), panel edge, glass, then attached feature painters
   drawFace(g, F, fc, see) {
     const pts = fc.p.map(q => F.P(q[0], q[1], q[2]));
-    const b = F.b = F.bright(fc.n);
+    const b = F.b = F.bright(fc.n) * (fc.gain || 1);
     if (fc.mat === 'none') { if (fc.fx) for (const fn of fc.fx) { F.b = b; g.save(); fn(g, F, fc); g.restore(); g.setTransform(1, 0, 0, 1, 0, 0); } return; }
     const fill = this.fillFor(g, F, fc, pts, b);
     g.fillStyle = fill;
@@ -600,18 +606,24 @@ Object.assign(CarArt, {
   },
 });
 // Per-type body styling for the passenger-car builder. The footprint (len, wid) is the physics one from
-// CAR_TYPES; the visual heights live here: h beltline / hood line, cabH greenhouse height, cab greenhouse
-// base [rear, front] as fractions of len. Late-80s American proportions: low beltline, long hood, thin
-// pillars, big wheels in dark arches, thin chrome bumpers with rub strips.
+// CAR_TYPES (about half a real car's length); heights are scaled from real late-80s cars by the width ratio so
+// the bodies keep their real long-and-low proportions: h beltline / hood line, cabH greenhouse height, cab
+// greenhouse base [rear, front] as fractions of len, axF / axR axles (fractions of len), bv / rb rounded
+// shoulder and roof edge. Long hoods, thin pillars, big wheels in dark arches, thin chrome bumpers.
 const CA_CARS = {
-  base: { h: 0.62, cabH: 0.44, cab: [-0.28, 0.2], z0: 0.14, r: 0.19, axF: 0.3, axR: -0.29, nose: 0.05, tail: 0.02, chF: 0.06, chR: 0.05, rakeF: 0.25, rakeR: 0.14, tum: 0.085, gin: 0.045, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap', opera: true, crease: true },
+  // full-size rear-drive sedan (Caprice / Crown Victoria class): formal roof, long hood and trunk
+  base: { h: 0.55, cabH: 0.36, cab: [-0.33, 0.175], z0: 0.12, r: 0.2, axF: 0.3, axR: -0.245, nose: 0.06, tail: 0.02, chF: 0.05, chR: 0.05, rakeF: 0.32, rakeR: 0.2, tum: 0.07, gin: 0.04, bv: 0.035, rb: 0.03, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap', opera: true, crease: true },
   sedan: { vinyl: true, white: true, orn: true },
   police: { bar: 'police', pushbar: true, trim: 'black', rim: 'dog', livery: 'bw', spot: true },
   taxi: { sign: true, checker: true, trim: 'black', rim: 'steel' },
-  hatchback: { h: 0.6, cabH: 0.43, cab: [-0.45, 0.19], z0: 0.13, r: 0.18, axF: 0.32, axR: -0.31, nose: 0.06, tail: 0, chF: 0.07, chR: 0.04, rakeF: 0.25, rakeR: 0.13, tum: 0.07, opera: false, hatch: true, bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', trim: 'black', rim: 'steel' },
-  wagon: { cab: [-0.46, 0.2], rakeR: 0.04, opera: false, hatch: true, wood: true, rack: true, tails: 'vert', quarter: true, white: true },
-  sports: { h: 0.5, cabH: 0.33, cab: [-0.36, 0.1], z0: 0.11, r: 0.18, axF: 0.31, axR: -0.3, nose: 0.12, tail: 0.04, chF: 0.12, chR: 0.06, rakeF: 0.34, rakeR: 0.44, tum: 0.1, opera: false, crease: false, doors: 2, bump: 'body', grille: 'none', lamps: 'popup', tails: 'band', spoiler: true, trim: 'black', rim: 'alloy' },
-  suv: { h: 0.8, cabH: 0.5, cab: [-0.47, 0.22], z0: 0.25, r: 0.22, axF: 0.3, axR: -0.3, nose: 0.03, tail: 0, chF: 0.05, chR: 0.04, rakeF: 0.17, rakeR: 0.03, tum: 0.05, opera: false, hatch: true, rack: true, spare: true, two: '#a4a9ae', bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', flares: true, rim: 'steel', quarter: true },
+  // small front-drive hatchback: short nose, upright hatch
+  hatchback: { h: 0.52, cabH: 0.34, cab: [-0.45, 0.23], z0: 0.11, r: 0.185, axF: 0.31, axR: -0.305, nose: 0.06, tail: 0, chF: 0.06, chR: 0.04, rakeF: 0.3, rakeR: 0.16, tum: 0.06, opera: false, hatch: true, bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', trim: 'black', rim: 'steel' },
+  // full-size wagon: long roof to a near-upright tailgate, wood-grain sides, roof rack
+  wagon: { cab: [-0.45, 0.17], axR: -0.215, rakeR: 0.04, opera: false, hatch: true, wood: true, rack: true, tails: 'vert', quarter: true, white: true },
+  // pony car / sports coupe: low wedge nose, long hood, fastback glass
+  sports: { h: 0.44, cabH: 0.27, cab: [-0.38, 0.12], z0: 0.1, r: 0.19, axF: 0.3, axR: -0.27, nose: 0.13, tail: 0.03, chF: 0.12, chR: 0.06, rakeF: 0.36, rakeR: 0.4, tum: 0.08, rb: 0.025, opera: false, crease: false, doors: 2, bump: 'body', grille: 'none', lamps: 'popup', tails: 'band', spoiler: true, trim: 'black', rim: 'alloy' },
+  // full-size 4x4 (Blazer / Bronco class): tall, upright glass, two-tone, flares, spare on the tailgate
+  suv: { h: 0.7, cabH: 0.4, cab: [-0.47, 0.2], z0: 0.24, r: 0.23, axF: 0.3, axR: -0.27, nose: 0.03, tail: 0, chF: 0.05, chR: 0.04, rakeF: 0.2, rakeR: 0.03, tum: 0.05, opera: false, hatch: true, rack: true, spare: true, two: '#a4a9ae', bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', flares: true, rim: 'steel', quarter: true },
 };
 Object.assign(CarArt, {
   // ---------------------------------------------------------------- model helpers
@@ -634,30 +646,80 @@ Object.assign(CarArt, {
   },
   // lower body as one convex part from f0 (rear) to f1 (front): hood slopes from fC down to noseZ,
   // trunk deck from fR down to tailZ; faces: sides, chamfers, front, rear, tops 'hood' / 'deck' / 'trunk'
+  // convex plan outline [[f, s]...] moved inward by ds on edges running along f (the sides) and by de on the
+  // others (ends; chamfers take the mean)
+  inset(ol, ds, de) {
+    const n = ol.length, L = [];
+    let ar = 0;
+    for (let i = 0; i < n; i++) { const a = ol[i], b = ol[(i + 1) % n]; ar += a[0] * b[1] - b[0] * a[1]; }
+    const sg = ar > 0 ? 1 : -1;
+    for (let i = 0; i < n; i++) {
+      const a = ol[i], b = ol[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      const nx = -dy / l * sg, ny = dx / l * sg, al = Math.abs(dx) / l, d = al > 0.9 ? ds : al < 0.1 ? de : (ds + de) / 2;
+      L.push([nx, ny, nx * a[0] + ny * a[1] + d]);
+    }
+    return ol.map((q, i) => {
+      const p = L[(i + n - 1) % n], c = L[i], det = p[0] * c[1] - p[1] * c[0];
+      if (Math.abs(det) < 1e-6) { const d = c[2] - c[0] * q[0] - c[1] * q[1]; return [q[0] + c[0] * d, q[1] + c[1] * d]; }
+      return [(p[2] * c[1] - c[2] * p[1]) / det, (p[0] * c[2] - c[0] * p[2]) / det];
+    });
+  },
+  // quads between two matching rings R0 -> R1 added to part P as bevel faces (rounded shoulders / roof edges:
+  // a lit strip between top and side instead of a hard box edge)
+  bevel(P, R0, R1, col) {
+    for (let i = 0; i < R0.length; i++) {
+      const j = (i + 1) % R0.length, p = [R0[i], R0[j], R1[j], R1[i]], n = this.normal(p, P.c);
+      if (n) P.faces.push({ p, n, t: 'bv', col, mat: 'paint', fx: null, win: null, gain: 1.07, noEdge: true });
+    }
+  },
+  // lower body as one convex part from f0 (rear) to f1 (front): hood slopes from fC down to noseZ,
+  // trunk deck from fR down to tailZ; faces: sides, chamfers, front, rear, tops 'hood' / 'deck' / 'trunk'.
+  // bv rounds the shoulder: the sides stop bv under the top line and a bevel runs in to the top faces.
   lowerBody(o) {
-    const { f0, f1, hw, z0, zb, fC, fR, noseZ, tailZ, chF, chR, col } = o;
+    const { f0, f1, hw, z0, zb, fC, fR, noseZ, tailZ, chF, chR, col } = o, bv = o.bv || 0;
     const zf = (f) => f > fC ? zb - (zb - noseZ) * (f - fC) / (f1 - fC) : f < fR ? zb - (zb - tailZ) * (fR - f) / Math.max(1e-6, fR - f0) : zb;
     let ol = [[f0 + chR, -hw], [fR, -hw], [fC, -hw], [f1 - chF, -hw], [f1, -hw + chF], [f1, hw - chF], [f1 - chF, hw], [fC, hw], [fR, hw], [f0 + chR, hw], [f0, hw - chR], [f0, -hw + chR]];
     ol = ol.filter((q, i) => { const r = ol[(i + 1) % ol.length]; return Math.abs(q[0] - r[0]) + Math.abs(q[1] - r[1]) > 1e-6; });
-    const A = ol.map(q => [q[0], q[1], z0]), B = ol.map(q => [q[0], q[1], zf(q[0])]);
-    const P = this.solid(A, B, col, { noA: true, noB: true, body: true });
+    const A = ol.map(q => [q[0], q[1], z0]), C = ol.map(q => [q[0], q[1], zf(q[0]) - bv]);
+    const B = bv ? this.inset(ol, bv, bv * (o.bvE === undefined ? 0.5 : o.bvE)).map(q => [q[0], q[1], zf(q[0])]) : C;
+    const P = this.solid(A, C, col, { noA: true, noB: true, body: true });
+    if (bv) this.bevel(P, C, B, col);
     const top = (pred, id) => {
       const p = B.filter(q => pred(q[0]));
       const n = p.length >= 3 && this.normal(p, P.c);
       if (n) P.faces.push({ p, n, t: 'T', id, col, mat: 'paint', fx: null, win: null });
     };
     top(f => f >= fC - 1e-6, 'hood'); top(f => f >= fR - 1e-6 && f <= fC + 1e-6, 'deck'); top(f => f <= fR + 1e-6, 'trunk');
-    P.zf = zf;
-    P.sideOl = [[f0 + chR, z0], [f1 - chF, z0], [f1 - chF, zf(f1 - chF)], [fC, zb], [fR, zb], [f0 + chR, zf(f0 + chR)]];
+    P.zf = zf; P.bv = bv;
+    P.sideOl = [[f0 + chR, z0], [f1 - chF, z0], [f1 - chF, zf(f1 - chF) - bv], [fC, zb - bv], [fR, zb - bv], [f0 + chR, zf(f0 + chR) - bv]];
     return P;
   },
-  // greenhouse: hollow part between the beltline outline and the roof outline
+  // greenhouse: hollow part between the beltline outline and the roof outline; rb rounds the roof edge
+  // (the glass faces stop rb under the roof, a bevel strip runs in to the roof panel)
   cabin(o) {
-    const { fR, fC, gw, gwT, zb, zr, rakeF, rakeR, col } = o;
+    const { fR, fC, gw, gwT, zb, zr, rakeF, rakeR, col } = o, rb = o.rb || 0, H = zr - zb, t = rb ? (H - rb) / H : 1;
     const A = [[fR, -gw, zb], [fC, -gw, zb], [fC, gw, zb], [fR, gw, zb]];
     const B = [[fR + rakeR, -gwT, zr], [fC - rakeF, -gwT, zr], [fC - rakeF, gwT, zr], [fR + rakeR, gwT, zr]];
-    const P = this.solid(A, B, col, { tags: ['L', 'F', 'R', 'B'], tA: 'D', tB: 'T', cols: { T: o.roof || col } });
-    P.hollow = true; P.inner = []; P.inCol = o.inCol;
+    const C = rb ? A.map((a, i) => [a[0] + (B[i][0] - a[0]) * t, a[1] + (B[i][1] - a[1]) * t, zb + H * t]) : B;
+    const roof = o.roof || col;
+    const P = this.solid(A, C, col, { tags: ['L', 'F', 'R', 'B'], tA: 'D', tB: 'T', noB: !!rb, cols: { T: roof } });
+    if (rb) {
+      const e = rb * 0.7, D = [[C[0][0] + e, C[0][1] + rb, zr], [C[1][0] - e, C[1][1] + rb, zr], [C[2][0] - e, C[2][1] - rb, zr], [C[3][0] + e, C[3][1] - rb, zr]];
+      this.bevel(P, C, D, o.bvCol || roof);
+      P.faces.push({ p: D, n: [0, 0, 1], t: 'T', col: roof, mat: 'paint', fx: null, win: null });
+    }
+    P.hollow = true; P.inner = []; P.inCol = o.inCol; P.rb = rb;
+    return P;
+  },
+  // rounded roof panel for a box body whose top is the plan outline ol at height z: a slab up to z + rb with
+  // bevelled edges (ef scales the bevel at the ends); its own part, so it sorts above the box by height
+  roofCap(ol, z, rb, col, ef) {
+    const A = ol.map(q => [q[0], q[1], z]), B = this.inset(ol, rb, rb * (ef === undefined ? 1 : ef)).map(q => [q[0], q[1], z + rb]);
+    let f0 = 1e9, f1 = -1e9, s0 = 1e9, s1 = -1e9;
+    for (const q of ol) { f0 = Math.min(f0, q[0]); f1 = Math.max(f1, q[0]); s0 = Math.min(s0, q[1]); s1 = Math.max(s1, q[1]); }
+    const P = { faces: [], bb: [f0, f1, s0, s1, z, z + rb], c: [(f0 + f1) / 2, (s0 + s1) / 2, z + rb * 0.4], body: false, k: '' };
+    this.bevel(P, A, B, col);
+    P.faces.push({ p: B, n: [0, 0, 1], t: 'T', col, mat: 'paint', fx: null, win: null });
     return P;
   },
   // bumper bar across the flat end of the body (dir 1 front at fe, -1 rear) plus two short wraps along the
@@ -804,7 +866,7 @@ Object.assign(CarArt, {
     g.fillStyle = F.sh(CA_COL.black, 0.85); R(f0, z0, f1, z0 + 0.03);
   },
   frontArt(g, F, M) {
-    const sp = M.sp, S = M.S, k = 100, w = M.hw - sp.chF, z0 = M.z0, zt = M.noseZ, live = !S.burnt;
+    const sp = M.sp, S = M.S, k = 100, w = M.hw - sp.chF, z0 = M.z0, zt = M.noseZ - (M.bv || 0), live = !S.burnt;
     F.frame(g, [M.f1, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
     g.beginPath(); g.rect(-w * k, z0 * k, 2 * w * k, (zt - z0) * k); g.clip();
     const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
@@ -849,7 +911,7 @@ Object.assign(CarArt, {
     this.dmgArt(g, F, M, fl, S.seed * 7 + 3, -w, w, z0 + 0.03, zt - 0.02);
   },
   rearArt(g, F, M) {
-    const sp = M.sp, S = M.S, k = 100, w = M.hw - M.chR, z0 = M.z0, zt = M.tailZ, live = !S.burnt;
+    const sp = M.sp, S = M.S, k = 100, w = M.hw - M.chR, z0 = M.z0, zt = M.tailZ - (M.bv || 0), live = !S.burnt;
     F.frame(g, [M.f0, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
     g.beginPath(); g.rect(-w * k, z0 * k, 2 * w * k, (zt - z0) * k); g.clip();
     const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
@@ -933,11 +995,11 @@ Object.assign(CarArt, {
     if (S.snow) this.snowCap(g, F, fc, 0.14);
   },
   roofArt(g, F, fc, M) {
-    const S = M.S, k = 100, x0 = M.fR + M.sp.rakeR, len = M.fC - M.sp.rakeF - x0;
+    const S = M.S, k = 100, rb = M.rb || 0, x0 = M.fR + M.sp.rakeR + rb * 0.7, len = M.fC - M.sp.rakeF - rb * 0.7 - x0, w = M.gwT - rb;
     F.frame(g, [x0, 0, M.zr], [1, 0, 0], [0, 1, 0], 0.01);
-    if (M.vinyl && !S.burnt) { g.fillStyle = F.sh(M.vinyl); g.fillRect(-1, -(M.gwT + 0.01) * k, (len * 0.82) * k, (M.gwT + 0.01) * 2 * k); g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 0.6; for (let x = 4; x < len * 80; x += 5) { g.beginPath(); g.moveTo(x, -M.gwT * k); g.lineTo(x, M.gwT * k); g.stroke(); } }
-    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.2;
-    g.beginPath(); for (const sd of [-1, 1]) { g.moveTo(1, sd * (M.gwT - 0.012) * k); g.lineTo((len - 0.01) * k, sd * (M.gwT - 0.012) * k); } g.stroke();
+    if (M.vinyl && !S.burnt) { g.fillStyle = F.sh(M.vinyl); g.fillRect(-1, -w * k, (len * 0.82) * k, w * 2 * k); g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 0.6; for (let x = 4; x < len * 80; x += 5) { g.beginPath(); g.moveTo(x, -w * k); g.lineTo(x, w * k); g.stroke(); } }
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1;
+    g.beginPath(); for (const sd of [-1, 1]) { g.moveTo(1, sd * (w - 0.01) * k); g.lineTo((len - 0.01) * k, sd * (w - 0.01) * k); } g.stroke();
     if (S.snow) this.snowCap(g, F, fc, 0.08);
   },
   // cabin sides: belt molding, black B-pillar; windshield wipers / mirror; rear defroster lines
@@ -1024,7 +1086,8 @@ Object.assign(CarArt, {
     if (sp.vinyl && h % 3 === 0) M.vinyl = dark ? '#e2ddd0' : '#3a2c26';
     if (sp.wood && h % 3 !== 1) M.wood = true;
     // lower body with painted sides, front, rear, hood and trunk
-    const body = M.body = this.lowerBody({ f0: M.f0, f1: M.f1, hw, z0, zb, fC, fR, noseZ: M.noseZ, tailZ: M.tailZ, chF: sp.chF, chR, col: paint });
+    M.bv = sp.bv;
+    const body = M.body = this.lowerBody({ f0: M.f0, f1: M.f1, hw, z0, zb, fC, fR, noseZ: M.noseZ, tailZ: M.tailZ, chF: sp.chF, chR, col: paint, bv: sp.bv });
     M.parts.push(body);
     // door cuts: the front door runs from the B-pillar to just ahead of the windshield base, the rear door
     // stops at the C-pillar (opera window / quarter glass behind it)
@@ -1040,7 +1103,8 @@ Object.assign(CarArt, {
     }
     // greenhouse with windows, seats, dash and steering wheel
     const cabCol = S.burnt ? CA_COL.burnt : sp.livery === 'bw' ? S.col : paint;
-    const cab = M.cab = this.cabin({ fR, fC, gw: M.gw, gwT: M.gwT, zb, zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cabCol, roof: cabCol, inCol: S.burnt ? '#1a1612' : null });
+    const cab = M.cab = this.cabin({ fR, fC, gw: M.gw, gwT: M.gwT, zb, zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cabCol, roof: cabCol, inCol: S.burnt ? '#1a1612' : null, rb: sp.rb, bvCol: M.vinyl && live ? M.vinyl : null });
+    M.rb = sp.rb;
     M.parts.push(cab);
     const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
     this.win(this.face(cab, 'F'), 'windshield', 0.04, 0.96, 0.05, 0.94, gs('windshield'));
@@ -1078,11 +1142,11 @@ Object.assign(CarArt, {
     const white = sp.white && h % 2 === 0;
     for (const f of [L * sp.axF, L * sp.axR]) for (const sd of [-1, 1]) this.wheel(M, f, sd, sp.r, { rim: sp.rim, white });
     const wf = hw - sp.chF, wr = hw - chR;
-    if (sp.lamps !== 'popup') for (const sd of [-1, 1]) this.lamp(M, 'h', M.f1 + 0.004, sd * (wf - 0.11), M.noseZ - 0.065, sd < 0 ? 0 : 1);
+    if (sp.lamps !== 'popup') for (const sd of [-1, 1]) this.lamp(M, 'h', M.f1 + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.064, sd < 0 ? 0 : 1);
     for (const sd of [-1, 1]) {
       const i = sd < 0 ? 2 : 3;
-      if (sp.tails === 'vert') { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - 0.06), (bz1 + M.tailZ) / 2 + 0.04, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.06), bz1 + 0.04, i); }
-      else { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - (sp.tails === 'band' ? 0.2 : 0.14)), M.tailZ - 0.086, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.27), M.tailZ - 0.11, i); }
+      if (sp.tails === 'vert') { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - 0.06), (bz1 + M.tailZ - M.bv) / 2 + 0.03, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.06), bz1 + 0.04, i); }
+      else { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - (sp.tails === 'band' ? 0.2 : 0.14)), M.tailZ - M.bv - 0.086, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.27), M.tailZ - M.bv - 0.11, i); }
     }
     this.lamp(M, 'c', sp.hatch ? fR + sp.rakeR - 0.012 : fR + 0.05, 0, sp.hatch ? zr - 0.025 : zb + 0.03);
     this.lamp(M, 'd', (fR + fC) / 2, 0, zr - 0.02);
@@ -1287,8 +1351,9 @@ Object.assign(CarArt, {
     const sp = Object.assign({}, CA_CARS.base, { opera: false }, o.sp || {});
     const hl = M.hl, hw = o.hw || M.hw, live = !S.burnt;
     const paint = o.paint || (S.burnt ? CA_COL.burnt : S.col);
-    Object.assign(M, { sp, hw, sideHw: hw, z0: o.z0, zb: o.zb, zr: o.zr, fC: o.fC, fR: o.fb, chR: 0, f0: o.fb, f1: hl, noseZ: o.zb - sp.nose, tailZ: o.zb, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: o.z0 + (o.zb - o.z0) * 0.5, seat2: this.seatCol(S.col), noRear: true, noTrunk: true });
-    const body = M.body = this.lowerBody({ f0: o.fb, f1: hl, hw, z0: o.z0, zb: o.zb, fC: o.fC, fR: o.fb, noseZ: M.noseZ, tailZ: o.zb, chF: sp.chF, chR: 0, col: paint });
+    const bv = o.bv === undefined ? 0.03 : o.bv, rb = o.rb === undefined ? 0.025 : o.rb;
+    Object.assign(M, { sp, hw, sideHw: hw, z0: o.z0, zb: o.zb, zr: o.zr, fC: o.fC, fR: o.fb, chR: 0, f0: o.fb, f1: hl, noseZ: o.zb - sp.nose, tailZ: o.zb, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: o.z0 + (o.zb - o.z0) * 0.5, seat2: this.seatCol(S.col), noRear: true, noTrunk: true, bv, rb });
+    const body = M.body = this.lowerBody({ f0: o.fb, f1: hl, hw, z0: o.z0, zb: o.zb, fC: o.fC, fR: o.fb, noseZ: M.noseZ, tailZ: o.zb, chF: sp.chF, chR: 0, col: paint, bv, bvE: 0.4 });
     M.parts.push(body);
     M.doorF = [[o.fb + 0.035, o.fC + 0.06]];
     this.pfx(body, [0, -1, 0], (g, F) => this.sideArt(g, F, M, -1));
@@ -1296,7 +1361,7 @@ Object.assign(CarArt, {
     this.pfx(body, [1, 0, 0], (g, F) => this.frontArt(g, F, M));
     for (const fc of body.faces) if (fc.id === 'hood') fc.fx = [(g, F, f) => this.hoodArt(g, F, f, M)];
     const cc = o.cabCol || paint;
-    const cab = M.cab = this.cabin({ fR: o.fb, fC: o.fC, gw: M.gw, gwT: M.gwT, zb: o.zb, zr: o.zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cc, roof: o.roof || cc, inCol: S.burnt ? '#1a1612' : null });
+    const cab = M.cab = this.cabin({ fR: o.fb, fC: o.fC, gw: M.gw, gwT: M.gwT, zb: o.zb, zr: o.zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cc, roof: o.roof || cc, inCol: S.burnt ? '#1a1612' : null, rb });
     M.parts.push(cab);
     const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
     this.win(this.face(cab, 'F'), 'windshield', 0.04, 0.96, 0.05, 0.94, gs('windshield'));
@@ -1320,7 +1385,7 @@ Object.assign(CarArt, {
       M.parts.push(this.box(o.fC - 0.13, o.fC - 0.08, sd > 0 ? hw + 0.03 : -hw - 0.08, sd > 0 ? hw + 0.08 : -hw - 0.03, o.zb + 0.045, o.zb + 0.15, mc, { mat: mc === CA_COL.chrome ? 'chrome' : 'paint' }));
     }
     const wf = hw - sp.chF;
-    for (const sd of [-1, 1]) this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - (sp.lamps === 'round' ? 0.083 : 0.065), sd < 0 ? 0 : 1);
+    for (const sd of [-1, 1]) this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - bv - (sp.lamps === 'round' ? 0.083 : 0.064), sd < 0 ? 0 : 1);
     this.lamp(M, 'd', (o.fb + o.fC) / 2, 0, o.zr - 0.02);
     return { body, cab, sp };
   },
@@ -1332,9 +1397,9 @@ Object.assign(CarArt, {
   },
   b_pickup(M, S, T) {
     const L = T.len, hl = M.hl, hw = M.hw, h = this.hash(S.col0), live = !S.burnt;
-    const z0 = 0.21, zb = 0.76, zr = 1.24, fb = -L * 0.045, fC = L * 0.18;
+    const z0 = 0.22, zb = 0.68, zr = 1.08, fb = -L * 0.04, fC = L * 0.2;
     const two = h % 2 ? null : (Col.rgb(S.col)[0] > 150 ? '#8a3a2a' : '#c8c0a8');
-    const { sp } = this.truckFront(M, S, { z0, zb, zr, fb, fC, sp: { r: 0.21, nose: 0.04, chF: 0.05, rakeF: 0.16, rakeR: 0.02, tum: 0.055, gin: 0.04, doors: 2, lamps: h % 3 ? 'quad' : 'rect', grille: 'chrome', two } });
+    const { sp } = this.truckFront(M, S, { z0, zb, zr, fb, fC, sp: { r: 0.225, nose: 0.04, chF: 0.05, rakeF: 0.2, rakeR: 0.02, tum: 0.05, gin: 0.035, doors: 2, lamps: h % 3 ? 'quad' : 'rect', grille: 'chrome', two } });
     M.band = true;
     const paint = M.paint, zf = z0 + 0.22, bf = fb - 0.03, t = 0.05;
     // bed: ribbed floor, side walls with chrome rail caps, front wall, tailgate
@@ -1375,28 +1440,29 @@ Object.assign(CarArt, {
     if (live) this.fx(rbp[0], 'B', (g, F, fc) => this.plate(g, F, fc, 0.15, 0.7));
     this.fx(rbp[0], 'T', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#1c1c1e'); g.fillRect(35, 10, 30, 80); });
     M.parts.push(...rbp);
-    for (const f of [L * 0.3, L * -0.29]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.21, { rim: h % 3 === 1 ? 'steel' : 'cap', white: h % 3 === 0 });
-    if (live) for (const sd of [-1, 1]) this.mudflap(M, L * -0.29 - 0.27, sd, hw - 0.01, z0);
+    for (const f of [L * 0.33, L * -0.255]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.225, { rim: h % 3 === 1 ? 'steel' : 'cap', white: h % 3 === 0 });
+    if (live) for (const sd of [-1, 1]) this.mudflap(M, L * -0.255 - 0.28, sd, hw - 0.01, z0);
     for (const sd of [-1, 1]) { const i = sd < 0 ? 2 : 3; this.lamp(M, 't', -hl - 0.004, sd * (hw - t / 2), zb - 0.16, i); this.lamp(M, 'r', -hl - 0.004, sd * (hw - t / 2), zb - 0.2, i); }
     this.lamp(M, 'c', fb + 0.01, 0, zr - 0.03);
   },
   b_van(M, S, T) {
     const L = T.len, hl = M.hl, hw = M.hw, h = this.hash(S.col0), live = !S.burnt;
     const paint = S.burnt ? CA_COL.burnt : S.col;
-    const z0 = 0.2, zh = 0.74, zr = 1.5, fC = L * 0.33, rake = 0.25, win = h % 2 === 0;
+    const z0 = 0.2, zh = 0.64, zr = 1.22, rb = 0.03, zt = zr - rb, fC = L * 0.33, rake = 0.25, win = h % 2 === 0;
     const sp = Object.assign({}, CA_CARS.base, { nose: 0.07, chF: 0.06, lamps: h % 3 ? 'rect' : 'quad', grille: h % 3 ? 'black' : 'chrome', bump: 'chrome', trim: 'black', opera: false, crease: false });
-    Object.assign(M, { sp, z0, zb: zh, zr, fC, fR: -hl, chR: 0.04, f0: -hl, f1: hl, noseZ: zh - sp.nose, tailZ: zh, gw: hw, gwT: hw, paint, zTrim: z0 + 0.3, seat2: this.seatCol(S.col), noTrunk: true });
-    const hood = M.body = this.lowerBody({ f0: fC, f1: hl, hw, z0, zb: zh, fC, fR: fC, noseZ: M.noseZ, tailZ: zh, chF: sp.chF, chR: 0, col: paint });
+    Object.assign(M, { sp, z0, zb: zh, zr, fC, fR: -hl, chR: 0.04, f0: -hl, f1: hl, noseZ: zh - sp.nose, tailZ: zh, gw: hw, gwT: hw, paint, zTrim: z0 + 0.3, seat2: this.seatCol(S.col), noTrunk: true, bv: 0.025 });
+    const hood = M.body = this.lowerBody({ f0: fC, f1: hl, hw, z0, zb: zh, fC, fR: fC, noseZ: M.noseZ, tailZ: zh, chF: sp.chF, chR: 0, col: paint, bv: M.bv, bvE: 0.4 });
     M.doorF = [];
     this.pfx(hood, [1, 0, 0], (g, F) => this.frontArt(g, F, M));
     for (const fc of hood.faces) if (fc.id === 'hood') fc.fx = [(g, F, f) => this.hoodArt(g, F, f, M)];
     for (const sd of [-1, 1]) this.sidePaint(hood, sd, hw, (g, F, R) => { this.wells(g, F, M, sd, z0); if (live) { g.fillStyle = F.sh(CA_COL.amber); R(hl - 0.13, zh - 0.17, hl - 0.07, zh - 0.135); } g.fillStyle = F.sh(CA_COL.black, 0.85); R(fC, z0, hl, z0 + 0.03); });
     M.parts.push(hood);
     // tall body with a raked windshield, hollow so the seats show through the glass
-    const prof = [[-hl, z0], [fC, z0], [fC, zh], [fC - rake, zr - 0.035], [fC - rake - 0.06, zr], [-hl + 0.03, zr], [-hl, zr - 0.03]];
+    const prof = [[-hl, z0], [fC, z0], [fC, zh], [fC - rake, zt], [-hl, zt]];
     const box = M.cab = this.xbody(prof, -hw, hw, paint, { body: true });
     box.hollow = true; box.inner = []; box.inCol = S.burnt ? '#1a1612' : null;
-    M.parts.push(box);
+    const cap = this.roofCap(this.rect(-hl, fC - rake, -hw, hw), zt, rb, paint, 0.6);
+    M.parts.push(box, cap);
     const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
     const ws = box.faces.find(fc => fc.n[0] > 0.6 && fc.n[2] > 0.2 && fc.n[2] < 0.75);
     this.win(ws, 'windshield', 0.035, 0.965, 0.06, 0.93, gs('windshield'));
@@ -1405,7 +1471,7 @@ Object.assign(CarArt, {
     // side glass: front door window follows the A-pillar; passenger vans get three windows a side
     for (const sd of [-1, 1]) {
       const fc = this.sideFace(box, sd);
-      const fe = (z) => fC - rake * (z - zh) / (zr - 0.035 - zh) - 0.04;
+      const fe = (z) => fC - rake * (z - zh) / (zt - zh) - 0.04;
       this.sideWin(fc, sd < 0 ? 'winFL' : 'winFR', fd0 + 0.04, fe(zw0), zw0, zw1, gs(sd < 0 ? 'winFL' : 'winFR', sd < 0 ? 0 : 1), fe(zw1));
       if (win) for (const [a, b] of [[sl0 + 0.05, sl1 - 0.05], [-hl + 0.4, sl0 - 0.06], [-hl + 0.06, -hl + 0.34]]) {
         const open = sd > 0 && S.doors[3] && a > sl0;
@@ -1426,7 +1492,7 @@ Object.assign(CarArt, {
         if (S.doors[3]) { g.fillStyle = F.sh(CA_COL.inside, 0.7); R(sl0, z0 + 0.04, sl1, zr - 0.07); g.fillStyle = F.sh(M.seat2, 0.9); R(sl0 + 0.05, zh - 0.12, sl1 - 0.1, zh + 0.02); g.strokeStyle = 'rgba(0,0,0,0.5)'; g.strokeRect((sl0 - 0.55) * 100, (z0 + 0.03) * 100, (sl1 - sl0) * 100, (zr - z0 - 0.1) * 100); }
         else { g.strokeRect(sl0 * 100, (z0 + 0.035) * 100, (sl1 - sl0) * 100, (zr - z0 - 0.09) * 100); g.fillStyle = F.sh(CA_COL.black); R(sl1 - 0.1, zh - 0.07, sl1 - 0.04, zh - 0.05); }
       }
-      if (live) { g.fillStyle = F.sh(CA_COL.tail); R(-hl + 0.015, z0 + 0.12, -hl + 0.06, z0 + 0.155); g.fillStyle = 'rgba(255,255,255,0.12)'; R(-hl, zr - 0.05, fC - rake, zr - 0.043); }
+      if (live) { g.fillStyle = F.sh(CA_COL.tail); R(-hl + 0.015, z0 + 0.12, -hl + 0.06, z0 + 0.155); }
       this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 41 + sd, -hl + 0.15, fC - 0.1, z0 + 0.05, zh);
       this.wells(g, F, M, sd, z0);
       g.fillStyle = F.sh(CA_COL.black, 0.85); R(-hl, z0, fC, z0 + 0.03);
@@ -1445,11 +1511,10 @@ Object.assign(CarArt, {
       }
       g.fillStyle = F.sh(CA_COL.plate); R(-0.075, z0 + 0.16, 0.075, z0 + 0.235);
     });
-    const top = box.faces.find(fc => fc.t === 'T');
+    const top = this.face(cap, 'T');
     if (top) top.fx = [(g, F, fc) => {
       F.frame(g, [0, 0, zr], [1, 0, 0], [0, 1, 0], 0.01);
-      g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1; g.beginPath(); for (const sd of [-1, 1]) { g.moveTo((-hl + 0.05) * 100, sd * (hw - 0.02) * 100); g.lineTo((fC - rake - 0.08) * 100, sd * (hw - 0.02) * 100); } g.stroke();
-      g.fillStyle = 'rgba(0,0,0,0.12)'; for (let f = -hl + 0.2; f < fC - rake - 0.15; f += 0.3) g.fillRect(f * 100, -(hw - 0.05) * 100, 2, (hw - 0.05) * 200);
+      g.fillStyle = 'rgba(0,0,0,0.1)'; for (let f = -hl + 0.2; f < fC - rake - 0.15; f += 0.3) g.fillRect(f * 100, -(hw - rb - 0.03) * 100, 2, (hw - rb - 0.03) * 200);
       if (S.snow) this.snowCap(g, F, fc, 0.06);
     }];
     // seats behind the glass
@@ -1466,10 +1531,10 @@ Object.assign(CarArt, {
       M.parts.push(this.box(fC - 0.2, fC - 0.16, sd > 0 ? hw - 0.005 : -hw - 0.07, sd > 0 ? hw + 0.07 : -hw + 0.005, zh + 0.05, zh + 0.065, CA_COL.black));
       M.parts.push(this.box(fC - 0.2, fC - 0.15, sd > 0 ? hw + 0.03 : -hw - 0.08, sd > 0 ? hw + 0.08 : -hw - 0.03, zh + 0.065, zh + 0.18, CA_COL.black));
     }
-    for (const f of [hl - 0.48, -hl + 0.6]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.2, { rim: h % 2 ? 'steel' : 'cap', rimCol: h % 2 ? '#d8d8d0' : null });
+    for (const f of [hl - 0.43, -hl + 0.61]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.215, { rim: h % 2 ? 'steel' : 'cap', rimCol: h % 2 ? '#d8d8d0' : null });
     const wf = hw - sp.chF;
     for (const sd of [-1, 1]) {
-      this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - 0.065, sd < 0 ? 0 : 1);
+      this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.064, sd < 0 ? 0 : 1);
       this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.04), zh - 0.15, sd < 0 ? 2 : 3); this.lamp(M, 'r', -hl - 0.004, sd * (hw - 0.04), z0 + 0.2, sd < 0 ? 2 : 3);
     }
     this.lamp(M, 'c', -hl - 0.004, 0, zr - 0.06);
