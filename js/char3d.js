@@ -156,7 +156,9 @@ const Char3D = {
         if (vx < minX - 3 || vx > maxX + 3 || z.y < minY - 3 || z.y > maxY + 3) continue;
         const d = Zombie.drawInfo(z);
         if (!d) continue;
-        this.queue(z, z.a, z.look, d.pose, d.s, z.stag > 0 ? 0.25 : 0, dt);
+        // a brief flash as a blow lands, not for the whole stagger
+        const hitT = z.stag > 0 ? (z.stag0 || 0.5) - z.stag : 9;
+        this.queue(z, z.a, z.look, d.pose, d.s, hitT < 0.14 ? 0.3 * (1 - hitT / 0.14) : 0, dt);
       }
       GL3D.flush();
     } catch (e) {
