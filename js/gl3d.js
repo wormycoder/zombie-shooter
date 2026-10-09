@@ -7,8 +7,10 @@
 //   GL3D.ok()                     WebGL usable?
 //   GL3D.begin(scale)             start a frame (scale = screen px per world px)
 //   GL3D.prim(m, cx,cy,cz, X.., Y.., Z.., r,g,b, t0, t1)
-//                                 queue mesh m (GL3D.BOX/RBOX/CYL/SPH) centred at c with orthogonal half-axes
-//                                 X, Y, Z; the cross-section scales from t0 (z=-1 end) to t1 (z=+1 end)
+//                                 queue mesh m (GL3D.BOX/RBOX/CYL/SPH or one added with def) centred at c with
+//                                 orthogonal half-axes X, Y, Z; the cross-section scales from t0 (z=-1 end) to t1 (z=+1 end)
+//   GL3D.def(name, build)         add a mesh type before first use (build returns { v, i }); GL3D[name] is its index
+//   GL3D.lathe(rings, seg, axis)  a smooth closed mesh through superelliptic rings (see below)
 //   GL3D.mark(a) / GL3D.seal(cell, a, light, flash)
 //                                 remember the queue position, then stamp cell, light and flash on what followed
 //   GL3D.cell(w, h, ax, ay)       reserve a cell of w x h world px with the anchor (feet) at ax, ay
@@ -19,7 +21,7 @@
 // ---------------------------------------------------------------------------
 const GL3D = {
   cv: null, gl: null, prog: null, failed: false,
-  BOX: 0, RBOX: 1, CYL: 2, SPH: 3, NM: 4,
+  BOX: 0, RBOX: 1, CYL: 2, SPH: 3, NM: 4, defs: [],
   inst: [], n: [0, 0, 0, 0], cap: [0, 0, 0, 0], meshes: [],
   // software WebGL (no GPU) is far too slow to redraw models every frame; ?soft3d forces it on for testing
   soft: false, allowSoft: /[?&]soft3d/.test(location.search), renderer: '',
@@ -84,8 +86,8 @@ const GL3D = {
       this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT']) this.loc[a] = gl.getAttribLocation(p, a);
       this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale');
       const buf = (data, T) => { const b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, data, gl.STATIC_DRAW); return b; };
-      for (const m of this.buildMeshes()) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
-      for (let k = 0; k < this.NM; k++) this.grow(k, 1024);
+      for (const m of this.buildMeshes().concat(this.defs.map(d => d.build()))) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
+      for (let k = 0; k < this.NM; k++) { this.n[k] = 0; this.grow(k, 512); }
       cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.failed = true; });
       return true;
     } catch (e) {
@@ -148,6 +150,63 @@ const GL3D = {
       out.push({ v, i: I });
     }
     return out;
+  },
+  def(name, build) {
+    if (this.gl) throw new Error('GL3D.def after init');
+    this.defs.push({ name, build });
+    return (this[name] = this.NM++);
+  },
+  // A closed smooth mesh through rings along an axis ('z': rings in x-y, or 'x': rings in y-z).
+  // Each ring is [t, c1, r1, c2, r2, n, nb]: position along the axis, centre and half extent on the two
+  // cross axes, superellipse exponent (nb for the back half, c1 < 0 side). A ring with r1 = 0 is a pole;
+  // open ends get flat caps. Coordinates are used as given (keep them inside [-1, 1]).
+  lathe(rings, seg, axis) {
+    const S = seg || 16, R = rings.length, P = [], v = [], I = [];
+    const se = (c, n) => Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+    for (let j = 0; j < R; j++) {
+      const [t, c1, r1, c2, r2, n, nb] = rings[j];
+      for (let k = 0; k < S; k++) {
+        const a = k / S * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), e = ca < 0 && nb ? nb : n || 2;
+        const u = c1 + r1 * se(ca, e), w = c2 + r2 * se(sa, e);
+        P.push(axis === 'x' ? [t, u, w] : [u, w, t]);
+      }
+    }
+    const pt = (j, k) => P[j * S + ((k + S) % S)];
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const ai = axis === 'x' ? 0 : 2;
+    for (let j = 0; j < R; j++) {
+      const pole = rings[j][2] === 0;
+      for (let k = 0; k < S; k++) {
+        const p = pt(j, k);
+        let nx, ny, nz;
+        if (pole) { nx = 0; ny = 0; nz = 0; const d = j === 0 ? -1 : 1; if (ai === 0) nx = d; else nz = d; }
+        else {
+          // tangents round the ring and along the axis (one-sided at the ends)
+          const tu = sub(pt(j, k + 1), pt(j, k - 1)), tv = sub(pt(Math.min(R - 1, j + 1), k), pt(Math.max(0, j - 1), k));
+          nx = tu[1] * tv[2] - tu[2] * tv[1]; ny = tu[2] * tv[0] - tu[0] * tv[2]; nz = tu[0] * tv[1] - tu[1] * tv[0];
+          // point outward, away from the ring's centre line
+          const rc = rings[j], cx = axis === 'x' ? 0 : rc[1], cy = axis === 'x' ? rc[1] : rc[3], cz = axis === 'x' ? rc[3] : 0;
+          const ox = ai === 0 ? 0 : p[0] - cx, oy = p[1] - cy, oz = ai === 2 ? 0 : p[2] - cz;
+          if (nx * ox + ny * oy + nz * oz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+        }
+        const l = Math.hypot(nx, ny, nz) || 1;
+        v.push(p[0], p[1], p[2], nx / l, ny / l, nz / l);
+      }
+    }
+    for (let j = 0; j < R - 1; j++) for (let k = 0; k < S; k++) {
+      const a = j * S + k, b = j * S + (k + 1) % S;
+      I.push(a, b, b + S, a, b + S, a + S);
+    }
+    // flat caps on open ends
+    for (const j of [0, R - 1]) {
+      if (rings[j][2] === 0) continue;
+      const d = j === 0 ? -1 : 1, c = v.length / 6, rc = rings[j];
+      const cen = axis === 'x' ? [rc[0], rc[1], rc[3]] : [rc[1], rc[3], rc[0]];
+      v.push(cen[0], cen[1], cen[2], ai === 0 ? d : 0, 0, ai === 2 ? d : 0);
+      for (let k = 0; k < S; k++) { const p = pt(j, k); v.push(p[0], p[1], p[2], ai === 0 ? d : 0, 0, ai === 2 ? d : 0); }
+      for (let k = 0; k < S; k++) I.push(c, c + 1 + k, c + 1 + (k + 1) % S);
+    }
+    return { v, i: I };
   },
   grow(m, n) { this.cap[m] = n; const a = new Float32Array(n * this.FL); if (this.inst[m]) a.set(this.inst[m].subarray(0, this.n[m] * this.FL)); this.inst[m] = a; },
   // ---- frame
