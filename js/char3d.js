@@ -606,7 +606,11 @@ const Char3D = {
     if (!K[name]) { const k = mk(); k.v = new Float32Array(k.v); K[name] = k; }
     return K[name];
   },
-  // ---- melee: ready stance (aiming), then the swing styles keyed around the contact moment (0.48)
+  // ---- melee: a ready stance (aiming), then swing styles keyed round the moment combat resolves the hit (0.48;
+  // 0.52 for blows at the ground). Key rows: [t, right wrist f s z (from the shoulder, chest frame), weapon yaw and
+  // pitch (degrees, chest frame; pitch past 90 points up and back), left-hand grip offset along the weapon, then
+  // added to the body: spine twist, spine bend, pelvis yaw, pelvis forward, pelvis height, head pitch, then the free
+  // left wrist f s z (s toward the body's right) and how much of it to use]; [t, -1] is the holding pose
   styleOf(P, W, two) {
     if (P.style) return P.style;
     if (!W) return 'punch';
@@ -615,162 +619,221 @@ const Char3D = {
     if (P.weapon === 'sledge') return 'heavy';
     return two ? '2h' : '1h';
   },
-  ready(T, S, D, P, W, two) {
-    const st = this.styleOf(P, W, two);
-    if (st === '2h' || st === 'heavy' || st === 'floor' && two) { this.arm(T, 1, 0.1, -0.1, -0.16, 0.5); this.wdir(T, -0.25, 0.3, 0.92); T[C3.GR] = 1; T[C3.GO] = -0.1; }
-    else if (st === 'spear') { this.arm(T, 1, 0.06, -0.04, -0.38, 0.4); this.wdir(T, 0.96, -0.2, 0.18); T[C3.GR] = 1; T[C3.GO] = 0.45; }
-    else if (st === 'stab' || st === 'floorStab') { this.arm(T, 1, 0.3, -0.06, -0.3, 0.6); this.wdir(T, 0.95, -0.1, 0.25); this.arm(T, -1, 0.26, -0.08, -0.22, 1); }
-    else if (st === 'punch') { this.arm(T, 1, 0.22, -0.1, -0.2, 1); this.arm(T, -1, 0.26, -0.1, -0.16, 1); T[C3.LH] = 1; }
-    else { this.arm(T, 1, 0.16, 0.06, 0.0, 0.6); this.wdir(T, -0.2, 0.15, 0.97); this.arm(T, -1, 0.26, -0.06, -0.3, 0.6); }
-    // knees soften, left foot forward
-    if (S.amp < 0.3) { T[C3.PZ] -= 0.04; T[C3.SW] += 0.1; this.stance(T, D, 0.13, -0.1, 0.12, 0, 0); }
+  READY: {
+    '2h': [0.06, 0.08, -0.14, 130, 62, -0.12, 0.22, 0, 0.1, -0.015, -0.03, 0, 0, 0, 0, 0],
+    heavy: [0.1, 0.04, -0.22, 100, 75, -0.16, 0.12, 0.02, 0.06, -0.01, -0.035, 0, 0, 0, 0, 0],
+    spear: [0.02, -0.02, -0.36, 2, 6, 0.45, 0.18, 0.02, 0.1, -0.01, -0.035, 0, 0, 0, 0, 0],
+    stab: [0.26, -0.02, -0.3, 0, 12, 0, 0.12, 0.04, 0.06, 0, -0.035, 0, 0.3, 0.1, -0.24, 1],
+    punch: [0.2, -0.1, -0.18, 0, -70, 0, 0.18, 0.04, 0.08, -0.01, -0.035, 0, 0.26, 0.1, -0.15, 1],
+    '1h': [0.08, 0.1, -0.06, 60, 72, 0, 0.18, 0, 0.08, -0.01, -0.035, 0, 0.28, 0.08, -0.26, 1],
   },
   SWINGS: {
-    // t, right wrist f s z, weapon dir x y z, grip offset, then additive: twist SW, bend SP, pelvis yaw PW, pelvis PX, pelvis PZ, head HP
-    '2h': [[0, 0.1, -0.1, -0.16, -0.25, 0.3, 0.92, -0.1, 0, 0, 0, 0, -0.03, 0],
-      [0.3, 0.0, 0.02, -0.1, -0.6, 0.45, 0.66, -0.1, 0.5, -0.04, 0.22, -0.05, -0.05, 0],
-      [0.41, 0.2, -0.04, -0.22, -0.1, 0.98, 0.15, -0.1, 0.25, 0, -0.08, 0.0, -0.06, 0],
-      [0.48, 0.4, -0.2, -0.26, 0.92, 0.38, 0.0, -0.1, -0.12, 0.04, -0.26, 0.05, -0.07, 0.05],
-      [0.6, 0.3, -0.38, -0.2, 0.15, -0.97, 0.15, -0.1, -0.5, 0.04, -0.36, 0.05, -0.06, 0.05],
-      [0.78, 0.1, -0.34, -0.06, -0.55, -0.45, 0.7, -0.1, -0.55, 0, -0.3, 0.03, -0.04, 0],
+    // two hands, a flat swing from over the right shoulder across the body, wrapping round the left
+    '2h': [[0, -1],
+      [0.15, 0.1, 0.06, -0.14, 100, 66, -0.12, 0.2, 0, 0.08, -0.01, -0.02, 0],
+      [0.3, 0.02, 0.1, -0.1, 150, 38, -0.12, 0.46, -0.02, 0.22, -0.035, -0.035, -0.04],
+      [0.37, 0.05, 0.1, -0.12, 148, 30, -0.12, 0.44, -0.01, 0.2, -0.03, -0.04, -0.03],
+      [0.43, 0.24, 0.06, -0.2, 80, 8, -0.12, 0.12, 0.03, 0.04, 0.01, -0.05, 0],
+      [0.48, 0.4, -0.1, -0.24, 22, 0, -0.12, -0.24, 0.06, -0.16, 0.05, -0.055, 0.03],
+      [0.57, 0.32, -0.3, -0.2, -70, 6, -0.12, -0.5, 0.06, -0.3, 0.05, -0.05, 0.03],
+      [0.72, 0.12, -0.36, -0.08, -140, 32, -0.12, -0.55, 0.03, -0.32, 0.03, -0.035, 0],
       [1, -1]],
+    // overhead smash with a heavy head
+    heavy: [[0, -1],
+      [0.2, 0.08, 0.04, -0.08, 30, 110, -0.16, 0.08, -0.06, 0.04, -0.02, -0.02, -0.06],
+      [0.38, 0.0, 0.0, 0.14, 0, 145, -0.16, 0.04, -0.2, 0.02, -0.045, -0.01, -0.14],
+      [0.44, 0.1, -0.03, 0.1, 0, 95, -0.16, 0.0, -0.08, 0.0, -0.02, -0.03, -0.04],
+      [0.5, 0.38, -0.12, -0.38, 0, -38, -0.16, -0.06, 0.42, -0.04, 0.06, -0.12, 0.25],
+      [0.66, 0.37, -0.12, -0.44, 0, -48, -0.16, -0.06, 0.46, -0.04, 0.06, -0.13, 0.28],
+      [1, -1]],
+    // forehand from up beside the head, down across the body
     '1h': [[0, -1],
-      [0.3, -0.04, 0.06, 0.02, -0.35, 0.2, 0.91, 0, 0.3, -0.06, 0.12, -0.04, -0.02, -0.05],
-      [0.42, 0.2, 0.02, 0.02, 0.35, 0.05, 0.94, 0, 0.1, 0.02, 0, 0, -0.03, 0],
-      [0.48, 0.42, -0.1, -0.2, 0.82, -0.12, -0.55, 0, -0.14, 0.12, -0.16, 0.05, -0.05, 0.08],
-      [0.63, 0.26, -0.26, -0.45, 0.25, -0.55, -0.8, 0, -0.35, 0.18, -0.22, 0.04, -0.05, 0.1],
+      [0.16, 0.05, 0.12, -0.04, 60, 80, 0, 0.16, -0.01, 0.07, -0.01, -0.015, 0, 0.26, 0.1, -0.24, 0.8],
+      [0.32, -0.04, 0.12, 0.14, 20, 135, 0, 0.32, -0.05, 0.14, -0.025, -0.025, -0.06, 0.3, 0.14, -0.18, 1],
+      [0.38, -0.02, 0.11, 0.15, 20, 130, 0, 0.3, -0.04, 0.13, -0.02, -0.03, -0.05, 0.3, 0.14, -0.18, 1],
+      [0.44, 0.22, 0.05, 0.04, 10, 60, 0, 0.04, 0.05, 0.02, 0.015, -0.04, 0.02, 0.18, 0.04, -0.3, 1],
+      [0.48, 0.4, -0.05, -0.16, 0, -8, 0, -0.18, 0.12, -0.12, 0.05, -0.05, 0.06, 0.04, -0.02, -0.42, 1],
+      [0.6, 0.3, -0.2, -0.38, -45, -55, 0, -0.3, 0.16, -0.18, 0.05, -0.05, 0.07, -0.02, -0.04, -0.45, 1],
+      [0.76, 0.18, -0.1, -0.42, -25, -62, 0, -0.16, 0.08, -0.1, 0.02, -0.03, 0.03, 0.04, 0.0, -0.48, 0.6],
       [1, -1]],
-    'stab': [[0, -1],
-      [0.3, -0.02, 0.05, -0.28, 0.97, 0.0, 0.2, 0, 0.32, 0, 0.1, -0.04, -0.03, 0],
-      [0.48, 0.52, -0.14, -0.2, 0.98, -0.12, 0.1, 0, -0.26, 0.1, -0.16, 0.09, -0.06, 0.05],
-      [0.62, 0.5, -0.14, -0.22, 0.98, -0.12, 0.08, 0, -0.24, 0.1, -0.15, 0.08, -0.06, 0.05],
+    // knife: chamber at the hip, thrust straight out
+    stab: [[0, -1],
+      [0.18, 0.06, 0.06, -0.32, 6, 6, 0, 0.12, 0, 0.06, -0.01, -0.015, 0, 0.28, 0.08, -0.22, 0.8],
+      [0.34, -0.08, 0.08, -0.34, 4, 10, 0, 0.3, -0.02, 0.12, -0.035, -0.025, 0, 0.32, 0.12, -0.2, 1],
+      [0.48, 0.5, -0.1, -0.13, -4, 3, 0, -0.26, 0.1, -0.15, 0.08, -0.05, 0.04, 0.04, -0.04, -0.4, 1],
+      [0.6, 0.47, -0.1, -0.15, -4, 0, 0, -0.22, 0.09, -0.12, 0.07, -0.05, 0.04, 0.04, -0.04, -0.4, 1],
       [1, -1]],
-    'spear': [[0, -1],
-      [0.3, -0.1, 0.02, -0.36, 0.96, -0.15, 0.22, 0.45, 0.25, 0, 0.08, -0.06, -0.04, 0],
-      [0.48, 0.38, -0.12, -0.26, 0.98, -0.14, 0.06, 0.45, -0.2, 0.12, -0.12, 0.12, -0.07, 0.04],
-      [0.64, 0.36, -0.12, -0.27, 0.98, -0.14, 0.06, 0.45, -0.18, 0.12, -0.12, 0.11, -0.07, 0.04],
+    // spear: both hands, drawn back and driven forward with a lunge
+    spear: [[0, -1],
+      [0.2, -0.04, 0.0, -0.36, 2, 8, 0.45, 0.14, 0, 0.08, -0.01, -0.02, 0],
+      [0.34, -0.16, 0.02, -0.35, 2, 10, 0.45, 0.32, -0.02, 0.15, -0.045, -0.03, 0],
+      [0.48, 0.28, -0.12, -0.28, -3, 4, 0.45, -0.18, 0.08, -0.16, 0.13, -0.07, 0.04],
+      [0.62, 0.25, -0.12, -0.29, -3, 4, 0.45, -0.16, 0.08, -0.14, 0.12, -0.07, 0.04],
       [1, -1]],
-    'heavy': [[0, -1],
-      [0.36, 0.0, -0.06, 0.1, -0.55, 0.12, 0.82, -0.28, 0.1, -0.18, 0.08, -0.05, -0.02, -0.1],
-      [0.5, 0.36, -0.14, -0.4, 0.68, -0.05, -0.73, -0.14, -0.1, 0.38, -0.06, 0.06, -0.12, 0.2],
-      [0.66, 0.36, -0.14, -0.48, 0.55, -0.05, -0.83, -0.14, -0.1, 0.45, -0.06, 0.06, -0.14, 0.25],
+    // fists: up into a guard, a straight right, back to the guard
+    punch: [[0, -1],
+      [0.2, 0.2, -0.1, -0.18, 0, -70, 0, 0.12, 0.03, 0.06, -0.01, -0.03, 0, 0.26, 0.1, -0.15, 1],
+      [0.32, 0.1, -0.04, -0.18, 0, -70, 0, 0.24, 0.03, 0.11, -0.025, -0.035, 0, 0.26, 0.1, -0.15, 1],
+      [0.48, 0.55, -0.17, -0.06, 0, -10, 0, -0.32, 0.06, -0.16, 0.07, -0.045, 0, 0.18, 0.08, -0.17, 1],
+      [0.62, 0.5, -0.16, -0.08, 0, -10, 0, -0.28, 0.05, -0.14, 0.06, -0.045, 0, 0.2, 0.08, -0.16, 1],
+      [0.85, 0.2, -0.1, -0.18, 0, -70, 0, 0.06, 0.02, 0.03, 0, -0.03, 0, 0.26, 0.1, -0.15, 1],
       [1, -1]],
-    'punch': [[0, 0.22, -0.1, -0.2, 0.3, 0, -0.9, 0, 0, 0, 0, 0, -0.03, 0],
-      [0.3, 0.1, -0.03, -0.16, 0.3, 0, -0.9, 0, 0.28, 0, 0.1, -0.03, -0.04, 0],
-      [0.48, 0.55, -0.17, -0.05, 0.3, 0, -0.9, 0, -0.36, 0.06, -0.16, 0.07, -0.05, 0],
-      [0.62, 0.5, -0.16, -0.07, 0.3, 0, -0.9, 0, -0.3, 0.06, -0.14, 0.06, -0.05, 0],
-      [1, 0.22, -0.1, -0.2, 0.3, 0, -0.9, 0, 0, 0, 0, 0, -0.03, 0]],
-    'floor': [[0, -1],
-      [0.36, 0.02, -0.04, 0.1, -0.4, 0.05, 0.92, -0.1, 0, -0.1, 0.05, -0.04, -0.02, 0.1],
-      [0.52, 0.44, -0.16, -0.56, 0.5, -0.06, -0.86, -0.1, -0.06, 0.62, -0.05, 0.05, -0.16, 0.45],
-      [0.68, 0.44, -0.16, -0.6, 0.45, -0.06, -0.89, -0.1, -0.06, 0.65, -0.05, 0.05, -0.17, 0.45],
+    // at a body on the ground: raise overhead and chop down, bending at the waist
+    floor: [[0, -1],
+      [0.2, 0.08, 0.05, -0.04, 10, 100, -0.12, 0.08, -0.04, 0.05, -0.01, -0.02, 0.05, 0.25, 0.1, -0.25, 0.8],
+      [0.38, 0.0, 0.02, 0.15, 0, 145, -0.12, 0.05, -0.12, 0.03, -0.03, -0.02, -0.05, 0.28, 0.12, -0.2, 1],
+      [0.46, 0.18, -0.04, 0.04, 0, 75, -0.12, 0.0, 0.18, 0.0, 0.01, -0.05, 0.25, 0.25, 0.08, -0.28, 1],
+      [0.52, 0.38, -0.1, -0.34, 0, -12, -0.12, -0.05, 0.48, -0.02, 0.06, -0.09, 0.45, 0.2, 0.04, -0.42, 1],
+      [0.68, 0.37, -0.1, -0.36, 0, -16, -0.12, -0.05, 0.48, -0.02, 0.06, -0.09, 0.45, 0.2, 0.04, -0.42, 1],
       [1, -1]],
-    'floorStab': [[0, -1],
-      [0.32, 0.16, -0.02, -0.18, 0.5, 0, -0.86, 0, 0.1, 0.5, 0.02, -0.04, -0.3, 0.4],
-      [0.52, 0.38, -0.12, -0.56, 0.25, -0.05, -0.97, 0, -0.1, 0.72, -0.05, 0.02, -0.38, 0.55],
-      [0.68, 0.38, -0.12, -0.58, 0.25, -0.05, -0.97, 0, -0.1, 0.72, -0.05, 0.02, -0.38, 0.55],
+    // a knife (or a spear) driven down into a body on the ground from a crouch
+    floorStab: [[0, -1],
+      [0.25, 0.16, 0.0, -0.2, 0, -30, 0, 0.1, 0.3, 0.05, -0.02, -0.15, 0.3, 0.3, 0.06, -0.3, 1],
+      [0.38, 0.1, 0.02, -0.08, 0, -55, 0, 0.12, 0.45, 0.05, -0.04, -0.3, 0.45, 0.3, 0.08, -0.35, 1],
+      [0.52, 0.38, -0.08, -0.55, 0, -80, 0, -0.08, 0.7, -0.04, 0.02, -0.36, 0.55, 0.25, 0.02, -0.5, 1],
+      [0.68, 0.38, -0.08, -0.57, 0, -82, 0, -0.08, 0.7, -0.04, 0.02, -0.36, 0.55, 0.25, 0.02, -0.5, 1],
       [1, -1]],
+    // throwing: wind back overhead, release forward at 0.3 (the item flies from the start)
+    throw: [[0, -1],
+      [0.12, -0.08, 0.1, 0.12, 0, 120, 0, 0.3, -0.06, 0.12, -0.03, -0.02, -0.05, 0.3, 0.1, -0.15, 1],
+      [0.3, 0.45, -0.08, -0.02, 0, 10, 0, -0.3, 0.12, -0.15, 0.06, -0.04, 0, 0.05, -0.04, -0.4, 1],
+      [0.5, 0.35, -0.14, -0.3, 0, -40, 0, -0.32, 0.12, -0.16, 0.05, -0.04, 0, 0.05, -0.04, -0.42, 1],
+      [1, -1]],
+  },
+  // the ready stance as a key row
+  readyRow(st) { return this.READY[st] || this.READY[st === 'floor' ? '2h' : st === 'floorStab' ? 'stab' : st === 'throw' ? 'punch' : '1h']; },
+  ready(T, S, D, P, W, two) {
+    const st = this.styleOf(P, W, two), r = this.readyRow(st === '1h' && two ? '2h' : st), o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
+    for (let i = 0; i < 16; i++) o[i] = r[i];
+    o[16] = 1;
+    this.applySwing(T, o, W && !W.gun && (two || st === 'spear'), st === 'punch');
+    // knees soften, left foot forward
+    if (S.amp < 0.3) { T[C3.PZ] -= 0.02; this.stance(T, D, 0.13, -0.1, 0.12, 0, 0); }
+  },
+  // a key row (16 values + right arm weight) onto the pose; two: the left hand is on the weapon
+  applySwing(T, o, two, fists) {
+    const rw = o[16], lw = o[15];
+    T[C3.RW] += (o[0] - T[C3.RW]) * rw; T[C3.RW + 1] += (o[1] - T[C3.RW + 1]) * rw; T[C3.RW + 2] += (o[2] - T[C3.RW + 2]) * rw;
+    const y = o[3] * Math.PI / 180, p = o[4] * Math.PI / 180, cp = Math.cos(p);
+    this.wdir(T, cp * Math.cos(y), cp * Math.sin(y), Math.sin(p));
+    T[C3.GO] = o[5]; T[C3.GR] = two ? 1 : 0;
+    T[C3.SW] += o[6]; T[C3.SP] += o[7]; T[C3.PW] += o[8]; T[C3.PX] += o[9]; T[C3.PZ] += o[10]; T[C3.HP] += o[11];
+    if (!two && lw > 0) { T[C3.LW] += (o[12] - T[C3.LW]) * lw; T[C3.LW + 1] += (o[13] - T[C3.LW + 1]) * lw; T[C3.LW + 2] += (o[14] - T[C3.LW + 2]) * lw; T[C3.LE] = 0.6 * lw; }
+    T[C3.RE] = fists ? 1 : 0.45;
+    if (fists) T[C3.LH] = 1;
   },
   swing(T, S, D, P, W, two) {
-    const st = this.styleOf(P, W, two), rows = this.SWINGS[st] || this.SWINGS['1h'], st2h = two && st !== 'stab';
-    // the first and last keys are the holding pose (a row of [t, -1])
-    const name = 'sw_' + st + (st2h ? '2' : '1') + (P.weapon || '');
+    const st = this.styleOf(P, W, two), rows = this.SWINGS[st] || this.SWINGS['1h'];
+    const st2 = !!W && !W.gun && (two || st === 'spear') && st !== 'stab' && st !== 'floorStab' && st !== 'throw';
+    // swung from the ready stance (aiming) or from holding the weapon at rest
+    const fromReady = !!P.ready, name = 'sw_' + st + (st2 ? '2' : '1') + (P.weapon || '') + (fromReady ? 'r' : '');
     const K = this.keys(name, () => {
       const H = new Float32Array(C3.N); this.hold(H, P, W, 0);
-      if (st === 'punch' || !W) { H[C3.RW] = 0.22; H[C3.RW + 1] = -0.1; H[C3.RW + 2] = -0.2; }
+      const l = Math.hypot(H[C3.WD], H[C3.WD + 1], H[C3.WD + 2]) || 1;
+      const hy = Math.atan2(H[C3.WD + 1], H[C3.WD]) * 180 / Math.PI, hp = Math.asin(U.clamp(H[C3.WD + 2] / l, -1, 1)) * 180 / Math.PI;
+      const R = this.readyRow(st2 && st === '1h' ? '2h' : st);
       const v = [], ts = [];
-      for (const r of rows) {
+      rows.forEach((r, i) => {
         ts.push(r[0]);
-        if (r[1] === -1) v.push(H[C3.RW], H[C3.RW + 1], H[C3.RW + 2], H[C3.WD], H[C3.WD + 1], H[C3.WD + 2], st2h ? H[C3.GO] || -0.1 : 0, 0, 0, 0, 0, 0, 0);
-        else v.push(...r.slice(1));
-      }
-      return { t: ts, v, ch: [C3.RW, C3.RW + 1, C3.RW + 2, C3.WD, C3.WD + 1, C3.WD + 2, C3.GO, C3.SW, C3.SP, C3.PW, C3.PX, C3.PZ, C3.HP] };
+        if (r[1] !== -1) { v.push(...r.slice(1), ...(r.length < 17 ? [0, 0, 0, 0] : []), 1); return; }
+        // holding pose (arm weights 0: what the body is doing anyway); swung from the ready stance it starts there
+        if (fromReady && i === 0) v.push(...R, 1);
+        else v.push(H[C3.RW], H[C3.RW + 1], H[C3.RW + 2], hy, hp, st2 ? H[C3.GO] : 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      });
+      const ch = []; for (let i = 0; i < 17; i++) ch.push(i);
+      return { t: ts, v, ch };
     });
-    // the base pose for the legs comes from loco; channels the swing owns are reset first
-    T[C3.RE] = 0.4;
-    c3track(K, U.clamp(P.swingT || 0, 0, 1), T, this.ADD_SW || (this.ADD_SW = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]));
-    const l = Math.hypot(T[C3.WD], T[C3.WD + 1], T[C3.WD + 2]) || 1; T[C3.WD] /= l; T[C3.WD + 1] /= l; T[C3.WD + 2] /= l;
-    T[C3.GR] = st2h ? 1 : 0;
-    if (!st2h) {
-      // the free arm balances: forward on the wind-up, back on the strike
-      const k = Math.sin(U.clamp(P.swingT || 0, 0, 1) * Math.PI);
-      if (st === 'punch') this.arm(T, -1, 0.26 - k * 0.08, -0.1, -0.16, 1), T[C3.LH] = 1;
-      else this.arm(T, -1, 0.12 + k * 0.18, 0.06 + k * 0.08, -0.42 + k * 0.12, 0.3);
+    const o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
+    c3track(K, U.clamp(P.swingT || 0, 0, 1), o);
+    this.applySwing(T, o, st2, st === 'punch');
+    if (st === 'floorStab' && P.weapon === 'spear') { T[C3.GR] = 1; T[C3.GO] = 0.4; }
+    // standing still: a fighting stance; a blow at the ground is struck from a wider, lower stance
+    if (S.amp < 0.3) {
+      if (st === 'floorStab') this.stance(T, D, 0.3, -0.22, 0.13, 0, -0.7);
+      else if (st === 'floor') this.stance(T, D, 0.2, -0.16, 0.14, 0, -0.15);
+      else this.stance(T, D, 0.15, -0.12, 0.12, 0, 0);
     }
-    // standing still: a fighting stance with the weight moving through the swing
-    if (S.amp < 0.3) this.stance(T, D, st === 'floorStab' ? 0.3 : 0.15, st === 'floorStab' ? -0.2 : -0.12, 0.12, 0, st === 'floorStab' ? -0.6 : 0);
   },
-  // ---- firearms: two-handed pistol stance or rifle shouldered, with recoil
+  // ---- firearms: a pistol out at arm's length in both hands, a long gun shouldered; recoil kicks the muzzle up
   aim(T, S, D, P, long) {
-    const r = P.arms === 'fire' ? U.clamp(P.swingT || 0, 0, 1) : 1, kick = r < 0.12 ? r / 0.12 : Math.max(0, 1 - (r - 0.12) / 0.7);
-    const k2 = kick * kick * (3 - 2 * kick);
+    const r = P.arms === 'fire' ? U.clamp(P.swingT || 0, 0, 1) : 1;
+    const kick = r < 0.1 ? r / 0.1 : Math.max(0, 1 - (r - 0.1) / 0.75), k2 = kick * kick * (3 - 2 * kick);
     if (long) {
-      T[C3.PW] += 0.32; T[C3.SW] += -0.18; T[C3.SP] += 0.05 - k2 * 0.05;
-      const cy = -(T[C3.PW] + T[C3.SW]);
-      this.arm(T, 1, 0.2 - k2 * 0.05, -0.07, -0.1 + k2 * 0.02, 0.7);
-      this.wdir(T, Math.cos(cy), Math.sin(cy), 0.02 + k2 * 0.22);
-      T[C3.GR] = 1; T[C3.GO] = 0.32; T[C3.HR] += 0.2; T[C3.HP] += 0.14; T[C3.HW] += 0.12;
+      // bladed stance; the butt in the shoulder pocket, cheek down on the stock, left hand out on the fore-end
+      T[C3.PW] += 0.38; T[C3.SW] += -0.14; T[C3.SP] += 0.07 - k2 * 0.07; T[C3.PX] -= k2 * 0.025;
+      const cy = -(T[C3.PW] + T[C3.SW]), dz = 0.02 + k2 * 0.28, dl = Math.hypot(1, dz), dx = Math.cos(cy) / dl, dy = Math.sin(cy) / dl;
+      // the stock reaches 0.26 behind the hand: put the hand that far along the barrel from the pocket
+      this.arm(T, 1, 0.0 + dx * 0.21 - k2 * 0.04, -0.07 + dy * 0.21, -0.05 + dz / dl * 0.21, 0.9);
+      this.wdir(T, dx, dy, dz / dl);
+      T[C3.GR] = 1; T[C3.GO] = 0.34; T[C3.LE] = 0.7; T[C3.HR] += 0.24; T[C3.HP] += 0.14;
     } else {
-      T[C3.SP] += 0.04 - k2 * 0.04; T[C3.SW] += 0.05;
+      T[C3.SP] += 0.05 - k2 * 0.04; T[C3.SW] += 0.05;
       const cy = -(T[C3.PW] + T[C3.SW]);
-      this.arm(T, 1, 0.46 - k2 * 0.06, -0.15, -0.05 + k2 * 0.06, 0.6);
-      this.wdir(T, Math.cos(cy), Math.sin(cy), k2 * 0.5);
-      T[C3.GR] = 1; T[C3.GO] = -0.015; T[C3.HP] += 0.1;
+      this.arm(T, 1, 0.46 - k2 * 0.08, -0.13, -0.01 + k2 * 0.1, 0.5);
+      this.wdir(T, Math.cos(cy), Math.sin(cy), k2 * 0.7);
+      T[C3.GR] = 1; T[C3.GO] = -0.015; T[C3.LE] = 0.5; T[C3.HP] += 0.06;
     }
-    T[C3.HP] -= k2 * 0.06;
-    if (S.amp < 0.3) this.stance(T, D, 0.12, -0.1, 0.13);
+    T[C3.HP] -= k2 * 0.05;
+    if (S.amp < 0.3) { T[C3.PZ] -= 0.02; this.stance(T, D, 0.12, -0.1, 0.13); }
   },
-  // ---- shove: chamber, a two-handed push with a step of the left foot, recover (contact 0.4)
+  // ---- shove: hands up, a two-handed push with a step of the left foot and the body behind it (contact 0.4)
   shove(T, S, D, P) {
     const p = U.clamp(P.swingT || 0, 0, 1);
     const K = this.keys('shove', () => ({
-      ch: [0, 1, 2, 3, C3.SP, C3.PX, C3.PZ],
-      t: [0, 0.22, 0.4, 0.58, 1],
-      v: [0.06, 0.05, -0.5, 0, 0, 0, 0,
-        0.12, -0.06, -0.22, 1, -0.05, -0.03, -0.03,
-        0.47, -0.07, -0.12, 1, 0.2, 0.13, -0.05,
-        0.44, -0.07, -0.14, 1, 0.18, 0.12, -0.05,
-        0.06, 0.05, -0.5, 0, 0, 0, 0],
+      // wrist f, s (outward), z, elbow, weight, spine bend, pelvis forward, pelvis height, twist
+      ch: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+      t: [0, 0.2, 0.4, 0.56, 0.8, 1],
+      v: [0.1, 0.0, -0.5, 0, 0, 0, 0, 0, 0,
+        0.16, -0.06, -0.2, 1, 1, -0.03, -0.03, -0.02, 0.1,
+        0.5, -0.08, -0.11, 0.5, 1, 0.22, 0.13, -0.05, -0.08,
+        0.47, -0.08, -0.12, 0.5, 1, 0.2, 0.12, -0.05, -0.06,
+        0.2, -0.04, -0.3, 0.7, 0.6, 0.06, 0.04, -0.02, 0,
+        0.1, 0.0, -0.5, 0, 0, 0, 0, 0, 0],
     }));
     const o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
     c3track(K, p, o);
-    for (const side of [-1, 1]) this.arm(T, side, o[0], o[1], o[2], o[3]);
-    T[C3.SP] += o[4]; T[C3.PX] += o[5]; T[C3.PZ] += o[6]; T[C3.LH] = 0;
+    for (let side = -1; side <= 1; side += 2) {
+      const i = side < 0 ? C3.LW : C3.RW, w = o[4];
+      T[i] += (o[0] - T[i]) * w; T[i + 1] += (side * o[1] - T[i + 1]) * w; T[i + 2] += (o[2] - T[i + 2]) * w; T[i + 3] = o[3] * w;
+    }
+    T[C3.SP] += o[5]; T[C3.PX] += o[6]; T[C3.PZ] += o[7]; T[C3.SW] += o[8]; T[C3.LH] = 0; T[C3.GR] = 0;
     // the left foot steps in and back
-    const out = U.smooth(U.clamp((p - 0.06) / 0.3, 0, 1)), back = U.smooth(U.clamp((p - 0.62) / 0.33, 0, 1)), st = out * (1 - back);
-    const lift = Math.sin(U.clamp((p - 0.06) / 0.3, 0, 1) * Math.PI) * 0.07 + Math.sin(U.clamp((p - 0.62) / 0.33, 0, 1) * Math.PI) * 0.05;
+    const out = U.smooth(U.clamp((p - 0.05) / 0.3, 0, 1)), back = U.smooth(U.clamp((p - 0.6) / 0.35, 0, 1)), st = out * (1 - back);
+    const lift = Math.sin(U.clamp((p - 0.05) / 0.3, 0, 1) * Math.PI) * 0.07 + Math.sin(U.clamp((p - 0.6) / 0.35, 0, 1) * Math.PI) * 0.05;
     if (S.amp < 0.3) {
       const Pf = this.pelvisOf(T, this.T1);
       this.foot(T, Pf, -1, 0.02 + st * 0.3, -0.11, D.ankH + lift, lift * 2, 0.12);
-      this.foot(T, Pf, 1, -0.06 - st * 0.04, 0.11, D.ankH, -st * 0.3, 0.2);
+      this.foot(T, Pf, 1, -0.06 - st * 0.06, 0.12, D.ankH, -st * 0.35, 0.2);
     }
   },
-  // ---- stomp: knee up, drive the heel down onto the body in front (contact 0.5), step back
+  // ---- stomp: lift the knee high, lean over and drive the heel down onto the head of the body in front (contact
+  // 0.5), hold, step back. stompD: how far ahead the head lies
   stomp(T, S, D, P) {
-    const p = U.clamp(P.swingT || 0, 0, 1), sd = U.clamp(P.stompD || 0.5, 0.35, 0.62);
+    const p = U.clamp(P.swingT || 0, 0, 1), sd = U.clamp(P.stompD === undefined ? 0.45 : P.stompD, 0.3, 0.6);
     const K = this.keys('stomp', () => ({
-      // right ankle x z (body), foot pitch, SP, PX, PY, PZ, HP, PR
+      // right ankle x (fraction of the reach at contact), z, foot pitch; spine bend, pelvis fwd, side, height, head pitch, pelvis roll
       ch: [0, 1, 2, 3, 4, 5, 6, 7, 8],
-      t: [0, 0.32, 0.42, 0.5, 0.64, 1],
-      v: [0.0, 0.075, 0, 0.0, 0, 0, 0, 0.1, 0,
-        0.24, 0.42, 0.25, 0.2, -0.02, -0.05, -0.02, 0.35, -0.06,
-        0.38, 0.33, 0.1, 0.28, 0.02, -0.04, -0.03, 0.45, -0.05,
-        1.0, 0.075, 0.0, 0.38, 0.07, -0.01, -0.09, 0.55, -0.02,
-        1.0, 0.075, 0.0, 0.36, 0.06, -0.01, -0.1, 0.55, -0.02,
-        0.0, 0.075, 0, 0.0, 0, 0, 0, 0.1, 0],
+      t: [0, 0.22, 0.38, 0.46, 0.5, 0.62, 0.82, 1],
+      v: [0.0, 0.075, 0, 0, 0, 0, 0, 0.05, 0,
+        0.4, 0.42, 0.2, 0.14, 0.0, -0.04, -0.01, 0.3, -0.05,
+        0.66, 0.5, 0.12, 0.24, 0.04, -0.05, -0.02, 0.45, -0.06,
+        0.95, 0.27, 0.0, 0.3, 0.1, -0.04, -0.06, 0.55, -0.04,
+        1.0, 0.13, 0.0, 0.32, 0.13, -0.03, -0.09, 0.62, -0.02,
+        1.0, 0.13, 0.0, 0.3, 0.13, -0.03, -0.09, 0.62, -0.02,
+        0.45, 0.17, -0.1, 0.12, 0.04, -0.01, -0.03, 0.3, 0,
+        0.0, 0.075, 0, 0, 0, 0, 0, 0.05, 0],
     }));
     const o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
     c3track(K, p, o);
     T[C3.SP] += o[3]; T[C3.PX] += o[4]; T[C3.PY] += o[5]; T[C3.PZ] += o[6]; T[C3.HP] += o[7]; T[C3.PR] += o[8];
-    // arms out for balance, then swinging down with the stomp
+    // arms out for balance, swinging down with the stomp
     const k = Math.sin(p * Math.PI);
-    this.hang(T, -1, D, 0.1 * k, 0.1 + 0.18 * k, 0.15);
-    this.hang(T, 1, D, -0.12 * k, 0.08 + 0.12 * k, 0.15);
+    this.hang(T, -1, D, 0.14 * k, 0.06 + 0.1 * k, 0.25);
+    this.hang(T, 1, D, -0.12 * k, 0.05 + 0.07 * k, 0.25);
     if (!P.weapon) T[C3.LH] = 1;
     const Pf = this.pelvisOf(T, this.T1);
-    const fx = o[0] > 0.9 ? sd * o[0] : o[0];
-    this.foot(T, Pf, -1, -0.04, -0.12, D.ankH, 0, 0.15);
-    this.foot(T, Pf, 1, fx, 0.07, o[1], o[2], 0.05);
+    this.foot(T, Pf, -1, -0.06, -0.12, D.ankH, 0, 0.15);
+    this.foot(T, Pf, 1, sd * o[0], 0.06, Math.max(D.ankH, o[1]), o[2], 0.05);
   },
   // ---- climbing over a fence or through a window (prog 0..1)
   climb(T, S, D, P) {
