@@ -342,11 +342,11 @@ const Player = {
       this.xp('Nimble', dt * 0.15);
     }
     if (p.swing) sp *= 0.5;
-    sp *= this.speedMult();
+    sp *= this.speedMult() * Debug.speed;
     if (p.st.drunk > 0.3) { const wob = Math.sin(performance.now() / 300) * p.st.drunk * 0.5; const c = Math.cos(wob), s = Math.sin(wob); const tx = nx * c - ny * s; ny = nx * s + ny * c; nx = tx; }
     p.moveMode = mode;
     const ox = p.x, oy = p.y;
-    World.move(p, nx * sp * dt, ny * sp * dt, p.r);
+    if (Debug.ghost) { p.x += nx * sp * dt; p.y += ny * sp * dt; } else World.move(p, nx * sp * dt, ny * sp * dt, p.r);
     Vehicles.pushOut(p, p.r);
     this.pushZombies(p);
     const moved = U.dist(ox, oy, p.x, p.y);
@@ -362,7 +362,7 @@ const Player = {
     else { this.xp('Lightfooted', dt * 0.03); if (p.sneak) this.xp('Sneaking', dt * (p.seenZ > 0 ? 0.25 : 0.04)); }
     if (this.hasTrait('asthmatic')) drain *= 1.4;
     if (this.heavyRatio() > 1) { drain += 0.003 * this.heavyRatio(); this.xp('Strength', dt * 0.05); }
-    st.endurance = Math.max(0, st.endurance - drain * dt);
+    if (!Debug.noTire) st.endurance = Math.max(0, st.endurance - drain * dt);
     // footstep noise
     p.noiseT -= dt;
     const stepInt = mode === 'sprint' ? 0.28 : mode === 'run' ? 0.34 : 0.48;
@@ -416,7 +416,7 @@ const Player = {
   // ------------------------------------------------------------------ zombie attacks
   zombieAttack(z) {
     const p = G.player;
-    if (p.dead) return;
+    if (p.dead || Debug.god) return;
     const ang = Math.atan2(z.y - p.y, z.x - p.x);
     const behind = Math.abs(U.angDiff(p.angle, ang)) > 1.7;
     let chance = 0.62;
@@ -459,6 +459,7 @@ const Player = {
   },
   addWound(part, type, src) {
     const p = G.player;
+    if (Debug.god) return;
     const b = p.body[part];
     const wd = WOUND[type];
     b.w[type] = Math.max(b.w[type] || 0, R.f(wd.heal[0], wd.heal[1]));
@@ -747,6 +748,7 @@ const Player = {
   die(cause) {
     const p = G.player;
     if (p.dead) return;
+    if (Debug.god) { p.health = Math.max(p.health, 1); return; }
     p.dead = true; p.deathCause = cause; p.deadT = 0;
     G.corpse = true;
     p.swing = null; p.action = null; p.queue = [];

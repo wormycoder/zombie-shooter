@@ -27,7 +27,7 @@ const Actions = {
     const a = p.action;
     if (!a || p.dead) return;
     if (a.check && !a.check()) { this.cancel(); return; }
-    a.t += dt * (a.rate || 1);
+    a.t += dt * (a.rate || 1) * (Debug.instant ? 1000 : 1);
     if (a.tick) a.tick(dt);
     if (a.t >= a.dur) {
       p.action = null;

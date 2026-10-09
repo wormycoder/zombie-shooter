@@ -31,6 +31,7 @@ const Menu = {
   },
   show() {
     G.mode = 'menu';
+    Versions.mountHome();
     // first visit: put the menu up at once and build the background town right after
     if (this.bgWorld) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
     const meta = Save.meta();

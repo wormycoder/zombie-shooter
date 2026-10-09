@@ -325,10 +325,12 @@ const Render = {
     if (G.build) Build.drawGhost(ctx);
     if (G.hover) this.drawHover(ctx, G.hover);
     if (p && !p.dead) Player.drawOverlay(ctx);
+    if (Debug.on) Debug.drawWorld(ctx, minX, minY, maxX, maxY);
     // ---------------- screen space
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     Weather.drawScreen(ctx, this.W, this.H, dt);
     this.drawVignette(ctx);
+    if (Debug.on) Debug.drawScreen(ctx, this.W, this.H);
   },
   drawEnt(ctx, k, e) {
     if (k === 'p') Player.draw(ctx);

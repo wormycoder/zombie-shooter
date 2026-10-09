@@ -79,7 +79,7 @@ const Crafting = {
     }
     return res;
   },
-  has(rec) { return this.check(rec).every(r => r.have >= r.need); },
+  has(rec) { return Debug.build || this.check(rec).every(r => r.have >= r.need); },
   nearHeat() {
     const p = G.player;
     for (let y = Math.floor(p.y) - 2; y <= Math.floor(p.y) + 2; y++) for (let x = Math.floor(p.x) - 2; x <= Math.floor(p.x) + 2; x++) {

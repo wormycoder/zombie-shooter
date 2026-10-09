@@ -267,7 +267,7 @@ const Zombie = {
     this.moveToward(z, dt, speed, d);
   },
   perceive(z, p, px, py, d) {
-    if (p.dead) { if (z.st === 'chase' || z.st === 'attack') { z.st = 'investigate'; } z.canSee = false; return; }
+    if (p.dead || Debug.invisible) { if (z.st === 'chase' || z.st === 'attack') { z.st = 'investigate'; } z.canSee = false; return; }
     const target = p.inCar || p;
     let see = false;
     const sr = p.inCar ? 22 : this.sightRange(z, p);
