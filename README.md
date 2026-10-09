@@ -25,9 +25,17 @@ All graphics and audio are generated procedurally at runtime — there are no as
 - Radial menu (V): vehicle controls inside or next to a car, quick actions on foot
 - Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
 - Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread, infection transmission, zombie toughness, door-opening zombies, house and car alarm frequency
-- Settings screen with Display / Performance / Audio / Controls tabs and Low / Medium / High / Ultra presets: render resolution, frame-rate cap, world detail, particles, rain & snow, 3D characters, frame-rate counter (FPS or detailed timings), lighting updates per second (5-60), UI refresh rate (10-60), lazy zombie updates and adaptive zombie physics for big crowds, lazy chunk updates (16x16-tile chunks 6+ away run at half speed, 12+ away pause); cached ground chunks and trimmed sprites keep frames light
+- Settings screen with Display / Performance / Audio / Controls tabs and Low / Medium / High / Ultra presets: render resolution, frame-rate cap, world detail, particles, rain & snow, 3D characters, frame-rate counter (FPS or detailed timings), lighting updates per second (5-60), UI refresh rate (10-60), lazy zombie updates and adaptive zombie physics for big crowds, lazy chunk updates (8x8-tile chunks 6+ away run at half speed, 12+ away pause); cached ground chunks and trimmed sprites keep frames light
 - Save/load (permadeath)
+- Debug mode in the spirit of Project Zomboid's (`?debug`, F2 or `` ` `` in game, or the switch on the title screen / pause menu): cheats, item / zombie / vehicle spawners, time, weather, utilities, fires and teleport (Ctrl+click the world or the map), player health / stats / skills / traits, world overlays (chunk tiers, tile info, rooms, collision, zombie AI, noise, light, vision) and frame-time graphs
 
 ## Controls
 WASD move · Shift run · Alt/X sprint · C sneak · hold Right mouse aim · Left click attack · Space shove/stomp · R reload · 1-4 hotbar ·
 Right-click (tap) context menu · E interact · F flashlight · Q shout · V radial menu · I inventory · H health · B crafting · K skills · M map · Esc menu
+
+## Version history
+The title screen shows the build as `VERSION : XY.Z.A.BCD` in the bottom-right corner, next to a **?** button that opens the full version history with notes and screenshots taken during development.
+
+- **XY** major (00 for the development builds) · **Z** minor (feature updates) · **A** patch (fixes, polish, internal work) · **BCD** build number, the count of commits on the development branch up to that build
+- The history lives in `js/versions.js` (`VERSION_LOG`, newest first; `VERSION` follows the newest entry) and its screenshots in `versions/`
+- 00.1 first playable town · 00.2 two-storey houses, fire, seasons, the county · 00.3 trapping, soundscape, fractures, moveable furniture, rotting corpses, sirens · 00.4 detailed houses, cars and streets · 00.5 radial menu and alarm options · 00.6 graphics and performance settings · 00.7 vehicle handling and mechanics · 00.8 3D characters, Zomboid-style inventory and hotbar, lived-in yards · 00.9 8x8 chunks, debug mode, version tracker
