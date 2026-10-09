@@ -1,1 +1,80 @@
-/* debug mode panels and overlays */
+/* debug mode: window, tabs, controls, title-screen switch and the "DEBUG" chip */
+#dbgwin {
+  position: fixed; right: 14px; top: 64px; width: 440px; max-height: calc(100vh - 110px); z-index: 900;
+  display: flex; flex-direction: column; background: rgba(16, 18, 20, 0.95); border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7); font: 12px/1.4 Verdana, Geneva, sans-serif; color: #ddd8c8;
+  pointer-events: auto; user-select: none;
+}
+#dbgwin .dbg-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; cursor: move; background: linear-gradient(#3a2626, #2a1c1c); border-bottom: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px 4px 0 0; }
+#dbgwin .dbg-title { font-weight: bold; letter-spacing: 2px; text-transform: uppercase; color: #ff9a7a; }
+#dbgwin .dbg-hint { flex: 1; font-size: 10px; color: #9a9080; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dbgwin .dbg-off, #dbgwin .dbg-x { cursor: pointer; padding: 0 6px; border-radius: 3px; color: #c8c0b0; }
+#dbgwin .dbg-off { font-size: 10px; border: 1px solid rgba(255, 255, 255, 0.2); line-height: 16px; }
+#dbgwin .dbg-x { font-size: 16px; line-height: 16px; }
+#dbgwin .dbg-off:hover, #dbgwin .dbg-x:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+#dbgwin .dbg-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 5px 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.25); }
+#dbgwin .dbg-tab { padding: 3px 9px 4px; cursor: pointer; border: 1px solid transparent; border-bottom: 0; border-radius: 3px 3px 0 0; color: #a8a090; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+#dbgwin .dbg-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+#dbgwin .dbg-tab.on { color: #ffe6b0; background: rgba(16, 18, 20, 1); border-color: rgba(255, 255, 255, 0.18); margin-bottom: -1px; }
+#dbgwin .dbg-body { overflow-y: auto; padding: 4px 10px 10px; }
+#dbgwin .dbg-sec { margin: 10px 0 5px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #c89a6a; border-bottom: 1px solid rgba(200, 154, 106, 0.25); padding-bottom: 2px; }
+#dbgwin .dbg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 4px 0; }
+#dbgwin .dbg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; }
+#dbgwin .dbg-grid1 { display: grid; grid-template-columns: 1fr; gap: 5px; }
+#dbgwin .dbg-btn { display: inline-block; padding: 3px 9px; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 3px; background: rgba(255, 255, 255, 0.05); color: #e0dacc; white-space: nowrap; }
+#dbgwin .dbg-btn:hover { background: rgba(255, 220, 160, 0.14); border-color: rgba(255, 220, 160, 0.45); color: #fff; }
+#dbgwin .dbg-btn:active { background: rgba(255, 220, 160, 0.25); }
+#dbgwin .dbg-btn.on { background: rgba(120, 200, 110, 0.22); border-color: rgba(140, 220, 120, 0.6); color: #d8ffd0; }
+#dbgwin .dbg-sw { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; padding: 2px 0; }
+#dbgwin .dbg-sw input { display: none; }
+#dbgwin .dbg-sw small { display: block; color: #8a8478; font-size: 10px; }
+#dbgwin .dbg-knob, .dbg-titlesw .dbg-knob { flex: none; position: relative; width: 26px; height: 14px; margin-top: 1px; border-radius: 7px; background: #4a4440; border: 1px solid rgba(255, 255, 255, 0.2); transition: background 0.12s; }
+#dbgwin .dbg-knob::after, .dbg-titlesw .dbg-knob::after { content: ''; position: absolute; left: 1px; top: 1px; width: 10px; height: 10px; border-radius: 50%; background: #c8c0b0; transition: left 0.12s; }
+#dbgwin .dbg-sw input:checked + .dbg-knob, .dbg-titlesw .dbg-knob.on { background: #4a8a3a; }
+#dbgwin .dbg-sw input:checked + .dbg-knob::after, .dbg-titlesw .dbg-knob.on::after { left: 13px; background: #f0ffe8; }
+#dbgwin input[type=text], #dbgwin input[type=number], #dbgwin select { background: rgba(0, 0, 0, 0.45); color: #eee; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 3px; padding: 3px 5px; font: 11px Verdana, sans-serif; }
+#dbgwin input:focus, #dbgwin select:focus { outline: none; border-color: rgba(255, 210, 140, 0.7); }
+#dbgwin .dbg-grow { flex: 1; min-width: 120px; }
+#dbgwin .dbg-num { width: 52px; }
+#dbgwin .dbg-lbl { display: inline-flex; align-items: center; gap: 4px; color: #b8b0a0; }
+#dbgwin .dbg-val { min-width: 34px; color: #fff; }
+#dbgwin .dbg-sml { color: #9a9282; font-size: 10px; }
+#dbgwin .dbg-note { color: #9a9282; font-size: 11px; padding: 6px 0; }
+#dbgwin .dbg-place { margin: 6px 0; padding: 5px 8px; background: rgba(255, 200, 80, 0.12); border: 1px solid rgba(255, 200, 80, 0.4); border-radius: 3px; color: #ffe0a0; }
+#dbgwin .dbg-list { max-height: 330px; overflow-y: auto; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 3px; background: rgba(0, 0, 0, 0.2); }
+#dbgwin .dbg-item { display: flex; align-items: center; gap: 6px; padding: 2px 5px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+#dbgwin .dbg-item:nth-child(odd) { background: rgba(255, 255, 255, 0.025); }
+#dbgwin .dbg-item:hover { background: rgba(255, 220, 160, 0.08); }
+#dbgwin .dbg-item img { width: 22px; height: 22px; image-rendering: auto; }
+#dbgwin .dbg-in { flex: 1; color: #e8e2d4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#dbgwin .dbg-ic { color: #8a8478; font-size: 10px; width: 78px; text-align: right; }
+#dbgwin .dbg-item .dbg-btn { padding: 1px 7px; font-size: 11px; }
+#dbgwin .dbg-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 4px 0; }
+#dbgwin .dbg-kv span { color: #9a9282; }
+#dbgwin .dbg-kv b { color: #f0ead8; font-weight: normal; }
+#dbgwin .dbg-kv3 { grid-template-columns: auto 1fr auto 1fr; }
+#dbgwin .dbg-cols { gap: 4px; }
+#dbgwin .dbg-col { width: 20px; height: 20px; border-radius: 3px; cursor: pointer; border: 2px solid rgba(255, 255, 255, 0.15); display: inline-flex; align-items: center; justify-content: center; color: #aaa; font-size: 11px; background: #2a2a2a; }
+#dbgwin .dbg-col.on { border-color: #ffe0a0; box-shadow: 0 0 0 1px #000 inset; }
+#dbgwin .dbg-places .dbg-btn { font-size: 10px; padding: 2px 6px; }
+#dbgwin .dbg-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+#dbgwin .dbg-stat { display: grid; grid-template-columns: 70px 1fr 38px; align-items: center; gap: 5px; color: #b8b0a0; font-size: 11px; }
+#dbgwin .dbg-stat input { width: 100%; }
+#dbgwin .dbg-stat b { color: #fff; font-weight: normal; text-align: right; }
+#dbgwin .dbg-skills { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+#dbgwin .dbg-skill { display: grid; grid-template-columns: 1fr auto 22px auto; align-items: center; gap: 4px; }
+#dbgwin .dbg-skill b { text-align: center; color: #fff; }
+#dbgwin .dbg-skill .dbg-btn { padding: 0 6px; }
+#dbgwin .dbg-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 7px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); }
+#dbgwin .dbg-chipx { cursor: pointer; color: #c88; padding: 0 3px; }
+#dbgwin .dbg-chipx:hover { color: #fff; }
+#dbgwin canvas#dbggraph { width: 100%; height: 120px; display: block; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 3px; }
+#dbgwin .dbg-legend { display: flex; gap: 10px; align-items: center; font-size: 10px; color: #a8a090; margin: 4px 0; }
+#dbgwin .dbg-legend i { display: inline-block; width: 9px; height: 9px; margin-right: -6px; border-radius: 2px; }
+#dbgwin input[type=range] { accent-color: #c8945a; }
+#dbgchip { position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 900; padding: 2px 10px; border-radius: 10px; cursor: pointer;
+  background: rgba(120, 30, 30, 0.85); border: 1px solid rgba(255, 150, 120, 0.6); color: #ffd8c8; font: bold 10px Verdana, sans-serif; letter-spacing: 1.5px; pointer-events: auto; }
+#dbgchip:hover { background: rgba(160, 40, 40, 0.95); }
+.dbg-titlesw { position: absolute; left: 14px; bottom: 12px; display: flex; align-items: center; gap: 8px; padding: 4px 10px; cursor: pointer; pointer-events: auto;
+  font: 11px Verdana, sans-serif; color: #b8b0a0; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 3px; }
+.dbg-titlesw:hover { color: #fff; border-color: rgba(255, 255, 255, 0.35); }

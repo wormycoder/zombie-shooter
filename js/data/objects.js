@@ -85,6 +85,8 @@ const FLOOR_NAMES = ['Grass', 'Grass', 'Dirt', 'Asphalt', 'Sidewalk', 'Wooden Fl
 const LV = { W0: 400 };
 function lvOf(x) { return x >= LV.W0 ? 1 : 0; }
 function vxOf(x) { return x >= LV.W0 ? x - LV.W0 : x; }
+// simulation level-of-detail chunks: CHUNK x CHUNK tiles; LOD distances are counted in chunks
+const CHUNK = 8;
 // Wall types
 const WT = { NONE: 0, EXT: 1, INT: 2, BRICK: 3, PICKET: 4, WOODFENCE: 5, CHAIN: 6, BUILT: 7, LOG: 8, BOUND: 9 };
 const WALL_INFO = {

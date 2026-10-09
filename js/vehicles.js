@@ -424,17 +424,20 @@ const Vehicles = {
   // local coordinates of point relative to car
   local(c, x, y) { const dx = x - c.x, dy = y - c.y, ca = Math.cos(c.a), sa = Math.sin(c.a); return [dx * ca + dy * sa, -dx * sa + dy * ca]; },
   pushOut(e, r) {
-    for (const c of (this.active || G.cars)) {
-      if (G.player && G.player.inCar === c && e === G.player) continue;
-      if (Math.abs(e.x - c.x) > 3 || Math.abs(e.y - c.y) > 3) continue;
+    const cars = this.active || G.cars, inCar = G.player && e === G.player ? G.player.inCar : null;
+    for (let k = 0; k < cars.length; k++) {
+      const c = cars[k];
+      if (inCar === c) continue;
+      const dx = e.x - c.x, dy = e.y - c.y;
+      if (dx > 3 || dx < -3 || dy > 3 || dy < -3) continue;
       const T = CAR_TYPES[c.type];
-      const [f, s] = this.local(c, e.x, e.y);
+      // this.local() inlined (runs for every walker every step)
+      const ca = Math.cos(c.a), sa = Math.sin(c.a), f = dx * ca + dy * sa, s = -dx * sa + dy * ca;
       const hl = T.len / 2 + r, hw = T.wid / 2 + r;
       if (Math.abs(f) < hl && Math.abs(s) < hw) {
         const pf = hl - Math.abs(f), ps = hw - Math.abs(s);
         let nf = f, ns = s;
         if (pf < ps) nf = Math.sign(f || 1) * hl; else ns = Math.sign(s || 1) * hw;
-        const ca = Math.cos(c.a), sa = Math.sin(c.a);
         e.x = c.x + nf * ca - ns * sa; e.y = c.y + nf * sa + ns * ca;
         World.resolve(e, r);
       }

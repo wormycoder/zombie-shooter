@@ -354,12 +354,12 @@ const Game = {
     }
   },
   // ------------------------------------------------------------------ world tick (game minutes)
-  // 0 within 6 chunks (16x16 tiles) of the player, 1 within 12, 2 beyond
+  // 0 within 6 chunks (CHUNK x CHUNK tiles) of the player, 1 within 12, 2 beyond
   chunkTier(x, y) {
     const p = G.player;
     if (!p) return 0;
     const q = p.inCar || p;
-    const cd = Math.max(Math.abs(Math.floor(vxOf(x) / 16) - Math.floor(vxOf(q.x) / 16)), Math.abs(Math.floor(y / 16) - Math.floor(q.y / 16)));
+    const cd = Math.max(Math.abs(Math.floor(vxOf(x) / CHUNK) - Math.floor(vxOf(q.x) / CHUNK)), Math.abs(Math.floor(y / CHUNK) - Math.floor(q.y / CHUNK)));
     return cd >= 12 ? 2 : cd >= 6 ? 1 : 0;
   },
   worldTick(gm) {

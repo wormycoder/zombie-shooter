@@ -5,7 +5,7 @@
 const ZSKIN = '#7d8a6e';
 let _zid = 1;
 const Zombie = {
-  grid: null, gw: 0, CELL: 4,
+  gHead: null, gNext: null, gRef: [], gw: 0, gh: 0, CELL: 4,
   create(x, y, outfit) {
     const female = R.chance(0.45);
     const wear = this.outfit(outfit, female);
@@ -102,32 +102,54 @@ const Zombie = {
     }
   },
   // ------------------------------------------------------------------ spatial hash
+  // linked lists in typed arrays, rebuilt every step without allocating: gHead[cell] -> first slot,
+  // gNext[slot] -> next slot, gRef[slot] -> zombie (references, so splices between rebuilds stay safe)
   rebuildGrid() {
-    const C = this.CELL, gw = Math.ceil(Wd.w / C), gh = Math.ceil(Wd.h / C);
-    if (!this.grid || this.gw !== gw) { this.gw = gw; this.gh = gh; this.grid = new Array(gw * gh); }
-    for (let i = 0; i < this.grid.length; i++) this.grid[i] = null;
-    for (const z of G.zombies) {
-      const k = Math.floor(z.y / C) * gw + Math.floor(z.x / C);
-      if (k < 0 || k >= this.grid.length) continue;
-      (this.grid[k] || (this.grid[k] = [])).push(z);
+    const C = this.CELL, gw = Math.ceil(Wd.w / C), gh = Math.ceil(Wd.h / C), zs = G.zombies, n = zs.length;
+    if (!this.gHead || this.gw !== gw || this.gh !== gh) { this.gw = gw; this.gh = gh; this.gHead = new Int32Array(gw * gh); }
+    if (!this.gNext || this.gNext.length < n) this.gNext = new Int32Array(Math.max(256, n * 1.5 | 0));
+    const head = this.gHead, next = this.gNext, ref = this.gRef;
+    head.fill(-1);
+    if (ref.length > n) ref.length = n;
+    // backwards so each cell lists its zombies in array order
+    for (let i = n - 1; i >= 0; i--) {
+      const z = zs[i];
+      ref[i] = z;
+      const cx = Math.floor(z.x / C), cy = Math.floor(z.y / C);
+      if (cx < 0 || cy < 0 || cx >= gw || cy >= gh) continue;
+      const k = cy * gw + cx;
+      next[i] = head[k]; head[k] = i;
     }
   },
   near(x, y, r) {
     const out = [];
-    if (!this.grid) return out;
-    const C = this.CELL;
-    const x0 = Math.max(0, Math.floor((x - r) / C)), x1 = Math.min(this.gw - 1, Math.floor((x + r) / C));
+    if (!this.gHead) return out;
+    const C = this.CELL, gw = this.gw, head = this.gHead, next = this.gNext, ref = this.gRef;
+    const x0 = Math.max(0, Math.floor((x - r) / C)), x1 = Math.min(gw - 1, Math.floor((x + r) / C));
     const y0 = Math.max(0, Math.floor((y - r) / C)), y1 = Math.min(this.gh - 1, Math.floor((y + r) / C));
     const r2 = r * r;
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
-      const a = this.grid[cy * this.gw + cx];
-      if (!a) continue;
-      for (const z of a) { const dx = z.x - x, dy = z.y - y; if (dx * dx + dy * dy <= r2) out.push(z); }
+      for (let i = head[cy * gw + cx]; i >= 0; i = next[i]) { const z = ref[i], dx = z.x - x, dy = z.y - y; if (dx * dx + dy * dy <= r2) out.push(z); }
     }
     return out;
   },
+  // push z out of standing zombies it overlaps (walks the grid directly: runs for every walker every step)
+  separate(z) {
+    if (!this.gHead) return;
+    const C = this.CELL, gw = this.gw, head = this.gHead, next = this.gNext, ref = this.gRef;
+    const x0 = Math.max(0, Math.floor((z.x - 0.6) / C)), x1 = Math.min(gw - 1, Math.floor((z.x + 0.6) / C));
+    const y0 = Math.max(0, Math.floor((z.y - 0.6) / C)), y1 = Math.min(this.gh - 1, Math.floor((z.y + 0.6) / C));
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      for (let i = head[cy * gw + cx]; i >= 0; i = next[i]) {
+        const o = ref[i];
+        if (o === z || o.dead || o.lie > 0.5) continue;
+        const sx = z.x - o.x, sy = z.y - o.y, s2 = sx * sx + sy * sy;
+        if (s2 < 0.25 && s2 > 1e-6) { const sd = Math.sqrt(s2), pp = (0.5 - sd) / sd * 0.3; z.x += sx * pp; z.y += sy * pp; }
+      }
+    }
+  },
   // ------------------------------------------------------------------ update
-  // Level of detail (settings): by 16x16-tile chunk distance from the player - near chunks every step,
+  // Level of detail (settings): by CHUNK x CHUNK-tile chunk distance from the player - near chunks every step,
   // 3-5 chunks every other step (unless chasing or on screen), 6-11 a coarse update every ~2 s, 12+ frozen.
   // With a crowd close by, adaptive physics updates each crowd zombie every other step instead.
   updateAll(dt) {
@@ -135,19 +157,23 @@ const Zombie = {
     const p = G.player;
     const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
     const lazy = Settings.v.zLazy, crowd = Settings.v.zAdapt && (this.nearN || 0) > 120;
-    const pcx = Math.floor(vxOf(px) / 16), pcy = Math.floor(py / 16);
+    const W0 = LV.W0, plv = px >= W0, pvx = plv ? px - W0 : px;
+    const pcx = Math.floor(pvx / CHUNK), pcy = Math.floor(py / CHUNK);
     const tick = this.tick = (this.tick || 0) + 1;
     let chasing = 0, nearN = 0, upd = 0;
     const zs = G.zombies;
     for (let k = 0; k < zs.length; k++) {
       const z = zs[k];
       if (z.dead) { if (z.lie < 1) z.lie = Math.min(1, z.lie + dt * 2.5); continue; }
-      const d = World.lvDist(z.x, z.y, px, py);
+      // World.lvDist inlined; frozen chunks (12+ away, so never within 32 tiles) skip even that
+      const zl = z.x >= W0, zvx = zl ? z.x - W0 : z.x;
+      const cd = Math.max(Math.abs(Math.floor(zvx / CHUNK) - pcx), Math.abs(Math.floor(z.y / CHUNK) - pcy));
+      if (lazy && cd >= 12) { if (z.va) z.va = 0; continue; }
+      const ddx = zvx - pvx, ddy = z.y - py;
+      const d = Math.sqrt(ddx * ddx + ddy * ddy) + (zl !== plv ? 4 : 0);
       if (d < 32) nearN++;
       let zdt = dt;
       if (lazy) {
-        const cd = Math.max(Math.abs(Math.floor(vxOf(z.x) / 16) - pcx), Math.abs(Math.floor(z.y / 16) - pcy));
-        if (cd >= 12) { z.va = 0; continue; }
         if (cd >= 6 || d > 60) { z.far = (z.far || 0) + dt; if (z.far > (cd >= 6 ? 2 : 1)) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
         const busy = z.st === 'chase' || z.st === 'attack' || z.va > 0.01;
         const rate = (!busy && cd >= 3) || (crowd && d < 32 && z.st !== 'attack') ? 2 : 1;
@@ -163,8 +189,8 @@ const Zombie = {
     }
     this.nearN = nearN; this.updN = upd;
     G.chasing = chasing;
-    // corpse cleanup
-    if (G.zombies.length > 900) {
+    // corpse cleanup (a scan of every zombie, so twice a second is plenty)
+    if (G.zombies.length > 900 && tick % 15 === 0) {
       const idx = G.zombies.findIndex(z => z.dead && U.dist(z.x, z.y, px, py) > 40);
       if (idx >= 0) G.zombies.splice(idx, 1);
     }
@@ -350,12 +376,7 @@ const Zombie = {
     const ox = z.x, oy = z.y;
     World.move(z, mx * speed * dt, my * speed * dt, z.r);
     Vehicles.pushOut(z, z.r);
-    // separation
-    for (const o of this.near(z.x, z.y, 0.6)) {
-      if (o === z || o.dead || o.lie > 0.5) continue;
-      const sx = z.x - o.x, sy = z.y - o.y, sd = Math.sqrt(sx * sx + sy * sy);
-      if (sd < 0.5 && sd > 0.001) { const pp = (0.5 - sd) / sd * 0.3; z.x += sx * pp; z.y += sy * pp; }
-    }
+    this.separate(z);
     const moved = U.dist(ox, oy, z.x, z.y);
     z.ph += moved * 3.6;
     z.amp = Math.min(0.7, z.amp + dt * 3);

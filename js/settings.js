@@ -13,9 +13,9 @@ const SETTINGS_OPTS = {
   fpsShow: { tab: 'display', n: 'Frame rate counter', opts: [['Off', 0], ['FPS', 1], ['Detailed', 2]], tip: 'Detailed adds frame time, simulation time, lighting and zombie counts.' },
   lightHz: { tab: 'perf', n: 'Lighting updates', opts: [['5 / sec', 5], ['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often lights and shadows are recalculated. Lower is cheaper; moving lights (flashlight, headlights) update less smoothly.' },
   uiHz: { tab: 'perf', n: 'UI refresh rate', opts: [['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often the HUD, clock, moodles and open windows refresh.' },
-  zLazy: { tab: 'perf', n: 'Lazy zombie updates', opts: [['Off', 0], ['On', 1]], tip: 'Zombies in distant chunks (16x16 tiles) think less often: 3-5 chunks away every other step, 6-11 a coarse update every 2 s, 12+ paused. Chasing and visible zombies always run at full rate.' },
+  zLazy: { tab: 'perf', n: 'Lazy zombie updates', opts: [['Off', 0], ['On', 1]], tip: 'Zombies in distant chunks (8x8 tiles) think less often: 3-5 chunks away every other step, 6-11 a coarse update every 2 s, 12+ paused. Chasing and visible zombies always run at full rate.' },
   zAdapt: { tab: 'perf', n: 'Adaptive zombie physics', opts: [['Off', 0], ['On', 1]], tip: 'With more than 120 zombies close by, crowd zombies update at half rate to keep the frame rate up.' },
-  chunkLazy: { tab: 'perf', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
+  chunkLazy: { tab: 'perf', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks (8x8 tiles) 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
 };
 const SETTINGS_PRESETS = {
   Low: { res: 0.5, fps: 30, detail: 0, particles: 0.3, weather: 0.45, chars3d: 0, lightHz: 15, uiHz: 15, zLazy: 1, zAdapt: 1, chunkLazy: 1 },

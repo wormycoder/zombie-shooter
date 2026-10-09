@@ -427,23 +427,29 @@ const World = {
     const W = Wd.w;
     const gen = ++this.pfGen;
     const G_ = this.pfG, from = this.pfFrom, stamp = this.pfStamp, closed = this.pfClosed;
-    const heap = [];  // [f, idx]
+    // binary min-heap of (f, tile) in reusable typed arrays: no allocation per node
+    if (!this.hpF || this.hpF.length < maxNodes * 9 + 64) { this.hpF = new Float64Array(maxNodes * 9 + 64); this.hpI = new Int32Array(maxNodes * 9 + 64); }
+    let HF = this.hpF, HI = this.hpI, hn = 0;
     const push = (f, i) => {
-      heap.push([f, i]);
-      let c = heap.length - 1;
-      while (c > 0) { const p = (c - 1) >> 1; if (heap[p][0] <= heap[c][0]) break; const t = heap[p]; heap[p] = heap[c]; heap[c] = t; c = p; }
+      if (hn >= HF.length) { const nf = new Float64Array(HF.length * 2), ni = new Int32Array(HF.length * 2); nf.set(HF); ni.set(HI); this.hpF = HF = nf; this.hpI = HI = ni; }
+      let c = hn++;
+      while (c > 0) { const p = (c - 1) >> 1; if (HF[p] <= f) break; HF[c] = HF[p]; HI[c] = HI[p]; c = p; }
+      HF[c] = f; HI[c] = i;
     };
     const pop = () => {
-      const top = heap[0], last = heap.pop();
-      if (heap.length) {
-        heap[0] = last; let c = 0;
+      const top = HI[0];
+      hn--;
+      if (hn > 0) {
+        const f = HF[hn], i = HI[hn];
+        let c = 0;
         for (;;) {
-          const l = c * 2 + 1, r = l + 1; let m = c;
-          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-          if (m === c) break;
-          const t = heap[m]; heap[m] = heap[c]; heap[c] = t; c = m;
+          const l = c * 2 + 1, r = l + 1;
+          let m = l < hn && HF[l] < f ? l : -1;
+          if (r < hn && HF[r] < (m < 0 ? f : HF[l])) m = r;
+          if (m < 0) break;
+          HF[c] = HF[m]; HI[c] = HI[m]; c = m;
         }
+        HF[c] = f; HI[c] = i;
       }
       return top;
     };
@@ -455,8 +461,8 @@ const World = {
     push(h(sx, sy), si);
     let expanded = 0, best = si, bestH = h(sx, sy);
     const targetSolid = this.tileSolid(tx, ty);
-    while (heap.length) {
-      const [, ci] = pop();
+    while (hn > 0) {
+      const ci = pop();
       if (closed[ci] === gen) continue;
       closed[ci] = gen;
       if (ci === ti) { best = ti; break; }
@@ -506,10 +512,15 @@ const World = {
   },
   // cost of stepping between orthogonal neighbours, -1 = impassable
   _stepCost(ax, ay, bx, by, who) {
-    const e = this.edgeBetween(ax, ay, bx, by);
-    const t = this.wall(e[0], e[1], e[2]);
+    // edgeBetween() inlined: this runs for every neighbour A* looks at
+    let ex = bx, ey = by, ed = 0;
+    if (bx === ax + 1) ed = 1;
+    else if (bx === ax - 1) { ex = ax; ey = ay; ed = 1; }
+    else if (by === ay - 1) { ex = ax; ey = ay; }
+    if (ex < 0 || ey < 0 || ex >= Wd.w || ey >= Wd.h) return 1;
+    const t = ed ? Wd.wallW[ey * Wd.w + ex] : Wd.wallN[ey * Wd.w + ex];
     if (!t) return 1;
-    const f = this.feat(e[0], e[1], e[2]);
+    const f = Wd.feat.get(((ey * Wd.w + ex) << 1) | ed);
     if (f) {
       if (f.k === 'doorway' || f.k === 'gap') return 1;
       if (f.k === 'door') {
