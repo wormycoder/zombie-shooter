@@ -343,8 +343,9 @@ Object.assign(CarArt, {
     if (A.on === B) return 1;
     if (B.on === A) return -1;
     // a part lying against a slanted face of another (bumper wraps on chamfered corners) carries that plane
-    if (A.sep && A.sep.of === B) return A.sep.n[0] * cf + A.sep.n[1] * cs + A.sep.n[2] > 0 ? 1 : -1;
-    if (B.sep && B.sep.of === A) return B.sep.n[0] * cf + B.sep.n[1] * cs + B.sep.n[2] > 0 ? -1 : 1;
+    // (seen edge-on either order is right; leave it to the other tests)
+    if (A.sep && A.sep.of === B) { const v = A.sep.n[0] * cf + A.sep.n[1] * cs + A.sep.n[2]; if (Math.abs(v) > 1e-3) return v > 0 ? 1 : -1; }
+    if (B.sep && B.sep.of === A) { const v = B.sep.n[0] * cf + B.sep.n[1] * cs + B.sep.n[2]; if (Math.abs(v) > 1e-3) return v > 0 ? -1 : 1; }
     const a = A.bb, b = B.bb, e = 1e-4;
     // a horizontal separating plane is always valid (camera above) and keeps low wheels consistent
     if (a[5] <= b[4] + e) return -1;
@@ -382,16 +383,15 @@ Object.assign(CarArt, {
     }
     return true;
   },
-  // Pairs are only constrained where their projected outlines really overlap (convex parts project to convex
-  // polygons), so far-apart parts with overlapping boxes add no edges and no cycles.
+  // Pairs are only constrained where the projected outlines of their boxes overlap (convex hexagons, much
+  // tighter than screen rectangles), so parts that merely share a screen rectangle add no edges and no cycles.
   order(parts, F) {
     const n = parts.length;
     if (n < 2) return parts;
     for (const p of parts) {
       const bb = p.bb, pts = [];
       p._d = F.depth(p.c[0], p.c[1], p.c[2]);
-      if (p.faces.length) { for (const fc of p.faces) for (const q of fc.p) pts.push(F.P(q[0], q[1], q[2])); }
-      else { F.tilt = !p.wheel; for (let k = 0; k < 8; k++) pts.push(F.P(bb[k & 1], bb[2 + ((k >> 1) & 1)], bb[4 + (k >> 2)])); F.tilt = true; }
+      F.tilt = !p.wheel; for (let k = 0; k < 8; k++) pts.push(F.P(bb[k & 1], bb[2 + ((k >> 1) & 1)], bb[4 + (k >> 2)])); F.tilt = true;
       const h = p._h = this.hull(pts);
       let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
       for (const q of h) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
