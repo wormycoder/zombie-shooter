@@ -15,6 +15,11 @@ const Combat = {
   startMelee() {
     const p = G.player;
     const { w, it } = this.meleeDef();
+    const [wx, wy] = Render.mouseWorld();
+    p.angle = Math.atan2(wy - p.y, wx - p.x);
+    // a zombie on the ground in front: bare hands stomp it, a weapon strikes down at it
+    const dn = this.downedTarget(w === FISTS ? 1.35 : Math.max(1.2, w.range + 0.15));
+    if (dn && w === FISTS) { this.startStomp(dn); return; }
     const sk = w.sk ? Player.skill(w.sk) : 0;
     let dur = w.swing * (1 - sk * 0.025);
     if (Player.hasTrait('axeman') && w.sk === 'Axe') dur *= 0.85;
@@ -22,23 +27,54 @@ const Combat = {
     if (p.st.endurance < 0.1) dur *= 1.25;
     if (Player.heavyRatio() > 1.25) dur *= 1.15;
     if (p.st.pain > 50) dur *= 1.1;
-    const [wx, wy] = Render.mouseWorld();
-    p.angle = Math.atan2(wy - p.y, wx - p.x);
-    p.swing = { t: 0, dur, kind: 'melee', w, it, done: false };
+    p.swing = { t: 0, dur, kind: 'melee', w, it, done: false, hit: 0.48 };
+    // nothing standing closer in the way: aim the blow at the body on the ground
+    if (dn && !this.standingInFront(Math.min(U.dist(p.x, p.y, dn.x, dn.y), w.range))) { p.swing.floor = dn; p.swing.hit = 0.52; p.swing.dur *= 1.1; p.angle = Math.atan2(dn.y - p.y, dn.x - p.x); }
     p.st.endurance = Math.max(0, p.st.endurance - w.end * (1.4 - Player.skill('Fitness') * 0.06));
     Sfx.play(w === FISTS ? 'swingLight' : (w.swing > 1.2 ? 'swingHeavy' : 'swing'));
+  },
+  // the nearest zombie lying (or crawling, or still getting up) within reach in front of the player
+  downedTarget(reach) {
+    const p = G.player;
+    let best = null, bd = 1e9;
+    for (const z of Zombie.near(p.x, p.y, reach + 0.3)) {
+      if (z.dead || !(z.st === 'down' || z.crawl || (z.st === 'getup' && z.lie > 0.45))) continue;
+      const d = U.dist(p.x, p.y, z.x, z.y);
+      // the body lies ahead of its feet: aim at where its chest is
+      const off = (z.lieDir || 1) * (z.crawl ? -0.35 : -0.45), cx = z.x + Math.cos(z.a) * off, cy = z.y + Math.sin(z.a) * off;
+      const dc = Math.min(d, U.dist(p.x, p.y, cx, cy));
+      if (dc > reach) continue;
+      const ad = Math.abs(U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x)));
+      if (ad > (dc < 0.75 ? 1.6 : 1.1)) continue;
+      if (!World.lineClear(p.x, p.y, z.x, z.y, 'move')) continue;
+      const sc = dc + ad * 0.4;
+      if (sc < bd) { bd = sc; best = z; }
+    }
+    return best;
+  },
+  standingInFront(reach) {
+    const p = G.player;
+    for (const z of Zombie.near(p.x, p.y, reach + 0.3)) {
+      if (z.dead || z.st === 'down' || z.crawl || z.lie > 0.45) continue;
+      if (U.dist(p.x, p.y, z.x, z.y) > reach + z.r) continue;
+      if (Math.abs(U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x))) < 0.8) return true;
+    }
+    return false;
+  },
+  startStomp(z) {
+    const p = G.player;
+    p.angle = Math.atan2(z.y - p.y, z.x - p.x);
+    // the heel lands at 0.5 of the motion
+    p.swing = { t: 0, dur: 0.72, kind: 'stomp', target: z, done: false, hit: 0.5 };
+    p.st.endurance = Math.max(0, p.st.endurance - 0.015);
   },
   startShove() {
     const p = G.player;
     if (p.swing) return;
     // stomp a downed zombie in front
-    const down = Zombie.near(p.x, p.y, 1.3).filter(z => !z.dead && (z.st === 'down' || z.crawl) && Math.abs(U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x))) < 1.1);
-    if (down.length) {
-      p.swing = { t: 0, dur: 0.6, kind: 'stomp', target: down[0], done: false };
-      p.st.endurance = Math.max(0, p.st.endurance - 0.015);
-      return;
-    }
-    p.swing = { t: 0, dur: 0.45, kind: 'shove', done: false };
+    const dn = this.downedTarget(1.35);
+    if (dn) { this.startStomp(dn); return; }
+    p.swing = { t: 0, dur: 0.5, kind: 'shove', done: false, hit: 0.4 };
     p.st.endurance = Math.max(0, p.st.endurance - 0.012);
     Sfx.play('swingLight');
   },
@@ -47,34 +83,42 @@ const Combat = {
     const str = Player.skill('Strength');
     if (s.kind === 'shove') {
       let any = false;
-      for (const z of Zombie.near(p.x, p.y, 1.25)) {
+      for (const z of Zombie.near(p.x, p.y, 1.3)) {
         if (z.dead || z.st === 'down' || z.lie > 0.3) continue;
         const a = Math.atan2(z.y - p.y, z.x - p.x);
-        if (Math.abs(U.angDiff(p.angle, a)) > 1.0) continue;
+        if (Math.abs(U.angDiff(p.angle, a)) > 1.0 || U.dist(p.x, p.y, z.x, z.y) > 1.15 + z.r) continue;
         if (!World.lineClear(p.x, p.y, z.x, z.y, 'move')) continue;
         any = true;
-        if (R.chance(0.22 + str * 0.035)) { z.st = 'down'; z.downT = R.f(1.5, 2.8); z.lieDir = 1; z.svx = Math.cos(a) * 1.8; z.svy = Math.sin(a) * 1.8; Sfx.play('zfall', z.x, z.y); }
-        else { z.stag = 0.6; z.svx = Math.cos(a) * 2.2; z.svy = Math.sin(a) * 2.2; if (z.st === 'attack') { z.st = 'chase'; z.cd = 0.7; } }
+        // shoved from behind or mid-lunge they go over easily; head on it takes strength
+        const behind = Math.abs(U.angDiff(z.a, a)) < 1.2;
+        const ch = behind ? 0.85 : 0.3 + str * 0.035 + (z.st === 'attack' ? 0.15 : 0) + (z.stag > 0 ? 0.2 : 0);
+        if (z.st !== 'climb' && R.chance(ch)) { Zombie.knockDown(z, a, 2.0, R.f(1.6, 3.0)); Sfx.play('zfall', z.x, z.y); }
+        else Zombie.stagger(z, a, 0.65, 2.4);
       }
       if (any) { Sfx.play('shove'); Player.xp('Strength', 0.5); }
       return;
     }
     if (s.kind === 'stomp') {
       const z = s.target;
-      if (z && !z.dead && U.dist(p.x, p.y, z.x, z.y) < 1.5) {
-        const dmg = R.f(0.35, 0.75) * (0.75 + str * 0.05);
+      if (z && !z.dead && (z.st === 'down' || z.crawl || z.lie > 0.3) && U.dist(p.x, p.y, z.x, z.y) < 1.7) {
+        // a stomp to the head of a body on the ground: strong legs crush skulls
+        const dmg = R.f(0.45, 0.85) * (0.75 + str * 0.06) * (R.chance(0.12 + str * 0.01) ? 2.5 : 1);
         Zombie.hit(z, dmg, Math.atan2(z.y - p.y, z.x - p.x), { stag: 0 });
-        Sfx.play('stomp');
+        Sfx.play('stomp', z.x, z.y);
         Player.xp('Strength', 0.5);
-        if (z.st === 'down') z.downT = Math.max(z.downT, 1.0);
-      }
+        if (z.st === 'down') z.downT = Math.max(z.downT, 1.2);
+        if (z.st === 'getup' && !z.dead) Zombie.knockDown(z, z.a + Math.PI, 0, R.f(1.2, 2), z.lieDir);
+      } else Sfx.play('thud', p.x, p.y);
       return;
     }
     // melee
     const w = s.w, it = s.it;
     const sk = w.sk ? Player.skill(w.sk) : 0;
     const cands = [];
-    for (const z of Zombie.near(p.x, p.y, w.range + 0.6)) {
+    if (s.floor) {
+      const z = s.floor;
+      if (!z.dead && (z.st === 'down' || z.crawl || z.lie > 0.3) && U.dist(p.x, p.y, z.x, z.y) < w.range + 0.7 && World.lineClear(p.x, p.y, z.x, z.y, 'move')) cands.push({ z, d: 0, down: true });
+    } else for (const z of Zombie.near(p.x, p.y, w.range + 0.6)) {
       if (z.dead) continue;
       const d = U.dist(p.x, p.y, z.x, z.y);
       if (d > w.range + z.r) continue;
@@ -95,9 +139,11 @@ const Combat = {
         if (Player.brokenArm()) dmg *= 0.55;
         const crit = R.chance(w.crit + sk * 0.02 + (Player.hasTrait('lucky') ? 0.03 : 0));
         if (crit) dmg *= 2.5;
-        const knock = R.chance(w.knock + str * 0.02 + (crit ? 0.2 : 0));
+        const knock = !s.floor && R.chance(w.knock + str * 0.02 + (crit ? 0.2 : 0));
         const a = Math.atan2(z.y - p.y, z.x - p.x);
-        Zombie.hit(z, dmg, a, { knock, push: 1.0 + str * 0.06 });
+        // a blow driven down into a body on the ground carries the weight of the swing
+        if (s.floor) dmg *= 1.2;
+        Zombie.hit(z, dmg, a, { knock, push: s.floor ? 0.2 : 1.0 + str * 0.06 });
         if (crit && !z.dead) Fx.text(z.x, z.y, 'Critical!', '#ffcc66', 0.8);
         Sfx.play(w.sk === 'ShortBlade' || w.sk === 'LongBlade' || w.sk === 'Axe' || w.sk === 'Spear' ? 'hitBlade' : 'hitBlunt', z.x, z.y);
         if (w.sk) Player.xp(w.sk, R.f(1.5, 3));
@@ -204,7 +250,7 @@ const Combat = {
     if (dist > 12) { wx = p.x + (wx - p.x) / dist * 12; wy = p.y + (wy - p.y) / dist * 12; }
     Player.removeItem(it);
     p.angle = Math.atan2(wy - p.y, wx - p.x);
-    p.swing = { t: 0, dur: 0.5, kind: 'melee', w: FISTS, it: null, done: true };
+    p.swing = { t: 0, dur: 0.6, kind: 'melee', w: FISTS, it: null, done: true, throw: true };
     const T = Math.max(0.35, U.dist(p.x, p.y, wx, wy) / 9);
     this.projs.push({ x: p.x, y: p.y, z: 1.4, x0: p.x, y0: p.y, x1: wx, y1: wy, t: 0, T, item: it, kind: d.throwable });
     Sfx.play('swing');

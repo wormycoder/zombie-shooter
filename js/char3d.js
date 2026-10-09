@@ -105,7 +105,7 @@ const Char3D = {
   // ---- per frame: collect, animate and queue every character that may be drawn
   prepare(minX, minY, maxX, maxY) {
     this.map.clear();
-    const now = performance.now();
+    const now = this.now = performance.now();
     let dt = this.lastT ? Math.min(0.1, (now - this.lastT) / 1000) : 0;
     this.lastT = now;
     if (!this.on()) return;
@@ -138,9 +138,12 @@ const Char3D = {
     if (!S || S.look !== look && S.lookId !== this.lookKey(look)) {
       const prev = S;
       S = this.newState(id, look);
-      if (prev) { S.cur.set(prev.cur); S.fresh = false; S.key = prev.key; S.ph = prev.ph; S.v = prev.v; S.amp = prev.amp; S.hip = prev.hip; S.lx = prev.lx; S.ly = prev.ly; S.mode = prev.mode; S.mt = prev.mt; S.t = prev.t; }
+      if (prev) { S.cur.set(prev.cur); S.fresh = false; S.key = prev.key; S.ph = prev.ph; S.v = prev.v; S.amp = prev.amp; S.hip = prev.hip; S.lx = prev.lx; S.ly = prev.ly; S.mode = prev.mode; S.mt = prev.mt; S.t = prev.t; S.seen = prev.seen; }
       this.st.set(e, S);
     }
+    // not drawn for a while (off screen, out of sight): start from its current state instead of blending from a stale pose
+    if (this.now - S.seen > 400) S.fresh = true;
+    S.seen = this.now;
     S.look = look;
     this.animate(S, e.x, e.y, ang, pose, dt);
     const cell = this.render(S, ang, look, pose, Math.max(0.05, Math.min(1, shade)), flash);
@@ -150,7 +153,7 @@ const Char3D = {
   lookKey(L) { return (L.female ? 'f' : 'm') + (L.zombie ? 'z' : ''); },
   newState(id, look) {
     const N = C3.N;
-    const S = { id, cur: new Float32Array(N), tgt: new Float32Array(N), off: new Float32Array(N), offT: 1, offD: 0.2, key: '', fresh: true,
+    const S = { id, cur: new Float32Array(N), tgt: new Float32Array(N), off: new Float32Array(N), offT: 1, offD: 0.2, key: '', fresh: true, seen: 0, lk: 0,
       ph: 0, v: 0, amp: 0, lx: NaN, ly: 0, mdir: 0, hip: NaN, back: false, turn: 0, gw: new Float32Array(5), mode: '', mt: 0, t: 0, swN: 0, lastSw: 0, look, lookId: this.lookKey(look) };
     S.D = this.dims(look, id);
     return S;
@@ -176,13 +179,33 @@ const Char3D = {
     [0.5, 0.5, 0.62, 1.2, 0.66, 0.045, 0.45, 0.5, 0.04, 0.02, 0, 0.15, 0.08, 0.2, 0.1, 0.08, 0.09, 0.035, 0.115, 0.05, 0.25],
   ],
   gp: new Float32Array(21),
-  gaitOf(P) { const g = P.gait; return g === 'run' ? 1 : g === 'sprint' ? 2 : g === 'sneak' ? 3 : g === 'shamble' ? 4 : 0; },
+  gaitOf(P, D) {
+    const g = P.gait;
+    if (g) return g === 'run' ? 1 : g === 'sprint' ? 2 : g === 'sneak' ? 3 : g === 'shamble' ? 4 : 0;
+    // callers that only set the 2D painter's fields
+    const a = P.amp || 0;
+    return D && D.zomb ? 4 : a > 1.15 ? 2 : a > 1.0 ? 1 : (P.crouch || 0) >= 0.5 ? 3 : 0;
+  },
+  // the animation mode; older callers (menus, previews) only set the 2D painter's fields
+  modeOf(P) {
+    if (P.mode) return P.mode;
+    if ((P.lie || 0) > 0.02) return P.lieOff ? 'sleep' : P.arms === 'zombie' ? (P.lieDir < 0 && P.amp > 0 ? 'crawl' : 'fall') : 'dead';
+    if (P.arms === 'climb') return 'climb';
+    const c = P.crouch || 0;
+    if (c >= 0.75) return 'sit';
+    if (P.arms === 'work' && c >= 0.65) return 'kneel';
+    return 'loco';
+  },
   NOMV: [1.75, 3.1, 4.3, 1.1, 0.8],
   // advance trackers (speed, gait phase, hip yaw), build the target pose and blend it in
   animate(S, ex, ey, ang, P, dt) {
-    const T = S.tgt, D = S.D, fresh = S.fresh, gi = this.gaitOf(P);
+    const T = S.tgt, D = S.D, fresh = S.fresh, gi = this.gaitOf(P, D);
     S.t += dt; S.ang = ang;
-    const mode = P.mode || 'loco';
+    const mode = this.modeOf(P);
+    if (P.prog === undefined && P.lie !== undefined && !P.mode) P.prog = P.lie;
+    // where the head looks follows the target smoothly
+    const lk = P.look || 0;
+    S.lk = fresh || !(dt > 0) ? lk : S.lk + (lk - S.lk) * Math.min(1, dt * 7);
     if (mode !== S.mode) { S.mode = mode; S.mt = 0; } else S.mt += dt;
     // ---- locomotion trackers
     const gw = S.gw;
@@ -223,7 +246,7 @@ const Char3D = {
     if (sw !== undefined) { if (sw < S.lastSw - 0.25) S.swN++; S.lastSw = sw; }
     const key = mode + '|' + (P.arms || '') + '|' + (P.style || '') + '|' + (P.weapon || '') + '|' + S.swN + '|' + (P.lieDir || 0);
     if (key !== S.key) {
-      const dur = mode !== S.lastMode ? (mode === 'loco' && S.lastMode === 'getup' ? 0.3 : mode === 'dead' || mode === 'fall' || mode === 'stagger' ? 0.1 : 0.25) : P.arms === 'fire' ? 0.05 : 0.16;
+      const dur = this.blendDur(S.lastMode, mode, P);
       if (!fresh) for (let i = 0; i < C3.N; i++) S.off[i] = S.cur[i] - T[i]; else S.off.fill(0);
       S.offT = 0; S.offD = dur; S.key = key; S.lastMode = mode;
     }
@@ -232,6 +255,18 @@ const Char3D = {
     const cur = S.cur, off = S.off;
     for (let i = 0; i < C3.N; i++) cur[i] = T[i] + off[i] * k;
     S.fresh = false;
+  },
+  // how long a change of state takes to blend in
+  blendDur(from, to, P) {
+    if (from === to) return P.arms === 'fire' ? 0.05 : P.arms === 'swing' || P.arms === 'stomp' || P.arms === 'shove' ? 0.12 : 0.2;
+    const lyingFrom = from === 'fall' || from === 'dead' || from === 'lie' || from === 'crawl';
+    if (to === 'stagger') return 0.08;
+    if (to === 'fall' || to === 'dead') return lyingFrom ? 0.5 : 0.15;
+    if (to === 'getup') return 0.3;
+    if (to === 'crawl') return lyingFrom ? 0.4 : 0.25;
+    if (from === 'attack' || from === 'stagger' || from === 'getup') return 0.35;
+    if (from === 'sit' || from === 'kneel' || to === 'sit' || to === 'kneel') return 0.4;
+    return 0.25;
   },
   gaitParams(g, gw, v) {
     g.fill(0);
@@ -257,13 +292,14 @@ const Char3D = {
       if (mode === 'climb') this.climb(T, S, D, P);
       else if (mode === 'attack') this.zAttack(T, S, D, P);
       else if (mode === 'stagger') this.stagger(T, S, D, P);
-      else if (zomb && !P.arms || P.arms === 'zombie') this.zArms(T, S, D, P);
+      else if (P.arms === 'thump') { this.zArms(T, S, D, P); this.thump(T, S, D, P); }
+      else if (zomb && (!P.arms || P.arms === 'zombie' || P.arms === 'idle')) this.zArms(T, S, D, P);
       else this.upper(T, S, D, P);
-      if (P.arms === 'thump') this.thump(T, S, D, P);
     }
     // gaze: the head turns toward what the character looks at, beyond what the chest already turned
-    if (P.look !== undefined && mode !== 'dead' && mode !== 'fall' && mode !== 'sleep') {
-      T[C3.HW] += U.clamp(P.look - T[C3.PW] - T[C3.SW], -0.95, 0.95);
+    if (P.look !== undefined && (mode === 'loco' || mode === 'attack' || mode === 'climb' || mode === 'sit' || mode === 'kneel' || mode === 'crawl')) {
+      const k = mode === 'crawl' ? 0.5 : 1;
+      T[C3.HW] += U.clamp(S.lk - T[C3.PW] - T[C3.SW], -0.95, 0.95) * k;
       if (P.lookP) T[C3.HP] += P.lookP;
     }
   },
