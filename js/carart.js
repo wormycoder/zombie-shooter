@@ -232,13 +232,19 @@ Object.assign(CarArt, {
       const bb = [w.f - w.r - 0.02, w.f + w.r + 0.02, w.side > 0 ? w.s - w.w : w.s, w.side > 0 ? w.s : w.s + w.w, 0, w.r * 2];
       const c = [w.f, w.s - w.side * w.w / 2, w.r];
       out.push({ wheel: w.side, pass: 0, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
-      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
+      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, zlo: M.z0 || 0, draw: this.drawWheel });
     }
     return out;
   },
   drawWheel(g, F, P) {
     const w = P.spec, near = w.side * F.cs > 0;
     if (P.pass === 1 && !near) return;
+    if (P.pass === 1) {
+      // the outer pass shows the tyre in its arch over the body side; clip it to the side plane so that in
+      // near end-on views it cannot paint over the front / rear face
+      const e = w.r + 0.08, zl = (P.zlo || 0) + 0.004, zh = w.r * 2 + 0.08;
+      g.save(); g.beginPath(); this.path(g, [F.P(w.f - e, w.s, zl), F.P(w.f + e, w.s, zl), F.P(w.f + e, w.s, zh), F.P(w.f - e, w.s, zh)]); g.clip();
+    }
     F.tilt = false;
     const cs = Math.cos(P.ang), sn = Math.sin(P.ang);
     const fw = [cs, sn, 0], ax = [-sn * w.side, cs * w.side, 0];
@@ -265,25 +271,51 @@ Object.assign(CarArt, {
     const outV = F.vis(ax) > 0, disc = outV ? po : pi, b = F.bright(outV ? ax : [-ax[0], -ax[1], 0]);
     g.fillStyle = Col.shade(bare ? tyre : CA_COL.wall, b * (outV ? 1 : 0.7)); g.beginPath(); this.path(g, disc); g.fill();
     if (outV) {
-      // rim / hubcap painted in the wheel plane
+      // rim / wheel cover painted in the wheel plane (x forward, y down; units of 0.01)
       F.frame(g, O, fw, [0, 0, -1], 0.01);
-      const R = r * 100, rimC = w.burnt ? '#4a3a30' : w.rim || CA_COL.rim;
-      if (!bare && w.white) { g.strokeStyle = Col.shade('#e8e8e0', b); g.lineWidth = R * 0.12; g.beginPath(); g.arc(0, 0, R * 0.8, 0, 7); g.stroke(); }
-      const rr = bare ? R * 0.96 : R * 0.6;
-      g.fillStyle = Col.shade(rimC, b); g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill();
-      g.fillStyle = Col.shade(rimC, b * 0.72); g.beginPath(); g.arc(0, 0, rr * 0.78, 0, 7); g.fill();
-      if (w.spokes) {
-        g.strokeStyle = Col.shade(rimC, b * 1.08); g.lineWidth = rr * 0.18; g.beginPath();
-        for (let k = 0; k < 5; k++) { const an = k * 1.2566; g.moveTo(0, 0); g.lineTo(Math.cos(an) * rr * 0.8, Math.sin(an) * rr * 0.8); }
+      const R = r * 100, st = bare ? 'bare' : w.rim || 'cap', C = (c, m) => Col.shade(c, b * (m || 1));
+      const disc = (rr, c) => { g.fillStyle = c; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); };
+      const ring = (rr, lw, c) => { g.strokeStyle = c; g.lineWidth = lw; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.stroke(); };
+      const dots = (n, rr, d, c, a0) => { g.fillStyle = c; for (let k = 0; k < n; k++) { const an = (a0 || 0) + k * Math.PI * 2 / n; g.beginPath(); g.arc(Math.cos(an) * rr, Math.sin(an) * rr, d, 0, 7); g.fill(); } };
+      // tyre shoulder catches a little light; whitewall / white-letter band
+      ring(R * 0.93, R * 0.08, C('#3a3a3c'));
+      if (!bare && w.white) ring(R * 0.77, R * 0.13, C('#e6e4da'));
+      if (st === 'bare') {
+        const m = w.burnt ? '#4a3a30' : CA_COL.steel;
+        disc(R * 0.96, C(m)); disc(R * 0.7, C(m, 0.7)); dots(5, R * 0.36, R * 0.07, C(m, 1.2), 0.3); disc(R * 0.2, C(m, 0.85));
+      } else if (st === 'cap') {
+        // full 80s wheel cover: domed silver disc, slotted ring, small centre cap
+        const m = w.rimCol || CA_COL.rim;
+        disc(R * 0.68, C(m, 0.82)); disc(R * 0.6, C(m)); disc(R * 0.36, C(m, 1.12));
+        g.strokeStyle = C('#2a2c30'); g.lineWidth = R * 0.07; g.beginPath();
+        for (let k = 0; k < 10; k++) { const an = k * 0.6283; g.moveTo(Math.cos(an) * R * 0.42, Math.sin(an) * R * 0.42); g.lineTo(Math.cos(an) * R * 0.55, Math.sin(an) * R * 0.55); }
         g.stroke();
+        disc(R * 0.15, C('#8a9096')); disc(R * 0.08, C('#e2e6ea'));
+      } else if (st === 'alloy') {
+        // five-spoke alloy: bright disc with dark pockets between the spokes
+        const m = w.rimCol || '#d4d8dc';
+        disc(R * 0.66, C(m, 0.9)); disc(R * 0.58, C('#2a2c30'));
+        g.fillStyle = C(m, 1.08); g.beginPath();
+        for (let k = 0; k < 5; k++) { const an = k * 1.2566 - 1.57, ca = Math.cos(an), sa = Math.sin(an), px = -sa, py = ca; g.moveTo(px * R * 0.1, py * R * 0.1); g.lineTo(ca * R * 0.58 + px * R * 0.13, sa * R * 0.58 + py * R * 0.13); g.lineTo(ca * R * 0.58 - px * R * 0.13, sa * R * 0.58 - py * R * 0.13); g.lineTo(-px * R * 0.1, -py * R * 0.1); }
+        g.fill(); disc(R * 0.2, C(m, 1.1)); disc(R * 0.08, C('#5a5e62'));
+      } else if (st === 'dog') {
+        // black steel wheel with a chrome dog-dish cap (police, taxis)
+        disc(R * 0.62, C('#26282b')); ring(R * 0.5, R * 0.04, C('#3a3c40'));
+        disc(R * 0.36, C('#9aa0a6')); disc(R * 0.3, C(CA_COL.chrome)); disc(R * 0.12, C('#7a8086'));
+      } else if (st === 'mil') {
+        const m = w.rimCol || '#4a5238';
+        disc(R * 0.64, C(m)); ring(R * 0.48, R * 0.05, C(m, 0.7)); dots(8, R * 0.38, R * 0.045, C(m, 1.25)); disc(R * 0.24, C(m, 0.85)); disc(R * 0.14, C('#2a2c26'));
       } else {
-        g.fillStyle = Col.shade(rimC, b * 1.1); g.beginPath(); g.arc(-rr * 0.12, -rr * 0.12, rr * 0.55, 0, 7); g.fill();
+        // painted steel wheel: dished centre, five lug nuts, small chrome cap
+        const m = w.rimCol || CA_COL.steel;
+        disc(R * 0.62, C(m)); ring(R * 0.5, R * 0.05, C(m, 0.72)); disc(R * 0.34, C(m, 0.86));
+        dots(5, R * 0.24, R * 0.045, C('#c8ccd0'), 0.3); disc(R * 0.12, C(CA_COL.chrome));
       }
-      g.fillStyle = Col.shade(CA_COL.hub, b); g.beginPath(); g.arc(0, 0, rr * 0.26, 0, 7); g.fill();
-      if (w.dual) { g.strokeStyle = Col.shade('#3a3a3a', b); g.lineWidth = R * 0.05; g.beginPath(); g.arc(0, 0, rr * 0.5, 0, 7); g.stroke(); }
+      if (w.dual) ring(R * 0.46, R * 0.05, C('#222222'));
       g.setTransform(1, 0, 0, 1, 0, 0);
     }
     F.tilt = true;
+    if (P.pass === 1) g.restore();
   },
   // soft contact shadow under the whole vehicle
   drawShadow(g, F, M) {
@@ -567,16 +599,19 @@ Object.assign(CarArt, {
     ctx.restore();
   },
 });
-// per-type body styling for the passenger-car builder (dimensions come from CAR_TYPES)
+// Per-type body styling for the passenger-car builder. The footprint (len, wid) is the physics one from
+// CAR_TYPES; the visual heights live here: h beltline / hood line, cabH greenhouse height, cab greenhouse
+// base [rear, front] as fractions of len. Late-80s American proportions: low beltline, long hood, thin
+// pillars, big wheels in dark arches, thin chrome bumpers with rub strips.
 const CA_CARS = {
-  base: { z0: 0.15, r: 0.17, axF: 0.31, axR: -0.3, nose: 0.07, tail: 0.03, chF: 0.1, chR: 0.08, rakeF: 0.27, rakeR: 0.2, tum: 0.09, gin: 0.05, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap' },
-  sedan: { vinyl: true, white: true },
-  police: { bar: 'police', pushbar: true, trim: 'black', rim: 'steel', livery: 'bw', spot: true },
+  base: { h: 0.62, cabH: 0.44, cab: [-0.28, 0.2], z0: 0.14, r: 0.19, axF: 0.3, axR: -0.29, nose: 0.05, tail: 0.02, chF: 0.06, chR: 0.05, rakeF: 0.25, rakeR: 0.14, tum: 0.085, gin: 0.045, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap', opera: true, crease: true },
+  sedan: { vinyl: true, white: true, orn: true },
+  police: { bar: 'police', pushbar: true, trim: 'black', rim: 'dog', livery: 'bw', spot: true },
   taxi: { sign: true, checker: true, trim: 'black', rim: 'steel' },
-  hatchback: { z0: 0.14, r: 0.16, axF: 0.33, axR: -0.32, nose: 0.08, chR: 0.05, rakeF: 0.26, rakeR: 0.3, tum: 0.08, doors: 2, hatch: true, bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', trim: 'black', rim: 'steel' },
-  wagon: { rakeR: 0.06, hatch: true, wood: true, rack: true, tails: 'vert', quarter: true, white: true },
-  sports: { cab: [-0.37, 0.15], z0: 0.11, r: 0.16, axF: 0.32, axR: -0.31, nose: 0.13, tail: 0.04, chF: 0.15, chR: 0.07, rakeF: 0.36, rakeR: 0.44, tum: 0.11, doors: 2, bump: 'body', grille: 'none', lamps: 'popup', tails: 'band', spoiler: true, trim: 'black', rim: 'alloy' },
-  suv: { z0: 0.25, r: 0.21, axF: 0.31, axR: -0.31, nose: 0.05, tail: 0, chF: 0.07, chR: 0.05, rakeF: 0.2, rakeR: 0.04, tum: 0.06, hatch: true, rack: true, spare: true, two: '#a4a9ae', bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', flares: true, rim: 'steel' },
+  hatchback: { h: 0.6, cabH: 0.43, cab: [-0.45, 0.19], z0: 0.13, r: 0.18, axF: 0.32, axR: -0.31, nose: 0.06, tail: 0, chF: 0.07, chR: 0.04, rakeF: 0.25, rakeR: 0.13, tum: 0.07, opera: false, hatch: true, bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', trim: 'black', rim: 'steel' },
+  wagon: { cab: [-0.46, 0.2], rakeR: 0.04, opera: false, hatch: true, wood: true, rack: true, tails: 'vert', quarter: true, white: true },
+  sports: { h: 0.5, cabH: 0.33, cab: [-0.36, 0.1], z0: 0.11, r: 0.18, axF: 0.31, axR: -0.3, nose: 0.12, tail: 0.04, chF: 0.12, chR: 0.06, rakeF: 0.34, rakeR: 0.44, tum: 0.1, opera: false, crease: false, doors: 2, bump: 'body', grille: 'none', lamps: 'popup', tails: 'band', spoiler: true, trim: 'black', rim: 'alloy' },
+  suv: { h: 0.8, cabH: 0.5, cab: [-0.47, 0.22], z0: 0.25, r: 0.22, axF: 0.3, axR: -0.3, nose: 0.03, tail: 0, chF: 0.05, chR: 0.04, rakeF: 0.17, rakeR: 0.03, tum: 0.05, opera: false, hatch: true, rack: true, spare: true, two: '#a4a9ae', bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', flares: true, rim: 'steel', quarter: true },
 };
 Object.assign(CarArt, {
   // ---------------------------------------------------------------- model helpers
@@ -625,11 +660,26 @@ Object.assign(CarArt, {
     P.hollow = true; P.inner = []; P.inCol = o.inCol;
     return P;
   },
-  // trapezoid bumper wrapping the chamfered corners; dir 1 front, -1 rear; fe = body end
-  bumper(dir, fe, hw, ch, z0, z1, mat, col) {
-    const d = 0.055 * dir, b = fe - dir * Math.max(0.03, ch * 0.9);
-    const ol = dir > 0 ? [[b, -hw + 0.012], [fe + d, -hw + ch * 0.55], [fe + d, hw - ch * 0.55], [b, hw - 0.012]] : [[fe + d, -hw + ch * 0.55], [b, -hw + 0.012], [b, hw - 0.012], [fe + d, hw - ch * 0.55]];
-    return this.prism(ol, z0, z1, mat === 'chrome' ? CA_COL.chrome : mat === 'body' ? col : CA_COL.black, { mat: mat === 'chrome' ? 'chrome' : 'paint', skip: [dir > 0 ? 'B' : 'F'] });
+  // bumper bar across the flat end of the body (dir 1 front at fe, -1 rear) plus two short wraps along the
+  // chamfered corners. Every piece lies outside the body so the separating planes order it exactly.
+  // Returns [bar, wrapL, wrapR]; chrome bars get a black rubber rub strip.
+  bumper(dir, fe, hw, ch, z0, z1, mat, col, o) {
+    o = o || {};
+    const d = o.d || 0.045, sx = hw - ch, e = 0.005;
+    const C = mat === 'chrome' ? CA_COL.chrome : mat === 'body' ? col : CA_COL.black, mo = mat === 'chrome' ? 'chrome' : 'paint';
+    const bar = this.box(dir > 0 ? fe : fe - d, dir > 0 ? fe + d : fe, -sx, sx, z0, z1, C, { mat: mo, skip: ['L', 'R', dir > 0 ? 'B' : 'F'] });
+    const out = [bar], strip = mat === 'chrome' && !o.noStrip;
+    const rub = (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#1c1d20'); g.fillRect(-1, 38, 102, 26); g.fillStyle = F.sh('#3a3c40'); g.fillRect(-1, 58, 102, 4); };
+    if (strip) this.fx(bar, dir > 0 ? 'F' : 'B', rub);
+    if (ch > 0.012) for (const sd of [-1, 1]) {
+      // quad in plan: bar end (inner, outer), side end flush with the body side, chamfer start
+      const p = [[fe, sd * sx], [fe + dir * d, sd * sx], [fe - dir * (ch - d * 0.5), sd * (hw + e)], [fe - dir * ch, sd * hw]];
+      const w = this.prism(p, z0, z1, C, { mat: mo, tags: ['x', 'W', 'x', 'x'] });
+      w.faces = w.faces.filter(fc => fc.t !== 'x');
+      if (strip) this.fx(w, 'W', rub);
+      out.push(w);
+    }
+    return out;
   },
   // front bucket seats (+ headrests) at fs, optional rear bench at fr; w = half width available
   seats(P, fs, fr, zb, w, col, burnt) {
@@ -703,54 +753,54 @@ Object.assign(CarArt, {
     if (sp.two && live) { g.fillStyle = F.sh(sp.two); if (M.band) R(f0, zt - 0.04, f1, zt + 0.05); else { R(f0, z0, f1, zt); g.fillStyle = F.sh(sp.two, 0.8); R(f0, zt, f1, zt + 0.012); } }
     if (M.wood && live) {
       const a = f0 + 0.08, b = M.fC + 0.04;
-      g.fillStyle = F.sh('#7a5030'); R(a, z0 + 0.09, b, zb - 0.045);
+      g.fillStyle = F.sh('#7a5030'); R(a, z0 + 0.09, b, zb - 0.05);
       g.strokeStyle = F.sh('#5a3820'); g.lineWidth = 0.8; g.beginPath();
-      for (let z = z0 + 0.12; z < zb - 0.05; z += 0.035) { g.moveTo(a * k, z * k); for (let f = a; f < b; f += 0.12) g.lineTo(f * k, (z + Math.sin(f * 37 + z * 50) * 0.006) * k); }
-      g.stroke(); g.strokeStyle = F.sh('#d8c49a'); g.lineWidth = 2; g.strokeRect(a * k, (z0 + 0.09) * k, (b - a) * k, (zb - z0 - 0.135) * k);
+      for (let z = z0 + 0.12; z < zb - 0.055; z += 0.035) { g.moveTo(a * k, z * k); for (let f = a; f < b; f += 0.12) g.lineTo(f * k, (z + Math.sin(f * 37 + z * 50) * 0.006) * k); }
+      g.stroke(); g.strokeStyle = F.sh('#d8c49a'); g.lineWidth = 2; g.strokeRect(a * k, (z0 + 0.09) * k, (b - a) * k, (zb - z0 - 0.14) * k);
     }
-    const di = side < 0 ? [0, 2] : [1, 3];
+    // shoulder crease under the beltline: a lit edge over a shadow line reads as a folded panel
+    if (sp.crease && live) { g.fillStyle = 'rgba(255,255,255,0.14)'; R(f0, zb - 0.052, f1, zb - 0.042); g.fillStyle = 'rgba(0,0,0,0.14)'; R(f0, zb - 0.042, f1, zb - 0.034); }
+    const di = side < 0 ? [0, 2] : [1, 3], trim = sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black;
     for (let j = 0; j < M.doorF.length; j++) {
       const [a, b] = M.doorF[j], ds = S.doors[di[j]];
       if (ds) {
+        // open or missing door: door aperture, sill and the seat inside
         g.fillStyle = F.sh(CA_COL.inside, 0.75); R(a, z0 + 0.05, b, zb + 0.02);
         g.fillStyle = F.sh(M.seat2 || CA_COL.seat, 0.95); R(a + 0.05, zb - 0.17, b - 0.04, zb - 0.07);
         g.fillStyle = F.sh(CA_COL.black, 0.8); R(a, z0 + 0.05, b, z0 + 0.09);
         continue;
       }
       if (sp.livery === 'bw' && live) { g.fillStyle = F.sh(S.col); R(a, z0 + 0.035, b, zb + 0.02); }
-      g.strokeStyle = 'rgba(0,0,0,0.42)'; g.lineWidth = 1.1; g.strokeRect(a * k, (z0 + 0.035) * k, (b - a) * k, (zb - z0) * k);
-      g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black); R(a + 0.035, zb - 0.08, a + 0.1, zb - 0.058);
+      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.1; g.strokeRect(a * k, (z0 + 0.035) * k, (b - a) * k, (zb - z0) * k);
+      // pull handle near the rear edge, just under the shoulder line
+      g.fillStyle = F.sh(trim, 0.95); R(b - 0.1, zb - 0.085, b - 0.04, zb - 0.068);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; R(b - 0.1, zb - 0.068, b - 0.04, zb - 0.063);
     }
-    // body side molding and lamps
-    if (sp.livery !== 'bw' && !M.wood) { g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black, 0.95); R(f0 + 0.1, zt - 0.009, f1 - 0.1, zt + 0.009); }
+    // body side molding at the widest point
+    if (sp.livery !== 'bw' && !M.wood) { g.fillStyle = F.sh(trim, 0.92); R(f0 + 0.08, zt - 0.011, f1 - 0.08, zt + 0.011); if (trim === CA_COL.chrome) { g.fillStyle = F.sh('#1c1c1e'); R(f0 + 0.08, zt - 0.004, f1 - 0.08, zt + 0.004); } }
     if (live) {
-      g.fillStyle = F.sh(CA_COL.amber); R(f1 - sp.chF - 0.08, zb - sp.nose - 0.14, f1 - sp.chF - 0.02, zb - sp.nose - 0.1);
-      if (!M.noRear) { g.fillStyle = F.sh(CA_COL.tail); R(f0 + M.chR + 0.02, M.tailZ - 0.14, f0 + M.chR + 0.08, M.tailZ - 0.1); }
+      // side marker lamps; fuel filler door on the driver-side rear quarter
+      g.fillStyle = F.sh(CA_COL.amber); R(f1 - sp.chF - 0.085, M.noseZ - 0.11, f1 - sp.chF - 0.025, M.noseZ - 0.075);
+      if (!M.noRear) {
+        g.fillStyle = F.sh(CA_COL.tail); R(f0 + M.chR + 0.025, M.tailZ - 0.11, f0 + M.chR + 0.085, M.tailZ - 0.075);
+        if (side < 0 && M.fR - f0 > 0.25) { g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1; g.strokeRect((M.fR - 0.03) * k, (zb - 0.135) * k, 0.075 * k, 0.065 * k); }
+      }
     }
     if (sp.livery === 'bw' && live) {
       const [a, b] = M.doorF[0], cx = (a + b) / 2;
-      g.fillStyle = F.sh('#d8b040'); g.beginPath();
-      for (let i = 0; i < 10; i++) { const an = Math.PI / 2 + i * Math.PI / 5, r = (i & 1 ? 0.024 : 0.055) * k; g.lineTo(cx * k + Math.cos(an) * r, (zb - 0.19) * k + Math.sin(an) * r); }
-      g.fill();
+      this.star(g, F, cx * k, (zb - 0.17) * k, 0.055 * k, '#d8b040');
       const [c0, c1] = M.doorF[1] || M.doorF[0];
-      F.frame(g, [(c0 + c1) / 2, side * hw, zb - 0.16], [side, 0, 0], [0, 0, -1], 0.01);
+      F.frame(g, [(c0 + c1) / 2, side * hw, zb - 0.15], [side, 0, 0], [0, 0, -1], 0.01);
       g.fillStyle = F.sh('#111'); g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('POLICE', 0, 0);
       F.frame(g, [0, side * hw, 0], [1, 0, 0], [0, 0, 1], 0.01);
     }
     if (M.star) { const [a, b] = M.doorF[0]; this.star(g, F, (a + b) / 2 * k, (zb - 0.2) * k, 0.1 * k, '#e8e8e0'); }
     if (sp.checker && live) {
-      for (let f = M.fR + 0.02, i = 0; f < M.fC + 0.06; f += 0.045, i++) for (let r = 0; r < 2; r++) { g.fillStyle = F.sh((i + r) & 1 ? '#111111' : '#f2f2ea'); R(f, zb - 0.12 + r * 0.04, f + 0.045, zb - 0.08 + r * 0.04); }
+      for (let f = M.fR + 0.02, i = 0; f < M.fC + 0.06; f += 0.045, i++) for (let r = 0; r < 2; r++) { g.fillStyle = F.sh((i + r) & 1 ? '#111111' : '#f2f2ea'); R(f, zb - 0.13 + r * 0.04, f + 0.045, zb - 0.09 + r * 0.04); }
     }
     if (S.d && live) { const gr = g.createLinearGradient(0, z0 * k, 0, (z0 + 0.24) * k); gr.addColorStop(0, 'rgba(70,56,40,' + (0.16 * S.d) + ')'); gr.addColorStop(1, 'rgba(70,56,40,0)'); g.fillStyle = gr; R(f0, z0, f1, z0 + 0.24); }
     this.dmgArt(g, F, M, this.sideLvl(M, side < 0 ? 'left' : 'right'), S.seed * 131 + side * 17 + 5, f0 + 0.15, f1 - 0.15, z0 + 0.04, zb - 0.06);
-    // wheel wells
-    for (const w of M.wheels) {
-      if (w.side !== side) continue;
-      const r0 = (w.r + 0.035) * k;
-      g.fillStyle = F.sh('#111113'); g.beginPath(); g.arc(w.f * k, w.r * k, r0, 0, 7); g.rect(w.f * k - r0, z0 * k - 4, r0 * 2, (w.r - z0) * k + 4); g.fill();
-      g.strokeStyle = sp.flares && live ? F.sh(CA_COL.black) : F.sh(M.paint, 0.7); g.lineWidth = sp.flares ? 5 : 1.6;
-      g.beginPath(); g.arc(w.f * k, w.r * k, r0 + (sp.flares ? 2 : 0.5), 0, Math.PI); g.stroke();
-    }
+    this.wells(g, F, M, side, z0, sp.flares && live ? CA_COL.black : null);
     g.fillStyle = F.sh(CA_COL.black, 0.85); R(f0, z0, f1, z0 + 0.03);
   },
   frontArt(g, F, M) {
@@ -758,37 +808,42 @@ Object.assign(CarArt, {
     F.frame(g, [M.f1, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
     g.beginPath(); g.rect(-w * k, z0 * k, 2 * w * k, (zt - z0) * k); g.clip();
     const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
-    const lz1 = zt - 0.035, lz0 = lz1 - 0.075, gw = w - 0.215;
+    const lz1 = zt - 0.028, lz0 = lz1 - (sp.lamps === 'round' ? 0.11 : 0.072), gw = w - 0.215;
+    // hood leading edge and the dark lower valance under the bumper
+    g.fillStyle = 'rgba(0,0,0,0.35)'; R(-w, zt - 0.012, w, zt - 0.006);
+    g.fillStyle = F.sh('#18191c'); R(-w + 0.05, z0, w - 0.05, z0 + 0.055);
     if (sp.grille === 'chrome' || sp.grille === 'black') {
       const ch = sp.grille === 'chrome' && live;
-      g.fillStyle = F.sh(ch ? CA_COL.chrome : '#2a2b2e'); R(-gw, lz0 - 0.03, gw, lz1 + 0.005);
-      g.fillStyle = F.sh('#141416'); R(-gw + 0.02, lz0 - 0.015, gw - 0.02, lz1 - 0.012);
-      g.fillStyle = F.sh(ch ? '#b8c0c8' : '#3a3c40');
-      for (let z = lz0 - 0.005; z < lz1 - 0.015; z += 0.022) R(-gw + 0.02, z, gw - 0.02, z + 0.007);
-      if (ch) { g.fillStyle = F.sh('#e8ecf0'); R(-0.01, lz0 - 0.015, 0.01, lz1 - 0.012); }
+      g.fillStyle = F.sh(ch ? CA_COL.chrome : '#2a2b2e'); R(-gw, lz0 - 0.022, gw, lz1 + 0.006);
+      g.fillStyle = F.sh('#121214'); R(-gw + 0.016, lz0 - 0.01, gw - 0.016, lz1 - 0.008);
+      g.fillStyle = F.sh(ch ? '#aab2ba' : '#3a3c40');
+      if (ch) { for (let s = -gw + 0.04; s < gw - 0.02; s += 0.042) R(s, lz0 - 0.01, s + 0.008, lz1 - 0.008); R(-gw + 0.016, (lz0 + lz1) / 2 - 0.01, gw - 0.016, (lz0 + lz1) / 2 - 0.003); g.fillStyle = F.sh('#e8ecf0'); R(-0.022, lz0 - 0.01, 0.022, lz1 - 0.008); }
+      else for (let z = lz0 - 0.002; z < lz1 - 0.012; z += 0.02) R(-gw + 0.016, z, gw - 0.016, z + 0.007);
     } else if (sp.grille === 'army') {
       g.fillStyle = F.sh('#1a1c18'); R(-gw - 0.04, z0 + 0.1, gw + 0.04, zt - 0.03);
       g.fillStyle = F.sh(M.paint, 0.9); for (let s = -gw - 0.02; s < gw + 0.03; s += 0.05) R(s, z0 + 0.12, s + 0.02, zt - 0.05);
-    } else { g.fillStyle = F.sh('#141416'); R(-w + 0.08, z0 + 0.1, w - 0.08, z0 + 0.15); }
+    } else { g.fillStyle = F.sh('#141416'); R(-w + 0.1, z0 + 0.09, w - 0.1, z0 + 0.13); }
     for (const sd of [-1, 1]) {
       const a = sd * (w - 0.02), b = sd * (w - 0.2), s0 = Math.min(a, b), s1 = Math.max(a, b);
       const broken = S.burnt || S.lights[sd < 0 ? 0 : 1] === 1;
-      if (sp.lamps === 'popup') { if (live) { g.fillStyle = F.sh(CA_COL.amber); R(s0 + 0.02, z0 + 0.12, s0 + 0.09, z0 + 0.16); } continue; }
-      g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black); R(s0 - 0.01, lz0 - 0.01, s1 + 0.01, lz1 + 0.01);
+      if (sp.lamps === 'popup') { if (live) { g.fillStyle = F.sh(CA_COL.amber); R(s0 + 0.02, z0 + 0.1, s0 + 0.1, z0 + 0.14); } continue; }
+      // bezel, then the lens(es)
+      g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : '#1a1a1c'); R(s0 - 0.012, lz0 - 0.012, s1 + 0.012, lz1 + 0.01);
       const lens = (x0, x1) => {
         g.fillStyle = broken ? F.sh('#2c2c2a') : F.sh(CA_COL.head, 1.05); R(x0, lz0, x1, lz1);
-        if (!broken) { g.fillStyle = 'rgba(255,255,255,0.55)'; R(x0 + 0.01, lz1 - 0.025, x0 + (x1 - x0) * 0.45, lz1 - 0.012); }
+        if (!broken) { g.fillStyle = 'rgba(255,255,255,0.6)'; R(x0 + 0.008, lz1 - 0.022, x0 + (x1 - x0) * 0.45, lz1 - 0.01); g.fillStyle = 'rgba(120,110,80,0.25)'; R(x0, lz0, x1, lz0 + 0.012); }
         else { g.strokeStyle = 'rgba(200,200,190,0.6)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x0 * k, lz0 * k); g.lineTo(x1 * k, lz1 * k); g.moveTo(x0 * k, lz1 * k); g.lineTo((x0 + x1) / 2 * k, lz0 * k); g.stroke(); }
       };
       if (sp.lamps === 'round') {
-        const cx = (s0 + s1) / 2 * k, cz = (lz0 + lz1) / 2 * k, r = Math.min(s1 - s0, 0.13) * 40;
+        const cx = (s0 + s1) / 2 * k, cz = (lz0 + lz1) / 2 * k, r = Math.min(s1 - s0, 0.11) * 45;
         g.fillStyle = F.sh(CA_COL.black); g.beginPath(); g.arc(cx, cz, r * 1.25, 0, 7); g.fill();
         g.fillStyle = broken ? F.sh('#2c2c2a') : F.sh(CA_COL.head, 1.05); g.beginPath(); g.arc(cx, cz, r, 0, 7); g.fill();
         if (!broken) { g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.arc(cx - r * 0.3, cz + r * 0.3, r * 0.35, 0, 7); g.fill(); }
         continue;
       }
-      if (sp.lamps === 'quad') { const m = (s0 + s1) / 2; lens(s0, m - 0.008); lens(m + 0.008, s1); } else lens(s0, s1);
-      if (live) { g.fillStyle = F.sh(CA_COL.amber); R(s0, lz0 - 0.06, s1, lz0 - 0.025); }
+      if (sp.lamps === 'quad') { const m = (s0 + s1) / 2; lens(s0, m - 0.006); lens(m + 0.006, s1); } else lens(s0, s1);
+      // parking / turn lamps under the headlamps
+      if (live) { g.fillStyle = F.sh('#1a1a1c'); R(s0 - 0.004, lz0 - 0.058, s1 + 0.004, lz0 - 0.022); g.fillStyle = F.sh(CA_COL.amber); R(s0, lz0 - 0.054, s1, lz0 - 0.026); }
     }
     const fl = M.S.sides ? M.S.sides.front : S.d >= 3 ? 3 : S.d >= 2 ? 1 : 0;
     this.dmgArt(g, F, M, fl, S.seed * 7 + 3, -w, w, z0 + 0.03, zt - 0.02);
@@ -798,33 +853,39 @@ Object.assign(CarArt, {
     F.frame(g, [M.f0, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
     g.beginPath(); g.rect(-w * k, z0 * k, 2 * w * k, (zt - z0) * k); g.clip();
     const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
+    const bz = z0 + 0.15 + (sp.bump === 'black' ? 0.03 : 0);
+    g.fillStyle = F.sh('#18191c'); R(-w + 0.04, z0, w - 0.04, z0 + 0.05);
     for (const sd of [-1, 1]) {
       const broken = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1;
       const red = broken ? F.sh('#3a1a16') : F.sh(CA_COL.tail, 1.08);
       if (sp.tails === 'vert') {
-        const a = sd * (w - 0.015), b = sd * (w - 0.12), s0 = Math.min(a, b), s1 = Math.max(a, b);
-        g.fillStyle = F.sh(CA_COL.black); R(s0 - 0.008, z0 + 0.13, s1 + 0.008, zt - 0.012);
-        g.fillStyle = red; R(s0, z0 + 0.14, s1, zt - 0.02);
-        if (live) { g.fillStyle = F.sh('#e8e8e4'); R(s0, z0 + 0.14, s1, z0 + 0.18); g.fillStyle = F.sh(CA_COL.amber); R(s0, z0 + 0.18, s1, z0 + 0.21); }
+        const a = sd * (w - 0.012), b = sd * (w - 0.11), s0 = Math.min(a, b), s1 = Math.max(a, b);
+        g.fillStyle = F.sh(CA_COL.black); R(s0 - 0.008, bz + 0.01, s1 + 0.008, zt - 0.012);
+        g.fillStyle = red; R(s0, bz + 0.02, s1, zt - 0.02);
+        if (live) { g.fillStyle = F.sh('#e8e8e4'); R(s0, bz + 0.02, s1, bz + 0.06); g.fillStyle = F.sh(CA_COL.amber); R(s0, bz + 0.06, s1, bz + 0.09); g.fillStyle = 'rgba(0,0,0,0.25)'; for (let z = bz + 0.1; z < zt - 0.03; z += 0.035) R(s0, z, s1, z + 0.005); }
       } else {
-        const a = sd * (w - 0.015), b = sd * (sp.tails === 'band' ? 0.02 : w - 0.3), s0 = Math.min(a, b), s1 = Math.max(a, b);
-        g.fillStyle = F.sh(CA_COL.black); R(s0 - 0.008, zt - 0.14, s1 + 0.008, zt - 0.03);
-        g.fillStyle = red; R(s0, zt - 0.13, s1, zt - 0.04);
+        const a = sd * (w - 0.012), b = sd * (sp.tails === 'band' ? 0.02 : w - 0.3), s0 = Math.min(a, b), s1 = Math.max(a, b);
+        g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black); R(s0 - 0.01, zt - 0.15, s1 + 0.01, zt - 0.022);
+        g.fillStyle = red; R(s0, zt - 0.14, s1, zt - 0.032);
         if (live) {
-          g.fillStyle = 'rgba(0,0,0,0.3)'; for (let s = s0 + 0.03; s < s1 - 0.01; s += 0.04) R(s, zt - 0.13, s + 0.006, zt - 0.04);
-          const r0 = sd < 0 ? s1 - 0.05 : s0, r1 = sd < 0 ? s1 : s0 + 0.05;
-          g.fillStyle = F.sh('#e8e8e4'); R(r0, zt - 0.13, r1, zt - 0.09);
+          g.fillStyle = 'rgba(0,0,0,0.3)'; for (let s = s0 + 0.03; s < s1 - 0.01; s += 0.04) R(s, zt - 0.14, s + 0.005, zt - 0.032);
+          g.fillStyle = 'rgba(255,190,170,0.35)'; R(s0, zt - 0.06, s1, zt - 0.05);
+          const r0 = sd < 0 ? s1 - 0.06 : s0, r1 = sd < 0 ? s1 : s0 + 0.06;
+          g.fillStyle = F.sh('#e8e8e4'); R(r0, zt - 0.14, r1, zt - 0.086);
+          g.fillStyle = F.sh(CA_COL.amber); R(r0, zt - 0.086, r1, zt - 0.032);
         }
       }
     }
-    if (sp.hatch && S.trunk) { g.fillStyle = F.sh('#1c1c1e'); R(-(w - 0.14), z0 + 0.13, w - 0.14, zt + 0.01); this.dmgArt(g, F, M, S.d >= 2 ? 1 : 0, S.seed * 11 + 9, -w, w, z0 + 0.03, z0 + 0.12); return; }
-    // trunk / hatch seam, plate in a recess, badge
-    g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1.1;
-    g.beginPath(); g.moveTo(-(w - 0.02) * k, (sp.hatch ? z0 + 0.12 : zt - 0.16) * k); g.lineTo((w - 0.02) * k, (sp.hatch ? z0 + 0.12 : zt - 0.16) * k); g.stroke();
-    g.fillStyle = F.sh('#1a1a1c'); R(-0.105, z0 + 0.14, 0.105, z0 + 0.25);
-    g.fillStyle = F.sh(live ? CA_COL.plate : '#4a443e'); R(-0.09, z0 + 0.15, 0.09, z0 + 0.24);
-    if (live) { g.fillStyle = F.sh('#2a3a7a'); R(-0.09, z0 + 0.22, 0.09, z0 + 0.24); g.fillStyle = F.sh('#202020'); for (let i = 0; i < 5; i++) R(-0.07 + i * 0.03, z0 + 0.17, -0.05 + i * 0.03, z0 + 0.205); }
-    if (live) { g.fillStyle = F.sh(CA_COL.chrome); R(w - 0.2, zt - 0.025, w - 0.1, zt - 0.012); }
+    if (sp.hatch && S.trunk) { g.fillStyle = F.sh('#1c1c1e'); R(-(w - 0.13), bz + 0.01, w - 0.13, zt + 0.01); this.dmgArt(g, F, M, S.d >= 2 ? 1 : 0, S.seed * 11 + 9, -w, w, z0 + 0.03, bz); return; }
+    // lid seam, plate in a lit recess, lock and badge
+    const sz = sp.hatch ? bz + 0.01 : zt - 0.14;
+    g.strokeStyle = 'rgba(0,0,0,0.42)'; g.lineWidth = 1.1;
+    g.beginPath(); g.moveTo(-(w - 0.02) * k, sz * k); g.lineTo((w - 0.02) * k, sz * k); g.stroke();
+    const pz = bz + 0.015;
+    g.fillStyle = F.sh('#1a1a1c'); R(-0.09, pz, 0.09, pz + 0.095);
+    g.fillStyle = F.sh(live ? CA_COL.plate : '#4a443e'); R(-0.075, pz + 0.01, 0.075, pz + 0.085);
+    if (live) { g.fillStyle = F.sh('#2a3a7a'); R(-0.075, pz + 0.068, 0.075, pz + 0.085); g.fillStyle = F.sh('#202020'); for (let i = 0; i < 5; i++) R(-0.06 + i * 0.025, pz + 0.028, -0.043 + i * 0.025, pz + 0.058); }
+    if (live) { g.fillStyle = F.sh(CA_COL.chrome); R(w - 0.22, zt - 0.02, w - 0.12, zt - 0.01); g.fillStyle = F.sh('#202022'); g.beginPath(); g.arc(0, (sz + 0.035) * k, 1.6, 0, 7); g.fill(); }
     const rl = M.S.sides ? M.S.sides.rear : S.d >= 3 ? 2 : S.d >= 2 ? 1 : 0;
     this.dmgArt(g, F, M, rl, S.seed * 11 + 9, -w, w, z0 + 0.03, zt - 0.02);
   },
@@ -949,26 +1010,26 @@ Object.assign(CarArt, {
   },
   b_car(M, S, T) {
     const sp = Object.assign({}, CA_CARS.base, CA_CARS[S.type] || {});
-    if (S.type === 'suv') sp.quarter = true;
-    const L = T.len, W = T.wid, hl = L / 2, hw = W / 2, h = this.hash(S.col0);
+    const L = T.len, W = T.wid, hl = L / 2, hw = W / 2, h = this.hash(S.col0), live = !S.burnt;
     const paint = S.burnt ? CA_COL.burnt : sp.livery === 'bw' ? '#1a1b1e' : S.col;
-    const z0 = sp.z0, zb = T.h, zr = T.h + T.cabH;
-    const ce = sp.cab || T.cab;
-    const fC = Math.min(hl - 0.3, L * ce[1]);
-    const fR = Math.max(-hl + (sp.hatch ? 0.06 : 0.32), Math.min(fC - 0.5, L * ce[0]));
+    const z0 = sp.z0, zb = sp.h, zr = sp.h + sp.cabH;
+    const fC = Math.min(hl - 0.3, L * sp.cab[1]);
+    const fR = Math.max(-hl + (sp.hatch ? 0.06 : 0.32), Math.min(fC - 0.5, L * sp.cab[0]));
     const chR = Math.min(sp.chR, Math.max(0, (fR + hl) * 0.7));
     // keep a roof: windshield + rear window rake must leave at least 0.28 of roof
     const rk = sp.rakeF + sp.rakeR, room = fC - fR - 0.28;
     if (rk > room) { sp.rakeF *= room / rk; sp.rakeR *= room / rk; }
-    Object.assign(M, { sp, L, W, hl, hw, z0, zb, zr, fC, fR, chR, f0: -hl + S.crR, f1: hl - S.crF, noseZ: zb - sp.nose - S.crF * 0.5, tailZ: zb - sp.tail - S.crR * 0.5, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: z0 + (zb - z0) * 0.46, seat2: sp.livery === 'bw' ? '#2a2a2e' : this.seatCol(S.col) });
+    Object.assign(M, { sp, L, W, hl, hw, z0, zb, zr, fC, fR, chR, f0: -hl + S.crR, f1: hl - S.crF, noseZ: zb - sp.nose - S.crF * 0.5, tailZ: zb - sp.tail - S.crR * 0.5, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: z0 + (zb - z0) * 0.5, seat2: sp.livery === 'bw' ? '#2a2a2e' : this.seatCol(S.col) });
     const c3 = Col.rgb(S.col0), dark = c3[0] * 0.3 + c3[1] * 0.59 + c3[2] * 0.11 < 110;
     if (sp.vinyl && h % 3 === 0) M.vinyl = dark ? '#e2ddd0' : '#3a2c26';
     if (sp.wood && h % 3 !== 1) M.wood = true;
     // lower body with painted sides, front, rear, hood and trunk
     const body = M.body = this.lowerBody({ f0: M.f0, f1: M.f1, hw, z0, zb, fC, fR, noseZ: M.noseZ, tailZ: M.tailZ, chF: sp.chF, chR, col: paint });
     M.parts.push(body);
-    const fB = fR + (fC - fR) * 0.5;
-    M.doorF = sp.doors === 4 ? [[fB + 0.012, fC + 0.07], [fR + (sp.quarter ? (fC - fR) * 0.29 : 0.03), fB - 0.012]] : [[fR + (fC - fR) * 0.34, fC + 0.07]];
+    // door cuts: the front door runs from the B-pillar to just ahead of the windshield base, the rear door
+    // stops at the C-pillar (opera window / quarter glass behind it)
+    const fB = fR + (fC - fR) * 0.5, qr = sp.quarter ? 0.29 : sp.opera ? 0.19 : 0.03;
+    M.doorF = sp.doors === 4 ? [[fB + 0.012, fC + 0.06], [fR + (fC - fR) * qr, fB - 0.012]] : [[fR + (fC - fR) * 0.34, fC + 0.06]];
     this.pfx(body, [0, -1, 0], (g, F) => this.sideArt(g, F, M, -1));
     this.pfx(body, [0, 1, 0], (g, F) => this.sideArt(g, F, M, 1));
     this.pfx(body, [1, 0, 0], (g, F) => this.frontArt(g, F, M));
@@ -977,101 +1038,121 @@ Object.assign(CarArt, {
       if (fc.id === 'hood') fc.fx = [(g, F, f) => this.hoodArt(g, F, f, M)];
       if (fc.id === 'trunk') fc.fx = [(g, F, f) => this.trunkArt(g, F, f, M)];
     }
-    // greenhouse with windows, seats and dash
+    // greenhouse with windows, seats, dash and steering wheel
     const cabCol = S.burnt ? CA_COL.burnt : sp.livery === 'bw' ? S.col : paint;
     const cab = M.cab = this.cabin({ fR, fC, gw: M.gw, gwT: M.gwT, zb, zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cabCol, roof: cabCol, inCol: S.burnt ? '#1a1612' : null });
     M.parts.push(cab);
     const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
-    this.win(this.face(cab, 'F'), 'windshield', 0.05, 0.95, 0.06, 0.93, gs('windshield'));
-    this.win(this.face(cab, 'B'), 'rearWindow', 0.07, 0.93, 0.08, 0.9, sp.hatch && S.trunk ? 4 : gs('rearWindow'));
+    this.win(this.face(cab, 'F'), 'windshield', 0.04, 0.96, 0.05, 0.94, gs('windshield'));
+    this.win(this.face(cab, 'B'), 'rearWindow', 0.06, 0.94, 0.07, 0.92, sp.hatch && S.trunk ? 4 : gs('rearWindow'));
     for (const [t, sd] of [['L', 0], ['R', 1]]) {
       const fc = this.face(cab, t), fr = sd ? 'winFR' : 'winFL', rr = sd ? 'winRR' : 'winRL';
       if (sp.doors === 4) {
-        if (sp.quarter) this.win(fc, 'q', 0.04, 0.26, 0.1, 0.9, S.burnt ? 4 : 0);
-        this.win(fc, rr, sp.quarter ? 0.31 : 0.08, 0.47, 0.1, 0.9, gs(rr, sd ? 3 : 2));
-        this.win(fc, fr, 0.53, 0.95, 0.1, 0.9, gs(fr, sd));
+        if (sp.quarter) this.win(fc, 'q', 0.035, 0.26, 0.09, 0.9, S.burnt ? 4 : 0);
+        else if (sp.opera && !M.vinyl) this.win(fc, 'q', 0.07, 0.165, 0.2, 0.84, S.burnt ? 4 : 0);
+        this.win(fc, rr, sp.quarter ? 0.305 : sp.opera ? 0.205 : 0.07, 0.475, 0.09, 0.9, gs(rr, sd ? 3 : 2));
+        this.win(fc, fr, 0.525, 0.955, 0.09, 0.9, gs(fr, sd));
       } else {
-        this.win(fc, rr, 0.07, 0.3, 0.12, 0.88, gs(rr));
-        this.win(fc, fr, 0.36, 0.95, 0.1, 0.9, gs(fr, sd));
+        this.win(fc, rr, 0.06, 0.3, 0.12, 0.88, gs(rr));
+        this.win(fc, fr, 0.35, 0.955, 0.09, 0.9, gs(fr, sd));
       }
     }
     const sw = M.gwT - 0.035;
-    const fs = fR + (fC - fR) * (sp.doors === 4 ? (sp.quarter ? 0.68 : 0.62) : 0.55);
-    const fr2 = S.type === 'sports' ? null : sp.quarter ? fR + (fC - fR) * 0.42 : sp.hatch ? fR + (fC - fR) * 0.3 : fR + 0.17;
+    const fs = fR + (fC - fR) * (sp.doors === 4 ? (sp.quarter ? 0.68 : 0.64) : 0.56);
+    const fr2 = S.type === 'sports' ? null : sp.quarter ? fR + (fC - fR) * 0.42 : sp.hatch ? fR + (fC - fR) * 0.3 : fR + 0.19;
     this.seats(cab, fs, fr2, zb, sw, M.seat2, S.burnt);
-    cab.inner.push(this.box(fC - 0.2, fC - 0.1, -sw, sw, zb - 0.02, zb + 0.07, '#222226'));
+    cab.inner.push(this.box(fC - 0.19, fC - 0.09, -sw, sw, zb - 0.02, zb + 0.065, '#222226'));
+    if (live) cab.inner.push(this.steer(fC - 0.215, -sw * 0.5, zb + 0.1, 0.058));
     M.seat = [fs - 0.02, -sw * 0.5, zb + 0.12];
     this.cabinArt(M, cab);
-    // bumpers (plates), mirrors, wheels, lamps
-    const bm = S.burnt ? 'black' : sp.bump;
-    const fbp = this.bumper(1, M.f1, hw, sp.chF, z0 + 0.02 - S.crF * 0.3, z0 + 0.14 - S.crF * 0.3, bm, paint), rbp = this.bumper(-1, M.f0, hw, chR, z0 + 0.02, z0 + 0.14, bm, paint);
-    if (!(S.crF && S.seed & 1)) M.parts.push(fbp);
-    M.parts.push(rbp);
-    if (!S.burnt && S.type !== 'sports') this.fx(fbp, 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh(CA_COL.plate); g.fillRect(41.5, 18, 17, 64); g.fillStyle = F.sh('#222'); g.fillRect(44, 40, 12, 18); });
-    this.fx(rbp, 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = '#0c0c0c'; g.beginPath(); g.ellipse(22, 8, 3.5, 9, 0, 0, 7); g.fill(); });
-    const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : sp.livery === 'bw' ? CA_COL.black : paint;
-    for (const sd of [-1, 1]) {
-      const s0 = sd > 0 ? hw - 0.005 : -hw - 0.065, s1 = sd > 0 ? hw + 0.065 : -hw + 0.005;
-      M.parts.push(this.box(fC - 0.15, fC - 0.065, s0, s1, zb + 0.015, zb + 0.09, mc, { mat: mc === CA_COL.chrome ? 'chrome' : 'paint' }));
-    }
-    const rim = sp.rim === 'cap' ? CA_COL.rim : sp.rim === 'alloy' ? '#d6dade' : CA_COL.steel;
+    // thin bumpers with rub strips, mirrors at the front corner of the door glass, wheels, lamps
+    const bm = S.burnt ? 'black' : sp.bump, thick = bm === 'black' ? 0.03 : 0;
+    const bz0 = z0 + 0.06, bz1 = z0 + 0.145 + thick;
+    const fbp = this.bumper(1, M.f1, hw, sp.chF, bz0 - S.crF * 0.3, bz1 - S.crF * 0.3, bm, paint), rbp = this.bumper(-1, M.f0, hw, chR, bz0, bz1, bm, paint);
+    if (!(S.crF && S.seed & 1)) M.parts.push(...fbp);
+    M.parts.push(...rbp);
+    if (live && S.type !== 'sports') this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.86));
+    this.fx(rbp[0], 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = '#0c0c0c'; g.beginPath(); g.ellipse(18, -4, 3, 8, 0, 0, 7); g.fill(); });
+    const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : CA_COL.black;
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) this.mirror(M, fC - 0.115, sd, M.gw - 0.006, hw + 0.045, zb + 0.025, mc);
     const white = sp.white && h % 2 === 0;
-    for (const f of [L * sp.axF, L * sp.axR]) for (const sd of [-1, 1]) this.wheel(M, f, sd, sp.r, { rim, white, spokes: sp.rim === 'alloy' });
+    for (const f of [L * sp.axF, L * sp.axR]) for (const sd of [-1, 1]) this.wheel(M, f, sd, sp.r, { rim: sp.rim, white });
     const wf = hw - sp.chF, wr = hw - chR;
-    if (sp.lamps !== 'popup') for (const sd of [-1, 1]) this.lamp(M, 'h', M.f1 + 0.004, sd * (wf - 0.11), M.noseZ - 0.072, sd < 0 ? 0 : 1);
+    if (sp.lamps !== 'popup') for (const sd of [-1, 1]) this.lamp(M, 'h', M.f1 + 0.004, sd * (wf - 0.11), M.noseZ - 0.065, sd < 0 ? 0 : 1);
     for (const sd of [-1, 1]) {
       const i = sd < 0 ? 2 : 3;
-      if (sp.tails === 'vert') { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - 0.065), (z0 + 0.14 + M.tailZ) / 2 + 0.03, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.065), z0 + 0.16, i); }
-      else { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - (sp.tails === 'band' ? 0.22 : 0.15)), M.tailZ - 0.085, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.27), M.tailZ - 0.11, i); }
+      if (sp.tails === 'vert') { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - 0.06), (bz1 + M.tailZ) / 2 + 0.04, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.06), bz1 + 0.04, i); }
+      else { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - (sp.tails === 'band' ? 0.2 : 0.14)), M.tailZ - 0.086, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.27), M.tailZ - 0.11, i); }
     }
-    this.lamp(M, 'c', sp.hatch ? fR + sp.rakeR - 0.012 : fR + 0.06, 0, sp.hatch ? zr - 0.03 : zb + 0.035);
+    this.lamp(M, 'c', sp.hatch ? fR + sp.rakeR - 0.012 : fR + 0.05, 0, sp.hatch ? zr - 0.025 : zb + 0.03);
     this.lamp(M, 'd', (fR + fC) / 2, 0, zr - 0.02);
     this.carExtras(M, S, sp);
+  },
+  // door mirror: a small head on a stalk from the glass line out past the body side
+  mirror(M, f, sd, sIn, sOut, z, col) {
+    const s0 = sd > 0 ? sIn : -sOut, s1 = sd > 0 ? sOut : -sIn;
+    M.parts.push(this.box(f, f + 0.05, s0, s1, z, z + 0.05, col, { mat: col === CA_COL.chrome ? 'chrome' : 'paint' }));
+  },
+  // steering wheel ring seen through the glass (custom-drawn part inside a hollow cabin)
+  steer(f, s, z, r) {
+    return { bb: [f - 0.03, f + 0.03, s - r, s + r, z - r, z + r], c: [f, s, z], faces: [], draw(g, F) {
+      F.frame(g, [f, s, z], [0, 1, 0], [0.55, 0, -0.84], 0.01);
+      g.strokeStyle = '#141416'; g.lineWidth = r * 26; g.beginPath(); g.arc(0, 0, r * 100, 0, 7); g.stroke();
+      g.lineWidth = r * 18; g.beginPath(); g.moveTo(-r * 100, 0); g.lineTo(r * 100, 0); g.stroke();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    } };
+  },
+  // licence plate centred on a bumper face (qframe units): w plate width as a fraction of the face
+  plate(g, F, fc, w, h) {
+    this.qframe(g, F, fc, 100);
+    const x0 = 50 - w * 50, x1 = 50 + w * 50, y0 = 50 - h * 50, y1 = 50 + h * 50;
+    g.fillStyle = F.sh('#141416'); g.fillRect(x0 - 1.5, y0 - 4, x1 - x0 + 3, y1 - y0 + 8);
+    g.fillStyle = F.sh(CA_COL.plate); g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.fillStyle = F.sh('#2a3a7a'); g.fillRect(x0, y1 - (y1 - y0) * 0.2, x1 - x0, (y1 - y0) * 0.2);
+    g.fillStyle = F.sh('#2a2a2a'); g.fillRect(x0 + (x1 - x0) * 0.15, y0 + (y1 - y0) * 0.28, (x1 - x0) * 0.7, (y1 - y0) * 0.36);
   },
   carExtras(M, S, sp) {
     const live = !S.burnt, rf0 = M.fR + sp.rakeR, rf1 = M.fC - sp.rakeF, rc = (rf0 + rf1) / 2, zr = M.zr, w = M.gwT;
     if (sp.bar && live) {
-      // light bar: black base, red / clear / blue lenses
-      const f0 = rc - 0.03, f1 = rc + 0.09;
-      M.parts.push(this.box(f0, f1, -w + 0.01, w - 0.01, zr, zr + 0.025, CA_COL.black));
-      M.parts.push(this.box(f0 + 0.005, f1 - 0.005, -w + 0.02, -0.07, zr + 0.025, zr + 0.085, '#b81c1c'));
-      M.parts.push(this.box(f0 + 0.01, f1 - 0.01, -0.06, 0.06, zr + 0.025, zr + 0.075, '#d8dcdc', { mat: 'chrome' }));
-      M.parts.push(this.box(f0 + 0.005, f1 - 0.005, 0.07, w - 0.02, zr + 0.025, zr + 0.085, '#1c34c0'));
-      M.lt.push({ k: 'b', f: (f0 + f1) / 2, s: -w * 0.55, z: zr + 0.06, c: 'r', ph: 0 }, { k: 'b', f: (f0 + f1) / 2, s: w * 0.55, z: zr + 0.06, c: 'b', ph: 4 });
-      M.bar = ['r', 'b'];
+      // low light bar on two feet: red / clear / blue lens segments
+      const f0 = rc - 0.035, f1 = rc + 0.075;
+      for (const sd of [-1, 1]) M.parts.push(this.box(f0 + 0.02, f1 - 0.02, sd * (w - 0.04) - 0.02, sd * (w - 0.04) + 0.02, zr, zr + 0.018, CA_COL.black));
+      this.lightbar(M, f0, f1, w + 0.015, zr + 0.018, ['#c41c1c', '#d8dcdc', '#1c34c8'], ['r', 'b']);
     }
     if (sp.pushbar && live) {
-      for (const sd of [-1, 1]) M.parts.push(this.box(M.hl + 0.06, M.hl + 0.095, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.04, M.noseZ + 0.02, CA_COL.black));
-      M.parts.push(this.box(M.hl + 0.06, M.hl + 0.095, -0.25, 0.25, M.noseZ + 0.02, M.noseZ + 0.055, CA_COL.black));
+      const fe = M.f1 + 0.05;
+      for (const sd of [-1, 1]) M.parts.push(this.box(fe, fe + 0.035, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.05, M.noseZ + 0.03, CA_COL.black));
+      M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, M.noseZ - 0.005, M.noseZ + 0.03, CA_COL.black));
+      M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, M.z0 + 0.17, M.z0 + 0.2, CA_COL.black));
     }
-    if (sp.spot && live) M.parts.push(this.box(M.fC - 0.06, M.fC - 0.005, -M.hw - 0.055, -M.hw - 0.005, M.zb + 0.13, M.zb + 0.18, CA_COL.chrome, { mat: 'chrome' }));
-    if (live && (S.type === 'police')) for (const sd of [-0.5, 0.5]) { const a = this.stick(M.f0 + 0.12, sd * M.hw, M.tailZ, 0.5, '#202020'); a.on = M.body; M.parts.push(a); }
-    else if (live && (S.type === 'sedan' || S.type === 'wagon')) { const a = this.stick(M.f1 - 0.3, M.hw - 0.07, M.noseZ + 0.03, 0.42, '#303030'); a.on = M.body; M.parts.push(a); }
+    if (sp.spot && live) M.parts.push(this.box(M.fC - 0.055, M.fC - 0.005, -M.hw - 0.05, -M.hw + 0.005, M.zb + 0.1, M.zb + 0.15, CA_COL.chrome, { mat: 'chrome' }));
+    if (live && S.type === 'police') for (const sd of [-0.5, 0.5]) { const a = this.stick(M.f0 + 0.14, sd * M.hw, M.tailZ, 0.46, '#202020'); a.on = M.body; M.parts.push(a); }
+    else if (live && (S.type === 'sedan' || S.type === 'wagon' || S.type === 'taxi')) { const a = this.stick(M.f1 - 0.28, M.hw - 0.07, M.noseZ + 0.03, 0.4, '#303030'); a.on = M.body; M.parts.push(a); }
     if (sp.sign && live) {
-      const sg = this.prism([[rc - 0.11, -0.16], [rc + 0.11, -0.16], [rc + 0.11, 0.16], [rc - 0.11, 0.16]], zr + 0.012, zr + 0.11, '#f2eedc');
+      const sg = this.prism([[rc - 0.1, -0.15], [rc + 0.1, -0.15], [rc + 0.1, 0.15], [rc - 0.1, 0.15]], zr + 0.012, zr + 0.1, '#f2eedc');
       this.label(sg, 'TAXI', 6, '#1a1a1a', 'LR');
       M.parts.push(this.box(rc - 0.07, rc + 0.07, -0.12, 0.12, zr, zr + 0.012, CA_COL.black), sg);
-      M.lt.push({ k: 'b', f: rc, s: 0, z: zr + 0.07, c: 'a', ph: 0, taxi: true });
+      M.lt.push({ k: 'b', f: rc, s: 0, z: zr + 0.065, c: 'a', ph: 0, taxi: true });
     }
     if (sp.rack && live) {
       const mat = S.type === 'wagon' ? 'chrome' : 'paint', col = S.type === 'wagon' ? CA_COL.chrome : CA_COL.black;
-      for (const sd of [-1, 1]) M.parts.push(this.box(rf0 + 0.04, rf1 - 0.03, sd * (w - 0.015) - 0.012, sd * (w - 0.015) + 0.012, zr, zr + 0.03, col, { mat }));
-      for (const f of [rf0 + 0.16, rf1 - 0.16]) M.parts.push(this.box(f - 0.015, f + 0.015, -w + 0.04, w - 0.04, zr + 0.03, zr + 0.05, col, { mat }));
+      for (const sd of [-1, 1]) M.parts.push(this.box(rf0 + 0.03, rf1 - 0.02, sd * (w - 0.015) - 0.012, sd * (w - 0.015) + 0.012, zr, zr + 0.028, col, { mat }));
+      for (const f of [rf0 + 0.14, rf1 - 0.14]) M.parts.push(this.box(f - 0.014, f + 0.014, -w + 0.035, w - 0.035, zr + 0.028, zr + 0.046, col, { mat }));
     }
-    if (sp.spare && live) M.parts.push(this.spare(M.f0, 0, (M.z0 + M.zb) / 2 + 0.04, 0.2));
+    if (sp.spare && live) M.parts.push(this.spare(M.f0, 0, (M.z0 + M.zb) / 2 + 0.05, 0.21));
     if (sp.spoiler && live) {
-      for (const sd of [-1, 1]) { const p = this.box(M.f0 + 0.06, M.f0 + 0.1, sd * (M.hw - 0.16) - 0.015, sd * (M.hw - 0.16) + 0.015, M.zb - 0.02, M.zb + 0.06, CA_COL.black); p.on = M.body; M.parts.push(p); }
-      const wing = this.box(M.f0 + 0.015, M.f0 + 0.15, -M.hw + 0.05, M.hw - 0.05, M.zb + 0.06, M.zb + 0.09, M.paint); wing.on = M.body;
+      for (const sd of [-1, 1]) { const p = this.box(M.f0 + 0.06, M.f0 + 0.1, sd * (M.hw - 0.16) - 0.015, sd * (M.hw - 0.16) + 0.015, M.zb - 0.02, M.zb + 0.055, CA_COL.black); p.on = M.body; M.parts.push(p); }
+      const wing = this.box(M.f0 + 0.015, M.f0 + 0.15, -M.hw + 0.05, M.hw - 0.05, M.zb + 0.055, M.zb + 0.08, M.paint); wing.on = M.body;
       M.parts.push(wing);
     }
     if (sp.lamps === 'popup' && S.pop) {
       const wf = M.hw - sp.chF;
       for (const sd of [-1, 1]) {
         const a = sd * (wf - 0.03), b = sd * (wf - 0.24), zh = M.body.zf(M.f1 - 0.14);
-        const p = this.box(M.f1 - 0.2, M.f1 - 0.08, Math.min(a, b), Math.max(a, b), zh, zh + 0.1, M.paint);
-        this.fx(p, 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh(CA_COL.head, 1.05); g.fillRect(10, 15, 80, 65); });
+        const p = this.box(M.f1 - 0.2, M.f1 - 0.08, Math.min(a, b), Math.max(a, b), zh, zh + 0.09, M.paint);
+        this.fx(p, 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#141416'); g.fillRect(4, 8, 92, 80); g.fillStyle = F.sh(CA_COL.head, 1.05); g.fillRect(10, 15, 80, 65); });
         p.on = M.body; M.parts.push(p);
-        this.lamp(M, 'h', M.f1 - 0.075, (a + b) / 2, zh + 0.05, sd < 0 ? 0 : 1);
+        this.lamp(M, 'h', M.f1 - 0.075, (a + b) / 2, zh + 0.045, sd < 0 ? 0 : 1);
       }
     }
   },
@@ -1190,13 +1271,15 @@ Object.assign(CarArt, {
       fn(g, F, (a, b, c, d) => g.fillRect(a * 100, b * 100, (c - a) * 100, (d - b) * 100));
     });
   },
-  // dark wheel wells for the wheels on side sd (inside a sidePaint frame)
+  // wheel arches for the wheels on side sd (inside a side frame, units * 100): a lit lip round the opening or
+  // a black plastic flare, then the dark well; the tyre is painted over it afterwards
   wells(g, F, M, sd, z0, flare) {
     for (const w of M.wheels) {
       if (w.side !== sd || w.dup) continue;
-      const r0 = (w.r + 0.035) * 100;
-      g.fillStyle = F.sh('#111113'); g.beginPath(); g.arc(w.f * 100, w.r * 100, r0, 0, 7); g.rect(w.f * 100 - r0, z0 * 100 - 6, r0 * 2, (w.r - z0) * 100 + 6); g.fill();
-      g.strokeStyle = F.sh(flare || M.paint, flare ? 1 : 0.7); g.lineWidth = flare ? 4 : 1.6; g.beginPath(); g.arc(w.f * 100, w.r * 100, r0 + 1, 0, Math.PI); g.stroke();
+      const r0 = (w.r + 0.035) * 100, cx = w.f * 100, cy = w.r * 100;
+      if (flare) { g.strokeStyle = F.sh(flare); g.lineWidth = 7; g.beginPath(); g.arc(cx, cy, r0 + 2.5, -0.05, Math.PI + 0.05); g.stroke(); }
+      else if (!M.S.burnt) { g.strokeStyle = F.sh(M.paint, 1.18); g.lineWidth = 1.8; g.beginPath(); g.arc(cx, cy, r0 + 1.2, 0.08, Math.PI - 0.08); g.stroke(); }
+      g.fillStyle = F.sh('#0e0e10'); g.beginPath(); g.arc(cx, cy, r0, 0, 7); g.rect(cx - r0, z0 * 100 - 6, r0 * 2, cy - z0 * 100 + 6); g.fill();
     }
   },
   // shared truck front: hood slab + 2-door cab (lower body + greenhouse) from fb (cab back) to the nose
@@ -1226,8 +1309,8 @@ Object.assign(CarArt, {
     M.seat = [fs - 0.02, -sw * 0.5, o.zb + 0.12];
     this.cabinArt(M, cab);
     const fbp = this.bumper(1, hl, hw, sp.chF, o.z0 + 0.02, o.z0 + 0.16, S.burnt ? 'black' : sp.bump, paint);
-    M.parts.push(fbp);
-    if (live) this.fx(fbp, 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh(CA_COL.plate); g.fillRect(41.5, 18, 17, 64); });
+    M.parts.push(...fbp);
+    if (live) this.fx(fbp[0], 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh(CA_COL.plate); g.fillRect(41.5, 18, 17, 64); });
     const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : CA_COL.black;
     for (const sd of [-1, 1]) {
       if (S.doors[sd < 0 ? 0 : 1] === 1) continue;
@@ -1274,9 +1357,9 @@ Object.assign(CarArt, {
       M.parts.push(tg);
     }
     const rbp = this.bumper(-1, -hl, hw, 0.03, z0 + 0.0, z0 + 0.12, S.burnt ? 'black' : 'chrome', paint);
-    if (live) this.fx(rbp, 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh(CA_COL.plate); g.fillRect(41.5, 14, 17, 70); g.fillStyle = F.sh('#222'); g.fillRect(44, 34, 12, 20); });
-    M.parts.push(rbp);
-    for (const f of [L * 0.31, L * -0.31]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.19, { rim: CA_COL.rim, white: h % 3 === 0 });
+    if (live) this.fx(rbp[0], 'B', (g, F, fc) => this.plate(g, F, fc, 0.16, 0.8));
+    M.parts.push(...rbp);
+    for (const f of [L * 0.31, L * -0.31]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.19, { rim: 'cap', white: h % 3 === 0 });
     for (const sd of [-1, 1]) { const i = sd < 0 ? 2 : 3; this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.028), zb - 0.1, i); this.lamp(M, 'r', -hl - 0.004, sd * (hw - 0.028), zb - 0.155, i); }
     this.lamp(M, 'c', fb + 0.01, 0, zr - 0.03);
   },
@@ -1339,10 +1422,10 @@ Object.assign(CarArt, {
     box.inner.push(this.box(fC - 0.26, fC - 0.14, -sw, sw, zh - 0.06, zh + 0.04, '#222226'));
     M.seat = [fs - 0.02, -sw * 0.5, zh + 0.07];
     const fbp = this.bumper(1, hl, hw, sp.chF, z0 + 0.02, z0 + 0.16, S.burnt ? 'black' : 'chrome', paint), rbp = this.bumper(-1, -hl, hw, 0.04, z0 + 0.02, z0 + 0.14, S.burnt ? 'black' : 'chrome', paint);
-    if (live) this.fx(fbp, 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh(CA_COL.plate); g.fillRect(41.5, 18, 17, 64); });
-    M.parts.push(fbp, rbp);
+    if (live) this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.15, 0.8));
+    M.parts.push(...fbp, ...rbp);
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.2, fC - 0.1, sd > 0 ? hw - 0.005 : -hw - 0.09, sd > 0 ? hw + 0.09 : -hw + 0.005, zh + 0.05, zh + 0.2, CA_COL.black));
-    for (const f of [fC - 0.08, -hl + 0.62]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.19, { rim: CA_COL.steel });
+    for (const f of [fC - 0.08, -hl + 0.62]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.19, { rim: 'steel' });
     const wf = hw - sp.chF;
     for (const sd of [-1, 1]) {
       this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - 0.072, sd < 0 ? 0 : 1);
@@ -1412,7 +1495,7 @@ Object.assign(CarArt, {
     }
     this.fx(box, 'F', (g, F) => { F.frame(g, [bx1, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { g.fillStyle = F.sh(live ? '#e02020' : '#3a1a16'); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.14) * 100, (zB - 0.11) * 100, 8, 7); } });
     M.parts.push(this.box(-hl - 0.12, -hl, -hw + 0.08, hw - 0.08, z0 + 0.02, z0 + 0.08, CA_COL.black));
-    for (const f of [fC - 0.08, -hl + 0.72]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.2, { rim: CA_COL.steel, dual: f < 0 });
+    for (const f of [fC - 0.08, -hl + 0.72]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.2, { rim: 'steel', dual: f < 0 });
     for (const sd of [-1, 1]) { this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.095), z0 + 0.3, sd < 0 ? 2 : 3); this.lamp(M, 'r', -hl - 0.004, sd * (hw - 0.095), z0 + 0.16, sd < 0 ? 2 : 3); }
   },
   b_firetruck(M, S, T) {
@@ -1490,10 +1573,10 @@ Object.assign(CarArt, {
       M.parts.push(lad);
       this.lightbar(M, hl - 0.3, hl - 0.18, hw - 0.1, zc, ['#c81c1c', '#dadede', '#c81c1c'], ['r', 'w']);
     }
-    M.parts.push(this.bumper(1, hl, hw, 0.05, z0 + 0.02, z0 + 0.2, live ? 'chrome' : 'black', red));
+    M.parts.push(...this.bumper(1, hl, hw, 0.05, z0 + 0.02, z0 + 0.2, live ? 'chrome' : 'black', red));
     M.parts.push(this.box(-hl - 0.14, -hl, -hw + 0.06, hw - 0.06, z0 + 0.02, z0 + 0.1, live ? CA_COL.chrome : CA_COL.black, { mat: live ? 'chrome' : 'paint' }));
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(hl - 0.2, hl - 0.12, sd > 0 ? hw - 0.005 : -hw - 0.1, sd > 0 ? hw + 0.1 : -hw + 0.005, zf + 0.05, zf + 0.25, CA_COL.black));
-    for (const f of [hl - 0.62, -hl + 0.85]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: CA_COL.rim, w: 0.18, dual: f < 0 });
+    for (const f of [hl - 0.62, -hl + 0.85]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'steel', rimCol: '#c8ccd0', w: 0.18, dual: f < 0 });
     for (const sd of [-1, 1]) {
       this.lamp(M, 'h', hl + 0.004, sd * (hw - 0.06 - 0.11), zf - 0.072, sd < 0 ? 0 : 1);
       this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.12), z0 + 0.26, sd < 0 ? 2 : 3);
@@ -1532,7 +1615,7 @@ Object.assign(CarArt, {
     const rb = this.face(bed, 'B');
     if (rb) rb.fx = [(g, F) => { F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.12) * 100, (z0 + 0.12) * 100, 6, 5); } }];
     M.parts.push(this.box(-hl - 0.06, -hl, -hw + 0.04, hw - 0.04, z0 - 0.04, z0 + 0.06, CA_COL.black));
-    for (const f of [1.05, -0.5, -1.02]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: '#4a5238', w: 0.2 });
+    for (const f of [1.05, -0.5, -1.02]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'mil', w: 0.2 });
     for (const sd of [-1, 1]) this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.09), z0 + 0.145, sd < 0 ? 2 : 3);
   },
   b_bus(M, S, T) {
@@ -1610,9 +1693,9 @@ Object.assign(CarArt, {
     body.inner.push(this.box(fC - 0.4, fC - 0.34, -sw, -0.12, zh - 0.08, zh + 0.16, S.burnt ? '#2a2420' : '#2a2a2e'));
     M.seat = [fC - 0.34, -sw * 0.55, zh + 0.07];
     const fbp = this.bumper(1, hl, hw - 0.04, 0.05, z0 - 0.04, z0 + 0.12, 'black', yel), rbp = this.bumper(-1, -hl, hw, 0.04, z0 - 0.04, z0 + 0.1, 'black', yel);
-    M.parts.push(fbp, rbp);
+    M.parts.push(...fbp, ...rbp);
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.06, fC + 0.02, sd > 0 ? hw - 0.005 : -hw - 0.12, sd > 0 ? hw + 0.12 : -hw + 0.005, zh + 0.1, zh + 0.3, CA_COL.black));
-    for (const f of [hl - 0.42, -hl + 1.25]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.24, { rim: CA_COL.steel, w: 0.18, dual: f < 0 });
+    for (const f of [hl - 0.42, -hl + 1.25]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.24, { rim: 'steel', rimCol: '#2a2a2c', w: 0.18, dual: f < 0 });
     const wf = hw - 0.04 - sp.chF;
     for (const sd of [-1, 1]) {
       this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - 0.072, sd < 0 ? 0 : 1);
