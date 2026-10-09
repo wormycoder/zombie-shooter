@@ -315,7 +315,7 @@ const Player = {
     const mouseA = Math.atan2(wy - p.y, wx - p.x);
     let target = p.angle;
     const sw = p.swing, stT = sw && (sw.kind === 'stomp' ? sw.target : sw.floor);
-    if (stT && !stT.dead) target = Math.atan2(stT.y - p.y, stT.x - p.x);   // keep over the body being stomped or struck
+    if (stT && !stT.dead) target = Math.atan2(sw.ty - p.y, sw.tx - p.x);   // keep over the body being stomped or struck
     else if (aiming || (sw && sw.kind !== 'shove' && sw.kind !== 'stomp')) target = mouseA;
     else if (moving) target = Math.atan2(my, mx);
     else if (!Input.overUI) target = mouseA;
@@ -394,6 +394,13 @@ const Player = {
     if (p.swing) {
       const s = p.swing;
       s.t += dt / s.dur;
+      // over a body on the ground: follow it (it may crawl) and step in so the heel or the blow lands on it
+      if (s.tx !== undefined && !s.done) {
+        const z = s.target || s.floor, reach = s.kind === 'stomp' ? 1.0 : s.w.range + 0.1;
+        if (z && !z.dead) { const q = Combat.aimPoint(z, p.x, p.y, reach); s.tx = q[0]; s.ty = q[1]; }
+        const want = s.kind === 'stomp' ? 0.48 : U.clamp(s.w.range * 0.6, 0.5, 0.85), d = U.dist(p.x, p.y, s.tx, s.ty);
+        if (d > want + 0.03 && s.t < s.hit) { const m = Math.min(d - want, dt * 2.4); World.move(p, (s.tx - p.x) / d * m, (s.ty - p.y) / d * m, p.r); }
+      }
       // the hit lands when the animation reaches its contact frame
       if (!s.done && s.t >= (s.hit || (s.kind === 'shove' ? 0.4 : 0.48))) { s.done = true; Combat.resolveSwing(s); }
       if (s.t >= 1) p.swing = null;
@@ -786,10 +793,10 @@ const Player = {
     if (sw) {
       pose.swingT = sw.t;
       if (sw.kind === 'shove') pose.arms = 'shove';
-      else if (sw.kind === 'stomp') { pose.arms = 'stomp'; if (sw.target) pose.stompD = U.dist(p.x, p.y, sw.target.x, sw.target.y); }
+      else if (sw.kind === 'stomp') { pose.arms = 'stomp'; if (sw.tx !== undefined) pose.stompD = U.dist(p.x, p.y, sw.tx, sw.ty) - 0.06; }
       else if (sw.kind === 'fire') { pose.arms = 'fire'; pose.flash = sw.t < 0.25; }
       else {
-        pose.arms = 'swing'; pose.style = this.swingStyle(pd, sw);
+        pose.arms = 'swing'; pose.style = this.swingStyle(pd, sw); pose.ready = !!sw.ready;
         pose.stab = pose.style === 'stab' || pose.style === 'spear' || pose.style === 'floorStab';
       }
     } else if (p.aiming && pd && pd.gun) pose.arms = 'aim';

@@ -427,7 +427,10 @@ const Zombie = {
     if (z.fake) { z.fake = false; z.downT = R.f(0.8, 1.6); }
     if (z.st === 'down') dmg *= 1.5;
     z.hp -= dmg;
-    Fx.blood(z.x, z.y, Math.round(4 + dmg * 6), fromA);
+    const n0 = Fx.parts.length;
+    Fx.blood(o.at ? o.at[0] : z.x, o.at ? o.at[1] : z.y, Math.round(4 + dmg * 6), fromA);
+    // a body on the ground bleeds from where it lies, not from chest height
+    if (z.lie > 0.5) for (let i = n0; i < Fx.parts.length; i++) Fx.parts[i].z *= 0.2;
     z.blood = Math.min(1, z.blood + 0.2);
     z.look.blood = z.blood;
     const p = G.player;
@@ -446,6 +449,13 @@ const Zombie = {
     z.st = 'down'; z.downT = dur; z.downAt = G.time; z.stag = 0; z.getT = 0;
     z.lieDir = dir || (Math.cos(U.angDiff(z.a, a)) < 0.2 ? 1 : -1);
     z.svx = Math.cos(a) * push; z.svy = Math.sin(a) * push;
+  },
+  // where a body on the ground lies, as drawn: head and hips (it falls away from where it stood: back down, the
+  // head ends up behind its feet; face down or crawling, ahead)
+  bodyLine(z) {
+    const down = z.crawl && !z.dead ? -1 : (z.lieDir || 1), c = Math.cos(z.a), s = Math.sin(z.a);
+    const hip = z.crawl && !z.dead ? 0.1 : down > 0 ? -0.42 : 0.4, head = hip + down * -0.76;
+    return [z.x + c * head, z.y + s * head, z.x + c * hip, z.y + s * hip];
   },
   // reeling back from a blow or a shove
   stagger(z, a, t, push) {
