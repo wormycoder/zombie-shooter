@@ -198,21 +198,32 @@ const Char3D = {
       shW: (fem ? 0.172 : 0.19) * bw, sp0: 0.09 * H, sp1: 0.18 * H, shZ: 0.25 * H, neck: 0.125 * H,
       belly: bw * heavy * (0.5 + 0.5 * H), hips: (0.97 + r(7) * 0.06) * (1 + (heavy - 1) * 0.5) * (0.5 + 0.5 * H), arm: (fem ? 0.88 : 1) * (0.94 + r(8) * 0.1) * (heavy > 1 ? 1.06 : 1),
       hand: fem ? 0.9 : 1, head: (fem ? 0.94 : 0.97) * (0.98 + r(9) * 0.04), foot: fem ? 0.86 : 0.92 + r(10) * 0.05 };
-    D.hipH = D.ankH + (D.thigh + D.shin) * 0.99;
+    // standing, the knees are all but straight (an IK knee bends fast as the hip lowers: 0.998 is about 7 degrees)
+    D.hipH = D.ankH + (D.thigh + D.shin) * 0.998;
     D.L = (D.thigh + D.shin) * 0.995;
     return D;
   },
   // ===================================================================== animation
-  // gait parameter sets: walk, run, sprint, sneak, shamble
+  // gait parameter sets: walk, run, sprint, sneak, shamble (metres, radians).
+  // stride = clamp(st0 + stk * speed, stMin, stMax) per full cycle; beta: stance share of the cycle; ff: share of the
+  // stance travel ahead of the hip; lift/peak: swing ankle lift and when it peaks; kick: the swing foot trails behind
+  // (heel up toward the seat) before the knee drives through; base/bob: pelvis lowering and bob (rb 0 = walk: high at
+  // mid-stance, 1 = run: low at mid-stance); drop: most the hips may sink to reach a planted foot; hs/to: foot pitch at
+  // heel strike and toe off; arm/bend: arm swing and elbow bend (0 hanging .. 1 pumping)
   GAIT: [
-    // st0, stk, stMin, stMax, beta, lift, peak, ff, base, bob, runBob, lean, arm, bend, twist, pyaw, proll, sway, stepW, hs, to
-    [0.75, 0.36, 0.9, 1.5, 0.6, 0.1, 0.3, 0.42, 0.012, 0.024, 0, 0.03, 0.17, 0.12, 0.1, 0.1, 0.06, 0.02, 0.085, 0.26, 0.55],
-    [1.2, 0.32, 1.6, 2.4, 0.37, 0.32, 0.38, 0.36, 0.05, 0.045, 1, 0.12, 0.17, 0.85, 0.2, 0.16, 0.05, 0.012, 0.062, 0.12, 0.9],
-    [1.3, 0.35, 2.0, 3.0, 0.31, 0.44, 0.4, 0.3, 0.07, 0.05, 1, 0.24, 0.25, 0.92, 0.24, 0.2, 0.05, 0.01, 0.052, 0.1, 1.0],
-    [0.75, 0.25, 0.8, 1.1, 0.64, 0.09, 0.4, 0.45, 0.23, 0.015, 0, 0.22, 0.05, 0.75, 0.06, 0.06, 0.03, 0.02, 0.1, 0.2, 0.5],
-    [0.5, 0.5, 0.62, 1.2, 0.66, 0.045, 0.45, 0.5, 0.04, 0.02, 0, 0.15, 0.08, 0.2, 0.1, 0.08, 0.09, 0.035, 0.115, 0.05, 0.25],
+    { st0: 0.72, stk: 0.38, stMin: 0.9, stMax: 1.55, beta: 0.6, lift: 0.085, peak: 0.3, ff: 0.4, base: 0.003, bob: 0.03, rb: 0, drop: 0.045, kick: 0.1,
+      lean: 0.035, arm: 0.15, bend: 0.1, twist: 0.08, pyaw: 0.09, proll: 0.055, sway: 0.016, stepW: 0.07, hs: 0.3, to: 0.62 },
+    { st0: 1.1, stk: 0.36, stMin: 1.55, stMax: 2.3, beta: 0.4, lift: 0.3, peak: 0.36, ff: 0.34, base: 0.03, bob: 0.04, rb: 1, drop: 0.07, kick: 0.75,
+      lean: 0.11, arm: 0.17, bend: 0.86, twist: 0.15, pyaw: 0.13, proll: 0.05, sway: 0.008, stepW: 0.05, hs: 0.16, to: 0.85 },
+    { st0: 1.3, stk: 0.36, stMin: 2.0, stMax: 2.9, beta: 0.34, lift: 0.42, peak: 0.36, ff: 0.3, base: 0.04, bob: 0.045, rb: 1, drop: 0.08, kick: 0.95,
+      lean: 0.22, arm: 0.24, bend: 0.94, twist: 0.2, pyaw: 0.16, proll: 0.045, sway: 0.006, stepW: 0.045, hs: 0.12, to: 0.95 },
+    { st0: 0.55, stk: 0.3, stMin: 0.68, stMax: 1.0, beta: 0.64, lift: 0.075, peak: 0.42, ff: 0.42, base: 0.12, bob: 0.012, rb: 0, drop: 0.04, kick: 0.15,
+      lean: 0.32, arm: 0.06, bend: 0.55, twist: 0.05, pyaw: 0.06, proll: 0.03, sway: 0.02, stepW: 0.1, hs: 0.18, to: 0.45 },
+    { st0: 0.5, stk: 0.5, stMin: 0.6, stMax: 1.15, beta: 0.66, lift: 0.04, peak: 0.5, ff: 0.44, base: 0.012, bob: 0.018, rb: 0, drop: 0.035, kick: 0,
+      lean: 0.1, arm: 0.07, bend: 0.15, twist: 0.1, pyaw: 0.08, proll: 0.08, sway: 0.03, stepW: 0.1, hs: 0.06, to: 0.3 },
   ],
-  gp: new Float32Array(21),
+  GK: ['beta', 'lift', 'peak', 'ff', 'base', 'bob', 'rb', 'drop', 'kick', 'lean', 'arm', 'bend', 'twist', 'pyaw', 'proll', 'sway', 'stepW', 'hs', 'to'],
+  gp: { stride: 1 },
   gaitOf(P, D) {
     const g = P.gait;
     if (g) return g === 'run' ? 1 : g === 'sprint' ? 2 : g === 'sneak' ? 3 : g === 'shamble' ? 4 : 0;
@@ -270,8 +281,8 @@ const Char3D = {
       // turning on the spot shuffles the feet
       const hr = dt > 0 ? Math.abs(U.angDiff(h0, S.hip)) / dt : 0;
       S.turn += (Math.min(0.55, hr * 0.22) * (1 - S.amp) - S.turn) * Math.min(1, dt * 8);
-      const g = this.gp; this.gaitParams(g, gw, S.v);
-      S.ph += (S.back ? -d : d) * Math.PI * 2 / g[0] + hr * dt * 0.7 * (1 - S.amp);
+      const g = this.gaitParams(this.gp, gw, S.v);
+      S.ph += (S.back ? -d : d) * Math.PI * 2 / g.stride + hr * dt * 0.7 * (1 - S.amp);
     }
     // ---- target pose
     this.base(T, S, D, ang, P, mode);
@@ -302,16 +313,18 @@ const Char3D = {
     if (from === 'sit' || from === 'kneel' || to === 'sit' || to === 'kneel') return 0.4;
     return 0.25;
   },
+  // the gait parameters for the current blend of gaits
   gaitParams(g, gw, v) {
-    g.fill(0);
-    for (let k = 0; k < 5; k++) {
-      const w = gw[k];
+    const K = this.GK;
+    g.stride = 0; for (const k of K) g[k] = 0;
+    for (let i = 0; i < 5; i++) {
+      const w = gw[i];
       if (w < 0.001) continue;
-      const G = this.GAIT[k];
-      g[0] += w * U.clamp(G[0] + G[1] * v, G[2], G[3]);
-      for (let j = 4; j < 21; j++) g[j - 3] += w * G[j];
+      const G = this.GAIT[i];
+      g.stride += w * U.clamp(G.st0 + G.stk * v, G.stMin, G.stMax);
+      for (const k of K) g[k] += w * G[k];
     }
-    // g: 0 stride, 1 beta, 2 lift, 3 peak, 4 ff, 5 base, 6 bob, 7 runBob, 8 lean, 9 arm, 10 bend, 11 twist, 12 pyaw, 13 proll, 14 sway, 15 stepW, 16 hs, 17 to
+    return g;
   },
   // the whole target pose for this frame
   base(T, S, D, ang, P, mode) {
@@ -367,86 +380,95 @@ const Char3D = {
   },
   // ---- locomotion: gait cycle + idle, with arms swinging
   loco(T, S, D, P) {
-    const g = this.gp; this.gaitParams(g, S.gw, S.v);
-    const amp = Math.max(S.amp, S.turn), ph = S.ph, t = S.t, zomb = D.zomb;
-    const zv = zomb ? this.zvar(S) : null;
-    const stride = g[0] * (S.turn > S.amp ? 0.18 : 1), beta = g[1], travel = beta * stride * amp;
+    const g = this.gaitParams(this.gp, S.gw, S.v);
+    const amp = Math.max(S.amp, S.turn), ph = S.ph, t = S.t, zomb = D.zomb, zv = zomb ? this.zvar(S) : null;
+    // turning on the spot: short shuffling steps
+    const stride = g.stride * (S.turn > S.amp ? 0.2 : 1), beta = g.beta, travel = beta * stride * amp;
     const crouch = Math.max(P.crouch || 0, 0) * (S.gw[3] > 0.5 ? 0 : 1);
-    // pelvis: height with bob (walks peak mid-stance, runs dip mid-stance), hip drop and sway toward the stance leg
-    const c2 = Math.cos(2 * (ph - beta * Math.PI)), rb = g[7];
-    let pz = D.hipH - g[5] * amp - crouch * 0.32 - (1 - rb) * g[6] * amp * (0.5 - 0.5 * c2) - rb * g[6] * amp * (0.5 + 0.5 * c2);
-    const cs = Math.cos(ph - beta * Math.PI);
-    let pr = g[13] * amp * cs * (D.fem ? 1.4 : 1), py = -g[14] * amp * cs;
-    const pw = g[12] * amp * Math.cos(ph);
-    // idle: breathing and a slow shift of weight from leg to leg
-    const idle = 1 - amp, ws = Math.sin(t * 0.55 + S.id * 1.7);
-    py += idle * 0.022 * ws; pr -= idle * 0.035 * ws;
-    const lean = g[8] * amp + (P.lean || 0) * 0.5 + crouch * 0.35 + (zomb ? zv.lean : 0);
-    T[C3.PX] = -lean * 0.05 + (crouch ? -0.04 : 0); T[C3.PY] = py; T[C3.PZ] = pz; T[C3.PR] = pr;
-    T[C3.PP] = lean * 0.45 + crouch * 0.25;
-    // hip lag behind the torso (set by the tracker) plus gait rotation
-    const lag = S.preview ? 0 : U.angDiff(S.ang, S.hip);
+    // sneaking stays low and bent over when it stops
+    const hold = S.gw[3] * (1 - amp), SN = this.GAIT[3];
+    // pelvis: a walk is highest at mid-stance (vaulting over the planted leg), a run lowest; the hips sway over the
+    // stance leg and drop on the swing side (ms is 0 at the left leg's mid-stance, pi at the right's)
+    const ms = ph - beta * Math.PI, c1 = Math.cos(ms), c2 = Math.cos(2 * ms);
+    let pz = D.hipH - g.base * amp - SN.base * hold - crouch * 0.32 - g.bob * amp * (g.rb * (0.5 + 0.5 * c2) + (1 - g.rb) * (0.5 - 0.5 * c2));
+    let pr = g.proll * amp * c1 * (D.fem ? 1.35 : 1), py = -g.sway * amp * c1;
+    const pw = g.pyaw * amp * Math.cos(ph);
+    // idle: breathing, and the weight resting on one leg then the other
+    const idle = 1 - amp, ws = Math.sin(t * 0.42 + S.id * 1.7), wsh = ws * Math.min(1, Math.abs(ws) * 1.6), breath = Math.sin(t * 1.6 + S.id);
+    py += idle * 0.028 * wsh; pr -= idle * 0.045 * wsh;
+    const lean = g.lean * amp + SN.lean * hold + (P.gait ? 0 : (P.lean || 0) * 0.5) + crouch * 0.35 + (zomb ? zv.lean : 0);
+    T[C3.PX] = -lean * 0.06 - crouch * 0.04; T[C3.PY] = py; T[C3.PZ] = pz; T[C3.PR] = pr;
+    T[C3.PP] = lean * 0.4 + crouch * 0.25;
+    // hip lag behind the torso (set by the tracker) plus gait rotation; the chest counter-rotates and stays level
+    const lag = S.preview ? 0 : U.angDiff(S.ang, S.hip), tw = g.twist * amp * Math.cos(ph);
     T[C3.PW] = lag + pw;
-    T[C3.SP] = lean * 0.6 + 0.012 * Math.sin(t * 1.8 + S.id) * idle + (zomb ? 0.04 * Math.sin(ph * 2) * amp : 0);
-    T[C3.SW] = -lag - pw - g[11] * amp * Math.cos(ph);
-    T[C3.SR] = zomb ? zv.side + zv.sway * Math.sin(ph) * amp + 0.03 * Math.sin(t * 0.7 + S.id) * idle : 0;
-    T[C3.HP] = -lean * 0.45 + (zomb ? zv.headP : 0);
-    T[C3.HR] = (zomb ? zv.headR + 0.06 * Math.sin(t * 0.9 + S.id * 3) : 0) - T[C3.SR] * 0.6;
-    T[C3.HW] = zomb ? 0.2 * Math.sin(t * 0.37 + S.id) * idle : 0;
-    // ---- legs
+    T[C3.SP] = lean * 0.6 + 0.012 * breath * idle + (zomb ? 0.04 * Math.sin(ph * 2) * amp : 0);
+    T[C3.SW] = -lag - pw - tw;
+    T[C3.SR] = (zomb ? zv.side + zv.sway * Math.sin(ph) * amp + 0.03 * Math.sin(t * 0.7 + S.id) * idle : 0) - pr * 0.75;
+    // the head keeps level and looks ahead
+    T[C3.HP] = -lean * 0.5 - 0.012 * breath * idle + (zomb ? zv.headP : 0);
+    T[C3.HR] = (zomb ? zv.headR + 0.06 * Math.sin(t * 0.9 + S.id * 3) : 0) - (pr + T[C3.SR]) * 0.6;
+    T[C3.HW] = (zomb ? 0.2 * Math.sin(t * 0.37 + S.id) * idle : 0) + tw * 0.8;
+    // ---- legs: stance glides back linearly (the foot planted: the phase advances with distance moved), heel strike
+    // to foot flat to heel rise; the swing foot lifts (trailing behind first in a run) and reaches forward
     const Pf = this.pelvisOf(T, this.T1);
     const psi = S.preview || S.amp < 0.25 ? 0 : U.angDiff(S.ang, S.back ? S.mdir + Math.PI : S.mdir);
     const cps = Math.cos(psi), sps = Math.sin(psi);
     const limp = P.limp || 0, ls = P.limpSide || 1;
-    let drop = 0;
+    const Af = g.ff * travel, Ab = travel - Af, pk = Math.log(0.5) / Math.log(U.clamp(g.peak, 0.1, 0.9)), ke = 1 + g.kick;
+    const mTan = -travel / beta * (1 - beta) * 0.4;
+    let drop = 0, limpW = 0;
     for (let pass = 0; pass < 2; pass++) {
-      for (const side of [-1, 1]) {
+      for (let side = -1; side <= 1; side += 2) {
         let u = (ph / (Math.PI * 2) + (side > 0 ? 0.5 : 0)) % 1; if (u < 0) u += 1;
         const bad = limp && side === ls ? limp : 0;
-        let lift = g[2] * (1 - bad * 0.85) * (zomb ? zv.lift[side < 0 ? 0 : 1] : 1), to = g[17] * (1 - bad * 0.6);
-        // the cycle: stance glides back linearly (planted), swing comes forward with a lifted, retracting foot
-        const Af = g[4] * travel, Ab = travel - Af;
-        let x, z = 0, th;
+        const lift = g.lift * (1 - bad * 0.8) * (zomb ? zv.lift[side < 0 ? 0 : 1] : 1), to = g.to * (1 - bad * 0.6);
+        // wc: how much this foot holds the hips up (planted, or about to land)
+        let x, z = 0, th, wc;
         if (u < beta) {
           const k = u / beta;
-          x = Af - k * travel;
-          th = g[16] * amp * (1 - U.smooth(Math.min(1, k / 0.22))) - to * amp * U.smooth(Math.max(0, (k - 0.6) / 0.4));
+          x = Af - k * travel; wc = 1;
+          th = (g.hs * (1 - U.smooth(Math.min(1, k / 0.18))) - to * U.smooth(Math.max(0, (k - 0.55) / 0.45))) * amp;
+          if (bad) limpW = Math.max(limpW, bad * Math.sin(k * Math.PI));
         } else {
-          const s = (u - beta) / (1 - beta), m = -travel / beta * (1 - beta) * 0.45, s2 = s * s, s3 = s2 * s;
-          x = (2 * s3 - 3 * s2 + 1) * -Ab + (s3 - 2 * s2 + s) * m + (-2 * s3 + 3 * s2) * Af + (s3 - s2) * m;
-          const pk = Math.log(0.5) / Math.log(g[3]);
+          const s = (u - beta) / (1 - beta), e = Math.pow(s, ke), e2 = e * e, e3 = e2 * e;
+          x = (2 * e3 - 3 * e2 + 1) * -Ab + (e3 - 2 * e2 + e) * mTan + (-2 * e3 + 3 * e2) * Af + (e3 - e2) * mTan;
           z = lift * amp * Math.sin(Math.PI * Math.pow(s, pk));
-          th = s < 0.4 ? U.lerp(-to, -0.25 * (zomb ? 2 : 1), U.smooth(s / 0.4)) : U.lerp(-0.25 * (zomb ? 2 : 1), g[16], U.smooth((s - 0.4) / 0.6));
-          th *= amp;
+          const mid = -0.22 - g.kick * 0.4 - (zomb ? 0.25 : 0);
+          th = (s < 0.45 ? U.lerp(-to, mid, U.smooth(s / 0.45)) : U.lerp(mid, g.hs, U.smooth((s - 0.45) / 0.55))) * amp;
+          wc = U.smooth(U.clamp((s - 0.7) / 0.3, 0, 1));
         }
         const r = this.rock(c3b, x, z, th, D);
         let ax = r[0], az = r[1];
-        const w = g[15] * (zomb ? zv.wide : 1) + crouch * 0.03;
+        const w = g.stepW * (zomb ? zv.wide : 1) + crouch * 0.03;
         let fx = ax * cps - side * w * sps, fy = ax * sps + side * w * cps;
-        // stance legs must reach: a trailing foot rises onto its ball, a leading one lowers the hips
-        if (u < beta) {
+        // the legs must reach: a trailing planted foot rises onto its ball, a leading one lowers the hips
+        if (wc > 0) {
           const hx = Pf[0] + Pf[6] * side * D.hipW, hy = Pf[1] + Pf[7] * side * D.hipW, hz = Pf[2] + Pf[8] * side * D.hipW - drop;
           const dxy2 = (fx - hx) * (fx - hx) + (fy - hy) * (fy - hy), need = hz - Math.sqrt(Math.max(0, D.L * D.L - dxy2));
           if (az < need) {
-            if (ax * cps < -0.02) {
-              for (let it = 0; it < 8 && az < need; it++) { th -= 0.12; const r2 = this.rock(c3b, x, z, th, D); ax = r2[0]; az = r2[1]; }
+            if (u < beta && ax * cps < -0.02) {
+              for (let it = 0; it < 10 && az < need; it++) { th -= 0.1; const r2 = this.rock(c3b, x, z, th, D); ax = r2[0]; az = r2[1]; }
               fx = ax * cps - side * w * sps; fy = ax * sps + side * w * cps;
-            } else if (pass === 0) drop = Math.max(drop, Math.min(0.12, need - az));
+            } else if (pass === 0) drop = Math.max(drop, Math.min(g.drop, (need - az) * wc));
           }
         }
-        if (pass === 1) this.foot(T, Pf, side, fx, fy, az + bad * 0.01, th, 0.1 + (zomb ? zv.toe : 0));
+        if (pass === 1) this.foot(T, Pf, side, fx, fy, az + bad * 0.008, th, 0.1 + (zomb ? zv.toe : 0));
       }
-      if (pass === 0 && drop > 0) { T[C3.PZ] -= drop; this.pelvisOf(T, Pf); drop = 0; }
+      if (pass === 0) {
+        // a bad leg is barely trusted: the hips sink and the body leans over it while it bears weight
+        if (limpW > 0) { T[C3.PZ] -= limpW * 0.025; T[C3.SR] += -ls * limpW * 0.12; T[C3.PY] += ls * limpW * 0.02; }
+        if (drop > 0 || limpW > 0) { T[C3.PZ] -= drop; this.pelvisOf(T, Pf); drop = 0; }
+      }
     }
-    // ---- arms: swing opposite the legs (lagging a little), bent and pumping when running
-    const A = g[9] * amp, bend = g[10];
-    for (const side of [-1, 1]) {
-      const sw = A * Math.cos(ph - 0.35) * -side;
-      if (bend < 0.3) this.hang(T, side, D, sw * (1 - bend), 0.035 + bend * 0.04, bend);
+    // ---- arms: swing opposite the legs (lagging a little, further forward than back), pumping when running
+    const A = g.arm * amp, bend = g.bend;
+    for (let side = -1; side <= 1; side += 2) {
+      const sw = A * Math.cos(ph - 0.3) * side;
+      if (bend < 0.3) this.hang(T, side, D, sw * (1 - bend) + A * 0.15, 0.035 + bend * 0.04, 0.12 + bend + Math.max(0, sw) * 0.9);
       else {
-        const k = (bend - 0.3) / 0.7;
-        const f0 = Math.sin(T[C3.PP] + T[C3.SP]) * 0.45;
-        this.arm(T, side, U.lerp(f0 + sw, 0.1 + sw * 1.3, k), U.lerp(0.035, 0.0 - Math.max(0, sw) * 0.25, k), U.lerp(-0.52 + Math.abs(sw) * 0.2, -0.32 + sw * 0.35, k), k * 0.2);
+        const k = (bend - 0.3) / 0.7, f0 = Math.sin(T[C3.PP] + T[C3.SP]) * 0.45;
+        this.arm(T, side, U.lerp(f0 + sw, 0.12 + sw * 1.35, k), U.lerp(0.035, 0.0 - Math.max(0, sw) * 0.3, k), U.lerp(-0.52 + Math.abs(sw) * 0.2, -0.33 + sw * 0.4, k), k * 0.2);
       }
     }
     this.wdir(T, 0.35, 0.05, -0.93);
