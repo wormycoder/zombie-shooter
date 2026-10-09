@@ -1086,6 +1086,8 @@ Object.assign(CarArt, {
     Object.assign(M, { sp, L, W, hl, hw, z0, zb, zr, fC, fR, chR, f0: -hl + S.crR, f1: hl - S.crF, noseZ: zb - sp.nose - S.crF * 0.5, tailZ: zb - sp.tail - S.crR * 0.5, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: z0 + (zb - z0) * 0.5, seat2: sp.livery === 'bw' ? '#2a2a2e' : this.seatCol(S.col) });
     const c3 = Col.rgb(S.col0), dark = c3[0] * 0.3 + c3[1] * 0.59 + c3[2] * 0.11 < 110;
     if (sp.vinyl && h % 3 === 0) M.vinyl = dark ? '#e2ddd0' : '#3a2c26';
+    // trim-level variety per colour: single rectangular sealed beams instead of the quad lamps
+    if (S.type === 'sedan' && (h >> 3) % 3 === 0) sp.lamps = 'rect';
     if (sp.wood && h % 3 !== 1) M.wood = true;
     // lower body with painted sides, front, rear, hood and trunk
     M.bv = sp.bv;
