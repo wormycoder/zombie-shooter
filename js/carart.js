@@ -240,7 +240,7 @@ Object.assign(CarArt, {
       const bb = [w.f - w.r - 0.02, w.f + w.r + 0.02, w.side > 0 ? w.s - w.w : w.s, w.side > 0 ? w.s : w.s + w.w, 0, w.r * 2];
       const c = [w.f, w.s - w.side * w.w / 2, w.r];
       out.push({ wheel: w.side, pass: 0, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
-      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, zlo: M.z0 || 0, draw: this.drawWheel });
+      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
     }
     return out;
   },
@@ -249,8 +249,9 @@ Object.assign(CarArt, {
     if (P.pass === 1 && !near) return;
     if (P.pass === 1) {
       // the outer pass shows the tyre in its arch over the body side; clip it to the side plane so that in
-      // near end-on views it cannot paint over the front / rear face
-      const e = w.r + 0.08, zl = (P.zlo || 0) + 0.004, zh = w.r * 2 + 0.08;
+      // near end-on views it cannot paint over the front / rear face. It runs down to the ground: a seam at the
+      // sill line would cut across the hub of a low car.
+      const e = w.r + 0.08, zl = -0.05, zh = w.r * 2 + 0.08;
       g.save(); g.beginPath(); this.path(g, [F.P(w.f - e, w.s, zl), F.P(w.f + e, w.s, zl), F.P(w.f + e, w.s, zh), F.P(w.f - e, w.s, zh)]); g.clip();
     }
     F.tilt = false;
@@ -341,6 +342,9 @@ Object.assign(CarArt, {
   before(A, B, cf, cs) {
     if (A.on === B) return 1;
     if (B.on === A) return -1;
+    // a part lying against a slanted face of another (bumper wraps on chamfered corners) carries that plane
+    if (A.sep && A.sep.of === B) return A.sep.n[0] * cf + A.sep.n[1] * cs + A.sep.n[2] > 0 ? 1 : -1;
+    if (B.sep && B.sep.of === A) return B.sep.n[0] * cf + B.sep.n[1] * cs + B.sep.n[2] > 0 ? -1 : 1;
     const a = A.bb, b = B.bb, e = 1e-4;
     // a horizontal separating plane is always valid (camera above) and keeps low wheels consistent
     if (a[5] <= b[4] + e) return -1;
@@ -354,21 +358,51 @@ Object.assign(CarArt, {
     if (B.wheel) return B.pass ? -1 : 1;
     return A._d < B._d ? -1 : 1;
   },
+  // convex hull (monotone chain) of screen points
+  hull(pts) {
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+    for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    lo.pop(); up.pop();
+    return lo.concat(up);
+  },
+  // do two convex screen polygons overlap by more than m pixels? (separating axis test)
+  overlap(P, Q, m) {
+    for (let r = 0; r < 2; r++) {
+      const A = r ? Q : P, B = r ? P : Q;
+      for (let i = 0; i < A.length; i++) {
+        const a = A[i], b = A[(i + 1) % A.length], nx = a[1] - b[1], ny = b[0] - a[0], l = Math.hypot(nx, ny);
+        if (l < 1e-6) continue;
+        let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+        for (const p of A) { const d = (p[0] * nx + p[1] * ny) / l; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+        for (const p of B) { const d = (p[0] * nx + p[1] * ny) / l; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+        if (a1 < b0 + m || b1 < a0 + m) return false;
+      }
+    }
+    return true;
+  },
+  // Pairs are only constrained where their projected outlines really overlap (convex parts project to convex
+  // polygons), so far-apart parts with overlapping boxes add no edges and no cycles.
   order(parts, F) {
     const n = parts.length;
     if (n < 2) return parts;
     for (const p of parts) {
-      const bb = p.bb;
+      const bb = p.bb, pts = [];
       p._d = F.depth(p.c[0], p.c[1], p.c[2]);
+      if (p.faces.length) { for (const fc of p.faces) for (const q of fc.p) pts.push(F.P(q[0], q[1], q[2])); }
+      else { F.tilt = !p.wheel; for (let k = 0; k < 8; k++) pts.push(F.P(bb[k & 1], bb[2 + ((k >> 1) & 1)], bb[4 + (k >> 2)])); F.tilt = true; }
+      const h = p._h = this.hull(pts);
       let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-      for (let k = 0; k < 8; k++) { const q = F.P(bb[k & 1], bb[2 + ((k >> 1) & 1)], bb[4 + (k >> 2)]); if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
-      p._s = [x0 - 2, y0 - 2, x1 + 2, y1 + 2];
+      for (const q of h) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+      p._s = [x0, y0, x1, y1];
     }
     const nxt = [], indeg = new Array(n).fill(0);
     for (let i = 0; i < n; i++) nxt.push([]);
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
       const A = parts[i], B = parts[j], sa = A._s, sb = B._s;
       if (sa[2] < sb[0] || sb[2] < sa[0] || sa[3] < sb[1] || sb[3] < sa[1]) continue;
+      if (!this.overlap(A._h, B._h, 0.5)) continue;
       if (this.before(A, B, F.cf, F.cs) < 0) { nxt[i].push(j); indeg[j]++; } else { nxt[j].push(i); indeg[i]++; }
     }
     const out = [], ready = [];
@@ -383,10 +417,33 @@ Object.assign(CarArt, {
     }
     return out;
   },
+  // A near-side wheel's outer pass is painted straight after the last-drawn body part whose side carries its
+  // arch (sorting it with the rest only adds cycles that can push it under the body); far-side outer passes
+  // draw nothing and are dropped.
   paint(g, F, M, steer) {
     this.drawShadow(g, F, M);
-    const parts = M.parts.concat(this.wheelParts(M, steer));
-    for (const p of this.order(parts, F)) this.drawPart(g, F, p);
+    const parts = M.parts.slice(), outer = [];
+    for (const p of this.wheelParts(M, steer)) {
+      if (p.pass === 0) { parts.push(p); continue; }
+      if (p.spec.side * F.cs <= 0) continue;
+      const hs = this.hostsOf(M, p.spec);
+      if (hs.length) outer.push([hs, p]); else parts.push(p);
+    }
+    const ord = this.order(parts, F), after = [];
+    for (const [hs, p] of outer) { let k = -1; for (const h of hs) k = Math.max(k, ord.indexOf(h)); (after[k] || (after[k] = [])).push(p); }
+    for (let i = 0; i < ord.length; i++) { this.drawPart(g, F, ord[i]); if (after[i]) for (const q of after[i]) this.drawPart(g, F, q); }
+  },
+  // body parts reaching out to wheel w's side over its arch (cached on the wheel spec)
+  hostsOf(M, w) {
+    if (w.hosts) return w.hosts;
+    const out = [];
+    for (const p of M.parts) {
+      if (!p.body) continue;
+      const bb = p.bb, sOut = w.side > 0 ? bb[3] : -bb[2];
+      if (sOut < Math.abs(w.s) - 0.03 || bb[4] > w.r * 2) continue;
+      if (Math.min(bb[1], w.f + w.r) - Math.max(bb[0], w.f - w.r) > 0.02) out.push(p);
+    }
+    return (w.hosts = out);
   },
 });
 Object.assign(CarArt, {
@@ -614,7 +671,7 @@ Object.assign(CarArt, {
 // shoulder and roof edge. Long hoods, thin pillars, big wheels in dark arches, thin chrome bumpers.
 const CA_CARS = {
   // full-size rear-drive sedan (Caprice / Crown Victoria class): formal roof, long hood and trunk
-  base: { h: 0.55, cabH: 0.36, cab: [-0.33, 0.175], z0: 0.12, r: 0.2, axF: 0.3, axR: -0.245, nose: 0.06, tail: 0.02, chF: 0.05, chR: 0.05, rakeF: 0.32, rakeR: 0.2, tum: 0.07, gin: 0.04, bv: 0.035, rb: 0.03, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap', opera: true, crease: true },
+  base: { h: 0.55, cabH: 0.36, cab: [-0.33, 0.175], z0: 0.12, r: 0.21, axF: 0.3, axR: -0.245, nose: 0.06, tail: 0.02, chF: 0.05, chR: 0.05, rakeF: 0.32, rakeR: 0.2, tum: 0.07, gin: 0.04, bv: 0.035, rb: 0.03, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap', opera: true, crease: true },
   sedan: { vinyl: true, white: true, orn: true },
   police: { bar: 'police', pushbar: true, trim: 'black', rim: 'dog', livery: 'bw', spot: true },
   taxi: { sign: true, checker: true, trim: 'black', rim: 'steel' },
@@ -740,6 +797,7 @@ Object.assign(CarArt, {
       const p = [[fe, sd * sx], [fe + dir * d, sd * sx], [fe - dir * (ch - d * 0.5), sd * (hw + e)], [fe - dir * ch, sd * hw]];
       const w = this.prism(p, z0, z1, C, { mat: mo, tags: ['x', 'W', 'x', 'x'] });
       w.faces = w.faces.filter(fc => fc.t !== 'x');
+      if (o.body) w.sep = { n: [dir * Math.SQRT1_2, sd * Math.SQRT1_2, 0], of: o.body };
       if (strip) this.fx(w, 'W', rub);
       out.push(w);
     }
@@ -1137,13 +1195,13 @@ Object.assign(CarArt, {
     // thin bumpers with rub strips, mirrors at the front corner of the door glass, wheels, lamps
     const bm = S.burnt ? 'black' : sp.bump, thick = bm === 'black' ? 0.03 : 0;
     const bz0 = z0 + 0.06, bz1 = z0 + 0.145 + thick;
-    const fbp = this.bumper(1, M.f1, hw, sp.chF, bz0 - S.crF * 0.3, bz1 - S.crF * 0.3, bm, paint), rbp = this.bumper(-1, M.f0, hw, chR, bz0, bz1, bm, paint);
+    const fbp = this.bumper(1, M.f1, hw, sp.chF, bz0 - S.crF * 0.3, bz1 - S.crF * 0.3, bm, paint, { body }), rbp = this.bumper(-1, M.f0, hw, chR, bz0, bz1, bm, paint, { body });
     if (!(S.crF && S.seed & 1)) M.parts.push(...fbp);
     M.parts.push(...rbp);
     if (live && S.type !== 'sports') this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.86));
     this.fx(rbp[0], 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = '#0c0c0c'; g.beginPath(); g.ellipse(18, -4, 3, 8, 0, 0, 7); g.fill(); });
     const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : CA_COL.black;
-    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) this.mirror(M, fC - 0.115, sd, M.gw - 0.006, hw + 0.045, zb + 0.025, mc);
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) this.mirror(M, fC - 0.115, sd, M.gw, hw + 0.045, zb + 0.025, mc);
     const white = sp.white && h % 2 === 0;
     for (const f of [L * sp.axF, L * sp.axR]) for (const sd of [-1, 1]) this.wheel(M, f, sd, sp.r, { rim: sp.rim, white });
     const wf = hw - sp.chF, wr = hw - chR;
@@ -1190,8 +1248,9 @@ Object.assign(CarArt, {
     }
     if (sp.pushbar && live) {
       const fe = M.f1 + 0.05;
-      for (const sd of [-1, 1]) M.parts.push(this.box(fe, fe + 0.035, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.05, M.noseZ + 0.03, CA_COL.black));
-      M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, M.noseZ - 0.005, M.noseZ + 0.03, CA_COL.black));
+      const zt = M.noseZ - M.bv;
+      for (const sd of [-1, 1]) M.parts.push(this.box(fe, fe + 0.035, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.05, M.z0 + 0.17, CA_COL.black), this.box(fe, fe + 0.035, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.2, zt, CA_COL.black));
+      M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, zt, zt + 0.035, CA_COL.black));
       M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, M.z0 + 0.17, M.z0 + 0.2, CA_COL.black));
     }
     if (sp.spot && live) M.parts.push(this.box(M.fC - 0.055, M.fC - 0.005, -M.hw - 0.05, -M.hw + 0.005, M.zb + 0.1, M.zb + 0.15, CA_COL.chrome, { mat: 'chrome' }));
@@ -1381,13 +1440,13 @@ Object.assign(CarArt, {
     if (live) cab.inner.push(this.steer(o.fC - 0.215, -sw * 0.5, o.zb + 0.1, 0.065));
     M.seat = [fs - 0.02, -sw * 0.5, o.zb + 0.12];
     this.cabinArt(M, cab);
-    const fbp = this.bumper(1, hl, hw, sp.chF, o.z0 + 0.03, o.z0 + 0.15, S.burnt ? 'black' : sp.bump, paint, { d: 0.05 });
+    const fbp = this.bumper(1, hl, hw, sp.chF, o.z0 + 0.03, o.z0 + 0.15, S.burnt ? 'black' : sp.bump, paint, { d: 0.05, body });
     M.parts.push(...fbp);
     if (live) this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.8));
     // tall truck mirrors on stalks
     const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : CA_COL.black;
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) {
-      const s0 = sd > 0 ? M.gw - 0.006 : -hw - 0.075, s1 = sd > 0 ? hw + 0.075 : -M.gw + 0.006;
+      const s0 = sd > 0 ? M.gw : -hw - 0.075, s1 = sd > 0 ? hw + 0.075 : -M.gw;
       M.parts.push(this.box(o.fC - 0.13, o.fC - 0.09, s0, s1, o.zb + 0.03, o.zb + 0.045, CA_COL.black));
       M.parts.push(this.box(o.fC - 0.13, o.fC - 0.08, sd > 0 ? hw + 0.03 : -hw - 0.08, sd > 0 ? hw + 0.08 : -hw - 0.03, o.zb + 0.045, o.zb + 0.15, mc, { mat: mc === CA_COL.chrome ? 'chrome' : 'paint' }));
     }
@@ -1443,7 +1502,7 @@ Object.assign(CarArt, {
       M.parts.push(tg);
     }
     // chrome step bumper with a black tread pad, plate in the middle
-    const rbp = this.bumper(-1, -hl, hw, 0.03, z0 - 0.01, z0 + 0.11, S.burnt ? 'black' : 'chrome', paint, { d: 0.06, noStrip: true });
+    const rbp = this.bumper(-1, -hl, hw, 0, z0 - 0.01, z0 + 0.11, S.burnt ? 'black' : 'chrome', paint, { d: 0.06, noStrip: true });
     if (live) this.fx(rbp[0], 'B', (g, F, fc) => this.plate(g, F, fc, 0.15, 0.7));
     this.fx(rbp[0], 'T', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#1c1c1e'); g.fillRect(35, 10, 30, 80); });
     M.parts.push(...rbp);
@@ -1531,11 +1590,11 @@ Object.assign(CarArt, {
     box.inner.push(this.box(fC - 0.24, fC - 0.13, -sw, sw, zh - 0.06, zh + 0.04, '#222226'));
     if (live) box.inner.push(this.steer(fC - 0.27, -sw * 0.5, zh + 0.08, 0.07));
     M.seat = [fs - 0.02, -sw * 0.5, zh + 0.07];
-    const fbp = this.bumper(1, hl, hw, sp.chF, z0 + 0.03, z0 + 0.14, S.burnt ? 'black' : 'chrome', paint), rbp = this.bumper(-1, -hl, hw, 0.04, z0 + 0.02, z0 + 0.13, S.burnt ? 'black' : 'chrome', paint);
+    const fbp = this.bumper(1, hl, hw, sp.chF, z0 + 0.03, z0 + 0.14, S.burnt ? 'black' : 'chrome', paint, { body: hood }), rbp = this.bumper(-1, -hl, hw, 0, z0 + 0.02, z0 + 0.13, S.burnt ? 'black' : 'chrome', paint);
     if (live) this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.8));
     M.parts.push(...fbp, ...rbp);
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) {
-      M.parts.push(this.box(fC - 0.2, fC - 0.16, sd > 0 ? hw - 0.005 : -hw - 0.07, sd > 0 ? hw + 0.07 : -hw + 0.005, zh + 0.05, zh + 0.065, CA_COL.black));
+      M.parts.push(this.box(fC - 0.2, fC - 0.16, sd > 0 ? hw : -hw - 0.07, sd > 0 ? hw + 0.07 : -hw, zh + 0.05, zh + 0.065, CA_COL.black));
       M.parts.push(this.box(fC - 0.2, fC - 0.15, sd > 0 ? hw + 0.03 : -hw - 0.08, sd > 0 ? hw + 0.08 : -hw - 0.03, zh + 0.065, zh + 0.18, CA_COL.black));
     }
     for (const f of [hl - 0.43, -hl + 0.61]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.215, { rim: h % 2 ? 'steel' : 'cap', rimCol: h % 2 ? '#d8d8d0' : null });
@@ -1688,9 +1747,9 @@ Object.assign(CarArt, {
       M.parts.push(lad);
       this.lightbar(M, hl - 0.3, hl - 0.18, hw - 0.1, zc, ['#c81c1c', '#dadede', '#c81c1c'], ['r', 'w']);
     }
-    M.parts.push(...this.bumper(1, hl, hw, 0.05, z0 + 0.02, z0 + 0.2, live ? 'chrome' : 'black', red));
+    M.parts.push(...this.bumper(1, hl, hw, 0, z0 + 0.02, z0 + 0.2, live ? 'chrome' : 'black', red));
     M.parts.push(this.box(-hl - 0.14, -hl, -hw + 0.06, hw - 0.06, z0 + 0.02, z0 + 0.1, live ? CA_COL.chrome : CA_COL.black, { mat: live ? 'chrome' : 'paint' }));
-    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(hl - 0.2, hl - 0.12, sd > 0 ? hw - 0.005 : -hw - 0.1, sd > 0 ? hw + 0.1 : -hw + 0.005, zf + 0.05, zf + 0.25, CA_COL.black));
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(hl - 0.2, hl - 0.12, sd > 0 ? hw : -hw - 0.1, sd > 0 ? hw + 0.1 : -hw, zf + 0.05, zf + 0.25, CA_COL.black));
     for (const f of [hl - 0.57, -hl + 0.98]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.26, { rim: 'steel', rimCol: '#c8ccd0', w: 0.18, dual: f < 0 });
     for (const sd of [-1, 1]) {
       this.lamp(M, 'h', hl + 0.004, sd * (hw - 0.06 - 0.11), zf - 0.072, sd < 0 ? 0 : 1);
@@ -1809,9 +1868,9 @@ Object.assign(CarArt, {
     for (const f of rows) for (const sd of [-1, 1]) body.inner.push(this.box(f - 0.25, f - 0.19, sd < 0 ? -sw : 0.1, sd < 0 ? -0.1 : sw, zh - 0.08, zh + 0.12, S.burnt ? '#2a2420' : '#3c5a3a'));
     body.inner.push(this.box(fC - 0.4, fC - 0.34, -sw, -0.12, zh - 0.08, zh + 0.16, S.burnt ? '#2a2420' : '#2a2a2e'));
     M.seat = [fC - 0.34, -sw * 0.55, zh + 0.07];
-    const fbp = this.bumper(1, hl, hw - 0.04, 0.05, z0 - 0.04, z0 + 0.12, 'black', yel), rbp = this.bumper(-1, -hl, hw, 0.04, z0 - 0.04, z0 + 0.1, 'black', yel);
+    const fbp = this.bumper(1, hl, hw - 0.04, sp.chF, z0 - 0.04, z0 + 0.12, 'black', yel, { body: hood }), rbp = this.bumper(-1, -hl, hw, 0, z0 - 0.04, z0 + 0.1, 'black', yel);
     M.parts.push(...fbp, ...rbp);
-    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.06, fC + 0.02, sd > 0 ? hw - 0.005 : -hw - 0.12, sd > 0 ? hw + 0.12 : -hw + 0.005, zh + 0.1, zh + 0.3, CA_COL.black));
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.06, fC + 0.02, sd > 0 ? hw : -hw - 0.12, sd > 0 ? hw + 0.12 : -hw, zh + 0.1, zh + 0.3, CA_COL.black));
     for (const f of [hl - 0.42, -hl + 1.55]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'steel', rimCol: '#2a2a2c', w: 0.18, dual: f < 0 });
     const wf = hw - 0.04 - sp.chF;
     for (const sd of [-1, 1]) {
