@@ -209,7 +209,9 @@ Object.assign(CarArt, {
       }
       g.restore();
     }
-    g.beginPath(); this.path(g, pts); g.strokeStyle = 'rgba(16,17,19,0.9)'; g.lineWidth = 1.3; g.stroke();
+    g.beginPath(); this.path(g, pts); g.strokeStyle = 'rgba(16,17,19,0.9)'; g.lineWidth = w.trim ? 2.6 : 1.3; g.stroke();
+    // bright-metal window surround (chrome-trim cars)
+    if (w.trim) { g.strokeStyle = Col.shade(w.trim, b * 1.05); g.lineWidth = 1.2; g.stroke(); }
   },
   // hollow part (cabin): inside of the far walls, then the interior, then near walls with see-through glass
   drawHollow(g, F, P) {
@@ -1121,13 +1123,14 @@ Object.assign(CarArt, {
         this.win(fc, fr, 0.35, 0.955, 0.09, 0.9, gs(fr, sd));
       }
     }
+    if (sp.trim === 'chrome' && live) for (const fc of cab.faces) if (fc.win) for (const w of fc.win) w.trim = CA_COL.chrome;
     const sw = M.gwT - 0.035;
     const fs = fR + (fC - fR) * (sp.doors === 4 ? (sp.quarter ? 0.68 : 0.64) : 0.56);
     const fr2 = S.type === 'sports' ? null : sp.quarter ? fR + (fC - fR) * 0.42 : sp.hatch ? fR + (fC - fR) * 0.3 : fR + 0.19;
     this.seats(cab, fs, fr2, zb, sw, M.seat2, S.burnt);
     cab.inner.push(this.box(fC - 0.19, fC - 0.09, -sw, sw, zb - 0.02, zb + 0.065, '#222226'));
     if (live) cab.inner.push(this.steer(fC - 0.215, -sw * 0.5, zb + 0.1, 0.058));
-    M.seat = [fs - 0.02, -sw * 0.5, zb + 0.12];
+    M.seat = [fs - 0.02, -sw * 0.5, zb + 0.08];
     this.cabinArt(M, cab);
     // thin bumpers with rub strips, mirrors at the front corner of the door glass, wheels, lamps
     const bm = S.burnt ? 'black' : sp.bump, thick = bm === 'black' ? 0.03 : 0;
@@ -1205,8 +1208,10 @@ Object.assign(CarArt, {
     }
     if (sp.spare && live) M.parts.push(this.spare(M.f0, 0, (M.z0 + M.zb) / 2 + 0.05, 0.21));
     if (sp.spoiler && live) {
-      for (const sd of [-1, 1]) { const p = this.box(M.f0 + 0.06, M.f0 + 0.1, sd * (M.hw - 0.16) - 0.015, sd * (M.hw - 0.16) + 0.015, M.zb - 0.02, M.zb + 0.055, CA_COL.black); p.on = M.body; M.parts.push(p); }
-      const wing = this.box(M.f0 + 0.015, M.f0 + 0.15, -M.hw + 0.05, M.hw - 0.05, M.zb + 0.055, M.zb + 0.08, M.paint); wing.on = M.body;
+      // low rear-deck wing on two short stands
+      const zd = M.body.zf(M.f0 + 0.11);
+      for (const sd of [-1, 1]) { const p = this.box(M.f0 + 0.05, M.f0 + 0.09, sd * (M.hw - 0.17) - 0.014, sd * (M.hw - 0.17) + 0.014, zd - 0.01, zd + 0.03, CA_COL.black); p.on = M.body; M.parts.push(p); }
+      const wing = this.box(M.f0 + 0.02, M.f0 + 0.12, -M.hw + 0.07, M.hw - 0.07, zd + 0.03, zd + 0.05, M.paint); wing.on = M.body;
       M.parts.push(wing);
     }
     if (sp.lamps === 'popup' && S.pop) {
@@ -1561,13 +1566,13 @@ Object.assign(CarArt, {
   },
   b_ambulance(M, S, T) {
     const L = T.len, hl = M.hl, hw = M.hw, live = !S.burnt, white = S.burnt ? CA_COL.burnt : S.col;
-    const z0 = 0.24, zb = 0.8, zr = 1.32, fC = hl - 0.42, fb = fC - 0.62, zB = T.h + T.cabH + 0.1;
-    this.truckFront(M, S, { z0, zb, zr, fb, fC, hw: hw - 0.05, paint: white, sp: { r: 0.2, nose: 0.06, chF: 0.07, rakeF: 0.14, rakeR: 0.02, tum: 0.05, doors: 2, lamps: 'rect', grille: 'chrome', trim: 'black' } });
+    const z0 = 0.22, zb = 0.66, zr = 1.16, fC = hl - 0.4, fb = fC - 0.6, zB = 1.54, rb = 0.03;
+    this.truckFront(M, S, { z0, zb, zr, fb, fC, hw: hw - 0.05, paint: white, sp: { r: 0.215, nose: 0.06, chF: 0.07, rakeF: 0.2, rakeR: 0.02, tum: 0.05, doors: 2, lamps: 'rect', grille: 'chrome', trim: 'black' } });
     M.sideHw = hw - 0.05; M.hw = hw; M.f0 = -hl;
     const red = live ? '#c41e1e' : '#3a2a24', bx1 = fb - 0.04;
     // stripe on the cab sides
     for (const sd of [-1, 1]) this.pfx(M.body, [0, sd, 0], (g, F) => { F.frame(g, [0, sd * (hw - 0.05), 0], [1, 0, 0], [0, 0, 1], 0.01); g.fillStyle = F.sh(red); g.fillRect(fb * 100, (zb - 0.2) * 100, (hl - 0.06 - fb) * 100, 7); });
-    const box = this.prism(this.rect(-hl, bx1, -hw, hw, 0.04, 0.04), z0 + 0.02, zB, white, { body: true });
+    const bol = this.rect(-hl, bx1, -hw, hw, 0.04, 0.04), box = this.prism(bol, z0 + 0.02, zB - rb, white, { body: true });
     for (const sd of [-1, 1]) this.sidePaint(box, sd, hw, (g, F, R) => {
       g.fillStyle = F.sh(red); R(-hl, zb - 0.2, bx1, zb - 0.13);
       R(-hl + 0.1, zB - 0.1, bx1 - 0.04, zB - 0.06);
@@ -1592,9 +1597,9 @@ Object.assign(CarArt, {
         if (live) { g.fillStyle = F.sh(red); R(-0.05, zb + 0.2, 0.05, zb + 0.44); R(-0.12, zb + 0.27, 0.12, zb + 0.37); }
       }];
     }
-    const top = this.face(box, 'T');
+    const cap = this.roofCap(bol, zB - rb, rb, white), top = this.face(cap, 'T');
     if (top) top.fx = [(g, F, fc) => { if (S.snow) this.snowCap(g, F, fc, 0.06); }];
-    M.parts.push(box);
+    M.parts.push(box, cap);
     if (S.trunk === 1) this.barnDoors(M, z0 + 0.08, zB - 0.12, white);
     if (live) {
       this.lightbar(M, fb + 0.12, fb + 0.24, hw - 0.12, zr, ['#c81c1c', '#dadede', '#c81c1c'], ['r', 'w']);
@@ -1602,36 +1607,37 @@ Object.assign(CarArt, {
     }
     this.fx(box, 'F', (g, F) => { F.frame(g, [bx1, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { g.fillStyle = F.sh(live ? '#e02020' : '#3a1a16'); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.14) * 100, (zB - 0.11) * 100, 8, 7); } });
     M.parts.push(this.box(-hl - 0.12, -hl, -hw + 0.08, hw - 0.08, z0 + 0.02, z0 + 0.08, CA_COL.black));
-    for (const f of [fC - 0.08, -hl + 0.72]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.2, { rim: 'steel', dual: f < 0 });
+    for (const f of [fC + 0.01, -hl + 0.74]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.215, { rim: 'steel', dual: f < 0 });
     for (const sd of [-1, 1]) { this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.095), z0 + 0.3, sd < 0 ? 2 : 3); this.lamp(M, 'r', -hl - 0.004, sd * (hw - 0.095), z0 + 0.16, sd < 0 ? 2 : 3); }
   },
   b_firetruck(M, S, T) {
     const hl = M.hl, hw = M.hw, live = !S.burnt, red = S.burnt ? CA_COL.burnt : S.col;
-    const z0 = 0.28, zc = 1.52, fc0 = 0.62, zbd = 1.2, zf = 0.95;
+    const z0 = 0.28, zc = 1.46, rb = 0.035, zt = zc - rb, fc0 = 0.66, zbd = 1.15, zf = 0.9;
     const sp = Object.assign({}, CA_CARS.base, { chF: 0.05, lamps: 'rect', grille: 'chrome', trim: 'chrome', bump: 'chrome' });
     Object.assign(M, { sp, z0, zb: zf, zr: zc, fC: hl, fR: fc0, chR: 0.04, f0: -hl, f1: hl, noseZ: zf, tailZ: zbd, gw: hw, gwT: hw, paint: red, seat2: '#2a2a2e', noRear: true, doorF: [], noHood: true, noTrunk: true });
     // cab-forward crew cab: hollow, big windshield, white roof
-    const cab = M.cab = this.xbody([[fc0, z0], [hl, z0], [hl, zf], [hl - 0.1, zc], [fc0 + 0.03, zc], [fc0, zc - 0.03]], -hw, hw, red, { body: true, cols: { T: live ? '#f2f2ee' : CA_COL.burnt } });
+    const cab = M.cab = this.xbody([[fc0, z0], [hl, z0], [hl, zf], [hl - 0.09, zt], [fc0, zt]], -hw, hw, red, { body: true });
     cab.hollow = true; cab.inner = []; cab.inCol = S.burnt ? '#1a1612' : null;
-    M.parts.push(cab);
+    const cap = this.roofCap(this.rect(fc0, hl - 0.09, -hw, hw), zt, rb, live ? '#f2f2ee' : CA_COL.burnt, 0.7);
+    M.parts.push(cab, cap);
     const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
     const ws = cab.faces.find(fc => fc.n[0] > 0.5 && fc.n[2] > 0.1);
     if (ws) { (ws.win = []); for (const [a, b] of [[0.03, 0.49], [0.51, 0.97]]) { const q = (u, v) => this.uv(ws, v, u); ws.win.push({ id: 'windshield', st: gs('windshield'), p: [q(a, 0.06), q(b, 0.06), q(b, 0.92), q(a, 0.92)] }); } }
     for (const sd of [-1, 1]) {
       const fc = this.sideFace(cab, sd);
-      this.sideWin(fc, sd < 0 ? 'winFL' : 'winFR', hl - 0.52, hl - 0.12, zf + 0.04, zc - 0.08, gs(sd < 0 ? 'winFL' : 'winFR', sd < 0 ? 0 : 1));
-      this.sideWin(fc, sd < 0 ? 'winRL' : 'winRR', fc0 + 0.08, fc0 + 0.42, zf + 0.04, zc - 0.08, gs(sd < 0 ? 'winRL' : 'winRR', sd < 0 ? 2 : 3));
+      this.sideWin(fc, sd < 0 ? 'winFL' : 'winFR', hl - 0.5, hl - 0.12, zf + 0.04, zt - 0.05, gs(sd < 0 ? 'winFL' : 'winFR', sd < 0 ? 0 : 1));
+      this.sideWin(fc, sd < 0 ? 'winRL' : 'winRR', fc0 + 0.08, fc0 + 0.42, zf + 0.04, zt - 0.05, gs(sd < 0 ? 'winRL' : 'winRR', sd < 0 ? 2 : 3));
       this.sidePaint(cab, sd, hw, (g, F, R) => {
         if (live) { g.fillStyle = F.sh('#f2f2ee'); R(fc0, zf - 0.17, hl, zf - 0.1); }
         g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1.1;
-        g.strokeRect((hl - 0.56) * 100, (z0 + 0.12) * 100, 0.5 * 100, (zc - z0 - 0.15) * 100); g.strokeRect((fc0 + 0.04) * 100, (z0 + 0.12) * 100, 0.44 * 100, (zc - z0 - 0.15) * 100);
+        g.strokeRect((hl - 0.54) * 100, (z0 + 0.12) * 100, 0.48 * 100, (zt - z0 - 0.15) * 100); g.strokeRect((fc0 + 0.04) * 100, (z0 + 0.12) * 100, 0.44 * 100, (zt - z0 - 0.15) * 100);
         this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 59 + sd, fc0 + 0.1, hl - 0.1, z0 + 0.05, zf);
         this.wells(g, F, M, sd, z0);
       });
     }
     const fr = cab.faces.find(fc => fc.n[0] > 0.95);
     if (fr) fr.fx = [(g, F) => this.frontArt(g, F, Object.assign({}, M, { hw: hw + 0.04, noseZ: zf, z0 }))];
-    const top = this.face(cab, 'T');
+    const top = this.face(cap, 'T');
     if (top) top.fx = [(g, F, fc) => { if (S.snow) this.snowCap(g, F, fc, 0.08); }];
     this.seats(cab, hl - 0.38, fc0 + 0.3, zf - 0.05, hw - 0.1, '#2a2a2e', S.burnt);
     M.seat = [hl - 0.4, -(hw - 0.1) * 0.5, zf + 0.07];
@@ -1683,7 +1689,7 @@ Object.assign(CarArt, {
     M.parts.push(...this.bumper(1, hl, hw, 0.05, z0 + 0.02, z0 + 0.2, live ? 'chrome' : 'black', red));
     M.parts.push(this.box(-hl - 0.14, -hl, -hw + 0.06, hw - 0.06, z0 + 0.02, z0 + 0.1, live ? CA_COL.chrome : CA_COL.black, { mat: live ? 'chrome' : 'paint' }));
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(hl - 0.2, hl - 0.12, sd > 0 ? hw - 0.005 : -hw - 0.1, sd > 0 ? hw + 0.1 : -hw + 0.005, zf + 0.05, zf + 0.25, CA_COL.black));
-    for (const f of [hl - 0.62, -hl + 0.85]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'steel', rimCol: '#c8ccd0', w: 0.18, dual: f < 0 });
+    for (const f of [hl - 0.57, -hl + 0.98]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.26, { rim: 'steel', rimCol: '#c8ccd0', w: 0.18, dual: f < 0 });
     for (const sd of [-1, 1]) {
       this.lamp(M, 'h', hl + 0.004, sd * (hw - 0.06 - 0.11), zf - 0.072, sd < 0 ? 0 : 1);
       this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.12), z0 + 0.26, sd < 0 ? 2 : 3);
@@ -1692,10 +1698,10 @@ Object.assign(CarArt, {
   },
   b_army(M, S, T) {
     const hl = M.hl, hw = M.hw, live = !S.burnt, od = S.burnt ? CA_COL.burnt : S.col;
-    const z0 = 0.36, zb = 0.98, zr = 1.5, fb = 0.32, fC = 0.88;
-    this.truckFront(M, S, { z0, zb, zr, fb, fC, paint: od, sp: { r: 0.25, nose: 0.02, chF: 0.05, rakeF: 0.04, rakeR: 0.0, tum: 0.03, doors: 2, lamps: 'round', grille: 'army', bump: 'black', trim: 'black', gin: 0.08 } });
+    const z0 = 0.38, zb = 0.86, zr = 1.26, fb = 0.32, fC = 0.88;
+    this.truckFront(M, S, { z0, zb, zr, fb, fC, paint: od, bv: 0.02, rb: 0.02, sp: { r: 0.28, nose: 0.02, chF: 0.05, rakeF: 0.04, rakeR: 0.0, tum: 0.03, doors: 2, lamps: 'round', grille: 'army', bump: 'black', trim: 'black', gin: 0.08 } });
     M.f0 = -hl; M.star = live;
-    const bf = fb - 0.06, zbd = zb - 0.06;
+    const bf = fb - 0.06, zbd = zb + 0.06;
     const bed = this.box(-hl, bf, -hw, hw, z0 + 0.06, zbd, od, { body: true });
     for (const sd of [-1, 1]) this.sidePaint(bed, sd, hw, (g, F, R) => {
       g.fillStyle = 'rgba(0,0,0,0.22)'; for (let z = z0 + 0.14; z < zbd; z += 0.09) R(-hl, z, bf, z + 0.012);
@@ -1706,7 +1712,7 @@ Object.assign(CarArt, {
     });
     M.parts.push(bed);
     // canvas cover: arched profile swept along the bed
-    const zc = zr + 0.12, arch = [[-hw + 0.02, zbd], [hw - 0.02, zbd], [hw - 0.02, zc - 0.24], [hw * 0.72, zc - 0.07], [0, zc], [-hw * 0.72, zc - 0.07], [-hw + 0.02, zc - 0.24]];
+    const zc = zr + 0.24, arch = [[-hw + 0.02, zbd], [hw - 0.02, zbd], [hw - 0.02, zc - 0.24], [hw * 0.72, zc - 0.07], [0, zc], [-hw * 0.72, zc - 0.07], [-hw + 0.02, zc - 0.24]];
     const cv = this.solid(arch.map(q => [-hl + 0.02, q[0], q[1]]), arch.map(q => [bf - 0.02, q[0], q[1]]), live ? '#6c6a48' : '#2c2622');
     for (const fc of cv.faces) {
       if (Math.abs(fc.n[0]) > 0.9) { fc.fx = [(g, F, f) => { const p = f.p.map(q => F.P(q[0], q[1], q[2])); g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < p.length; i++) { g.moveTo(p[i][0], p[i][1]); g.lineTo((p[0][0] + p[3][0] + p[4][0]) / 3, (p[0][1] + p[3][1] + p[4][1]) / 3); } g.stroke(); }]; continue; }
@@ -1722,22 +1728,24 @@ Object.assign(CarArt, {
     const rb = this.face(bed, 'B');
     if (rb) rb.fx = [(g, F) => { F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.12) * 100, (z0 + 0.12) * 100, 6, 5); } }];
     M.parts.push(this.box(-hl - 0.06, -hl, -hw + 0.04, hw - 0.04, z0 - 0.04, z0 + 0.06, CA_COL.black));
-    for (const f of [1.05, -0.5, -1.02]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'mil', w: 0.2 });
+    for (const f of [1.06, -0.46, -1.0]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.28, { rim: 'mil', w: 0.2 });
     for (const sd of [-1, 1]) this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.09), z0 + 0.145, sd < 0 ? 2 : 3);
   },
   b_bus(M, S, T) {
     const hl = M.hl, hw = M.hw, live = !S.burnt, yel = S.burnt ? CA_COL.burnt : S.col, blk = live ? '#18181a' : '#2a2420';
-    const z0 = 0.3, zh = 0.95, zr = T.h + T.cabH, fC = hl - 0.55;
+    const z0 = 0.3, zh = 0.86, zr = 1.56, rb = 0.035, zt = zr - rb, fC = hl - 0.6;
     const sp = Object.assign({}, CA_CARS.base, { nose: 0.12, chF: 0.06, lamps: 'round', grille: 'black', bump: 'black', trim: 'black' });
-    Object.assign(M, { sp, z0, zb: zh, zr, fC, fR: -hl, chR: 0.05, f0: -hl, f1: hl, noseZ: zh - sp.nose, tailZ: zh, gw: hw, gwT: hw, paint: yel, zTrim: z0 + 0.3, seat2: '#3c5a3a', doorF: [], noTrunk: true });
-    const hood = M.body = this.lowerBody({ f0: fC, f1: hl, hw: hw - 0.04, z0, zb: zh, fC, fR: fC, noseZ: M.noseZ, tailZ: zh, chF: sp.chF, chR: 0, col: yel });
+    Object.assign(M, { sp, z0, zb: zh, zr, fC, fR: -hl, chR: 0.05, f0: -hl, f1: hl, noseZ: zh - sp.nose, tailZ: zh, gw: hw, gwT: hw, paint: yel, zTrim: z0 + 0.3, seat2: '#3c5a3a', doorF: [], noTrunk: true, bv: 0.03 });
+    const hood = M.body = this.lowerBody({ f0: fC, f1: hl, hw: hw - 0.04, z0, zb: zh, fC, fR: fC, noseZ: M.noseZ, tailZ: zh, chF: sp.chF, chR: 0, col: yel, bv: M.bv, bvE: 0.5 });
     this.pfx(hood, [1, 0, 0], (g, F) => this.frontArt(g, F, Object.assign({}, M, { hw: hw - 0.04 })));
     for (const sd of [-1, 1]) this.sidePaint(hood, sd, hw - 0.04, (g, F, R) => { this.wells(g, F, M, sd, z0); g.fillStyle = F.sh(blk); R(fC, z0 + 0.12, hl, z0 + 0.15); });
     for (const fc of hood.faces) if (fc.id === 'hood') fc.fx = [(g, F, f) => { if (S.snow) this.snowCap(g, F, f, 0.1); }];
     M.parts.push(hood);
-    const body = M.cab = this.xbody([[-hl, z0], [fC, z0], [fC, zh], [fC - 0.06, zr - 0.1], [fC - 0.14, zr], [-hl + 0.1, zr], [-hl, zr - 0.1]], -hw, hw, yel, { body: true });
+    // bus box: the front and rear roof curves are profile chamfers, the side roof edges a rounded cap
+    const body = M.cab = this.xbody([[-hl, z0], [fC, z0], [fC, zh], [fC - 0.06, zr - 0.1], [fC - 0.11, zt], [-hl + 0.07, zt], [-hl, zr - 0.1]], -hw, hw, yel, { body: true });
     body.hollow = true; body.inner = []; body.inCol = S.burnt ? '#1a1612' : null;
-    M.parts.push(body);
+    const cap = this.roofCap(this.rect(-hl + 0.07, fC - 0.11, -hw, hw), zt, rb, yel, 0.4);
+    M.parts.push(body, cap);
     const ws = body.faces.find(fc => fc.n[0] > 0.5 && fc.n[2] > 0.02 && fc.n[2] < 0.5);
     const gs = (id) => S.burnt ? 4 : S.glass[id];
     if (ws) { ws.win = []; for (const [a, b] of [[0.04, 0.49], [0.51, 0.96]]) { const q = (u, v) => this.uv(ws, v, u); ws.win.push({ id: 'windshield', st: gs('windshield'), p: [q(a, 0.08), q(b, 0.08), q(b, 0.9), q(a, 0.9)] }); } }
@@ -1777,7 +1785,7 @@ Object.assign(CarArt, {
         if (live) { F.frame(g, [-hl, 0, zw1 + 0.08], [0, 1, 0], [0, 0, -1], 0.01); g.fillStyle = F.sh(blk); g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SCHOOL BUS', 0, 0); }
       }];
     }
-    const top = this.face(body, 'T');
+    const top = this.face(cap, 'T');
     if (top) top.fx = [(g, F, fc) => {
       F.frame(g, [0, 0, zr], [1, 0, 0], [0, 1, 0], 0.01);
       for (const f of [0.75, -0.9]) { g.fillStyle = F.sh(live ? '#d8d0b0' : '#3a3430'); g.fillRect((f - 0.16) * 100, -20, 32, 40); g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.2; g.strokeRect((f - 0.16) * 100, -20, 32, 40); }
@@ -1802,10 +1810,10 @@ Object.assign(CarArt, {
     const fbp = this.bumper(1, hl, hw - 0.04, 0.05, z0 - 0.04, z0 + 0.12, 'black', yel), rbp = this.bumper(-1, -hl, hw, 0.04, z0 - 0.04, z0 + 0.1, 'black', yel);
     M.parts.push(...fbp, ...rbp);
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.06, fC + 0.02, sd > 0 ? hw - 0.005 : -hw - 0.12, sd > 0 ? hw + 0.12 : -hw + 0.005, zh + 0.1, zh + 0.3, CA_COL.black));
-    for (const f of [hl - 0.42, -hl + 1.25]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.24, { rim: 'steel', rimCol: '#2a2a2c', w: 0.18, dual: f < 0 });
+    for (const f of [hl - 0.42, -hl + 1.55]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'steel', rimCol: '#2a2a2c', w: 0.18, dual: f < 0 });
     const wf = hw - 0.04 - sp.chF;
     for (const sd of [-1, 1]) {
-      this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - 0.072, sd < 0 ? 0 : 1);
+      this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.083, sd < 0 ? 0 : 1);
       this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.12), z0 + 0.25, sd < 0 ? 2 : 3);
     }
     this.lamp(M, 'd', 0, 0, zr - 0.03);
