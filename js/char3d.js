@@ -283,6 +283,11 @@ const Char3D = {
       S.turn += (Math.min(0.55, hr * 0.22) * (1 - S.amp) - S.turn) * Math.min(1, dt * 8);
       const g = this.gaitParams(this.gp, gw, S.v);
       S.ph += (S.back ? -d : d) * Math.PI * 2 / g.stride + hr * dt * 0.7 * (1 - S.amp);
+      // stopping: finish the step (on to the next mid-stance, feet under the body) instead of sliding the feet together
+      if (!moving && S.amp > 0.03 && dt > 0) {
+        const rel = ((S.ph - g.beta * Math.PI) % Math.PI + Math.PI) % Math.PI;
+        if (rel > 0.05) S.ph += Math.min(Math.PI - rel, dt * 9 * Math.max(0.35, S.amp));
+      }
     }
     // ---- target pose
     this.base(T, S, D, ang, P, mode);
@@ -373,10 +378,11 @@ const Char3D = {
   arm(T, side, f, out, z, el) { const i = side < 0 ? C3.LW : C3.RW; T[i] = f; T[i + 1] = side * out; T[i + 2] = z; T[i + 3] = el || 0; },
   wdir(T, x, y, z) { const l = Math.sqrt(x * x + y * y + z * z) || 1; T[C3.WD] = x / l; T[C3.WD + 1] = y / l; T[C3.WD + 2] = z / l; },
   // a hanging arm: the wrist below the shoulder in world terms, whatever the torso lean
+  // swing: how far the wrist swings forward (a pendulum from the shoulder); bend shortens the arm at the elbow
   hang(T, side, D, swing, out, bend) {
-    const lam = T[C3.PP] + T[C3.SP], L = (D.ua + D.fa) * (0.955 - (bend || 0) * 0.25);
-    const f = Math.sin(lam) * L + swing, z = -Math.cos(lam) * L + Math.abs(swing) * 0.22 + (bend || 0) * 0.08;
-    this.arm(T, side, f + (bend || 0) * 0.1, out, z, 0);
+    const b = bend || 0, L = (D.ua + D.fa) * (0.995 - b * 0.3);
+    const a = Math.asin(U.clamp(swing / L, -0.9, 0.9)) + T[C3.PP] + T[C3.SP];
+    this.arm(T, side, Math.sin(a) * L + b * 0.05, out, -Math.cos(a) * L + b * 0.04, 0);
   },
   // ---- locomotion: gait cycle + idle, with arms swinging
   loco(T, S, D, P) {
@@ -440,7 +446,7 @@ const Char3D = {
         }
         const r = this.rock(c3b, x, z, th, D);
         let ax = r[0], az = r[1];
-        const w = g.stepW * (zomb ? zv.wide : 1) + crouch * 0.03;
+        const w = g.stepW * (zomb ? zv.wide : 1) + crouch * 0.03 + idle * 0.03;
         let fx = ax * cps - side * w * sps, fy = ax * sps + side * w * cps;
         // the legs must reach: a trailing planted foot rises onto its ball, a leading one lowers the hips
         if (wc > 0) {
@@ -448,7 +454,13 @@ const Char3D = {
           const dxy2 = (fx - hx) * (fx - hx) + (fy - hy) * (fy - hy), need = hz - Math.sqrt(Math.max(0, D.L * D.L - dxy2));
           if (az < need) {
             if (u < beta && ax * cps < -0.02) {
-              for (let it = 0; it < 10 && az < need; it++) { th -= 0.1; const r2 = this.rock(c3b, x, z, th, D); ax = r2[0]; az = r2[1]; }
+              // just enough to reach (a bisection keeps it smooth from frame to frame)
+              let lo = th - 1.3, hi = th;
+              for (let it = 0; it < 9; it++) {
+                const m = (lo + hi) * 0.5, r2 = this.rock(c3b, x, z, m, D), qx = r2[0] * cps - side * w * sps - hx, qy = r2[0] * sps + side * w * cps - hy;
+                if (r2[1] >= hz - Math.sqrt(Math.max(0, D.L * D.L - qx * qx - qy * qy))) lo = m; else hi = m;
+              }
+              th = lo; const r2 = this.rock(c3b, x, z, th, D); ax = r2[0]; az = r2[1];
               fx = ax * cps - side * w * sps; fy = ax * sps + side * w * cps;
             } else if (pass === 0) drop = Math.max(drop, Math.min(g.drop, (need - az) * wc));
           }
@@ -465,7 +477,7 @@ const Char3D = {
     const A = g.arm * amp, bend = g.bend;
     for (let side = -1; side <= 1; side += 2) {
       const sw = A * Math.cos(ph - 0.3) * side;
-      if (bend < 0.3) this.hang(T, side, D, sw * (1 - bend) + A * 0.15, 0.035 + bend * 0.04, 0.12 + bend + Math.max(0, sw) * 0.9);
+      if (bend < 0.3) this.hang(T, side, D, sw * (1 - bend) + A * 0.2, 0.035 + bend * 0.04, 0.02 + bend + Math.max(0, sw) * 0.5);
       else {
         const k = (bend - 0.3) / 0.7, f0 = Math.sin(T[C3.PP] + T[C3.SP]) * 0.45;
         this.arm(T, side, U.lerp(f0 + sw, 0.12 + sw * 1.35, k), U.lerp(0.035, 0.0 - Math.max(0, sw) * 0.3, k), U.lerp(-0.52 + Math.abs(sw) * 0.2, -0.33 + sw * 0.4, k), k * 0.2);
