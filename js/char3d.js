@@ -499,57 +499,71 @@ const Char3D = {
   zArms(T, S, D, P, force) {
     const zv = this.zvar(S), t = S.t, amp = S.amp, ph = S.ph;
     const reach = force || U.clamp((P.reach || 0) + (zv.style === 3 ? 0.75 : 0), 0, 1);
-    for (const side of [-1, 1]) {
+    for (let side = -1; side <= 1; side += 2) {
       const own = zv.style === 2 && side === zv.arm ? 0.85 : zv.style === 1 ? 0.45 : 0;
       const r = Math.max(reach, own) + 0.08 * Math.sin(t * 1.3 + side + S.id);
-      const sw = 0.07 * amp * Math.cos(ph - 0.6) * -side + 0.025 * Math.sin(t * 1.1 + side * 2 + S.id);
-      // hanging pose, then blend toward reaching forward at chest height
-      this.hang(T, side, D, sw, 0.04, 0.05);
+      const sw = 0.07 * amp * Math.cos(ph - 0.6) * side + 0.025 * Math.sin(t * 1.1 + side * 2 + S.id);
+      // hanging slack, then toward reaching out at chest height, the arms all but straight, hands drifting
+      this.hang(T, side, D, sw, 0.04, 0.08);
       const i = side < 0 ? C3.LW : C3.RW;
-      const fx = 0.5 + 0.04 * Math.sin(t * 2.1 + side), fz = -0.08 + 0.05 * Math.sin(t * 1.7 + side * 1.3) + sw * 0.3, fy = -side * 0.03;
+      const fx = 0.53 + 0.03 * Math.sin(t * 2.1 + side), fz = -0.1 + 0.05 * Math.sin(t * 1.7 + side * 1.3) + sw * 0.3, fy = -side * 0.04;
       const k = U.smooth(U.clamp(r, 0, 1));
-      T[i] = U.lerp(T[i], fx, k); T[i + 1] = U.lerp(T[i + 1], fy, k); T[i + 2] = U.lerp(T[i + 2], fz, k); T[i + 3] = k;
+      T[i] = U.lerp(T[i], fx, k); T[i + 1] = U.lerp(T[i + 1], fy, k); T[i + 2] = U.lerp(T[i + 2], fz, k); T[i + 3] = k * 0.7;
     }
     T[C3.JAW] = zv.jaw + 0.25 * Math.max(0, Math.sin(t * 0.8 + S.id));
     this.wdir(T, 0.35, 0.05, -0.93);
   },
-  // ---- zombie lunge and bite (prog 0..1, the bite lands at the end)
+  // ---- zombie lunge and bite (prog 0..0.82 the lunge, the bite lands at 0.82, then recovering)
   zAttack(T, S, D, P) {
     this.zArms(T, S, D, P, 1);
     const p = U.clamp(P.prog === undefined ? S.mt / 0.7 : P.prog, 0, 1);
     const K = this.keys('zatk', () => ({
-      ch: [C3.PX, C3.SP, C3.HP, C3.JAW, C3.LW, C3.LW + 1, C3.LW + 2, C3.RW, C3.RW + 1, C3.RW + 2, C3.PZ],
-      t: [0, 0.45, 0.72, 0.88, 1],
-      v: [0, 0.05, 0.0, 0.3, 0.42, 0.02, -0.06, 0.42, -0.02, -0.06, 0,
-        -0.03, 0.18, -0.25, 0.5, 0.48, 0.04, 0.0, 0.48, -0.04, 0.0, -0.02,
-        0.16, 0.42, -0.35, 1.0, 0.36, 0.1, -0.08, 0.36, -0.1, -0.08, -0.06,
-        0.2, 0.5, 0.15, 0.25, 0.3, 0.13, -0.12, 0.3, -0.13, -0.12, -0.07,
-        0.12, 0.35, 0.05, 0.4, 0.38, 0.06, -0.1, 0.38, -0.06, -0.1, -0.04],
+      // pelvis fwd, height, spine bend, head pitch, jaw, wrists f, z, out, right foot step, twist
+      ch: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      t: [0, 0.3, 0.62, 0.82, 1],
+      v: [0, 0, 0, 0, 0.3, 0.53, -0.1, 0.04, 0, 0,
+        -0.04, -0.01, -0.06, -0.3, 0.7, 0.42, 0.06, 0.12, 0.04, 0.08,
+        0.12, -0.06, 0.32, -0.18, 1.0, 0.6, -0.02, 0.0, 0.3, -0.06,
+        0.14, -0.07, 0.42, 0.22, 0.12, 0.38, -0.14, -0.05, 0.3, -0.03,
+        0.04, -0.02, 0.12, 0.05, 0.4, 0.5, -0.1, 0.03, 0.08, 0],
     }));
-    c3track(K, p, T, this.ADD_ATK || (this.ADD_ATK = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1]));
-    T[C3.LE] = 0.8; T[C3.RE] = 0.8;
+    const o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
+    c3track(K, p, o);
+    T[C3.PX] += o[0]; T[C3.PZ] += o[1]; T[C3.SP] += o[2]; T[C3.HP] += o[3]; T[C3.JAW] = o[4]; T[C3.SW] += o[9];
+    // both hands grab out at the victim, closing in on the bite
+    for (let side = -1; side <= 1; side += 2) {
+      const i = side < 0 ? C3.LW : C3.RW, a = side * 0.02;
+      T[i] = o[5] + a; T[i + 1] = side * o[7]; T[i + 2] = o[6] - a; T[i + 3] = 0.6;
+    }
+    // a step in with the right foot
+    if (S.amp < 0.3) {
+      const Pf = this.pelvisOf(T, this.T1), lift = 0.08 * Math.sin(Math.PI * U.clamp((p - 0.25) / 0.4, 0, 1));
+      this.foot(T, Pf, -1, -0.04, -0.11, D.ankH, 0, 0.15);
+      this.foot(T, Pf, 1, o[8], 0.11, D.ankH + lift, lift * 2, 0.2);
+    }
   },
-  // ---- hit reaction: jerk back, step back, recover
+  // ---- hit reaction: thrown the way it was pushed (stagA: the push direction relative to the facing), the upper
+  // body and head whipping after the hips, a step to catch itself, then recovering
   stagger(T, S, D, P) {
-    const zomb = D.zomb;
-    if (zomb) this.zArms(T, S, D, P); else this.upper(T, S, D, P);
-    const p = U.clamp(P.prog === undefined ? S.mt / 0.5 : P.prog, 0, 1);
-    const K = this.keys('stag', () => ({
-      ch: [C3.PX, C3.SP, C3.HP, C3.JAW, C3.PZ, C3.SR],
-      t: [0, 0.15, 0.5, 1],
-      v: [0, 0, 0, 0, 0, 0,
-        -0.08, -0.32, -0.45, 0.6, -0.03, 0.1,
-        -0.12, -0.1, -0.15, 0.3, -0.05, 0.05,
-        0, 0, 0, 0, 0, 0],
-    }));
-    c3track(K, p, T, [1, 1, 1, 0, 1, 1]);
-    // arms fly up and out
-    const k = Math.sin(Math.min(1, p / 0.6) * Math.PI);
-    for (const side of [-1, 1]) { const i = side < 0 ? C3.LW : C3.RW; T[i] += 0.05 * k; T[i + 1] += side * 0.18 * k; T[i + 2] += 0.25 * k; }
-    // a step back with the right foot
-    const st = U.smooth(U.clamp((p - 0.1) / 0.4, 0, 1)) * (1 - U.smooth(U.clamp((p - 0.7) / 0.3, 0, 1)) * 0.6);
-    const Pf = this.pelvisOf(T, this.T1), lift = Math.sin(U.clamp((p - 0.1) / 0.4, 0, 1) * Math.PI) * 0.07;
-    this.foot(T, Pf, 1, -0.28 * st, D.hipW * 1.1, D.ankH + lift, -0.2 * lift * 5);
+    if (D.zomb) this.zArms(T, S, D, P); else this.upper(T, S, D, P);
+    const p = U.clamp(P.prog === undefined ? S.mt / 0.5 : P.prog, 0, 1), a = P.stagA === undefined ? Math.PI : P.stagA;
+    const fx = Math.cos(a), sy = Math.sin(a);
+    const k1 = p < 0.1 ? U.smooth(p / 0.1) : 1 - U.smooth(U.clamp((p - 0.1) / 0.65, 0, 1));
+    const k2 = U.smooth(U.clamp(p / 0.35, 0, 1)) * (1 - U.smooth(U.clamp((p - 0.6) / 0.4, 0, 1)));
+    T[C3.SP] += 0.42 * fx * k1 - 0.06 * k2; T[C3.SR] += 0.32 * sy * k1; T[C3.HP] += 0.5 * fx * k1; T[C3.HR] += 0.35 * sy * k1;
+    T[C3.PX] += 0.09 * fx * k2; T[C3.PY] += 0.09 * sy * k2; T[C3.PZ] -= 0.05 * k2; T[C3.JAW] = Math.max(T[C3.JAW], 0.8 * k1);
+    // the arms fly out with the jolt
+    for (let side = -1; side <= 1; side += 2) {
+      const i = side < 0 ? C3.LW : C3.RW;
+      T[i] -= 0.12 * fx * k1; T[i + 1] += side * 0.14 * k1 - 0.1 * sy * k1; T[i + 2] += 0.22 * k1;
+    }
+    // the foot on the side it was pushed toward steps that way
+    if (S.amp < 0.3) {
+      const side = sy > 0.3 ? 1 : sy < -0.3 ? -1 : S.id % 2 ? 1 : -1, st = 0.3 * k2;
+      const Pf = this.pelvisOf(T, this.T1), lift = 0.07 * Math.sin(Math.PI * U.clamp((p - 0.08) / 0.35, 0, 1));
+      this.foot(T, Pf, -side, 0, -side * 0.11, D.ankH, 0, 0.15);
+      this.foot(T, Pf, side, fx * st, side * 0.11 + sy * st, D.ankH + lift, -0.3 * lift * 5 * fx, 0.15);
+    }
   },
   // ---- the player: holding, readying, swinging, aiming, shoving, stomping, working ...
   upper(T, S, D, P) {
@@ -1009,19 +1023,21 @@ const Char3D = {
     c3track(K, p, T);
     if (D.zomb) T[C3.JAW] = 0.3;
   },
-  // crawling face down: arms reach ahead and drag the body, legs trail
+  // crawling face down: each arm reaches out ahead of the head, plants and drags the body up to it, the other half a
+  // cycle behind; the legs trail, a knee drawing up on the pulling side
   crawl(T, S, D, P) {
     this.liePose(T, D, -1, S.id, false);
-    const ph = S.ph * 2.2, amp = Math.max(0.25, S.amp), t = S.t;
-    T[C3.PX] = 0.1; T[C3.HW] = 0; T[C3.HR] = 0; T[C3.HP] = -0.75; T[C3.SP] = -0.12; T[C3.PZ] = 0.13 + 0.015 * Math.abs(Math.sin(ph)) * amp;
-    T[C3.SW] = 0.12 * Math.sin(ph) * amp; T[C3.PW] = -0.06 * Math.sin(ph) * amp;
-    for (const side of [-1, 1]) {
-      const c = Math.sin(ph + (side < 0 ? 0 : Math.PI)) * amp, i = side < 0 ? C3.LW : C3.RW;
-      // reach ahead (along the body, above the head), lifted on the way forward, pulling back along the ground
-      const up = Math.max(0, Math.cos(ph + (side < 0 ? 0 : Math.PI))) * amp;
-      T[i] = 0.02 - up * 0.12; T[i + 1] = side * (0.08 + 0.04 * c); T[i + 2] = 0.12 + c * 0.24; T[i + 3] = 0.5;
-      const j = side < 0 ? C3.LA : C3.RA, k = Math.max(0, -c);
-      T[j + 2] += k * 0.18; T[j] += -k * 0.12;
+    const ph = S.ph * 2.2, amp = Math.max(0.3, S.amp), t = S.t;
+    T[C3.PX] = 0.1; T[C3.HW] = 0; T[C3.HR] = 0; T[C3.HP] = -0.7; T[C3.SP] = -0.16; T[C3.PZ] = 0.13 + 0.012 * Math.abs(Math.sin(ph)) * amp;
+    T[C3.SW] = 0.1 * Math.sin(ph) * amp; T[C3.PW] = -0.05 * Math.sin(ph) * amp; T[C3.SR] = 0.1 * Math.sin(ph) * amp;
+    for (let side = -1; side <= 1; side += 2) {
+      let u = (ph / (Math.PI * 2) + (side > 0 ? 0.5 : 0)) % 1; if (u < 0) u += 1;
+      const pull = u < 0.6, k = pull ? u / 0.6 : (u - 0.6) / 0.4;
+      const reach = (pull ? U.lerp(0.5, 0.1, U.smooth(k)) : U.lerp(0.1, 0.5, U.smooth(k))) * amp + 0.3 * (1 - amp), lift = pull ? 0 : Math.sin(Math.PI * k) * 0.1;
+      const i = side < 0 ? C3.LW : C3.RW;
+      T[i] = 0.1 - lift; T[i + 1] = side * (0.08 + 0.08 * (1 - reach)); T[i + 2] = reach; T[i + 3] = 1.7;
+      const j = side < 0 ? C3.LA : C3.RA, kk = pull ? Math.sin(Math.PI * k) * amp : 0;
+      T[j] -= kk * 0.05; T[j + 1] += side * kk * 0.08; T[j + 2] += kk * 0.16;
     }
     T[C3.JAW] = 0.4 + 0.3 * Math.max(0, Math.sin(t * 2.3 + S.id));
   },
@@ -1274,8 +1290,9 @@ const Char3D = {
         const g = U.clamp(T[C3.GR], 0, 1);
         tg[0] += (gx - tg[0]) * g; tg[1] += (gy - tg[1]) * g; tg[2] += (gz - tg[2]) * g;
       } else c3pt(tg, Cf, -0.012 + T[i], side * D.shW + T[i + 1], D.shZ + T[i + 2]);
-      const el = U.clamp(T[i + 3], 0, 1);
-      const pole = c3dir(c3c, Cf, -1 + el * 0.75, side * (0.32 + el * 0.4), -0.25 - el * 0.6);
+      // elbow 0..1: pointing back .. out and down; 1..2: on toward pointing straight out to the side (crawling)
+      const el = U.clamp(T[i + 3], 0, 1), eo = U.clamp(T[i + 3] - 1, 0, 1);
+      const pole = c3dir(c3c, Cf, -1 + el * 0.75 + eo * 0.55, side * (0.32 + el * 0.4 + eo * 0.4), -0.25 - el * 0.6 + eo * 0.55);
       const E = c3E, Wr = c3W;
       this.ik(S0, tg, ua, fa, pole[0], pole[1], pole[2], E, Wr);
       const torn = side < 0 ? ex.tornL : ex.tornR;
