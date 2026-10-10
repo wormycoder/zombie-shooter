@@ -1028,16 +1028,51 @@ Object.assign(CarArt, {
     this.dmgArt(g, F, M, fl, S.seed * 23 + 1, 0.05, len - 0.05, -w + 0.1, w - 0.1);
     if (S.snow) this.snowCap(g, F, fc, 0.12);
   },
+  // open bay seen from above (hood frame: x forward from the cowl, y across): a V8 between the fender aprons with
+  // two ribbed valve covers, a round air cleaner, radiator and fan at the front, battery and washer bottle beside
   engineBay(g, F, M, len, w) {
-    const k = 100, R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
-    g.fillStyle = F.sh('#1c1c1e'); R(0.02, -w + 0.06, len - 0.02, w - 0.06);
-    g.fillStyle = F.sh('#4a4c50'); R(0.08, -w * 0.45, len * 0.75, w * 0.45);
-    g.fillStyle = F.sh('#8a2a20'); R(0.1, -w * 0.4, len * 0.7, -w * 0.12); R(0.1, w * 0.12, len * 0.7, w * 0.4);
-    g.fillStyle = F.sh('#141414'); g.beginPath(); g.arc(len * 0.42 * k, 0, w * 0.32 * k, 0, 7); g.fill();
-    g.fillStyle = F.sh('#6a6c70'); g.beginPath(); g.arc(len * 0.42 * k, 0, w * 0.08 * k, 0, 7); g.fill();
-    g.fillStyle = F.sh('#202022'); R(len * 0.15, w - 0.28, len * 0.45, w - 0.08);
-    g.fillStyle = F.sh('#c02020'); R(len * 0.2, w - 0.12, len * 0.24, w - 0.09);
-    g.fillStyle = F.sh('#3a3c40'); R(len - 0.08, -w + 0.08, len - 0.03, w - 0.08);
+    const k = 100, R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k), bt = M.S.burnt;
+    const C = (c, m) => F.sh(bt ? '#2a2420' : c, m), disc = (x, y, r) => { g.beginPath(); g.arc(x * k, y * k, r * k, 0, 7); g.fill(); };
+    const vc = bt ? '#3a2c24' : ['#b4562c', '#2e4c8a', '#8c9298', '#2a2a2e'][this.hash(M.S.col0 + M.S.type) % 4];
+    const e0 = len * 0.13, e1 = len * 0.66, bw = w * 0.42, fr = len - 0.1;
+    g.fillStyle = F.sh('#131315'); R(0.015, -w + 0.055, len - 0.025, w - 0.055);
+    // fender aprons, cowl / firewall with the brake booster on the driver side
+    g.fillStyle = C('#252629'); R(0.06, -w + 0.055, fr, -w + 0.1); R(0.06, w - 0.1, fr, w - 0.055); R(0.015, -w + 0.055, 0.06, w - 0.055);
+    g.fillStyle = C('#303135'); disc(0.1, -w * 0.62, Math.min(0.055, w * 0.12));
+    // radiator core support, radiator with fins and cap, fan shroud
+    g.fillStyle = C('#2a2b2e'); R(fr, -w + 0.08, len - 0.03, w - 0.08);
+    g.fillStyle = C('#3c3e42'); for (let s = -w + 0.11; s < w - 0.1; s += 0.025) R(fr + 0.012, s, len - 0.045, s + 0.01);
+    g.fillStyle = C('#1a1a1c'); R(e1 + 0.02, -bw * 0.9, fr, bw * 0.9);
+    g.fillStyle = C('#2c2d30'); disc((e1 + fr) / 2 + 0.01, 0, Math.min(bw * 0.7, (fr - e1) * 0.6));
+    // block, valve covers (ribbed, lit top edge), aluminium intake between them
+    g.fillStyle = C('#2c2e32'); R(e0, -bw, e1, bw);
+    for (const sd of [-1, 1]) {
+      const a = sd * bw * 0.42, b = sd * bw * 0.96, s0 = Math.min(a, b), s1 = Math.max(a, b);
+      g.fillStyle = F.sh(vc); R(e0 + 0.02, s0, e1 - 0.02, s1);
+      g.fillStyle = 'rgba(0,0,0,0.3)'; for (let f = e0 + 0.05; f < e1 - 0.03; f += 0.04) R(f, s0 + 0.01, f + 0.012, s1 - 0.01);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; R(e0 + 0.02, sd < 0 ? s0 : s1 - 0.012, e1 - 0.02, sd < 0 ? s0 + 0.012 : s1);
+    }
+    g.fillStyle = C('#6a6e74'); R(e0 + 0.03, -bw * 0.36, e1 - 0.03, bw * 0.36);
+    // air cleaner: black can, chrome lid, wing nut; snorkel towards the front
+    const ac = (e0 + e1) / 2, ar = Math.min(w * 0.26, (e1 - e0) * 0.42);
+    g.fillStyle = C('#161618'); R(ac, -ar * 0.25, e1 + 0.04, ar * 0.25); disc(ac, 0, ar);
+    g.fillStyle = C('#aab0b6'); disc(ac, 0, ar * 0.78);
+    g.fillStyle = C('#d8dde2'); disc(ac - ar * 0.12, -ar * 0.12, ar * 0.4);
+    g.fillStyle = C('#3a3c40'); disc(ac, 0, ar * 0.12);
+    // upper radiator hose, alternator
+    g.strokeStyle = C('#101012'); g.lineWidth = 3; g.beginPath(); g.moveTo((e1 - 0.04) * k, bw * 0.3 * k); g.quadraticCurveTo((e1 + 0.04) * k, bw * 0.75 * k, (fr + 0.01) * k, bw * 0.6 * k); g.stroke();
+    g.fillStyle = C('#7c8086'); disc(e1 + 0.01, -bw * 0.78, 0.028);
+    // battery (red / black posts) on the passenger apron, washer bottle on the driver side
+    const b0 = Math.max(e1 - 0.12, len * 0.42), s0 = Math.max(bw + 0.03, w - 0.27);
+    if (w - 0.1 - s0 > 0.06) {
+      g.fillStyle = C('#1c1c1e'); R(b0, s0, fr - 0.015, w - 0.1);
+      g.fillStyle = C('#34363a'); R(b0 + 0.012, s0 + 0.012, fr - 0.027, w - 0.112);
+      g.fillStyle = F.sh(bt ? '#3a2a22' : '#c42a1e'); R(fr - 0.06, s0 + 0.025, fr - 0.035, s0 + 0.05);
+      g.fillStyle = C('#101012'); R(b0 + 0.025, s0 + 0.025, b0 + 0.05, s0 + 0.05);
+      g.fillStyle = F.sh(bt ? '#2a2420' : '#9aa294', 0.9); R(fr - 0.15, -w + 0.11, fr - 0.03, -w + 0.2);
+      g.fillStyle = C('#2a4a8a'); disc(fr - 0.12, -w + 0.155, 0.016);
+    }
+    if (bt) { g.fillStyle = 'rgba(90,50,30,0.35)'; for (let i = 0; i < 6; i++) disc(e0 + (e1 - e0) * ((i * 37 % 10) / 10), (i * 53 % 9 - 4) / 9 * bw, 0.03); }
   },
   trunkArt(g, F, fc, M) {
     const S = M.S, k = 100, len = M.fR - M.f0, w = M.hw;
@@ -1457,13 +1492,14 @@ Object.assign(CarArt, {
   },
   // mud flap hanging behind a wheel, just inside the body side, down from the body bottom z1
   mudflap(M, f, sd, s, z1, col) {
-    const p = this.box(f - 0.014, f, sd > 0 ? s - 0.14 : -s, sd > 0 ? s : -s + 0.14, 0.06, z1, col || '#18181a');
+    // thick enough to read as a rubber flap (not a hairline) when seen edge-on from the side
+    const p = this.box(f - 0.028, f, sd > 0 ? s - 0.14 : -s, sd > 0 ? s : -s + 0.14, 0.075, z1, col || '#18181a');
     this.fx(p, 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(10, 55, 80, 6); });
     M.parts.push(p);
   },
   b_pickup(M, S, T) {
     const L = T.len, hl = M.hl, hw = M.hw, h = this.hash(S.col0), live = !S.burnt;
-    const z0 = 0.22, zb = 0.68, zr = 1.08, fb = -L * 0.04, fC = L * 0.2;
+    const z0 = 0.22, zb = 0.68, zr = 1.08, fb = -L * 0.07, fC = L * 0.2;
     const two = h % 2 ? null : (Col.rgb(S.col)[0] > 150 ? '#8a3a2a' : '#c8c0a8');
     const { sp } = this.truckFront(M, S, { z0, zb, zr, fb, fC, sp: { r: 0.225, nose: 0.04, chF: 0.05, rakeF: 0.2, rakeR: 0.02, tum: 0.05, gin: 0.035, doors: 2, lamps: h % 3 ? 'quad' : 'rect', grille: 'chrome', two } });
     M.band = true;
