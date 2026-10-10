@@ -216,13 +216,13 @@ const Char3D = {
   // heel strike and toe off; arm/bend: arm swing and elbow bend (0 hanging .. 1 pumping)
   GAIT: [
     { st0: 0.72, stk: 0.38, stMin: 0.9, stMax: 1.55, beta: 0.6, lift: 0.085, peak: 0.3, ff: 0.4, base: 0.003, bob: 0.03, rb: 0, drop: 0.045, kick: 0.1,
-      lean: 0.035, arm: 0.15, bend: 0.1, twist: 0.08, pyaw: 0.09, proll: 0.055, sway: 0.016, stepW: 0.07, hs: 0.3, to: 0.62 },
-    { st0: 1.1, stk: 0.36, stMin: 1.55, stMax: 2.3, beta: 0.4, lift: 0.3, peak: 0.36, ff: 0.34, base: 0.03, bob: 0.04, rb: 1, drop: 0.07, kick: 0.75,
+      lean: 0.035, arm: 0.19, bend: 0.1, twist: 0.08, pyaw: 0.09, proll: 0.055, sway: 0.016, stepW: 0.07, hs: 0.3, to: 0.62 },
+    { st0: 1.1, stk: 0.36, stMin: 1.55, stMax: 2.3, beta: 0.4, lift: 0.32, peak: 0.36, ff: 0.4, base: 0.03, bob: 0.04, rb: 1, drop: 0.07, kick: 0.2,
       lean: 0.11, arm: 0.17, bend: 0.86, twist: 0.15, pyaw: 0.13, proll: 0.05, sway: 0.008, stepW: 0.05, hs: 0.16, to: 0.85 },
-    { st0: 1.3, stk: 0.36, stMin: 2.0, stMax: 2.9, beta: 0.34, lift: 0.42, peak: 0.36, ff: 0.3, base: 0.04, bob: 0.045, rb: 1, drop: 0.08, kick: 0.95,
-      lean: 0.22, arm: 0.24, bend: 0.94, twist: 0.2, pyaw: 0.16, proll: 0.045, sway: 0.006, stepW: 0.045, hs: 0.12, to: 0.95 },
-    { st0: 0.55, stk: 0.3, stMin: 0.68, stMax: 1.0, beta: 0.64, lift: 0.075, peak: 0.42, ff: 0.42, base: 0.12, bob: 0.012, rb: 0, drop: 0.04, kick: 0.15,
-      lean: 0.32, arm: 0.06, bend: 0.55, twist: 0.05, pyaw: 0.06, proll: 0.03, sway: 0.02, stepW: 0.1, hs: 0.18, to: 0.45 },
+    { st0: 1.3, stk: 0.36, stMin: 2.0, stMax: 2.6, beta: 0.36, lift: 0.4, peak: 0.36, ff: 0.42, base: 0.015, bob: 0.045, rb: 1, drop: 0.05, kick: 0.25,
+      lean: 0.22, arm: 0.2, bend: 0.94, twist: 0.2, pyaw: 0.16, proll: 0.045, sway: 0.006, stepW: 0.045, hs: 0.12, to: 0.95 },
+    { st0: 0.55, stk: 0.3, stMin: 0.68, stMax: 1.0, beta: 0.64, lift: 0.075, peak: 0.42, ff: 0.42, base: 0.08, bob: 0.012, rb: 0, drop: 0.04, kick: 0.15,
+      lean: 0.52, arm: 0.06, bend: 0.55, twist: 0.05, pyaw: 0.06, proll: 0.03, sway: 0.02, stepW: 0.1, hs: 0.18, to: 0.45 },
     { st0: 0.5, stk: 0.5, stMin: 0.6, stMax: 1.15, beta: 0.66, lift: 0.04, peak: 0.5, ff: 0.44, base: 0.012, bob: 0.018, rb: 0, drop: 0.035, kick: 0,
       lean: 0.1, arm: 0.07, bend: 0.15, twist: 0.1, pyaw: 0.08, proll: 0.08, sway: 0.03, stepW: 0.1, hs: 0.06, to: 0.3 },
   ],
@@ -524,10 +524,10 @@ const Char3D = {
       ch: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
       t: [0, 0.3, 0.62, 0.82, 1],
       v: [0, 0, 0, 0, 0.3, 0.53, -0.1, 0.04, 0, 0,
-        -0.04, -0.01, -0.06, -0.3, 0.7, 0.42, 0.06, 0.12, 0.04, 0.08,
-        0.12, -0.06, 0.32, -0.18, 1.0, 0.6, -0.02, 0.0, 0.3, -0.06,
-        0.14, -0.07, 0.42, 0.22, 0.12, 0.38, -0.14, -0.05, 0.3, -0.03,
-        0.04, -0.02, 0.12, 0.05, 0.4, 0.5, -0.1, 0.03, 0.08, 0],
+        -0.04, -0.005, -0.06, -0.3, 0.7, 0.42, 0.06, 0.12, 0.04, 0.08,
+        0.12, -0.03, 0.32, -0.18, 1.0, 0.6, -0.02, 0.0, 0.36, -0.06,
+        0.15, -0.045, 0.42, 0.22, 0.12, 0.38, -0.14, -0.05, 0.36, -0.03,
+        0.04, -0.015, 0.12, 0.05, 0.4, 0.5, -0.1, 0.03, 0.1, 0],
     }));
     const o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
     c3track(K, p, o);
@@ -540,7 +540,8 @@ const Char3D = {
     // a step in with the right foot
     if (S.amp < 0.3) {
       const Pf = this.pelvisOf(T, this.T1), lift = 0.08 * Math.sin(Math.PI * U.clamp((p - 0.25) / 0.4, 0, 1));
-      this.foot(T, Pf, -1, -0.04, -0.11, D.ankH, 0, 0.15);
+      // the back leg pushes off, all but straight
+      this.foot(T, Pf, -1, -0.04 - o[8] * 0.2, -0.11, D.ankH, -o[8] * 0.5, 0.15);
       this.foot(T, Pf, 1, o[8], 0.11, D.ankH + lift, lift * 2, 0.2);
     }
   },
@@ -552,16 +553,16 @@ const Char3D = {
     const fx = Math.cos(a), sy = Math.sin(a);
     const k1 = p < 0.1 ? U.smooth(p / 0.1) : 1 - U.smooth(U.clamp((p - 0.1) / 0.65, 0, 1));
     const k2 = U.smooth(U.clamp(p / 0.35, 0, 1)) * (1 - U.smooth(U.clamp((p - 0.6) / 0.4, 0, 1)));
-    T[C3.SP] += 0.42 * fx * k1 - 0.06 * k2; T[C3.SR] += 0.32 * sy * k1; T[C3.HP] += 0.5 * fx * k1; T[C3.HR] += 0.35 * sy * k1;
-    T[C3.PX] += 0.09 * fx * k2; T[C3.PY] += 0.09 * sy * k2; T[C3.PZ] -= 0.05 * k2; T[C3.JAW] = Math.max(T[C3.JAW], 0.8 * k1);
-    // the arms fly out with the jolt
+    T[C3.SP] += 0.6 * fx * k1 - 0.08 * k2; T[C3.SR] += 0.42 * sy * k1; T[C3.HP] += 0.62 * fx * k1; T[C3.HR] += 0.45 * sy * k1; T[C3.HW] += 0.25 * sy * k1;
+    T[C3.PX] += 0.14 * fx * k2; T[C3.PY] += 0.12 * sy * k2; T[C3.PZ] -= 0.05 * k2; T[C3.PR] += 0.08 * sy * k2; T[C3.JAW] = Math.max(T[C3.JAW], 0.8 * k1);
+    // the arms fly out with the jolt, trailing the body
     for (let side = -1; side <= 1; side += 2) {
       const i = side < 0 ? C3.LW : C3.RW;
-      T[i] -= 0.12 * fx * k1; T[i + 1] += side * 0.14 * k1 - 0.1 * sy * k1; T[i + 2] += 0.22 * k1;
+      T[i] -= 0.18 * fx * k1; T[i + 1] += side * 0.2 * k1 - 0.14 * sy * k1; T[i + 2] += 0.3 * k1; T[i + 3] = Math.max(T[i + 3], 0.5 * k1);
     }
     // the foot on the side it was pushed toward steps that way
     if (S.amp < 0.3) {
-      const side = sy > 0.3 ? 1 : sy < -0.3 ? -1 : S.id % 2 ? 1 : -1, st = 0.3 * k2;
+      const side = sy > 0.3 ? 1 : sy < -0.3 ? -1 : S.id % 2 ? 1 : -1, st = 0.42 * k2;
       const Pf = this.pelvisOf(T, this.T1), lift = 0.07 * Math.sin(Math.PI * U.clamp((p - 0.08) / 0.35, 0, 1));
       this.foot(T, Pf, -side, 0, -side * 0.11, D.ankH, 0, 0.15);
       this.foot(T, Pf, side, fx * st, side * 0.11 + sy * st, D.ankH + lift, -0.3 * lift * 5 * fx, 0.15);
@@ -827,29 +828,32 @@ const Char3D = {
   stomp(T, S, D, P) {
     const p = U.clamp(P.swingT || 0, 0, 1), sd = U.clamp(P.stompD === undefined ? 0.45 : P.stompD, 0.3, 0.6);
     const K = this.keys('stomp', () => ({
-      // right ankle x (fraction of the reach at contact), z, foot pitch; spine bend, pelvis fwd, side, height, head pitch, pelvis roll
+      // right ankle x (fraction of the reach at contact), z, foot pitch; spine bend, pelvis fwd, side, height, head pitch, pelvis roll.
+      // The weight goes onto the left leg, the knee comes up under the body (foot below it, heel first), then the
+      // heel is driven straight down with the hips sinking and the body over it; it lands on the head (ankle above
+      // the ground), pushes through, and the foot comes back
       ch: [0, 1, 2, 3, 4, 5, 6, 7, 8],
-      t: [0, 0.22, 0.38, 0.46, 0.5, 0.62, 0.82, 1],
+      t: [0, 0.16, 0.32, 0.42, 0.5, 0.6, 0.8, 1],
       v: [0.0, 0.075, 0, 0, 0, 0, 0, 0.05, 0,
-        0.4, 0.42, 0.2, 0.14, 0.0, -0.04, -0.01, 0.3, -0.05,
-        0.66, 0.5, 0.12, 0.24, 0.04, -0.05, -0.02, 0.45, -0.06,
-        0.95, 0.27, 0.0, 0.3, 0.1, -0.04, -0.06, 0.55, -0.04,
-        1.0, 0.13, 0.0, 0.32, 0.13, -0.03, -0.09, 0.62, -0.02,
-        1.0, 0.13, 0.0, 0.3, 0.13, -0.03, -0.09, 0.62, -0.02,
-        0.45, 0.17, -0.1, 0.12, 0.04, -0.01, -0.03, 0.3, 0,
+        0.12, 0.17, 0.1, 0.06, 0.0, -0.035, -0.01, 0.25, -0.03,
+        0.45, 0.46, 0.18, 0.16, 0.02, -0.05, -0.02, 0.45, -0.06,
+        0.82, 0.38, 0.12, 0.26, 0.08, -0.04, -0.05, 0.55, -0.04,
+        1.0, 0.15, 0.04, 0.34, 0.12, -0.02, -0.1, 0.6, 0,
+        1.0, 0.12, 0.02, 0.32, 0.12, -0.02, -0.1, 0.6, 0,
+        0.45, 0.14, -0.08, 0.12, 0.04, -0.01, -0.04, 0.35, -0.02,
         0.0, 0.075, 0, 0, 0, 0, 0, 0.05, 0],
     }));
     const o = this.tmpRow || (this.tmpRow = new Float32Array(C3.N));
     c3track(K, p, o);
     T[C3.SP] += o[3]; T[C3.PX] += o[4]; T[C3.PY] += o[5]; T[C3.PZ] += o[6]; T[C3.HP] += o[7]; T[C3.PR] += o[8];
-    // arms out for balance, swinging down with the stomp
+    // arms out a little for balance, dropping with the stomp
     const k = Math.sin(p * Math.PI);
-    this.hang(T, -1, D, 0.14 * k, 0.06 + 0.1 * k, 0.25);
-    this.hang(T, 1, D, -0.12 * k, 0.05 + 0.07 * k, 0.25);
+    this.hang(T, -1, D, 0.16 * k, 0.07 + 0.08 * k, 0.3);
+    this.hang(T, 1, D, -0.1 * k, 0.06 + 0.06 * k, 0.25);
     if (!P.weapon) T[C3.LH] = 1;
     const Pf = this.pelvisOf(T, this.T1);
-    this.foot(T, Pf, -1, -0.06, -0.12, D.ankH, 0, 0.15);
-    this.foot(T, Pf, 1, sd * o[0], 0.06, Math.max(D.ankH, o[1]), o[2], 0.05);
+    this.foot(T, Pf, -1, -0.07, -0.11, D.ankH, 0, 0.15);
+    this.foot(T, Pf, 1, sd * o[0], 0.07, Math.max(D.ankH, o[1]), o[2], 0.05);
   },
   // ---- climbing over a fence or through a window (prog 0..1)
   climb(T, S, D, P) {
