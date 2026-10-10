@@ -394,7 +394,8 @@ const Char3D = {
     const amp = Math.max(S.amp, S.turn), ph = S.ph, t = S.t, zomb = D.zomb, zv = zomb ? this.zvar(S) : null;
     // turning on the spot: short shuffling steps
     const stride = g.stride * (S.turn > S.amp ? 0.2 : 1), beta = g.beta, travel = beta * stride * amp;
-    const crouch = Math.max(P.crouch || 0, 0) * (S.gw[3] > 0.5 ? 0 : 1);
+    // (squats bob on their own clock; the 2D painter's crouch would fight it)
+    const crouch = Math.max(P.crouch || 0, 0) * (S.gw[3] > 0.5 || P.arms === 'squat' ? 0 : 1);
     // sneaking stays low and bent over when it stops
     const hold = S.gw[3] * (1 - amp), SN = this.GAIT[3];
     // pelvis: a walk is highest at mid-stance (vaulting over the planted leg), a run lowest; the hips sway over the
