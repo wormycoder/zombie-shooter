@@ -1312,8 +1312,8 @@ const Char3D = {
       // the deltoid: an ellipsoid over the joint, longest down the arm, rounding the arm into the shoulder line
       // (flatter on the outside and tucked in a little, so a sleeve does not stand off the shoulder like a pad)
       const di = 0.01;
-      c3a[0] = S0[0] - ox * di; c3a[1] = S0[1] - oy * di; c3a[2] = S0[2] - oz * di;
-      c3g[0] = c3a[0] + ux * 0.105; c3g[1] = c3a[1] + uy * 0.105; c3g[2] = c3a[2] + uz * 0.105;
+      c3a[0] = S0[0] - ox * di + ux * 0.012; c3a[1] = S0[1] - oy * di + uy * 0.012; c3a[2] = S0[2] - oz * di + uz * 0.012;
+      c3g[0] = c3a[0] + ux * 0.1; c3g[1] = c3a[1] + uy * 0.1; c3g[2] = c3a[2] + uz * 0.1;
       const dR = armR * 1.04 + cl;
       c3seg(SP, c3a, c3g, dR * 0.88, dR * 1.02, up, 1, 1, ox, oy, oz);
       // upper arm, its top hidden in the deltoid; a short sleeve ends half way down with a slight flare
