@@ -1228,7 +1228,8 @@ const Char3D = {
       if (det > 1) c3box(BOX, Pf, 0.092 * hiS, 0, 0.112, 0.006, 0.02, 0.014, Pl.buckle);
     }
     c3box(GL3D.CHEST, Cf, 0, 0, 0, UC * shS * (fem ? 0.97 : 1), UC * shS, UC * H, Pl.bareTop ? Pl.skin : under);
-    if (fem) for (const sd of [-1, 1]) c3box(SP, Cf, 0.07 * shS, sd * 0.048 * shS, 0.115 * H, 0.05, 0.058, 0.055, Pl.bareTop ? Pl.skin : under);
+    // the bust: two soft overlapping swells that read as one shape under the cloth
+    if (fem) for (const sd of [-1, 1]) c3box(SP, Cf, 0.064 * shS, sd * 0.042 * shS, 0.112 * H, 0.046, 0.06, 0.052, Pl.bareTop ? Pl.skin : under);
     if (jk) {
       // a jacket over the shirt: bulkier, longer, with a turned-up collar and a darker zip line
       c3box(GL3D.CHEST, Cf, -0.004, 0, 0.004, UC * shS * jx * (fem ? 1 : 1.03), UC * shS * jx, UC * H * 1.01, Pl.jacket);
@@ -1308,17 +1309,19 @@ const Char3D = {
       let ux = E[0] - S0[0], uy = E[1] - S0[1], uz = E[2] - S0[2]; const ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1; ux /= ul; uy /= ul; uz /= ul;
       const ox = Cf[6] * side, oy = Cf[7] * side, oz = Cf[8] * side;
       // the deltoid: an ellipsoid over the joint, longest down the arm, rounding the arm into the shoulder line
-      c3a[0] = S0[0] - ux * 0.012; c3a[1] = S0[1] - uy * 0.012; c3a[2] = S0[2] - uz * 0.012;
-      c3g[0] = S0[0] + ux * 0.095; c3g[1] = S0[1] + uy * 0.095; c3g[2] = S0[2] + uz * 0.095;
+      // (flatter on the outside and tucked in a little, so a sleeve does not stand off the shoulder like a pad)
+      const di = 0.01;
+      c3a[0] = S0[0] - ox * di; c3a[1] = S0[1] - oy * di; c3a[2] = S0[2] - oz * di;
+      c3g[0] = c3a[0] + ux * 0.105; c3g[1] = c3a[1] + uy * 0.105; c3g[2] = c3a[2] + uz * 0.105;
       const dR = armR * 1.04 + cl;
-      c3seg(SP, c3a, c3g, dR, dR * 1.06, up, 1, 1, ox, oy, oz);
+      c3seg(SP, c3a, c3g, dR * 0.88, dR * 1.02, up, 1, 1, ox, oy, oz);
       // upper arm, its top hidden in the deltoid; a short sleeve ends half way down with a slight flare
       c3a[0] = S0[0] + ux * 0.05; c3a[1] = S0[1] + uy * 0.05; c3a[2] = S0[2] + uz * 0.05;
-      c3seg(GL3D.LIMB, c3a, E, armR * 1.02 + cl, armR * 0.98 + cl, longS ? sleeve : Pl.skin, 1, 1, Cf[3], Cf[4], Cf[5]);
+      c3seg(GL3D.LIMB, c3a, E, armR * 1.02 + (longS ? cl : 0), armR * 0.98 + (longS ? cl : 0), longS ? sleeve : Pl.skin, 1, 1, Cf[3], Cf[4], Cf[5]);
       if (clothed && !longS) {
         c3a[0] = S0[0] + ux * 0.035; c3a[1] = S0[1] + uy * 0.035; c3a[2] = S0[2] + uz * 0.035;
         const k = ua * 0.48; c3g[0] = S0[0] + ux * k; c3g[1] = S0[1] + uy * k; c3g[2] = S0[2] + uz * k;
-        c3seg(CY, c3a, c3g, dR, dR * 1.04, up, 0.98, 1.03, Cf[3], Cf[4], Cf[5]);
+        c3seg(CY, c3a, c3g, dR * 0.95, dR * 0.98, up, 0.98, 1.02, Cf[3], Cf[4], Cf[5]);
       }
       if (torn && det > 0) { c3g[0] = S0[0] + ux * ua * 0.5; c3g[1] = S0[1] + uy * ua * 0.5; c3g[2] = S0[2] + uz * ua * 0.5; c3emit(SP, c3g[0], c3g[1], c3g[2], 0.034, 0, 0, 0, 0.03, 0, 0, 0, 0.045, Pl.wound, 1, 1); }
       const eR = armR * 0.8 + (longS ? cl : 0);
