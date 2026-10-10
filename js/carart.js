@@ -1790,6 +1790,7 @@ Object.assign(CarArt, {
     if (rb) rb.fx = [(g, F) => { F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.12) * 100, (z0 + 0.12) * 100, 6, 5); } }];
     M.parts.push(this.box(-hl - 0.06, -hl, -hw + 0.04, hw - 0.04, z0 - 0.04, z0 + 0.06, CA_COL.black));
     for (const f of [1.06, -0.46, -1.0]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.28, { rim: 'mil', w: 0.2 });
+    if (live) for (const sd of [-1, 1]) this.mudflap(M, -1.34, sd, hw - 0.01, z0 + 0.06);
     for (const sd of [-1, 1]) this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.09), z0 + 0.145, sd < 0 ? 2 : 3);
   },
   b_bus(M, S, T) {
@@ -1872,6 +1873,7 @@ Object.assign(CarArt, {
     M.parts.push(...fbp, ...rbp);
     for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.06, fC + 0.02, sd > 0 ? hw : -hw - 0.12, sd > 0 ? hw + 0.12 : -hw, zh + 0.1, zh + 0.3, CA_COL.black));
     for (const f of [hl - 0.42, -hl + 1.55]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'steel', rimCol: '#2a2a2c', w: 0.18, dual: f < 0 });
+    if (live) for (const sd of [-1, 1]) this.mudflap(M, -hl + 1.22, sd, hw - 0.01, z0);
     const wf = hw - 0.04 - sp.chF;
     for (const sd of [-1, 1]) {
       this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.083, sd < 0 ? 0 : 1);
