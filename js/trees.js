@@ -643,7 +643,7 @@ const Trees = {
     if (gr) return gr;
     gr = g.createRadialGradient(0, 0, 0, 0, 0, 100);
     const f = f8 / 8;
-    for (const [r, T] of [[0, 0.9], [0.42, 0.9], [0.6, 0.76], [0.75, 0.5], [0.88, 0.2], [1, 0]]) gr.addColorStop(r, 'rgba(0,0,0,' + Math.pow(T * f, 1 / n).toFixed(3) + ')');
+    for (const [r, T] of [[0, 0.9], [0.55, 0.9], [0.7, 0.7], [0.84, 0.35], [0.94, 0.1], [1, 0]]) gr.addColorStop(r, 'rgba(0,0,0,' + Math.pow(T * f, 1 / n).toFixed(3) + ')');
     this.grads.set(key, gr);
     return gr;
   },
