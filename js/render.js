@@ -96,11 +96,9 @@ const Render = {
   },
 
   // ------------------------------------------------------------------ frame
-  fno: 0, tnow: 0,
   frame(dt) {
     const w = Wd, ctx = this.ctx, cam = this.cam, p = G.player;
     if (!w) return;
-    this.fno++; this.tnow = performance.now() / 1000;
     const W0 = LV.W0, HH = WALL_H;
     cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 10);
     const z = cam.zoom, dpr = this.dpr;
@@ -167,13 +165,12 @@ const Render = {
     ctx.globalAlpha = 1;
     // ground-level overlays from other modules (tyre marks etc.), drawn under entities
     for (const fn of FLOOR_HOOKS) fn(ctx, minX, minY, maxX, maxY);
-    // floor items (forEach: no entry arrays)
-    this.itemArgs[0] = ctx; this.itemArgs[1] = minX; this.itemArgs[2] = minY; this.itemArgs[3] = maxX; this.itemArgs[4] = maxY;
-    w.items.forEach(this.itemFn || (this.itemFn = (arr, i) => {
-      const A = this.itemArgs, W1 = Wd.w, x = i % W1, y = (i / W1) | 0;
-      if (x < A[1] || x > A[3] || y < A[2] || y > A[4]) return;
-      this.drawItems(A[0], x, y, arr, 0);
-    }));
+    // floor items
+    for (const [i, arr] of w.items) {
+      const x = i % W_, y = (i / W_) | 0;
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
+      this.drawItems(ctx, x, y, arr, 0);
+    }
     // corpses & downed bodies (flat things)
     const flat1 = new Map();
     for (const zb of G.zombies) {
@@ -189,21 +186,20 @@ const Render = {
     // ---------------- light overlay on floors
     this.drawLightOverlay();
     // ---------------- main pass
-    // what stands on each tile of the view: linked lists in typed arrays, in depth order within a tile
-    this.bkReset(minX, minY, maxX - minX + 1, maxY - minY + 1);
-    if (p && !p.dead && !p.inCar) this.bkAdd(p, 0);
-    if (G.corpse && p && p.dead && p.x >= W0) this.bkAdd(p, 0);
+    const buckets = new Map();
+    const addB = (x, y, e, k) => { const key = Math.floor(y) * W_ + Math.floor(x); let a = buckets.get(key); if (!a) { a = []; buckets.set(key, a); } a.push([k, e]); };
+    if (p && !p.dead && !p.inCar) addB(p.x, p.y, p, 'p');
+    if (G.corpse && p && p.dead && p.x >= W0) addB(p.x, p.y, p, 'p');
     for (const zb of G.zombies) {
       if (zb.dead && (zb.lie || 0) >= 0.99) continue;
       const ex = zb.x >= W0 ? zb.x - W0 : zb.x;
       if (ex < minX - 2 || ex > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
-      this.bkAdd(zb, 1);
+      addB(zb.x, zb.y, zb, 'z');
     }
     for (const c of G.cars) {
       if (c.x < minX - 3 || c.x > maxX + 3 || c.y < minY - 3 || c.y > maxY + 3) continue;
-      this.bkAdd(c, 2);
+      addB(c.x, c.y, c, 'c');
     }
-    const BH = this.bkH, BH1 = this.bkH1, BN = this.bkN, BE = this.bkE, BK = this.bkK, BVW = this.bvw;
     // buildings roofs by diagonal
     const roofs = new Map();
     for (const b of w.buildings) {
@@ -240,47 +236,47 @@ const Render = {
       let a = roofFire.get(bid); if (!a) { a = []; roofFire.set(bid, a); }
       if (a.length < 24) a.push([i % W_ >= W0 ? i % W_ - W0 : i % W_, (i / W_) | 0, e, i]);
     }
-    const dMin = minX + minY, dMax = maxX + maxY, WN = w.wallN, WW = w.wallW, OB = w.obj;
-    // the columns of a diagonal that can be on screen (X = (2x - d) * HTW within L - 110 .. Rr + 110), a tile of slack
-    const xl = (L - 110) / HTW, xr = (Rr + 110) / HTW;
+    const dMin = minX + minY, dMax = maxX + maxY;
     for (let d = dMin; d <= dMax; d++) {
-      const xa = Math.max(minX, d - maxY, Math.floor((d + xl) / 2) - 1), xb = Math.min(maxX, d - minY, Math.ceil((d + xr) / 2) + 1);
-      const Yd = d * HTH, rowG = Yd >= T - 40 && Yd <= B + 280;
+      const xa = Math.max(minX, d - maxY), xb = Math.min(maxX, d - minY);
       // ---- ground level
-      if (rowG) for (let x = xa; x <= xb; x++) {
+      for (let x = xa; x <= xb; x++) {
         const y = d - x;
-        const X = (x - y) * HTW, Y = Yd;
-        if (X < L - 110 || X > Rr + 110) continue;
+        const X = (x - y) * HTW, Y = (x + y) * HTH;
+        if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 280) continue;
         const i = y * W_ + x;
         const inOpen = openB && x >= openB.x0 && x <= openB.x1 && y >= openB.y0 && y <= openB.y1;
-        let bk = BH[(y - minY) * BVW + x - minX];
+        const bk = buckets.get(i);
         if (inOpen) {
           if (!see.has(i)) continue;
-          if (WN[i] || WW[i] || OB[i] || (FM && FM.has(i))) {
+          if (w.wallN[i] || w.wallW[i] || w.obj[i] || (FM && FM.has(i))) {
             ctx.save(); ctx.clip(openPath);
-            if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-            if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
-            if (OB[i]) this.drawObj(OB[i], x, y, X, Y, pl, t, x);
+            if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+            if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+            if (w.obj[i]) this.drawObj(w.obj[i], x, y, X, Y, pl, t, x);
             if (FM && FM.has(i)) Fire.drawFlames(ctx, X, Y, FM.get(i), t, i * 0.37);
             ctx.restore();
           }
-          for (; bk >= 0; bk = BN[bk]) {
+          if (bk) for (const [k, e] of bk) {
             // whatever rises above the upper floor (someone on the stairs) shows outside the opening too
-            const e = BE[bk], cp = new Path2D(openPath);
+            const cp = new Path2D(openPath);
             const yl = (e.x + e.y) * HTH - HH * ZU;
             cp.rect(L - 200, T - 600, (Rr - L) + 400, yl - (T - 600));
             ctx.save(); ctx.clip(cp);
-            this.drawEnt(ctx, BK[bk], e);
+            this.drawEnt(ctx, k, e);
             ctx.restore();
           }
           continue;
         }
-        if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-        if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
-        const o = OB[i];
+        if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+        if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+        const o = w.obj[i];
         if (o) this.drawObj(o, x, y, X, Y, pl, t, x);
         if (FM) { const fe = FM.get(i); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i * 0.37); }
-        for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
+        if (bk) {
+          if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
+          for (const [k, e] of bk) this.drawEnt(ctx, k, e);
+        }
       }
       // ---- upper floors
       if (any2) {
@@ -288,15 +284,13 @@ const Render = {
           if (d === dMin) this.drawUpFloor(ctx, openB, d, flat1);
           this.drawUpFloor(ctx, openB, d + 1, flat1);
         }
-        const Y1 = Yd - HH * ZU;
-        if (Y1 >= T - 40 && Y1 <= B + 200) for (let x = xa; x <= xb; x++) {
+        for (let x = xa; x <= xb; x++) {
           const y = d - x;
           const i1 = y * W_ + x + W0;
-          const wn = WN[i1], ww = WW[i1], o = OB[i1];
-          let bk = BH1[(y - minY) * BVW + x - minX];
-          if (!wn && !ww && !o && bk < 0 && !(FM && FM.has(i1))) continue;
-          const X = (x - y) * HTW, Y = Y1;
-          if (X < L - 110 || X > Rr + 110) continue;
+          const wn = w.wallN[i1], ww = w.wallW[i1], o = w.obj[i1], bk = buckets.get(i1);
+          if (!wn && !ww && !o && !bk && !(FM && FM.has(i1))) continue;
+          const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
+          if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 200) continue;
           if (wn && wn !== WT.BOUND) {
             const bid = this.edgeB(x + W0, y, 0);
             if (bid >= 0 && bid !== hiddenId && ((openB && bid === openB.id) || this._ext)) this.drawWall(x + W0, y, 0, X, Y, pb, pl, 1);
@@ -308,7 +302,10 @@ const Render = {
           if (!openB || x < openB.x0 || x > openB.x1 || y < openB.y0 || y > openB.y1) continue;
           if (o) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
           if (FM) { const fe = FM.get(i1); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i1 * 0.37); }
-          for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
+          if (bk) {
+            if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
+            for (const [k, e] of bk) this.drawEnt(ctx, k, e);
+          }
         }
       }
       const rl = roofs.get(d);
@@ -335,36 +332,10 @@ const Render = {
     this.drawVignette(ctx);
     if (Debug.on) Debug.drawScreen(ctx, this.W, this.H);
   },
-  // k: 0 the player, 1 a zombie, 2 a car
   drawEnt(ctx, k, e) {
-    if (k === 0) Player.draw(ctx);
-    else if (k === 1) Zombie.draw(ctx, e, false);
-    else Vehicles.draw(ctx, e);
-  },
-  // per-tile entity lists over the view (ground bkH, upstairs bkH1): heads, next links, entity, kind, depth
-  bkH: null, bkH1: null, bkN: new Int32Array(256), bkD: new Float64Array(256), bkE: [], bkK: new Uint8Array(256), bkC: 0, bvw: 0, bx0: 0, by0: 0, bvh: 0, itemArgs: [null, 0, 0, 0, 0],
-  bkReset(x0, y0, vw, vh) {
-    const n = vw * vh;
-    if (!this.bkH || this.bkH.length < n) { this.bkH = new Int32Array(n + (n >> 2)); this.bkH1 = new Int32Array(n + (n >> 2)); }
-    this.bkH.fill(-1, 0, n); this.bkH1.fill(-1, 0, n);
-    for (let k = 0; k < this.bkC; k++) this.bkE[k] = null;
-    this.bkC = 0; this.bx0 = x0; this.by0 = y0; this.bvw = vw; this.bvh = vh;
-  },
-  bkAdd(e, k) {
-    const up = e.x >= LV.W0, ex = up ? e.x - LV.W0 : e.x, tx = Math.floor(ex) - this.bx0, ty = Math.floor(e.y) - this.by0;
-    if (tx < 0 || ty < 0 || tx >= this.bvw || ty >= this.bvh) return;
-    let n = this.bkC++;
-    if (n >= this.bkN.length) {
-      const N = new Int32Array(n * 2), D = new Float64Array(n * 2), K = new Uint8Array(n * 2);
-      N.set(this.bkN); D.set(this.bkD); K.set(this.bkK); this.bkN = N; this.bkD = D; this.bkK = K;
-    }
-    const H = up ? this.bkH1 : this.bkH, j = ty * this.bvw + tx, dep = e.x + e.y, BN = this.bkN, BD = this.bkD;
-    this.bkE[n] = e; this.bkK[n] = k; BD[n] = dep;
-    // insert after everything not deeper (keeps the order of equals, like a stable sort)
-    let prev = -1, cur = H[j];
-    while (cur >= 0 && BD[cur] <= dep) { prev = cur; cur = BN[cur]; }
-    BN[n] = cur;
-    if (prev < 0) H[j] = n; else BN[prev] = n;
+    if (k === 'p') Player.draw(ctx);
+    else if (k === 'z') Zombie.draw(ctx, e, false);
+    else if (k === 'c') Vehicles.draw(ctx, e);
   },
   // one ground tile: floor, markings, grass creeping over hard edges, snow. water: animate (else skipped)
   groundTile(g, x, y, X, Y, t, gs, snowA, detail, water) {
