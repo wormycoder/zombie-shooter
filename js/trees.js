@@ -6,7 +6,8 @@
 // metres - trunk, limbs, crown lobes, leaf clusters, twigs - and painted per season into a cached sprite:
 // clusters of small leaves lit from the sun side (upper left) with dark undersides and inner shadow,
 // limbs showing through the gaps, root flare and a soft ground shadow. Sprites live in an LRU cache with
-// a pixel budget; far out (zoom < 0.72) a half-size copy is drawn. Bushes, stumps and fallen logs too.
+// a pixel budget; far out (zoom < 0.72) a half-size copy is drawn, close up (zoom >= 1.55 on a screen that
+// magnifies 1.6x or more) a double-resolution one, so the leaves stay crisp. Bushes, stumps and fallen logs too.
 // MapGen.treeKind / MapGen.tree pick species and size by biome (called from MapGen.forest etc).
 // ---------------------------------------------------------------------------
 // f crown form; H height and C crown radius (m) per age; cb crown base (fraction of H); lobes per age;
@@ -31,8 +32,8 @@ const TREE_SUN = (() => { const l = Math.hypot(-0.62, -0.22, 0.76); return [-0.6
 
 const Trees = {
   NV: 4,
-  cache: new Map(), px: 0, PXCAP: 7e6, plans: new Map(), last: new Map(),
-  tick: -1, spent: 0, BUDGET: 9, fade: new Map(), t0: 0, dt: 0, wind: 0.3, mx: -1e9, my: -1e9,
+  cache: new Map(), px: 0, PXCAP: 7e6, HICAP: 12e6, plans: new Map(), last: new Map(),
+  tick: -1, spent: 0, BUDGET: 9, fade: new Map(), t0: 0, dt: 0, wind: 0.3, mx: -1e9, my: -1e9, res: '',
   hash(a, b, c) { let h = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; },
   age(o) { const s = o.sz || 1; return s < 0.6 ? 0 : s < 0.95 ? 1 : s < 1.2 ? 2 : 3; },
   sp(o) { return TREE_SP[o.kind] || TREE_SP.oak; },
@@ -480,17 +481,25 @@ const Trees = {
   },
 
   // ------------------------------------------------------------------ sprite cache
-  key(o, half) { return 'T' + o.kind + this.age(o) + ((o.v || 0) % this.NV) + '|' + this.skey(o.kind) + (half ? 'h' : ''); },
-  sprite(o, half) {
+  // res: 'h' half size, 'x' double resolution, '' plain
+  key(o, res) { return 'T' + o.kind + this.age(o) + ((o.v || 0) % this.NV) + '|' + this.skey(o.kind) + (res || ''); },
+  sprite(o, res) {
     if (o.stump) return this.stumpSprite(o);
     if (!TREE_SP[o.kind]) o.kind = 'oak';
-    const key = this.key(o, half);
+    const key = this.key(o, res);
     let rec = this.cache.get(key);
     if (!rec) {
-      if (half) {
+      if (res === 'x') {
+        // over this frame's paint budget: the plain sprite (upscaled) until there is time to paint this one;
+        // the same when the trees in view already fill the close-up allowance (the densest woods)
+        if (this.spent > this.BUDGET || this.px > this.HICAP) return this.sprite(o, '');
+        const t0 = performance.now();
+        rec = this.build(o.kind, this.age(o), (o.v || 0) % this.NV, this.skey(o.kind), 2);
+        this.spent += performance.now() - t0;
+      } else if (res) {
         // halve the real sprite, never a sibling borrowed while over budget (that one is drawn full size)
-        const f = this.sprite(o, false);
-        if (f.k !== this.key(o, false)) return f;
+        const f = this.sprite(o, '');
+        if (f.k !== this.key(o, '')) return f;
         rec = this.halve(f);
       } else {
         // over this frame's paint budget: borrow a finished sibling for now
@@ -502,34 +511,37 @@ const Trees = {
         this.spent += performance.now() - t0;
         this.last.set(lk, key);
       }
-      rec.px = rec.c.width * rec.c.height;
+      // in use from now (u), so the eviction it may set off never takes it straight back out
+      rec.px = rec.c.width * rec.c.height; rec.u = this.tick;
       this.cache.set(key, rec); this.px += rec.px;
       if (this.px > this.PXCAP) this.evict();
     }
     rec.u = this.tick;
     return rec;
   },
-  build(kind, age, v, st) {
+  // S: pixels per world px (2 = the close-up sprite, drawn at sc 1/2)
+  build(kind, age, v, st, S) {
     const pl = this.plan(kind, age, v), bd = this.bounds(pl);
     const w = Math.ceil(bd.r - bd.l), h = Math.ceil(bd.b - bd.t), bx = Math.round(-bd.l), by = Math.round(-bd.t);
-    const c = mkCanvas(w, h);
-    this.paint(c.getContext('2d'), bx, by, kind, age, v, st);
+    const k = S || 1, c = mkCanvas(w * k, h * k), g = c.getContext('2d');
+    if (k !== 1) g.scale(k, k);
+    this.paint(g, bx, by, kind, age, v, st);
     // crown ellipse relative to the base, for the see-through test
     const ry = (pl.cone ? pl.H * 0.5 : pl.cv) * ZU + 10;
-    return { c, ax: bx, ay: by - HTH, sil: null, u: 0, m: { cx: (pl.lu - pl.lv) * HTW, cy: -(pl.zc * ZU), rx: pl.C * 45 + 12, ry: ry, tw: pl.wT * 45 / 2 + 3, th: -(pl.zc * ZU) } };
+    return { c, ax: bx * k, ay: (by - HTH) * k, sc: 1 / k, sil: null, u: 0, m: { cx: (pl.lu - pl.lv) * HTW, cy: -(pl.zc * ZU), rx: pl.C * 45 + 12, ry: ry, tw: pl.wT * 45 / 2 + 3, th: -(pl.zc * ZU) } };
   },
   halve(r) {
     const w = Math.ceil(r.c.width / 2), h = Math.ceil(r.c.height / 2), c = mkCanvas(w, h), g = c.getContext('2d');
     g.imageSmoothingQuality = 'high';
     g.drawImage(r.c, 0, 0, w, h);
-    return { c, ax: r.ax / 2, ay: r.ay / 2, sil: null, u: 0, m: r.m, half: 1 };
+    return { c, ax: r.ax / 2, ay: r.ay / 2, sc: 2, sil: null, u: 0, m: r.m };
   },
   evict() {
     const old = this.tick - 2;
     const arr = [];
     for (const [k, r] of this.cache) if (r.u < old) arr.push([k, r]);
     arr.sort((a, b) => a[1].u - b[1].u);
-    for (const [k, r] of arr) { if (this.px <= this.PXCAP * 0.75) break; this.cache.delete(k); this.px -= r.px + (r.sil ? r.px : 0); }
+    for (const [k, r] of arr) { if (this.px <= this.PXCAP * 0.75) break; this.cache.delete(k); this.px -= r.px + (r.sil ? r.spx : 0); }
   },
   // drop every tree sprite (season change is handled by the keys; this is for tests and settings)
   flush() { this.cache.clear(); this.px = 0; this.last.clear(); },
@@ -555,7 +567,9 @@ const Trees = {
     this.mx = Input.overUI ? -1e9 : (Input.mx - Render.ox) / z; this.my = (Input.my - Render.oy) / z;
     // sway is a sheared draw, far dearer than a plain one on a software canvas: only where it shows
     this.swayOn = Settings.v.detail !== 0 && z >= 0.8; this.z = z;
-    this.half = z < 0.72;
+    this.res = z < 0.72 ? 'h' : z >= 1.55 && z * Render.dpr >= 1.6 && Settings.v.detail !== 0 ? 'x' : '';
+    // sprites left over from other views go before the close-up allowance is judged
+    if (this.res === 'x' && this.px > this.HICAP) this.evict();
   },
   // horizontal shear of the sprite about its base: k * height px
   sway(x, y, t) {
@@ -579,10 +593,9 @@ const Trees = {
     if (this.tick !== Facade.tick) this.frame();
     const ctx = Render.ctx, isT = o.t === 'tree';
     if (isT && (o.v === undefined || !TREE_SP[o.kind])) this.fix(o, x, y);
-    const half = isT && this.half && !o.stump;
-    const rec = isT ? this.sprite(o, half) : Spr.obj(o);
+    const rec = isT ? this.sprite(o, this.res) : Spr.obj(o);
     const s = Render.shadeAt(x, y);
-    const by = Y + HTH, sc = rec.half ? 2 : 1;
+    const by = Y + HTH, sc = rec.sc || 1;
     const dx = X - rec.ax * sc, dy = Y - rec.ay * sc, dw = rec.c.width * sc, dh = rec.c.height * sc;
     let fh = 0, fc = 0;
     const hx = Render.PX, hy = Render.PY - 34, R = this.HOLE;
@@ -605,7 +618,7 @@ const Trees = {
     let k = this.swayOn && !o.stump ? this.sway(x, y, t) : 0;
     if (k && Math.abs(k) * dh * this.z < 0.4) k = 0;
     if (fh > 0.01 || fc > 0.01) {
-      // hole centres in sprite pixels (undo the sway shear and the half-size scale)
+      // hole centres in sprite pixels (undo the sway shear and the sprite's scale)
       const S = this.holed(rec, s, sc, fh > 0.01 ? fh : 0, (hx - k * (hy - by) - dx) / sc, (hy - dy) / sc, R / sc,
         fc > 0.01 ? fc : 0, (this.mx - k * (this.my - by) - dx) / sc, (this.my - dy) / sc, this.CHOLE / sc);
       if (k) ctx.transform(1, 0, k, 1, -k * by, 0);
@@ -625,7 +638,7 @@ const Trees = {
     if (!S || S.width < w || S.height < h) { S = this.scr = mkCanvas(Math.max(w, S ? S.width : 0, 320), Math.max(h, S ? S.height : 0, 400)); this.sg = S.getContext('2d'); }
     const g = this.sg, dk = 1 - s;
     g.clearRect(0, 0, w + 1, h + 1);
-    if (dk > 0.02) { this.silOf(rec); g.drawImage(rec.sil, 0, 0); if (dk < 0.97) { g.globalAlpha = 1 - dk; g.drawImage(rec.c, 0, 0); g.globalAlpha = 1; } }
+    if (dk > 0.02) { this.silOf(rec); g.drawImage(rec.sil, 0, 0, w, h); if (dk < 0.97) { g.globalAlpha = 1 - dk; g.drawImage(rec.c, 0, 0); g.globalAlpha = 1; } }
     else g.drawImage(rec.c, 0, 0);
     g.globalCompositeOperation = 'destination-out';
     if (f1) { g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, this.holeN)), Math.round(f1 * 8)); g.setTransform(r1 / 100, 0, 0, r1 * 1.1 / 100, x1, y1); g.fillRect(-100, -100, 200, 200); }
@@ -669,13 +682,14 @@ const Trees = {
     }
     ctx.globalAlpha = 1;
   },
-  // dark silhouette of a sprite (made on first use at night, counted in the cache budget)
+  // dark silhouette of a sprite (made on first use at night, counted in the cache budget); a close-up
+  // sprite's is half size: it is a flat dark shape lying under the sprite, nothing in it to blur
   silOf(rec) {
     if (rec.sil) return rec.sil;
-    const c = mkCanvas(rec.c.width, rec.c.height), g = c.getContext('2d');
-    g.drawImage(rec.c, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, c.width, c.height);
-    rec.sil = c;
-    if (rec.px) this.px += rec.px;
+    const k = rec.sc < 1 ? 2 : 1, c = mkCanvas(rec.c.width / k, rec.c.height / k), g = c.getContext('2d');
+    g.drawImage(rec.c, 0, 0, c.width, c.height); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, c.width, c.height);
+    rec.sil = c; rec.spx = c.width * c.height;
+    if (rec.px) this.px += rec.spx;
     return c;
   },
 };
