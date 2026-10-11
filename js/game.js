@@ -595,17 +595,35 @@ const Save = {
   exists() { try { return !!localStorage.getItem(this.KEY); } catch (e) { return false; } },
   meta() { try { const m = localStorage.getItem(this.KEY + '_meta'); return m ? JSON.parse(m) : null; } catch (e) { return null; } },
   wipe() { try { localStorage.removeItem(this.KEY); localStorage.removeItem(this.KEY + '_meta'); } catch (e) { /* ignore */ } },
+  ZSKIP: { path: 1, obE: 1, obTo: 1, cFrom: 1, dcOk: 1, look: 1 },
+  // base64 of a world array, reused while its bytes are unchanged (comparing is far cheaper than encoding: the
+  // autosave is one long frame, and most of the map never changes)
+  b64c: new WeakMap(),
+  b64(a) {
+    const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+    let e = this.b64c.get(a);
+    if (e && e.copy.length === u.length) {
+      let same = true;
+      if (!(u.byteOffset & 3) && !(u.length & 3)) { const A = new Uint32Array(u.buffer, u.byteOffset, u.length >> 2), B = new Uint32Array(e.copy.buffer); for (let i = 0; i < A.length; i++) if (A[i] !== B[i]) { same = false; break; } }
+      else for (let i = 0; i < u.length; i++) if (u[i] !== e.copy[i]) { same = false; break; }
+      if (same) return e.s;
+    }
+    if (!e) this.b64c.set(a, e = { copy: null, s: '' });
+    e.copy = u.slice(); e.s = Bin.toB64(u);
+    return e.s;
+  },
   serialize() {
     const w = Wd, p = G.player;
     const objs = [];
     for (let i = 0; i < w.obj.length; i++) if (w.obj[i]) objs.push([i, w.obj[i]]);
-    const u8 = (a) => Bin.toB64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
+    const u8 = (a) => this.b64(a);
     const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null });
-    const rd = (v) => Math.round(v * 100) / 100;
+    const rd = (v) => Math.round(v * 100) / 100, SK = this.ZSKIP;
+    // (copied field by field: assign-then-delete leaves slow dictionary objects for JSON.stringify)
     const zs = G.zombies.map(z => {
-      const o = Object.assign({}, z);
-      delete o.path; delete o.obE; delete o.obTo; delete o.cFrom; delete o.dcOk;
-      if (!o.keepLook) delete o.look; // rebuilt from clothes on load
+      const o = {};
+      for (const k in z) if (!SK[k]) o[k] = z[k];
+      if (z.keepLook) o.look = z.look; // else rebuilt from clothes on load
       o.x = rd(o.x); o.y = rd(o.y); o.tx = rd(o.tx); o.ty = rd(o.ty); o.a = rd(o.a); o.ph = rd(o.ph || 0); o.hp = rd(o.hp);
       return o;
     });

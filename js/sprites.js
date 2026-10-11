@@ -78,25 +78,29 @@ const Spr = {
     return { c: c2, ax: ax - x0, ay: ay - y0, sil: null };
   },
   draw(ctx, rec, sx, sy, s) { this.drawShaded(ctx, rec, sx - rec.ax, sy - rec.ay, s, 1); },
-  // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light)
+  // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light). A darkened sprite comes from
+  // rec.sil, which holds the sprite and its silhouette side by side: both draws read one texture, so the graphics
+  // card gets them as one batch instead of two (outside the view cone nearly every wall and object is darkened).
   drawShaded(ctx, rec, x, y, s, alpha) {
     const a = alpha === undefined ? 1 : alpha;
     if (a < 1) ctx.globalAlpha = a;
-    ctx.drawImage(rec.c, x, y);
     const dk = 1 - s;
     if (dk > 0.02) {
+      const w = rec.c.width, h = rec.c.height;
       if (!rec.sil) {
-        const c = mkCanvas(rec.c.width, rec.c.height);
+        const c = mkCanvas(w * 2 + 2, h);
         const g = c.getContext('2d');
         g.drawImage(rec.c, 0, 0);
+        g.drawImage(rec.c, w + 2, 0);
         g.globalCompositeOperation = 'source-atop';
         g.fillStyle = 'rgb(3,5,14)';
-        g.fillRect(0, 0, c.width, c.height);
+        g.fillRect(w + 2, 0, w, h);
         rec.sil = c;
       }
+      ctx.drawImage(rec.sil, 0, 0, w, h, x, y, w, h);
       ctx.globalAlpha = a * Math.min(1, dk);
-      ctx.drawImage(rec.sil, x, y);
-    }
+      ctx.drawImage(rec.sil, w + 2, 0, w, h, x, y, w, h);
+    } else ctx.drawImage(rec.c, x, y);
     ctx.globalAlpha = 1;
   },
 

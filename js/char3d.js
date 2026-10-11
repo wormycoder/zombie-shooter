@@ -127,7 +127,9 @@ const C3M = [0, 1].map(l => {
   return M;
 });
 // shadow fill per light level (0..20)
-const C3SH = []; for (let k = 0; k <= 20; k++) C3SH.push('rgba(0,0,0,' + (0.28 * k / 20 + 0.05).toFixed(3) + ')');
+// shadow disc: an ellipse of radii 31 x 15 about the centre of a 64 x 32 sprite
+let c3shd = null;
+const C3SHD = () => { if (!c3shd) { c3shd = mkCanvas(64, 32); const g = c3shd.getContext('2d'); g.fillStyle = '#000'; g.beginPath(); g.ellipse(32, 16, 31, 15, 0, 0, 6.2832); g.fill(); } return c3shd; };
 
 // ---- impostor atlas: characters kept as pre-rendered sprites in one 2D canvas - settled bodies (re-rendered only when
 // their light, size or look changes) and far crowds that animate at a reduced rate. Shelves per slot height; freed slots
@@ -327,14 +329,21 @@ const Char3D = {
   bake() {
     const g2 = GL3D.g2, s = GL3D.scale;
     if (!g2) return;
-    g2.globalCompositeOperation = 'destination-over';
-    for (const c of GL3D.cells) {
-      const sd = c.shadow;
-      if (!sd) continue;
-      g2.fillStyle = C3SH[Math.round(c.lt * 20)];
-      g2.beginPath(); g2.ellipse(c.px + (c.ax + sd[0]) * s, c.py + (c.ay + sd[1]) * s, sd[2] * s, sd[3] * s, sd[4], 0, 6.2832); g2.fill();
+    // (one disc sprite stretched and turned per shadow: no path filling, and the draws batch on the graphics card)
+    if (Settings.v.shadows !== 0) {
+      const sp = C3SHD();
+      g2.globalCompositeOperation = 'destination-over';
+      for (const c of GL3D.cells) {
+        const sd = c.shadow;
+        if (!sd) continue;
+        const co = Math.cos(sd[4]), si = Math.sin(sd[4]), rx = sd[2] * s / 31, ry = sd[3] * s / 15;
+        g2.setTransform(co * rx, si * rx, -si * ry, co * ry, c.px + (c.ax + sd[0]) * s, c.py + (c.ay + sd[1]) * s);
+        g2.globalAlpha = 0.28 * c.lt + 0.05;
+        g2.drawImage(sp, -32, -16);
+      }
+      g2.setTransform(1, 0, 0, 1, 0, 0); g2.globalAlpha = 1;
+      g2.globalCompositeOperation = 'source-over';
     }
-    g2.globalCompositeOperation = 'source-over';
     const P = this.pend;
     for (let i = 0; i < P.length; i++) {
       const c = P[i], S = c.S;
