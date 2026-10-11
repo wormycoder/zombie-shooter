@@ -41,16 +41,25 @@ function line(g, a, b, col, w) { g.strokeStyle = col; g.lineWidth = w || 1; g.be
 // codes: 1-9 road markings (sprites.js), 10-49 street details (street.js), 50-89 yards (yard.js)
 const DECO_ART = {};
 const Spr = {
-  cache: new Map(),
+  // furniture, ground tiles, props: bounded by the Sprite cache size setting; past it the sprites not drawn for the
+  // last ~2 s go (the working set even zoomed far out is under a thousand: no thrash)
+  cache: new Map(), CAP: 2500,
   get(key, w, h, ax, ay, draw) {
     let rec = this.cache.get(key);
-    if (rec) return rec;
+    if (rec) { rec.u = Facade.tick; return rec; }
     const c = mkCanvas(w, h), tr = !this.noTrim && c.width * c.height >= 4000;
     // a sprite that is cropped is painted on a CPU canvas: reading a GPU canvas back stalls the graphics pipeline
     const g = tr ? c.getContext('2d', { willReadFrequently: true }) : c.getContext('2d');
     draw(g, ax, ay);
     rec = (tr && this.trim(c, ax, ay)) || { c, ax, ay, sil: null };
+    rec.u = Facade.tick;
     this.cache.set(key, rec);
+    const cap = this.CAP * CACHE_K();
+    if (this.cache.size > cap) {
+      let n = this.cache.size - (cap * 0.8 | 0);
+      const old = Facade.tick - 120;
+      for (const [k, r] of this.cache) { if (n <= 0) break; if (r.u < old) { this.cache.delete(k); n--; } }
+    }
     return rec;
   },
   // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory). The result is

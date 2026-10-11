@@ -288,10 +288,12 @@ const Char3D = {
     let light = Math.max(0.05, Math.min(1, shade)), lod;
     // a body that has settled does not change: a sprite, re-rendered when its light, size or look changes
     // (one back in view after a while keeps its sprite: a slow frame must not make every body look new)
-    const stat = !flash && pose.mode === 'dead' && !(pose.prog < 1) && (S.fresh ? !!S.imp && S.imp.gen === C3Imp.gen : S.mode === 'dead' && S.offT >= S.offD);
-    if (stat) {
+    const dead = !flash && pose.mode === 'dead' && !(pose.prog < 1);
+    let stat = dead && (S.fresh ? !!S.imp && S.imp.gen === C3Imp.gen : S.mode === 'dead' && S.offT >= S.offD);
+    if (dead) {
       light = Math.round(light * 40) / 40;
-      if (this.impUse(S, e, ang, look, light, false)) { this.lodN[4]++; return; }
+      if (stat && this.impUse(S, e, ang, look, light, false)) { this.lodN[4]++; return; }
+      // (drawn as its sprite will be: it may settle in this very frame)
       lod = this.mode === 2 ? 1 : 0;
       S.acc = 0;
     } else {
@@ -305,11 +307,13 @@ const Char3D = {
       S.acc = 0;
     }
     this.animate(S, e.x, e.y, ang, pose, dt);
+    // settled now (also one seen again without a sprite, which may be every frame when frames take over 0.4 s)
+    if (dead && !stat) stat = S.mode === 'dead' && S.offT >= S.offD;
     const cell = this.render(S, ang, look, pose, light, flash, lod);
     if (!cell) return;
     this.map.set(e, cell);
     this.lodN[stat ? 4 : lod]++;
-    if (stat || lod === 3) { cell.S = S; cell.ang = ang; cell.bl = look.blood; this.pend.push(cell); }
+    if (stat || lod === 3) { cell.S = S; cell.ang = ang; cell.bl = look.blood; cell.lk = look; this.pend.push(cell); }
   },
   // draw S's sprite this frame if it is still good (anim: a recent far-crowd frame will do); false: render it again
   impUse(S, e, ang, look, light, anim) {
@@ -317,7 +321,7 @@ const Char3D = {
     if (!I || I.gen !== C3Imp.gen) return false;
     const rs = GL3D.scale / I.s, near = rs > 0.87 && rs < 1.15;
     if (anim) { if (!near || this.fno - I.made > 4) return false; }
-    else if (!(near && I.light === light && I.ang === ang && I.bl === look.blood && I.key === S.key)) {
+    else if (!(near && I.light === light && I.ang === ang && I.bl === look.blood && I.key === S.key && (I.lk === look || e === G.player))) {
       // stale: re-rendered within the frame's budget; the old sprite (scaled) meanwhile and while the zoom is moving
       const ok = rs > 0.6 && rs < 1.7;
       if (!ok || (!this.zooming && this.ibud > 0)) { this.ibud--; return false; }
@@ -359,13 +363,13 @@ const Char3D = {
       if (!I) {
         const sl = this.impAlloc(w, h);
         if (!sl) continue;
-        I = S.imp = { sl, gen: C3Imp.gen, pw: 0, ph: 0, ax: 0, ay: 0, s: 1, light: 0, ang: 0, bl: 0, key: '', made: 0, used: 0 };
+        I = S.imp = { sl, gen: C3Imp.gen, pw: 0, ph: 0, ax: 0, ay: 0, s: 1, light: 0, ang: 0, bl: 0, lk: null, key: '', made: 0, used: 0 };
         this.imps.add(S);
       }
       const sl = I.sl, g = C3Imp.g;
       g.clearRect(sl.x, sl.y, sl.w, sl.h);
       g.drawImage(GL3D.c2, c.px, c.py, c.pw, c.ph, sl.x + 1, sl.y + 1, c.pw, c.ph);
-      I.pw = c.pw; I.ph = c.ph; I.ax = c.ax; I.ay = c.ay; I.s = s; I.light = c.lt; I.ang = c.ang; I.bl = c.bl; I.key = S.key;
+      I.pw = c.pw; I.ph = c.ph; I.ax = c.ax; I.ay = c.ay; I.s = s; I.light = c.lt; I.ang = c.ang; I.bl = c.bl; I.lk = c.lk; I.key = S.key; c.lk = null;
       I.made = I.used = this.fno;
     }
     P.length = 0;
