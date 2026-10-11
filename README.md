@@ -34,8 +34,8 @@ WASD move · Shift run · Alt/X sprint · C sneak · hold Right mouse aim · Lef
 Right-click (tap) context menu · E interact · F flashlight · Q shout · V radial menu · I inventory · H health · B crafting · K skills · M map · Esc menu
 
 ## Version history
-The title screen shows the build as `VERSION : XY.Z.A.BCD` in the bottom-right corner, next to a **?** button that opens the full version history with notes and screenshots taken during development.
+The title screen shows the build as `VERSION : xxx.xxx.xxx.xxx` in the bottom-right corner, next to a **?** button that opens the full version history with notes and screenshots taken during development.
 
-- **XY** major (00 for the development builds) · **Z** minor (feature updates) · **A** patch (fixes, polish, internal work) · **BCD** build number, the count of commits on the development branch up to that build
+- Four three-digit fields: **major** (000 for the development builds) · **minor** (feature updates) · **patch** (fixes, polish, internal work) · **build** number, the count of commits on the development branch up to that build
 - The history lives in `js/versions.js` (`VERSION_LOG`, newest first; `VERSION` follows the newest entry) and its screenshots in `versions/`
-- 00.1 first playable town · 00.2 two-storey houses, fire, seasons, the county · 00.3 trapping, soundscape, fractures, moveable furniture, rotting corpses, sirens · 00.4 detailed houses, cars and streets · 00.5 radial menu and alarm options · 00.6 graphics and performance settings · 00.7 vehicle handling and mechanics · 00.8 3D characters, Zomboid-style inventory and hotbar, lived-in yards · 00.9 8x8 chunks, debug mode, version tracker
+- 000.001 first playable town · 000.002 two-storey houses, fire, seasons, the county · 000.003 trapping, soundscape, fractures, moveable furniture, rotting corpses, sirens · 000.004 detailed houses, cars and streets · 000.005 radial menu and alarm options · 000.006 graphics and performance settings · 000.007 vehicle handling and mechanics · 000.008 3D characters, Zomboid-style inventory and hotbar, lived-in yards · 000.009 8x8 chunks, debug mode, version tracker
