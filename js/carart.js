@@ -531,7 +531,7 @@ Object.assign(CarArt, {
     let M = this.models.get(mk);
     try {
       if (!M) { M = this.build(mk); this.models.set(mk, M); this.stats.models++; }
-      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1, this.sc(), L && L.rec);
+      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1, this.sc(), (L && L.rec) || true);
       rec.live = true; rec.silC = L ? L.rec.sil || L.rec.silC : null;
       this.live = { id: c.id, mk, st, sk, a: c.a, rec };
       return rec;
@@ -545,7 +545,8 @@ Object.assign(CarArt, {
     return this.build('sedan|' + (/^#[0-9a-fA-F]{6}$/.test(c.col) ? c.col : '#7a7a7a') + '|0|-|000000|0000|0|0|0000|0000||0');
   },
   // render model M at heading a into a fresh canvas (sc: 2 or 1 px per world px) sized to its projected bounds;
-  // reuse: the previous live render, whose canvas is repainted when big enough (no new canvas every frame of a turn)
+  // reuse (the driven car): true or the previous live render, whose canvas is repainted while it is big enough; new
+  // ones get room to spare, so a turn does not make a new canvas every few frames
   render(M, a, steer, sc, reuse) {
     const t0 = performance.now();
     sc = sc || CA_SC;
@@ -565,7 +566,7 @@ Object.assign(CarArt, {
     for (const f of [-M.hl - e, M.hl + e]) for (const s of [-M.hw - e, M.hw + e]) acc(F0.P(f, s, 0));
     for (const w of M.wheels) for (const f of [w.f - w.r, w.f + w.r]) for (const s of [w.s, w.s - w.side * w.w]) { acc(F0.P(f, s, 0)); acc(F0.P(f, s, w.r * 2)); }
     const pad = 4, W = Math.ceil(x1 - x0 + pad * 2), H = Math.ceil(y1 - y0 + pad * 2);
-    const rc = reuse && reuse.c, cv = rc && rc.width >= W && rc.height >= H && rc.width < W * 1.5 && rc.height < H * 1.5 ? rc : mkCanvas(W, H), g = cv.getContext('2d');
+    const rc = reuse && reuse.c, cv = rc && rc.width >= W && rc.height >= H && rc.width < W * 1.6 && rc.height < H * 1.6 ? rc : reuse ? mkCanvas(W * 1.3, H * 1.3) : mkCanvas(W, H), g = cv.getContext('2d');
     if (cv === rc) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, cv.width, cv.height); }
     const ax = Math.round(-x0 + pad), ay = Math.round(-y0 + pad);
     const F = this.proj(a, ax, ay, sc, M.tilt);
