@@ -224,7 +224,7 @@ const Trees = {
     }
     const s0 = st[0], au = sp.au, ai = hue % au.length;
     const auc = Col.mix(au[ai], au[(ai + 1) % au.length], (q * 7.3) % 1 * 0.55);
-    if (s0 === 'b') return sp.hold && pl.age < 2 && q < 0.3 ? Col.mix('#8a6438', '#6e4a2c', q * 3) : null;
+    if (s0 === 'b') return sp.hold && pl.age < 2 && q < 0.16 ? Col.mix('#9a7448', '#7e5a3a', q * 6) : null;
     if (s0 === 'p') {
       if (sp.bloom) return q < 0.82 ? (q < 0.12 ? sp.sp : sp.bloom) : null;
       if (q > 0.85) return null;
@@ -443,7 +443,7 @@ const Trees = {
         this.limb(g, a, b, s[6] * 45, s[7] * 45, s[8] && sp.white ? '#5c5048' : bark, lit * (bare ? 1 : 0.92), snow && (bare || sp.f === 'dead'), s[8] === 0 || s[6] > 0.09 ? white : '');
         continue;
       }
-      const c = it.c, p = P(c.u, c.v, c.z), r = c.r * 45;
+      const c = it.c, p = P(c.u, c.v, c.z), r = c.r * 45 * (bare && !sp.ev ? 0.62 : 1);
       let tn = 0.56 + 0.66 * this.light(c.n);
       // inner shadow: low and inner clusters darker
       const low = pl.cone ? 0.15 * (1 - c.z / pl.H) : U.clamp((pl.zc - c.z) / pl.cv, 0, 1) * 0.22;
