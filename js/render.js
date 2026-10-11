@@ -838,10 +838,9 @@ const Render = {
     let alpha = 1;
     if (p && def.h > 1.1 && o.t !== 'stairs' && o.t !== 'landing') {
       const by = Y + HTH;
-      const top = by - def.h * ZU - (o.t === 'tree' ? 40 : 6);
-      const wdt = o.t === 'tree' ? 56 : 30;
+      const top = by - def.h * ZU - 6;
       const pvx = p.x >= LV.W0 ? p.x - LV.W0 : p.x;
-      if (by > this.PY - 6 && top < this.PY - 10 && Math.abs(X - this.PX) < wdt && ((vx === undefined ? x : vx) + y + 1 > pvx + p.y)) alpha = o.t === 'tree' ? 0.35 : 0.45;
+      if (by > this.PY - 6 && top < this.PY - 10 && Math.abs(X - this.PX) < 30 && ((vx === undefined ? x : vx) + y + 1 > pvx + p.y)) alpha = 0.45;
     }
     const s = this.shadeAt(x, y);
     const ctx = this.ctx;

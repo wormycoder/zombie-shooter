@@ -210,6 +210,7 @@ const Trees = {
     const q = Math.round(f * 20), key = col + q;
     let s = this.tones.get(key);
     if (s) return s;
+    if (this.tones.size > 40000) this.tones.clear();
     const k = q / 20;
     s = k <= 1 ? Col.shade(Col.mix(col, '#1c2a3a', Math.max(0, 0.75 - k) * 0.35), k) : Col.shade(Col.mix(col, '#f2f0a8', (k - 1) * 0.9), 1 + (k - 1) * 0.3);
     this.tones.set(key, s);
@@ -536,6 +537,8 @@ const Trees = {
     this.dt = Math.min(0.1, (now - this.t0) / 1000); this.t0 = now;
     this.tick = typeof Facade !== 'undefined' ? Facade.tick : this.tick + 1; this.spent = 0;
     this.holeN = this.holeC; this.holeC = 0; this.curN = this.curC; this.curC = 0;
+    // fades of trees that went off screen mid-fade
+    if ((this.tick & 255) === 0 && this.fade.size > 32) for (const [i, e] of this.fade) if (e[2] < this.tick - 30) this.fade.delete(i);
     const w = G.weather || {};
     const tw = U.clamp(0.25 + (w.rain || 0) * 0.55 + (w.storm ? 0.7 : 0), 0, 1.3);
     this.wind += (tw - this.wind) * Math.min(1, this.dt * 0.5);
@@ -582,7 +585,8 @@ const Trees = {
       if (cur) this.curC++;
       const i = y * Wd.w + x, st = this.fade.get(i);
       if (hole || cur || st) {
-        const e = st || [0, 0], up = this.dt * 4, dn = this.dt * 2.5;
+        const e = st || [0, 0, 0], up = this.dt * 4, dn = this.dt * 2.5;
+        e[2] = this.tick;
         e[0] = hole ? Math.min(1, e[0] + up) : Math.max(0, e[0] - dn);
         e[1] = cur ? Math.min(1, e[1] + up) : Math.max(0, e[1] - dn);
         if (e[0] + e[1] <= 0) this.fade.delete(i); else if (!st) this.fade.set(i, e);
