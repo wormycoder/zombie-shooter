@@ -541,7 +541,8 @@ const Trees = {
     this.wind += (tw - this.wind) * Math.min(1, this.dt * 0.5);
     const z = Render.cam.zoom;
     this.mx = Input.overUI ? -1e9 : (Input.mx - Render.ox) / z; this.my = (Input.my - Render.oy) / z;
-    this.swayOn = Settings.v.detail !== 0 && z >= 0.45;
+    // sway is a sheared draw, far dearer than a plain one on a software canvas: only where it shows
+    this.swayOn = Settings.v.detail !== 0 && z >= 0.8; this.z = z;
     this.half = z < 0.72;
   },
   // horizontal shear of the sprite about its base: k * height px
@@ -588,7 +589,8 @@ const Trees = {
         fh = e[0]; fc = e[1];
       }
     }
-    const k = this.swayOn && !o.stump ? this.sway(x, y, t) : 0;
+    let k = this.swayOn && !o.stump ? this.sway(x, y, t) : 0;
+    if (k && Math.abs(k) * dh * this.z < 0.4) k = 0;
     if (fh > 0.01 || fc > 0.01) {
       // hole centres in sprite pixels (undo the sway shear and the half-size scale)
       const S = this.holed(rec, s, sc, fh > 0.01 ? fh : 0, (hx - k * (hy - by) - dx) / sc, (hy - dy) / sc, R / sc,
