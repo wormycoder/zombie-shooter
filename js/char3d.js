@@ -283,7 +283,8 @@ const Char3D = {
     S.look = look;
     let light = Math.max(0.05, Math.min(1, shade)), lod;
     // a body that has settled does not change: a sprite, re-rendered when its light, size or look changes
-    const stat = !S.fresh && !flash && pose.mode === 'dead' && !(pose.prog < 1) && S.mode === 'dead' && S.offT >= S.offD;
+    // (one back in view after a while keeps its sprite: a slow frame must not make every body look new)
+    const stat = !flash && pose.mode === 'dead' && !(pose.prog < 1) && (S.fresh ? !!S.imp && S.imp.gen === C3Imp.gen : S.mode === 'dead' && S.offT >= S.offD);
     if (stat) {
       light = Math.round(light * 40) / 40;
       if (this.impUse(S, e, ang, look, light, false)) { this.lodN[4]++; return; }
