@@ -792,7 +792,6 @@ const Render = {
     const t = d ? w.wallW[y * w.w + x] : w.wallN[y * w.w + x];
     if (t === WT.BOUND) return;
     const f = World.feat(x, y, d);
-    const col = this.wallColor(x, y, d, t);
     let cut = false, alpha = 1;
     const lw = lv || 0, same = lw === this.plv_;
     // an upper storey can also hide a player standing behind the building on the ground
@@ -813,10 +812,20 @@ const Render = {
       }
     }
     if (cut && WALL_INFO[t].fence) { cut = false; }
-    // facade descriptor (material, trim, fixtures); a shared scratch record, so read what we need now
-    const st = Facade.edge(x, y, d, t, f, col);
-    const rec = Spr.wall(t, d, col, f, cut, st);
-    const fx0 = cut ? '' : st.fx.charAt(0), lampB = st.b, neon = st.pst === 9;
+    // The face sprite (facade descriptor + string key) is worked out again every 8th frame (staggered), or at once when
+    // the wall, its door / window or the cutaway changes; in between the last answer is reused.
+    if (this.wmemoW !== w || this.wmemo.size > 30000) { this.wmemo.clear(); this.wmemoW = w; }
+    const eid = ((y * w.w + x) << 1) | d, fs = f ? (f.open ? 1 : 0) | (f.smashed ? 2 : 0) | (f.glassOut ? 4 : 0) | (f.broken ? 8 : 0) | (f.curtainsClosed ? 16 : 0) | (f.curtains ? 32 : 0) | ((f.barricade || 0) << 6) : -1;
+    let m = this.wmemo.get(eid);
+    if (!m || m.f !== f || m.fs !== fs || m.cut !== cut || m.t !== t || !((this.fno + eid) & 7)) {
+      const col = this.wallColor(x, y, d, t);
+      // facade descriptor (material, trim, fixtures); a shared scratch record, so read what we need now
+      const st = Facade.edge(x, y, d, t, f, col);
+      if (!m) { m = { rec: null, fx0: '', lampB: null, neon: false, f: null, fs: 0, cut: false, t: 0 }; this.wmemo.set(eid, m); }
+      m.rec = Spr.wall(t, d, col, f, cut, st); m.fx0 = cut ? '' : st.fx.charAt(0); m.lampB = st.b; m.neon = st.pst === 9;
+      m.f = f; m.fs = fs; m.cut = cut; m.t = t;
+    } else m.rec.u = Facade.tick;
+    const rec = m.rec, fx0 = m.fx0, lampB = m.lampB, neon = m.neon;
     // shading: the face tile, but walls bordering visible tiles stay readable
     let s = this.shadeAt(x, y);
     const so = d ? this.shadeAt(x - 1, y) : this.shadeAt(x, y - 1);
@@ -899,9 +908,13 @@ const Render = {
     ctx.fillStyle = Col.shade('#d8d0c0', Math.max(0.3, s));
     for (let k = 1; k < n; k += 2) { const q = pt(k); if (q[2] > z1 || q[2] < z0) continue; ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, 7); ctx.fill(); }
   },
+  wmemo: new Map(), wmemoW: null, omemo: new WeakMap(), anims: {},
   drawObj(o, x, y, X, Y, p, t, vx) {
     const def = OBJ[o.t];
-    const rec = Spr.obj(o);
+    // the sprite (a key string built from a dozen fields) is looked up again every 8th frame, staggered by tile
+    let m = this.omemo.get(o);
+    if (!m || !((this.fno + x + y) & 7)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
+    const rec = m.rec;
     let alpha = 1;
     if (p && def.h > 1.1 && o.t !== 'stairs' && o.t !== 'landing') {
       const by = Y + HTH;
@@ -927,7 +940,8 @@ const Render = {
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(h[0], h[1], 16, 0, 7); ctx.fill();
     }
     // per-type animated overlay: ObjArt.a_<type>(ctx, o, X, Y, t, shade, x, y)
-    const an = ObjArt['a_' + o.t];
+    let an = this.anims[o.t];
+    if (an === undefined) an = this.anims[o.t] = ObjArt['a_' + o.t] || null;
     if (an) an.call(ObjArt, ctx, o, X, Y, t, s, x, y);
     if (o.t === 'generator' && o.on && o.fuel > 0) { const c = isoP(X, Y, 0.3, 0.3, 0.9); ctx.fillStyle = 'rgba(120,120,120,0.4)'; ctx.beginPath(); ctx.arc(c[0] + Math.sin(t * 9) * 2, c[1] - (t * 20 % 12), 3, 0, 7); ctx.fill(); }
   },

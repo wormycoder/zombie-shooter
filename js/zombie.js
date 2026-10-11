@@ -531,11 +531,11 @@ const Zombie = {
     const fno = Render.fno;
     let m = this.dim.get(z);
     if (m && m.f === fno) return m.d;
-    if (!m) this.dim.set(z, m = { f: 0, d: null });
+    if (!m) this.dim.set(z, m = { f: 0, d: null, dead: null });
     m.f = fno;
-    return (m.d = this.info(z));
+    return (m.d = this.info(z, m));
   },
-  info(z) {
+  info(z, m) {
     let alpha = z.va;
     if (z.dead) alpha = 1;
     if (alpha < 0.02) return null;
@@ -543,6 +543,9 @@ const Zombie = {
     let s = Math.max(0.12, Render.shadeSmooth(z.x, z.y));
     const rot = z.dead ? this.rot(z) : 0;
     if (rot > 0) s *= 1 - rot * 0.35;
+    // a settled body keeps its pose and result objects: only light and decay change
+    const D0 = m && m.dead;
+    if (D0 && z.dead && !z.fake && D0.pose.lieDir === z.lieDir) { D0.s = s; D0.rot = rot; return D0; }
     // animation state for Char3D (mode, prog 0..1 through it) plus the simpler fields the 2D painter reads
     const pose = { walk: z.ph, amp: z.amp, t: Render.tnow + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
       mode: 'loco', gait: z.speed > 2 ? 'run' : 'shamble' };
@@ -563,7 +566,9 @@ const Zombie = {
     else if (z.st === 'getup') { pose.mode = 'getup'; pose.prog = U.clamp((z.getT || 0) / this.GETUP, 0, 1); }
     else if (z.crawl) pose.mode = 'crawl';
     if (z.crawl && !z.dead && z.st !== 'down') { pose.lie = 1; pose.lieDir = -1; pose.arms = 'zombie'; }
-    return { pose, s, alpha, rot };
+    const res = { pose, s, alpha, rot };
+    if (m) m.dead = z.dead && !z.fake && pose.prog === 1 ? res : null;
+    return res;
   },
   draw(ctx, z, flat) {
     void flat;
