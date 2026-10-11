@@ -831,6 +831,8 @@ const Render = {
     for (let k = 1; k < n; k += 2) { const q = pt(k); if (q[2] > z1 || q[2] < z0) continue; ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, 7); ctx.fill(); }
   },
   drawObj(o, x, y, X, Y, p, t, vx) {
+    // trees: own sprites, eased see-through fade, wind sway (trees.js)
+    if (o.t === 'tree' || o.t === 'st_tree') return Trees.draw(o, x, y, X, Y, p, t, vx);
     const def = OBJ[o.t];
     const rec = Spr.obj(o);
     let alpha = 1;
