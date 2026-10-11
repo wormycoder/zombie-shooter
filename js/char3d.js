@@ -88,8 +88,11 @@ const c3a = c3v(), c3b = c3v(), c3c = c3v(), c3d = c3v(), c3e = c3v(), c3g = c3v
 const C3U = {}, C3R = {};
 function c3mesh(name, U, rings, seg, axis) {
   C3U[name] = U; C3R[name] = rings;
-  GL3D.def(name, () => GL3D.lathe(rings.map(r => axis === 'x' ? [r[0] / U, 0, r[1] / U, (r[2] + r[3]) / 2 / U, (r[3] - r[2]) / 2 / U, r[4] || 2.6]
-    : [r[0] / U, (r[1] + r[2]) / 2 / U, (r[2] - r[1]) / 2 / U, 0, r[3] / U, r[4] || 2, r[5]]), seg, axis));
+  const mk = (rs, sg) => () => GL3D.lathe(rs.map(r => axis === 'x' ? [r[0] / U, 0, r[1] / U, (r[2] + r[3]) / 2 / U, (r[3] - r[2]) / 2 / U, r[4] || 2.6]
+    : [r[0] / U, (r[1] + r[2]) / 2 / U, (r[2] - r[1]) / 2 / U, 0, r[3] / U, r[4] || 2, r[5]]), sg, axis);
+  GL3D.def(name, mk(rings, seg));
+  // LOD1 (name + 'L'): every other ring (the ends kept) and half the segments round
+  GL3D.def(name + 'L', mk(rings.filter((r, i) => i === 0 || i === rings.length - 1 || !(i & 1)), Math.max(6, seg >> 1)));
 }
 // head: chin to crown, origin at the top of the neck
 c3mesh('HEAD', 0.2, [[-0.05, 0.035, 0.075, 0.016, 2.4], [-0.044, 0.004, 0.088, 0.032, 2.4], [-0.028, -0.026, 0.095, 0.05, 2.5, 2.1], [-0.005, -0.05, 0.098, 0.06, 2.6, 2.1],
@@ -114,6 +117,39 @@ c3mesh('CALF', 1, [[-1, -0.9, 0.9, 0.9], [-0.72, -1, 0.88, 0.94], [-0.4, -1, 0.8
 // shoe: heel to toe along x, ankle joint at the origin, sole at -0.076
 c3mesh('SHOE', 0.2, [[-0.078, 0.026, -0.074, -0.03], [-0.068, 0.04, -0.076, -0.004], [-0.045, 0.045, -0.076, 0.026], [0, 0.046, -0.076, 0.032], [0.045, 0.049, -0.076, 0.008],
   [0.095, 0.051, -0.076, -0.024], [0.145, 0.047, -0.076, -0.036], [0.175, 0.036, -0.076, -0.042], [0.192, 0.018, -0.072, -0.05]], 14, 'x');
+// LOD1 sphere and cylinder (8 and 6 round)
+GL3D.def('SPHL', () => GL3D.lathe([[-1, 0, 0, 0, 0], [-0.7, 0, 0.714, 0, 0.714], [0, 0, 1, 0, 1], [0.7, 0, 0.714, 0, 0.714], [1, 0, 0, 0, 0]], 8));
+GL3D.def('CYLL', () => GL3D.lathe([[-1, 0, 1, 0, 1], [1, 0, 1, 0, 1]], 6));
+// mesh sets per detail level (LOD1 swaps in the coarse lathes; rounded boxes become plain ones)
+const C3M = [0, 1].map(l => {
+  const M = { BOX: GL3D.BOX, RB: l ? GL3D.BOX : GL3D.RBOX, SPH: l ? GL3D.SPHL : GL3D.SPH, CYL: l ? GL3D.CYLL : GL3D.CYL };
+  for (const k of ['HEAD', 'HAIR', 'CAP', 'CHEST', 'BELLY', 'PELVIS', 'BAND', 'LIMB', 'CALF', 'SHOE']) M[k] = GL3D[k + (l ? 'L' : '')];
+  return M;
+});
+// shadow fill per light level (0..20)
+const C3SH = []; for (let k = 0; k <= 20; k++) C3SH.push('rgba(0,0,0,' + (0.28 * k / 20 + 0.05).toFixed(3) + ')');
+
+// ---- impostor atlas: characters kept as pre-rendered sprites in one 2D canvas - settled bodies (re-rendered only when
+// their light, size or look changes) and far crowds that animate at a reduced rate. Shelves per slot height; freed slots
+// are reused by size class.
+const C3Imp = {
+  cv: null, g: null, W: 2048, H: 2048, shelves: [], free: new Map(), y: 0, n: 0, gen: 1,
+  alloc(w, h) {
+    if (!this.cv) { this.cv = mkCanvas(this.W, this.H); this.g = this.cv.getContext('2d'); }
+    const q = w > 64 || h > 64 ? 16 : 8, cw = Math.ceil(w / q) * q, ch = Math.ceil(h / q) * q, key = cw * 8192 + ch;
+    if (cw > this.W || ch > this.H) return null;
+    const fl = this.free.get(key);
+    if (fl && fl.length) { this.n++; return fl.pop(); }
+    let s = null;
+    for (const sh of this.shelves) if (sh.h === ch && sh.x + cw <= this.W) { s = sh; break; }
+    if (!s) { if (this.y + ch > this.H) return null; s = { y: this.y, h: ch, x: 0 }; this.y += ch; this.shelves.push(s); }
+    const sl = { x: s.x, y: s.y, w: cw, h: ch, key };
+    s.x += cw; this.n++;
+    return sl;
+  },
+  release(sl) { let fl = this.free.get(sl.key); if (!fl) this.free.set(sl.key, fl = []); fl.push(sl); this.n--; },
+  reset() { this.shelves.length = 0; this.free.clear(); this.y = 0; this.n = 0; this.gen++; },
+};
 
 const Char3D = {
   map: new Map(), cols: new Map(), st: new WeakMap(), pals: new WeakMap(), palK: new Map(),
@@ -135,53 +171,212 @@ const Char3D = {
   sc(a, k) { return [Math.min(1, a[0] * k), Math.min(1, a[1] * k), Math.min(1, a[2] * k)]; },
   rnd(id, k) { const x = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); },
   // ---- per frame: collect, animate and queue every character that may be drawn
+  // Level of detail (Settings.v.chars3d: 1 Auto, 4 High, 3 Medium, 2 Low; 0 is the 2D painter): LOD0 the full model,
+  // LOD1 coarse meshes without small details, LOD2 one box per bone, LOD3 an LOD2 sprite re-rendered every 2-3 frames.
+  // Chosen per character by distance from the player against radii that shrink as characters get smaller on screen,
+  // as more of them want detail (Max detailed characters) and, on Auto, while preparing takes too long.
+  fno: 0, lodN: [0, 0, 0, 0, 0], imps: new Set(), pend: [], cand: [], dists: [], RL: [6, 16, 28], ibud: 0, bias: 0, prepMs: 0, mode: 1,
   prepare(minX, minY, maxX, maxY) {
     this.map.clear();
     const now = this.now = performance.now();
     let dt = this.lastT ? Math.min(0.1, (now - this.lastT) / 1000) : 0;
     this.lastT = now;
+    this.lodN.fill(0);
     if (!this.on()) return;
     if (G.paused || (G.mode !== 'play' && G.mode !== 'dead') || (typeof UI !== 'undefined' && UI.modalPause && UI.modalPause())) dt = 0;
     else dt = Math.min(0.1, dt * (G.speed || 1));
+    this.fno++;
     const z0 = Render.cam.zoom * Render.dpr;
     GL3D.begin(Math.min(3, Math.max(0.5, z0)));
+    this.lodSetup();
     const p = G.player;
+    this.pend.length = 0;
     try {
       if (p && !p.inCar && (!p.dead || G.corpse) && p.look) {
         const d = Player.drawInfo();
-        if (d) this.queue(p, d.ang, Player.look(), Player.pose(), d.s, p.hurtFlash > 0 ? Math.min(0.6, p.hurtFlash) : 0, dt);
+        if (d) this.queue(p, d.ang, Player.look(), Player.pose(), d.s, p.hurtFlash > 0 ? Math.min(0.6, p.hurtFlash) : 0, dt, 0);
       }
+      // distances from the player (from the view centre when the player is not about)
+      const q = p && !p.dead ? p.inCar || p : null, ox = q ? vxOf(q.x) : Render.cam.x, oy = q ? q.y : Render.cam.y;
+      const C = this.cand, R1 = this.RL[1];
+      let nc = 0, nd = 0;
       for (const z of G.zombies) {
         const vx = vxOf(z.x);
         if (vx < minX - 3 || vx > maxX + 3 || z.y < minY - 3 || z.y > maxY + 3) continue;
         const d = Zombie.drawInfo(z);
         if (!d) continue;
+        const dx = vx - ox, dy = z.y - oy, r = Math.sqrt(dx * dx + dy * dy);
+        let c = C[nc]; if (!c) c = C[nc] = { z: null, d: null, r: 0 };
+        c.z = z; c.d = d; c.r = r; nc++;
+        if (r < R1 && !z.dead) this.dists[nd++] = r;
+      }
+      // more moving characters want detail than allowed: pull the detail radius in to the nearest few
+      const mx = this.lodMax;
+      if (mx > 0 && nd > mx && this.mode !== 4) {
+        const ds = this.dists; ds.length = nd; ds.sort((a, b) => a - b);
+        this.RL[1] = Math.max(this.RL[0] + 0.5, ds[mx]);
+        if (this.RL[2] < this.RL[1] + 3) this.RL[2] = this.RL[1] + 3;
+      }
+      for (let i = 0; i < nc; i++) {
+        const c = C[i], z = c.z, d = c.d;
         // a brief flash as a blow lands, not for the whole stagger
         const hitT = z.stag > 0 ? (z.stag0 || 0.5) - z.stag : 9;
-        this.queue(z, z.a, z.look, d.pose, d.s, hitT < 0.14 ? 0.3 * (1 - hitT / 0.14) : 0, dt);
+        this.queue(z, z.a, z.look, d.pose, d.s, hitT < 0.14 ? 0.3 * (1 - hitT / 0.14) : 0, dt, c.r);
+        c.z = null; c.d = null;
       }
       GL3D.flush();
+      this.bake();
     } catch (e) {
       console.warn('3D characters disabled after an error', e);
       this.off = true; this.map.clear();
     }
+    this.prepMs += (performance.now() - now - this.prepMs) * 0.1;
   },
-  queue(e, ang, look, pose, shade, flash, dt) {
+  // LOD radii for this frame
+  lodSetup() {
+    const v = Settings.v, md = this.mode = v.chars3d, k = v.lodDist || 1, s = GL3D.scale;
+    // Auto: a slow prepare pulls the radii in, a fast one lets them out again (slowly: no visible pumping)
+    if (md === 1 && !G.paused) { if (this.prepMs > 4.5) this.bias = Math.min(1.5, this.bias + 0.01); else if (this.prepMs < 2.5) this.bias = Math.max(0, this.bias - 0.005); }
+    else if (md !== 1) this.bias = 0;
+    // smaller on screen, simplified sooner (full size at 1.1 screen px per world px and up)
+    const f = U.clamp(s / 1.1, 0.45, 1) * k / (1 + this.bias), R = this.RL;
+    R[0] = md === 2 ? 0 : 6;
+    if (md === 2) { R[1] = 6; R[2] = Math.max(10, 16 * f); }
+    else if (md === 3) { R[1] = Math.max(8, 12 * f); R[2] = 1e9; }
+    else { R[1] = Math.max(7, 16 * f); R[2] = Math.max(R[1] + 4, 30 * f); }
+    this.lodMax = v.lodMax === undefined ? 40 : v.lodMax;
+    // re-renders of stale body sprites per frame (new ones are never held back)
+    this.ibud = 40;
+    this.zooming = Math.abs(Render.cam.zoom - Render.cam.tz) > Render.cam.tz * 0.01;
+  },
+  // detail level for a moving character r tiles away, with hysteresis
+  pickLod(S, r, me) {
+    const md = this.mode, R = this.RL;
+    if (this.forceLod !== undefined) return this.forceLod;
+    if (md === 4) return 0;
+    if (me) return md === 2 ? 1 : 0;
+    let L = 0;
+    while (L < 3 && r >= R[L]) L++;
+    if (md === 3 && L > 2) L = 2;
+    if (md === 2 && L < 1) L = 1;
+    // switch only a margin past the radius, and not again within 0.4 s (except to full detail up close)
+    const c = S.lod;
+    if (c !== undefined && L !== c) {
+      if (L > c ? r < R[c] + 1.5 : r > R[L] - 1.5) L = c;
+      else if (this.now - S.lodT < 400 && !(L === 0 && r < R[0])) L = c;
+    }
+    if (L !== c) { S.lod = L; S.lodT = this.now; }
+    return L;
+  },
+  queue(e, ang, look, pose, shade, flash, dt, r) {
     const id = e.id === undefined ? 1 : e.id;
     let S = this.st.get(e);
     if (!S || S.look !== look && S.lookId !== this.lookKey(look)) {
       const prev = S;
       S = this.newState(id, look);
-      if (prev) { S.cur.set(prev.cur); S.fresh = false; S.key = prev.key; S.ph = prev.ph; S.v = prev.v; S.amp = prev.amp; S.hip = prev.hip; S.lx = prev.lx; S.ly = prev.ly; S.mode = prev.mode; S.mt = prev.mt; S.t = prev.t; S.seen = prev.seen; }
+      if (prev) { S.cur.set(prev.cur); S.fresh = false; S.key = prev.key; S.ph = prev.ph; S.v = prev.v; S.amp = prev.amp; S.hip = prev.hip; S.lx = prev.lx; S.ly = prev.ly; S.mode = prev.mode; S.mt = prev.mt; S.t = prev.t; S.seen = prev.seen; S.lod = prev.lod; S.lodT = prev.lodT; }
       this.st.set(e, S);
     }
     // not drawn for a while (off screen, out of sight): start from its current state instead of blending from a stale pose
     if (this.now - S.seen > 400) S.fresh = true;
     S.seen = this.now;
     S.look = look;
+    let light = Math.max(0.05, Math.min(1, shade)), lod;
+    // a body that has settled does not change: a sprite, re-rendered when its light, size or look changes
+    const stat = !S.fresh && !flash && pose.mode === 'dead' && !(pose.prog < 1) && S.mode === 'dead' && S.offT >= S.offD;
+    if (stat) {
+      light = Math.round(light * 40) / 40;
+      if (this.impUse(S, e, ang, look, light, false)) { this.lodN[4]++; return; }
+      lod = this.mode === 2 ? 1 : 0;
+      S.acc = 0;
+    } else {
+      lod = this.pickLod(S, r || 0, e === G.player);
+      if (lod === 3) {
+        // far crowds animate every 2nd or 3rd frame; their last sprite is drawn in between
+        S.acc = (S.acc || 0) + dt;
+        if ((this.fno + id) % (r > this.RL[2] + 8 ? 3 : 2) && this.impUse(S, e, ang, look, light, true)) { this.lodN[3]++; return; }
+        dt = S.acc; light = Math.round(light * 40) / 40;
+      }
+      S.acc = 0;
+    }
     this.animate(S, e.x, e.y, ang, pose, dt);
-    const cell = this.render(S, ang, look, pose, Math.max(0.05, Math.min(1, shade)), flash);
-    if (cell) this.map.set(e, cell);
+    const cell = this.render(S, ang, look, pose, light, flash, lod);
+    if (!cell) return;
+    this.map.set(e, cell);
+    this.lodN[stat ? 4 : lod]++;
+    if (stat || lod === 3) { cell.S = S; cell.ang = ang; cell.bl = look.blood; this.pend.push(cell); }
+  },
+  // draw S's sprite this frame if it is still good (anim: a recent far-crowd frame will do); false: render it again
+  impUse(S, e, ang, look, light, anim) {
+    const I = S.imp;
+    if (!I || I.gen !== C3Imp.gen) return false;
+    const rs = GL3D.scale / I.s, near = rs > 0.87 && rs < 1.15;
+    if (anim) { if (!near || this.fno - I.made > 4) return false; }
+    else if (!(near && I.light === light && I.ang === ang && I.bl === look.blood && I.key === S.key)) {
+      // stale: re-rendered within the frame's budget; the old sprite (scaled) meanwhile and while the zoom is moving
+      const ok = rs > 0.6 && rs < 1.7;
+      if (!ok || (!this.zooming && this.ibud > 0)) { this.ibud--; return false; }
+    }
+    I.used = this.fno;
+    this.map.set(e, I);
+    return true;
+  },
+  // after the GL pass: shadows into the atlas copy under each model (one blit per character), then the cells that
+  // become sprites are copied into the impostor atlas
+  bake() {
+    const g2 = GL3D.g2, s = GL3D.scale;
+    if (!g2) return;
+    g2.globalCompositeOperation = 'destination-over';
+    for (const c of GL3D.cells) {
+      const sd = c.shadow;
+      if (!sd) continue;
+      g2.fillStyle = C3SH[Math.round(c.lt * 20)];
+      g2.beginPath(); g2.ellipse(c.px + (c.ax + sd[0]) * s, c.py + (c.ay + sd[1]) * s, sd[2] * s, sd[3] * s, sd[4], 0, 6.2832); g2.fill();
+    }
+    g2.globalCompositeOperation = 'source-over';
+    const P = this.pend;
+    for (let i = 0; i < P.length; i++) {
+      const c = P[i], S = c.S;
+      c.S = null;
+      let I = S.imp;
+      const w = c.pw + 2, h = c.ph + 2;
+      if (I && (I.gen !== C3Imp.gen || I.sl.w < w || I.sl.h < h || I.sl.w > w + 24 || I.sl.h > h + 24)) {
+        if (I.gen === C3Imp.gen) C3Imp.release(I.sl);
+        I = S.imp = null;
+      }
+      if (!I) {
+        const sl = this.impAlloc(w, h);
+        if (!sl) continue;
+        I = S.imp = { sl, gen: C3Imp.gen, pw: 0, ph: 0, ax: 0, ay: 0, s: 1, light: 0, ang: 0, bl: 0, key: '', made: 0, used: 0 };
+        this.imps.add(S);
+      }
+      const sl = I.sl, g = C3Imp.g;
+      g.clearRect(sl.x, sl.y, sl.w, sl.h);
+      g.drawImage(GL3D.c2, c.px, c.py, c.pw, c.ph, sl.x + 1, sl.y + 1, c.pw, c.ph);
+      I.pw = c.pw; I.ph = c.ph; I.ax = c.ax; I.ay = c.ay; I.s = s; I.light = c.lt; I.ang = c.ang; I.bl = c.bl; I.key = S.key;
+      I.made = I.used = this.fno;
+    }
+    P.length = 0;
+    // sprites not drawn for 4 s give their slots back
+    if (this.fno % 60 === 0) for (const S of this.imps) {
+      const I = S.imp;
+      if (!I || I.gen !== C3Imp.gen) { S.imp = null; this.imps.delete(S); }
+      else if (this.fno - I.used > 240) { C3Imp.release(I.sl); S.imp = null; this.imps.delete(S); }
+    }
+  },
+  impAlloc(w, h) {
+    let sl = C3Imp.alloc(w, h);
+    if (sl) return sl;
+    // full: free the sprites not drawn this frame or the last, and start over if that is still not enough
+    for (const S of this.imps) { const I = S.imp; if (I && I.gen === C3Imp.gen && this.fno - I.used > 1) { C3Imp.release(I.sl); S.imp = null; this.imps.delete(S); } }
+    sl = C3Imp.alloc(w, h);
+    if (sl) return sl;
+    // (sprites already handed out this frame keep their pixels: nothing more is copied until the next frame)
+    C3Imp.reset();
+    for (const S of this.imps) S.imp = null;
+    this.imps.clear();
+    this.pend.length = 0;
+    return null;
   },
   // the player's look object is rebuilt every frame: compare what shapes the model
   lookKey(L) { return (L.female ? 'f' : 'm') + (L.zombie ? 'z' : ''); },
@@ -1084,15 +1279,21 @@ const Char3D = {
     if (key) { if (this.palK.size > 40) this.palK.clear(); this.palK.set(key, Pl); } else this.pals.set(look, Pl);
     return Pl;
   },
-  // pose -> joints -> primitives into a new atlas cell
-  render(S, ang, look, P, light, flash) {
+  // pose -> joints -> primitives into a new atlas cell (with room for the shadow, which bake() draws into it)
+  render(S, ang, look, P, light, flash, lod) {
     const mk = GL3D.mark(this.mk);
     C3B.x0 = -12; C3B.x1 = 12; C3B.y0 = -8; C3B.y1 = 6;
-    const sh = this.build(S, ang, look, P);
+    const sh = lod >= 2 ? this.buildBox(S, ang, look, P) : this.build(S, ang, look, P, lod || 0);
+    const cr = Math.cos(sh[4]), sr = Math.sin(sh[4]);
+    const hx = Math.sqrt(sh[2] * sh[2] * cr * cr + sh[3] * sh[3] * sr * sr) + 1, hy = Math.sqrt(sh[2] * sh[2] * sr * sr + sh[3] * sh[3] * cr * cr) + 1;
+    if (sh[0] - hx < C3B.x0) C3B.x0 = sh[0] - hx;
+    if (sh[0] + hx > C3B.x1) C3B.x1 = sh[0] + hx;
+    if (sh[1] - hy < C3B.y0) C3B.y0 = sh[1] - hy;
+    if (sh[1] + hy > C3B.y1) C3B.y1 = sh[1] + hy;
     const cell = GL3D.cell(C3B.x1 - C3B.x0 + 4, C3B.y1 - C3B.y0 + 4, 2 - C3B.x0, 2 - C3B.y0);
     if (!cell) { GL3D.undo(mk); return null; }
     GL3D.seal(cell, mk, light, flash);
-    cell.shadow = sh;
+    cell.shadow = sh; cell.lt = light;
     return cell;
   },
   // two-bone IK in model space: knee/elbow for a limb from A toward target Tg (lengths a, b), bending toward pole
@@ -1157,23 +1358,30 @@ const Char3D = {
   patch(F, o, w, h, col, lift) {
     const nx = o[3], ny = o[4], l = lift || 0.006;
     const cx = o[0] + nx * l, cy = o[1] + ny * l;
-    c3emit(GL3D.SPH, F[0] + F[3] * cx + F[6] * cy + F[9] * o[2], F[1] + F[4] * cx + F[7] * cy + F[10] * o[2], F[2] + F[5] * cx + F[8] * cy + F[11] * o[2],
+    c3emit(this.M.SPH, F[0] + F[3] * cx + F[6] * cy + F[9] * o[2], F[1] + F[4] * cx + F[7] * cy + F[10] * o[2], F[2] + F[5] * cx + F[8] * cy + F[11] * o[2],
       (F[3] * nx + F[6] * ny) * 0.008, (F[4] * nx + F[7] * ny) * 0.008, (F[5] * nx + F[8] * ny) * 0.008,
       (F[3] * -ny + F[6] * nx) * w, (F[4] * -ny + F[7] * nx) * w, (F[5] * -ny + F[8] * nx) * w,
       F[9] * h, F[10] * h, F[11] * h, col, 1, 1);
   },
-  build(S, ang, look, Pose) {
-    const T = S.cur, D = S.D, Pl = this.pal(look, D), H = D.H, bw = D.bw, fem = D.fem, zomb = D.zomb;
-    const det = GL3D.scale >= 1.5 ? 2 : GL3D.scale >= 0.85 ? 1 : 0;
-    const B = c3body(this.B, ang), Pf = this.P, Lf = this.L, Cf = this.C, NB = this.NB, Hf = this.H;
-    const BOX = GL3D.BOX, RB = GL3D.RBOX, CY = GL3D.CYL, SP = GL3D.SPH;
-    const ex = this.extras(S, look, D);
-    // ---- skeleton
+  // the skeleton frames for pose S.cur: pelvis, lumbar, chest, neck base, head
+  rig(S, ang) {
+    const T = S.cur, D = S.D, Pf = this.P, Lf = this.L, Cf = this.C, NB = this.NB, Hf = this.H, B = c3body(this.B, ang);
     c3loc(Pf, B, T[0], T[1], T[2]); c3yaw(Pf, T[5]); c3pitch(Pf, -T[3]); c3roll(Pf, -T[4]);
     c3loc(Lf, Pf, 0, 0, D.sp0); c3yaw(Lf, T[8] * 0.45); c3pitch(Lf, -T[6] * 0.5); c3roll(Lf, -T[7] * 0.5);
     c3loc(Cf, Lf, 0, 0, D.sp1); c3yaw(Cf, T[8] * 0.55); c3pitch(Cf, -T[6] * 0.5); c3roll(Cf, -T[7] * 0.5);
     c3loc(NB, Cf, -0.02, 0, D.shZ + 0.02); c3yaw(NB, T[11] * 0.4); c3pitch(NB, -T[9] * 0.4 - 0.1); c3roll(NB, -T[10] * 0.4);
     c3loc(Hf, NB, 0.0, 0, D.neck); c3pitch(Hf, 0.1); c3yaw(Hf, T[11] * 0.6); c3pitch(Hf, -T[9] * 0.6); c3roll(Hf, -T[10] * 0.6);
+  },
+  // LOD0 (lod 0: detail by on-screen size) and LOD1 (lod 1: coarse meshes, no small details)
+  build(S, ang, look, Pose, lod) {
+    const T = S.cur, D = S.D, Pl = this.pal(look, D), H = D.H, bw = D.bw, fem = D.fem, zomb = D.zomb;
+    const det = lod ? 0 : GL3D.scale >= 1.5 ? 2 : GL3D.scale >= 0.85 ? 1 : 0;
+    const M = this.M = C3M[lod ? 1 : 0];
+    const Pf = this.P, Lf = this.L, Cf = this.C, NB = this.NB, Hf = this.H;
+    const BOX = M.BOX, RB = M.RB, CY = M.CYL, SP = M.SPH;
+    const ex = this.extras(S, look, D);
+    // ---- skeleton
+    this.rig(S, ang);
     const jk = !!look.jacket, sl = look.sleeves, shorts = !!look.shorts && !Pl.bareLegs, legBare = Pl.bareLegs;
     // torso widths: shoulders, waist and hips differ between builds and sexes
     const shS = (fem ? 0.92 : 1) * bw * (0.5 + 0.5 * H), waS = (fem ? 0.88 : 1) * D.belly, hiS = (fem ? 1.07 : 1) * D.hips;
@@ -1190,7 +1398,7 @@ const Char3D = {
       const fx = Pf[3], fy = Pf[4], fz = Pf[5];
       // thigh, knee, shin: trousers are straight tubes, bare legs have a calf
       const thighCol = legBare ? Pl.skin : Pl.pants;
-      c3seg(GL3D.LIMB, hip, kn, thR + pantR, thR * 0.96 + pantR, shorts ? Pl.skin : thighCol, 1, 1, fx, fy, fz);
+      c3seg(M.LIMB, hip, kn, thR + pantR, thR * 0.96 + pantR, shorts ? Pl.skin : thighCol, 1, 1, fx, fy, fz);
       if (shorts) {
         c3g[0] = hip[0] + (kn[0] - hip[0]) * 0.55; c3g[1] = hip[1] + (kn[1] - hip[1]) * 0.55; c3g[2] = hip[2] + (kn[2] - hip[2]) * 0.55;
         c3seg(CY, hip, c3g, thR * 1.06 + 0.012, thR + 0.012, Pl.pants, 1, 0.98, fx, fy, fz);
@@ -1200,7 +1408,7 @@ const Char3D = {
       if (pantR) {
         c3seg(CY, kn, an, knR, knR * 0.94, Pl.pants, 1, 1.0, fx, fy, fz);
         if (det > 1) { c3g[0] = an[0] + (kn[0] - an[0]) * 0.08; c3g[1] = an[1] + (kn[1] - an[1]) * 0.08; c3g[2] = an[2] + (kn[2] - an[2]) * 0.08; c3seg(CY, c3g, an, knR * 0.98, knR * 1.02, Pl.pantsD, 1, 1, fx, fy, fz); }
-      } else c3seg(GL3D.CALF, kn, an, 0.062 * D.hips, 0.056 * D.hips, Pl.skin, 1, 1, fx, fy, fz);
+      } else c3seg(M.CALF, kn, an, 0.062 * D.hips, 0.056 * D.hips, Pl.skin, 1, 1, fx, fy, fz);
       // foot: pitch in the pelvis frame, turned out by the leg twist; its top faces back up the shin
       const fp = T[i + 4], ct = Math.cos(fp), stt = Math.sin(fp), ft = 0.1 * side + tw * 0.5;
       const fd = c3dir(c3g, Pf, ct * Math.cos(ft), ct * Math.sin(ft), stt);
@@ -1210,38 +1418,38 @@ const Char3D = {
       let tx = ux - fd[0] * dd, ty = uy - fd[1] * dd, tz = uz - fd[2] * dd; const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; tx /= tl; ty /= tl; tz /= tl;
       const sx = fd[1] * tz - fd[2] * ty, sy = fd[2] * tx - fd[0] * tz, sz = fd[0] * ty - fd[1] * tx;
       const U0 = C3U.SHOE * D.foot, uw = U0 * (fem ? 0.92 : 1) * (Pl.barefoot ? 0.86 : 1), uh = U0 * (Pl.barefoot ? 0.8 : 1);
-      c3emit(GL3D.SHOE, an[0], an[1], an[2], fd[0] * U0, fd[1] * U0, fd[2] * U0, sx * uw, sy * uw, sz * uw, tx * uh, ty * uh, tz * uh, Pl.shoes, 1, 1);
+      c3emit(M.SHOE, an[0], an[1], an[2], fd[0] * U0, fd[1] * U0, fd[2] * U0, sx * uw, sy * uw, sz * uw, tx * uh, ty * uh, tz * uh, Pl.shoes, 1, 1);
       if (det > 0 && !Pl.barefoot) {
         // the sole: the same shape squashed to its bottom
         const k = 0.24, o = -0.077 * (1 - k) * D.foot;
-        c3emit(GL3D.SHOE, an[0] + tx * o, an[1] + ty * o, an[2] + tz * o, fd[0] * U0 * 1.02, fd[1] * U0 * 1.02, fd[2] * U0 * 1.02, sx * uw * 1.05, sy * uw * 1.05, sz * uw * 1.05, tx * uh * k, ty * uh * k, tz * uh * k, Pl.sole, 1, 1);
+        c3emit(M.SHOE, an[0] + tx * o, an[1] + ty * o, an[2] + tz * o, fd[0] * U0 * 1.02, fd[1] * U0 * 1.02, fd[2] * U0 * 1.02, sx * uw * 1.05, sy * uw * 1.05, sz * uw * 1.05, tx * uh * k, ty * uh * k, tz * uh * k, Pl.sole, 1, 1);
       }
       const ak = side < 0 ? c3AL : c3AR; ak[0] = an[0]; ak[1] = an[1]; ak[2] = an[2];
     }
     // ---- pelvis, belly, rib cage
     const top = Pl.top, under = jk ? Pl.shirt : Pl.top, jx = jk ? 1.07 : 1;
-    c3box(GL3D.PELVIS, Pf, 0, 0, 0, UP * hiS, UP * hiS, UP * H, Pl.pants);
+    c3box(M.PELVIS, Pf, 0, 0, 0, UP * hiS, UP * hiS, UP * H, Pl.pants);
     // the shirt hangs over the belt unless tucked in
     const tuck = ex.tuck && !jk && !Pl.bareTop;
-    c3box(GL3D.BELLY, Lf, 0, 0, tuck || Pl.bareTop ? 0 : -0.035, UB * waS, UB * waS * 1.01, UB * H, Pl.bareTop ? Pl.skin : under);
+    c3box(M.BELLY, Lf, 0, 0, tuck || Pl.bareTop ? 0 : -0.035, UB * waS, UB * waS * 1.01, UB * H, Pl.bareTop ? Pl.skin : under);
     if (tuck && det > 0) {
-      c3box(GL3D.BAND, Pf, 0, 0, 0.112, C3U.BAND * hiS, C3U.BAND * hiS, C3U.BAND * H, Pl.belt);
+      c3box(M.BAND, Pf, 0, 0, 0.112, C3U.BAND * hiS, C3U.BAND * hiS, C3U.BAND * H, Pl.belt);
       if (det > 1) c3box(BOX, Pf, 0.092 * hiS, 0, 0.112, 0.006, 0.02, 0.014, Pl.buckle);
     }
-    c3box(GL3D.CHEST, Cf, 0, 0, 0, UC * shS * (fem ? 0.97 : 1), UC * shS, UC * H, Pl.bareTop ? Pl.skin : under);
+    c3box(M.CHEST, Cf, 0, 0, 0, UC * shS * (fem ? 0.97 : 1), UC * shS, UC * H, Pl.bareTop ? Pl.skin : under);
     // the bust: two soft overlapping swells that read as one shape under the cloth
     if (fem) for (const sd of [-1, 1]) c3box(SP, Cf, 0.064 * shS, sd * 0.042 * shS, 0.112 * H, 0.046, 0.06, 0.052, Pl.bareTop ? Pl.skin : under);
     if (jk) {
       // a jacket over the shirt: bulkier, longer, with a turned-up collar and a darker zip line
-      c3box(GL3D.CHEST, Cf, -0.004, 0, 0.004, UC * shS * jx * (fem ? 1 : 1.03), UC * shS * jx, UC * H * 1.01, Pl.jacket);
-      c3box(GL3D.BELLY, Lf, 0, 0, -0.03, UB * waS * 1.1, UB * waS * 1.1, UB * H, Pl.jacket);
-      c3box(GL3D.BELLY, Lf, -0.004, 0, -0.13, UB * waS * 1.1, UB * waS * 1.12, UB * H * 0.75, Pl.jacket, 1.12, 1);
+      c3box(M.CHEST, Cf, -0.004, 0, 0.004, UC * shS * jx * (fem ? 1 : 1.03), UC * shS * jx, UC * H * 1.01, Pl.jacket);
+      c3box(M.BELLY, Lf, 0, 0, -0.03, UB * waS * 1.1, UB * waS * 1.1, UB * H, Pl.jacket);
+      c3box(M.BELLY, Lf, -0.004, 0, -0.13, UB * waS * 1.1, UB * waS * 1.12, UB * H * 0.75, Pl.jacket, 1.12, 1);
       if (det > 0) c3box(CY, NB, 0.012, 0, -0.01, 0.075, 0.08, 0.035, Pl.jacketD, 1.06, 0.9);
       if (det > 1) { c3pt(c3a, Lf, 0.1 * waS, 0, -0.17); c3pt(c3b, Cf, 0.115 * shS, 0, 0.2); c3seg(BOX, c3a, c3b, 0.003, 0.004, Pl.jacketD, 1, 1, Cf[3], Cf[4], Cf[5]); }
     } else if (!Pl.bareTop && det > 0) c3box(CY, NB, 0.008, 0, -0.02, 0.064, 0.068, 0.016, Pl.shirtD, 1, 0.95);
     if (Pl.vest) {
-      c3box(GL3D.CHEST, Cf, 0.002, 0, -0.012, UC * shS * 1.1, UC * shS * 1.06, UC * H * 0.94, Pl.vest);
-      c3box(GL3D.BELLY, Lf, 0, 0, 0.02, UB * waS * 1.14, UB * waS * 1.14, UB * H * 0.9, Pl.vest);
+      c3box(M.CHEST, Cf, 0.002, 0, -0.012, UC * shS * 1.1, UC * shS * 1.06, UC * H * 0.94, Pl.vest);
+      c3box(M.BELLY, Lf, 0, 0, 0.02, UB * waS * 1.14, UB * waS * 1.14, UB * H * 0.9, Pl.vest);
     }
     // blood and rips on the clothes (on the outermost layer)
     if (det > 0 && (ex.stains.length || ex.rips.length)) {
@@ -1318,7 +1526,7 @@ const Char3D = {
       c3seg(SP, c3a, c3g, dR * 0.88, dR * 1.02, up, 1, 1, ox, oy, oz);
       // upper arm, its top hidden in the deltoid; a short sleeve ends half way down with a slight flare
       c3a[0] = S0[0] + ux * 0.05; c3a[1] = S0[1] + uy * 0.05; c3a[2] = S0[2] + uz * 0.05;
-      c3seg(GL3D.LIMB, c3a, E, armR * 1.02 + (longS ? cl : 0), armR * 0.98 + (longS ? cl : 0), longS ? sleeve : Pl.skin, 1, 1, Cf[3], Cf[4], Cf[5]);
+      c3seg(M.LIMB, c3a, E, armR * 1.02 + (longS ? cl : 0), armR * 0.98 + (longS ? cl : 0), longS ? sleeve : Pl.skin, 1, 1, Cf[3], Cf[4], Cf[5]);
       if (clothed && !longS) {
         c3a[0] = S0[0] + ux * 0.035; c3a[1] = S0[1] + uy * 0.035; c3a[2] = S0[2] + uz * 0.035;
         const k = ua * 0.48; c3g[0] = S0[0] + ux * k; c3g[1] = S0[1] + uy * k; c3g[2] = S0[2] + uz * k;
@@ -1327,7 +1535,7 @@ const Char3D = {
       if (torn && det > 0) { c3g[0] = S0[0] + ux * ua * 0.5; c3g[1] = S0[1] + uy * ua * 0.5; c3g[2] = S0[2] + uz * ua * 0.5; c3emit(SP, c3g[0], c3g[1], c3g[2], 0.034, 0, 0, 0, 0.03, 0, 0, 0, 0.045, Pl.wound, 1, 1); }
       const eR = armR * 0.8 + (longS ? cl : 0);
       c3emit(SP, E[0], E[1], E[2], eR, 0, 0, 0, eR, 0, 0, 0, eR, longS ? sleeve : Pl.skin, 1, 1);
-      c3seg(GL3D.LIMB, E, Wr, armR * 0.9 + (longS ? cl : 0), armR * 0.84 + (longS ? cl : 0), sleeve, 1, 1, Cf[3], Cf[4], Cf[5]);
+      c3seg(M.LIMB, E, Wr, armR * 0.9 + (longS ? cl : 0), armR * 0.84 + (longS ? cl : 0), sleeve, 1, 1, Cf[3], Cf[4], Cf[5]);
       // forearm direction
       let ax = Wr[0] - E[0], ay = Wr[1] - E[1], az = Wr[2] - E[2]; const al = Math.sqrt(ax * ax + ay * ay + az * az) || 1; ax /= al; ay /= al; az /= al;
       if (longS && det > 1) { c3a[0] = Wr[0] - ax * 0.035; c3a[1] = Wr[1] - ay * 0.035; c3a[2] = Wr[2] - az * 0.035; c3seg(CY, c3a, Wr, armR * 0.74 + cl, armR * 0.76 + cl, jk ? Pl.jacketD : Pl.shirtD, 1, 1, Cf[3], Cf[4], Cf[5]); }
@@ -1353,7 +1561,7 @@ const Char3D = {
           if (det > 1) {
             c3a[0] = Wr[0] + ax * 0.025 + wx * 0.03 - nx * 0.012; c3a[1] = Wr[1] + ay * 0.025 + wy * 0.03 - ny * 0.012; c3a[2] = Wr[2] + az * 0.025 + wz * 0.03 - nz * 0.012;
             c3g[0] = Wr[0] + ax * 0.085 + wx * 0.046 - nx * 0.022; c3g[1] = Wr[1] + ay * 0.085 + wy * 0.046 - ny * 0.022; c3g[2] = Wr[2] + az * 0.085 + wz * 0.046 - nz * 0.022;
-            c3seg(GL3D.LIMB, c3a, c3g, 0.013 * hs, 0.012 * hs, hcol, 1, 0.8, nx, ny, nz);
+            c3seg(M.LIMB, c3a, c3g, 0.013 * hs, 0.012 * hs, hcol, 1, 0.8, nx, ny, nz);
           }
         }
       }
@@ -1381,8 +1589,130 @@ const Char3D = {
         this.weapon(model, h, d, Pf, false, false, Pl);
       }
     }
-    // ---- shadow: a disc under the feet, stretched toward the head when lying or bent over
-    const hp = c3pt(c3a, Hf, 0, 0, 0.08);
+    return this.shadowOf();
+  },
+  // LOD2: the old box style on the same skeleton and poses - one box per bone segment in the model's colours, the
+  // outer clothing layer only, hair and hats as blocks, no face. Held items and hotbar gear as in the full model.
+  buildBox(S, ang, look, Pose) {
+    const T = S.cur, D = S.D, Pl = this.pal(look, D), H = D.H, bw = D.bw, fem = D.fem;
+    const M = this.M = C3M[1], BOX = M.BOX;
+    const Pf = this.P, Lf = this.L, Cf = this.C, NB = this.NB, Hf = this.H;
+    this.rig(S, ang);
+    const jk = !!look.jacket, shorts = !!look.shorts && !Pl.bareLegs, legBare = Pl.bareLegs;
+    const shS = (fem ? 0.92 : 1) * bw * (0.5 + 0.5 * H), waS = (fem ? 0.88 : 1) * D.belly, hiS = (fem ? 1.07 : 1) * D.hips;
+    // ---- legs: thigh, shin, foot
+    const thR = 0.086 * D.hips, pantR = legBare || shorts ? 0 : 0.01;
+    for (const side of [-1, 1]) {
+      const i = side < 0 ? C3.LA : C3.RA;
+      const hip = c3pt(c3a, Pf, 0, side * D.hipW, 0), tg = c3pt(c3b, Pf, T[i], T[i + 1], T[i + 2]);
+      const tw = T[i + 3] * side, pole = c3dir(c3c, Pf, Math.cos(tw), Math.sin(tw), 0);
+      const kn = c3d, an = c3e, fx = Pf[3], fy = Pf[4], fz = Pf[5];
+      this.ik(hip, tg, D.thigh, D.shin, pole[0], pole[1], pole[2], kn, an);
+      if (shorts) {
+        c3g[0] = hip[0] + (kn[0] - hip[0]) * 0.55; c3g[1] = hip[1] + (kn[1] - hip[1]) * 0.55; c3g[2] = hip[2] + (kn[2] - hip[2]) * 0.55;
+        c3seg(BOX, hip, c3g, thR * 1.06 + 0.012, thR + 0.012, Pl.pants, 1, 0.95, fx, fy, fz);
+        c3seg(BOX, c3g, kn, thR * 0.9, thR * 0.85, Pl.skin, 1, 0.8, fx, fy, fz);
+      } else c3seg(BOX, hip, kn, thR + pantR, thR * 0.96 + pantR, legBare ? Pl.skin : Pl.pants, 1, 0.78, fx, fy, fz);
+      const knR = 0.054 * D.hips + pantR;
+      c3seg(BOX, kn, an, knR * 1.05, knR, pantR ? Pl.pants : Pl.skin, 1, 0.8, fx, fy, fz);
+      const fp = T[i + 4], ct = Math.cos(fp), stt = Math.sin(fp), ft = 0.1 * side + tw * 0.5;
+      const fd = c3dir(c3g, Pf, ct * Math.cos(ft), ct * Math.sin(ft), stt);
+      let ux = kn[0] - an[0], uy = kn[1] - an[1], uz = kn[2] - an[2];
+      const ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+      const dd = ux * fd[0] + uy * fd[1] + uz * fd[2];
+      let tx = ux - fd[0] * dd, ty = uy - fd[1] * dd, tz = uz - fd[2] * dd; const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+      const sx = fd[1] * tz - fd[2] * ty, sy = fd[2] * tx - fd[0] * tz, sz = fd[0] * ty - fd[1] * tx;
+      const fl = 0.135 * D.foot, fw = 0.047 * D.foot * (fem ? 0.92 : 1), fh = 0.06 * D.foot, fo = 0.057 * D.foot, fu = -0.016 * D.foot;
+      c3emit(BOX, an[0] + fd[0] * fo + tx * fu, an[1] + fd[1] * fo + ty * fu, an[2] + fd[2] * fo + tz * fu, fd[0] * fl, fd[1] * fl, fd[2] * fl, sx * fw, sy * fw, sz * fw, tx * fh, ty * fh, tz * fh, Pl.shoes, 1, 0.8);
+      const ak = side < 0 ? c3AL : c3AR; ak[0] = an[0]; ak[1] = an[1]; ak[2] = an[2];
+    }
+    // ---- hips, belly, chest: only the outermost layer
+    const outer = Pl.vest || (jk ? Pl.jacket : Pl.bareTop ? Pl.skin : Pl.shirt), mid = jk ? Pl.jacket : Pl.bareTop ? Pl.skin : Pl.shirt, jx = jk ? 1.07 : 1;
+    // (boxes a little inside the smooth profiles: their corners stick out)
+    c3box(BOX, Pf, -0.012 * hiS, 0, 0.01, 0.09 * hiS, 0.15 * hiS, 0.125 * H, Pl.pants, 0.85, 1);
+    c3box(BOX, Lf, 0, 0, 0.055 - (jk ? 0.05 : 0), 0.082 * waS * jx, 0.13 * waS * jx, (0.13 + (jk ? 0.05 : 0)) * H, mid);
+    c3box(BOX, Cf, 0.004, 0, 0.09, 0.095 * shS * jx, 0.152 * shS * jx, 0.17 * H, outer, 0.88, 1);
+    if (Pl.bag) c3box(BOX, Cf, -0.105 * shS * jx - 0.06, 0, 0.1, 0.065, 0.125, 0.16, Pl.bag);
+    // ---- neck and head: hair and hats as blocks
+    c3pt(c3a, NB, -0.004, 0, -0.04); c3pt(c3b, Hf, -0.012, 0, 0.0);
+    const nr = 0.05 * (fem ? 0.88 : 1) * (0.94 + bw * 0.06);
+    c3seg(BOX, c3a, c3b, nr, nr, Pl.skin, 1, 1, NB[3], NB[4], NB[5]);
+    const hs = D.head, hw = hs * (fem ? 0.95 : 1);
+    c3box(BOX, Hf, 0.004 * hs, 0, 0.072 * hs, 0.1 * hs, 0.075 * hw, 0.12 * hs, Pl.skin, 0.8, 1);
+    const hsty = look.hairStyle || 'short', hat = look.hat, full = hat && hat.type === 'fullhelmet';
+    if (hsty !== 'bald' && !full) {
+      const hc = hsty === 'buzz' ? this.mix(Pl.hair, Pl.skin, 0.45) : Pl.hair, th = hsty === 'buzz' ? 0.02 : hsty === 'messy' ? 0.05 : 0.04;
+      c3box(BOX, Hf, -0.008 * hs, 0, (0.205 - th) * hs, 0.106 * hs, 0.081 * hw, th * hs, hc);
+      c3box(BOX, Hf, -0.077 * hs, 0, 0.08 * hs, 0.032 * hs, 0.08 * hw, 0.1 * hs, hc);
+      if (hsty === 'long' || (fem && hsty === 'short')) c3box(BOX, Hf, -0.07 * hs, 0, hsty === 'long' ? -0.02 : 0.04, 0.04, 0.075 * hw, hsty === 'long' ? 0.13 : 0.08, hc);
+      else if (hsty === 'ponytail') c3box(BOX, Hf, -0.128 * hs, 0, 0.05 * hs, 0.024, 0.022, 0.065, this.sc(hc, 0.9));
+    }
+    if (hat) {
+      const hcol = Pl.hat;
+      if (full) { c3box(BOX, Hf, 0.004, 0, 0.085, 0.13, 0.11, 0.14, hcol); c3box(BOX, Hf, 0.1, 0, 0.085, 0.035, 0.078, 0.04, Pl.glass); }
+      else if (hat.type === 'helmet') c3box(BOX, Hf, -0.004, 0, 0.15 * hs, 0.12 * hs, 0.1 * hw, 0.065 * hs, hcol);
+      else if (hat.type === 'beanie') c3box(BOX, Hf, -0.004, 0, 0.15 * hs, 0.108 * hs, 0.09 * hw, 0.06 * hs, hcol);
+      else { c3box(BOX, Hf, -0.002, 0, 0.165 * hs, 0.108 * hs, 0.088 * hw, 0.048 * hs, hcol); c3box(BOX, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92)); }
+    }
+    // ---- arms (the left hand on the weapon as in the full model), held items
+    const ua = D.ua, fa = D.fa, Wm = Pose.weapon ? WEAPON_MODELS[Pose.weapon] || WEAPON_MODELS.generic : null, armR = 0.047 * D.arm;
+    let handR = null, wd = null;
+    for (const side of [1, -1]) {
+      const i = side < 0 ? C3.LW : C3.RW;
+      const S0 = c3pt(c3S0, Cf, -0.012, side * D.shW, D.shZ), tg = c3TG;
+      c3pt(tg, Cf, -0.012 + T[i], side * D.shW + T[i + 1], D.shZ + T[i + 2]);
+      if (side < 0 && T[C3.GR] > 0.01 && handR && wd) {
+        const go = T[C3.GO];
+        let gx = handR[0] + wd[0] * go, gy = handR[1] + wd[1] * go, gz = handR[2] + wd[2] * go;
+        if (Math.abs(go) < 0.05) { gx -= Cf[6] * 0.035 + Cf[9] * 0.035; gy -= Cf[7] * 0.035 + Cf[10] * 0.035; gz -= Cf[8] * 0.035 + Cf[11] * 0.035; }
+        const vx = gx - S0[0], vy = gy - S0[1], vz = gz - S0[2], vl = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+        gx -= vx / vl * 0.06; gy -= vy / vl * 0.06; gz -= vz / vl * 0.06;
+        const g = U.clamp(T[C3.GR], 0, 1);
+        tg[0] += (gx - tg[0]) * g; tg[1] += (gy - tg[1]) * g; tg[2] += (gz - tg[2]) * g;
+      }
+      const el = U.clamp(T[i + 3], 0, 1), eo = U.clamp(T[i + 3] - 1, 0, 1);
+      const pole = c3dir(c3c, Cf, -1 + el * 0.75 + eo * 0.55, side * (0.32 + el * 0.4 + eo * 0.4), -0.25 - el * 0.6 + eo * 0.55);
+      const E = c3E, Wr = c3W;
+      this.ik(S0, tg, ua, fa, pole[0], pole[1], pole[2], E, Wr);
+      const sleeve = Pl.sleeve, up = Pl.upper, cl = up !== Pl.skin ? (jk ? 0.013 : 0.006) : 0, longS = sleeve !== Pl.skin;
+      if (cl && !longS) {
+        c3g[0] = (S0[0] + E[0]) * 0.5; c3g[1] = (S0[1] + E[1]) * 0.5; c3g[2] = (S0[2] + E[2]) * 0.5;
+        c3seg(BOX, S0, c3g, armR * 1.05 + cl, armR + cl, up, 1, 1, Cf[3], Cf[4], Cf[5]);
+        c3seg(BOX, c3g, E, armR, armR * 0.95, Pl.skin, 1, 0.9, Cf[3], Cf[4], Cf[5]);
+      } else c3seg(BOX, S0, E, armR * 1.05 + cl, armR + cl, longS ? sleeve : up, 1, 0.9, Cf[3], Cf[4], Cf[5]);
+      c3seg(BOX, E, Wr, armR * 0.9 + (longS ? cl : 0), armR * 0.84 + (longS ? cl : 0), sleeve, 1, 0.85, Cf[3], Cf[4], Cf[5]);
+      let ax = Wr[0] - E[0], ay = Wr[1] - E[1], az = Wr[2] - E[2]; const al = Math.sqrt(ax * ax + ay * ay + az * az) || 1; ax /= al; ay /= al; az /= al;
+      let nx = Cf[6] * side, ny = Cf[7] * side, nz = Cf[8] * side;
+      const nd = nx * ax + ny * ay + nz * az; nx -= ax * nd; ny -= ay * nd; nz -= az * nd; const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+      const wx = (ay * nz - az * ny) * side, wy = (az * nx - ax * nz) * side, wz = (ax * ny - ay * nx) * side;
+      const hz = D.hand, hc = side > 0 ? c3HR : c3HC, c = 0.047 * hz;
+      hc[0] = Wr[0] + ax * c; hc[1] = Wr[1] + ay * c; hc[2] = Wr[2] + az * c;
+      c3emit(BOX, hc[0], hc[1], hc[2], nx * 0.022 * hz, ny * 0.022 * hz, nz * 0.022 * hz, wx * 0.04 * hz, wy * 0.04 * hz, wz * 0.04 * hz, ax * 0.046 * hz, ay * 0.046 * hz, az * 0.046 * hz, Pl.hand, 1, 0.9);
+      if (side > 0) {
+        handR = hc;
+        const wl = Math.hypot(T[C3.WD], T[C3.WD + 1], T[C3.WD + 2]) || 1;
+        wd = c3dir(c3WD, Cf, T[C3.WD] / wl, T[C3.WD + 1] / wl, T[C3.WD + 2] / wl);
+      } else if (Pose.offhand && !T[C3.GR]) this.weapon('flashlight', hc, c3dir(c3c, Cf, 0.95, -0.05, -0.12), Cf, false, Pose.light, Pl);
+    }
+    if (Wm && handR) this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl);
+    if (look.att) for (const [slot, model] of look.att) {
+      const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
+      if (slot === 'back') {
+        const d = c3dir(c3g, Cf, 0, -0.5, -0.86), c = c3pt(c3c, Cf, -(0.11 * shS * jx + (Pl.bag ? 0.13 : 0) + 0.025), 0, 0.12);
+        const h = c3G1; h[0] = c[0] - d[0] * W.len * 0.5; h[1] = c[1] - d[1] * W.len * 0.5; h[2] = c[2] - d[2] * W.len * 0.5;
+        this.weapon(model, h, d, Cf, false, false, Pl);
+      } else {
+        const side = slot === 'beltL' ? -1 : 1, f = slot === 'holster' ? 0.04 : slot === 'beltR' ? -0.06 : 0;
+        const h = c3pt(c3G1, Pf, f, side * 0.18 * hiS, 0.08), d = c3dir(c3G2, Pf, 0.18, side * 0.08, -1), l = Math.hypot(d[0], d[1], d[2]);
+        d[0] /= l; d[1] /= l; d[2] /= l;
+        this.weapon(model, h, d, Pf, false, false, Pl);
+      }
+    }
+    return this.shadowOf();
+  },
+  // shadow: a disc under the feet, stretched toward the head when lying or bent over (after a build: ankles in c3AL/AR)
+  shadowOf() {
+    const hp = c3pt(c3a, this.H, 0, 0, 0.08);
     const fx = (c3AL[0] + c3AR[0]) * 0.5, fy = (c3AL[1] + c3AR[1]) * 0.5;
     // only as far as the body is horizontal: an upright figure keeps a round shadow
     const flat = U.clamp(1 - (hp[2] - 0.3) / 0.9, 0, 1);
@@ -1391,9 +1721,9 @@ const Char3D = {
     return [(mx - my) * HTW, (mx + my) * HTH, Math.max(9, len + 8), 4.5 + Math.min(3, len * 0.12), len > 1 ? Math.atan2(uy, ux) : 0];
   },
   head(Hf, look, Pl, D, S, T, det, ex) {
-    const SP = GL3D.SPH, RB = GL3D.RBOX, BOX = GL3D.BOX, CY = GL3D.CYL, fem = D.fem, zomb = D.zomb;
+    const M = this.M, SP = M.SPH, RB = M.RB, BOX = M.BOX, CY = M.CYL, fem = D.fem, zomb = D.zomb;
     const hs = D.head, hw = hs * (fem ? 0.95 : 1), U = C3U.HEAD;
-    c3box(GL3D.HEAD, Hf, 0, 0, 0, U * hs, U * hw, U * hs, Pl.skin);
+    c3box(M.HEAD, Hf, 0, 0, 0, U * hs, U * hw, U * hs, Pl.skin);
     const jaw = T[C3.JAW] || 0;
     if (det > 0) {
       // nose, eyes, brows, mouth, ears
@@ -1416,7 +1746,7 @@ const Char3D = {
     if (hsty !== 'bald' && !fullHelm) {
       const hc = hsty === 'buzz' ? this.mix(Pl.hair, Pl.skin, 0.45) : Pl.hair;
       const big = hsty === 'messy' ? 1.05 : hsty === 'buzz' ? 0.985 : hsty === 'long' || fem ? 1.025 : 1;
-      c3box(GL3D.HAIR, Hf, -0.002, 0, 0, UH * big, UH * big * (fem ? 0.97 : 1), UH * (big > 1 ? 1 + (big - 1) * 0.6 : big), hc);
+      c3box(M.HAIR, Hf, -0.002, 0, 0, UH * big, UH * big * (fem ? 0.97 : 1), UH * (big > 1 ? 1 + (big - 1) * 0.6 : big), hc);
       if (hsty === 'long') {
         // hangs down the back to the shoulders, and past the ears at the sides
         c3box(RB, Hf, -0.07 * hs, 0, -0.02, 0.04, 0.072 * hw, 0.13, hc, 0.82, 1);
@@ -1433,16 +1763,16 @@ const Char3D = {
     if (hat) {
       const hcol = Pl.hat, UC = C3U.CAP * hs;
       if (fullHelm) { c3box(SP, Hf, 0.004, 0, 0.085, 0.13, 0.11, 0.14, hcol); c3box(RB, Hf, 0.1, 0, 0.085, 0.035, 0.078, 0.04, Pl.glass); }
-      else if (hat.type === 'helmet') { c3box(GL3D.CAP, Hf, -0.004, 0, -0.012, UC * 1.13, UC * 1.12, UC * 1.08, hcol); c3box(CY, Hf, 0.0, 0, 0.112, 0.128, 0.11, 0.008, this.sc(hcol, 0.85)); }
-      else if (hat.type === 'beanie') { c3box(GL3D.CAP, Hf, -0.004, 0, -0.03, UC * 1.04, UC * 1.05, UC * 1.08, hcol); c3box(CY, Hf, -0.004, 0, 0.1, 0.107 * hs, 0.088 * hw, 0.018, this.sc(hcol, 0.85)); }
-      else { c3box(GL3D.CAP, Hf, 0, 0, 0, UC, UC * 1.01, UC, hcol); c3box(RB, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92), 1, 1); }
+      else if (hat.type === 'helmet') { c3box(M.CAP, Hf, -0.004, 0, -0.012, UC * 1.13, UC * 1.12, UC * 1.08, hcol); c3box(CY, Hf, 0.0, 0, 0.112, 0.128, 0.11, 0.008, this.sc(hcol, 0.85)); }
+      else if (hat.type === 'beanie') { c3box(M.CAP, Hf, -0.004, 0, -0.03, UC * 1.04, UC * 1.05, UC * 1.08, hcol); c3box(CY, Hf, -0.004, 0, 0.1, 0.107 * hs, 0.088 * hw, 0.018, this.sc(hcol, 0.85)); }
+      else { c3box(M.CAP, Hf, 0, 0, 0, UC, UC * 1.01, UC, hcol); c3box(RB, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92), 1, 1); }
     }
     if (look.glasses && det > 0) { c3box(BOX, Hf, 0.108 * hs, 0, 0.084 * hs, 0.004, 0.058, 0.012, Pl.glass); }
     void CY;
   },
   // a weapon model held at hand, pointing along wd (unit, model space)
   weapon(key, hand, wd, Rf, flash, lit, Pl) {
-    const W = WEAPON_MODELS[key] || WEAPON_MODELS.generic, BOX = GL3D.BOX, CY = GL3D.CYL, RB = GL3D.RBOX;
+    const W = WEAPON_MODELS[key] || WEAPON_MODELS.generic, M = this.M, BOX = M.BOX, CY = M.CYL, RB = M.RB;
     let sx = -wd[1], sy = wd[0], sz = 0, sl = Math.sqrt(sx * sx + sy * sy);
     if (sl < 1e-3) { sx = Rf[6]; sy = Rf[7]; sz = Rf[8]; sl = 1; }
     sx /= sl; sy /= sl; sz /= sl;
@@ -1463,7 +1793,7 @@ const Char3D = {
         if (key === 'shotgun') piece(CY, 0.38, 0.62, 0.019, 0.019, this.rgb(W.stock), -0.018);
         else piece(BOX, 0.28, 0.5, 0.016, 0.02, this.rgb(W.stock), -0.01);
       }
-      if (flash) piece(GL3D.SPH, L + 0.01, L + 0.15, 0.05, 0.05, [2, 1.85, 1.4]);
+      if (flash) piece(M.SPH, L + 0.01, L + 0.15, 0.05, 0.05, [2, 1.85, 1.4]);
       return;
     }
     if (W.grip) piece(CY, -(W.gripLen || 0.08), 0.03, 0.019, 0.019, this.rgb(W.grip));
@@ -1482,17 +1812,14 @@ const Char3D = {
     void Pl; void RB;
   },
   // blit a prepared character; false when it was not prepared (caller falls back to 2D)
+  // (the shadow is in the cell or sprite: one drawImage per character)
   draw(ctx, e, X, Y, shade, alpha) {
-    const cell = this.map.get(e);
-    if (!cell) return false;
+    const c = this.map.get(e);
+    if (!c) return false;
     const fade = alpha !== undefined && alpha < 1;
     if (fade) ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(0,0,0,' + (0.28 * shade + 0.05).toFixed(2) + ')';
-    ctx.beginPath();
-    const sd = cell.shadow;
-    if (sd) ctx.ellipse(X + sd[0], Y + sd[1], sd[2], sd[3], sd[4], 0, Math.PI * 2); else ctx.ellipse(X, Y, 10, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    GL3D.blit(ctx, cell, X, Y);
+    if (c.sl) ctx.drawImage(C3Imp.cv, c.sl.x + 1, c.sl.y + 1, c.pw, c.ph, X - c.ax, Y - c.ay, c.pw / c.s, c.ph / c.s);
+    else GL3D.blit(ctx, c, X, Y);
     if (fade) ctx.globalAlpha = 1;
     return true;
   },

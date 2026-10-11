@@ -9,7 +9,9 @@ const SETTINGS_OPTS = {
   detail: { tab: 'display', n: 'World detail', opts: [['Low', 0], ['High', 1]], tip: 'Low skips ground markings and litter, grass edges and power-line wires.' },
   particles: { tab: 'display', n: 'Particles', opts: [['Low', 0.3], ['Medium', 0.6], ['High', 1]], tip: 'Blood, smoke, sparks and glass.' },
   weather: { tab: 'display', n: 'Rain & snow', opts: [['Off', 0], ['Light', 0.45], ['Full', 1]], tip: 'Falling rain and snow on screen (the weather itself is unchanged).' },
-  chars3d: { tab: 'display', n: '3D characters', opts: [['Off (2D)', 0], ['On', 1]], tip: 'Animated 3D survivors and zombies, drawn with WebGL on the graphics card. Off uses the flat 2D figures (cheaper on very old machines).' },
+  chars3d: { tab: 'display', n: 'Character detail', opts: [['Auto', 1], ['High', 4], ['Medium', 3], ['Low', 2], ['2D', 0]], tip: 'Animated 3D survivors and zombies, drawn with WebGL on the graphics card. Auto: full detail up close, simpler models further away and in big crowds (more so when zoomed out or when the frame rate suffers). High: full detail everywhere. Medium / Low: simpler models sooner. 2D: the flat 2D figures (no WebGL).' },
+  lodDist: { tab: 'perf', n: 'LOD distance', opts: [['Near', 0.6], ['Normal', 1], ['Far', 1.6]], tip: 'How far from you characters keep their detailed models before switching to simpler ones (anything within 6 tiles always stays detailed, except on Low).' },
+  lodMax: { tab: 'perf', n: 'Max detailed characters', opts: [['15', 15], ['25', 25], ['40', 40], ['80', 80], ['Unlimited', 0]], tip: 'In a crowd only this many moving characters (the nearest) get the detailed models; the rest use simpler ones. Settled bodies are cached as sprites and do not count.' },
   fpsShow: { tab: 'display', n: 'Frame rate counter', opts: [['Off', 0], ['FPS', 1], ['Detailed', 2]], tip: 'Detailed adds frame time, simulation time, lighting and zombie counts.' },
   lightHz: { tab: 'perf', n: 'Lighting updates', opts: [['5 / sec', 5], ['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often lights and shadows are recalculated. Lower is cheaper; moving lights (flashlight, headlights) update less smoothly.' },
   uiHz: { tab: 'perf', n: 'UI refresh rate', opts: [['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often the HUD, clock, moodles and open windows refresh.' },
@@ -25,7 +27,7 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: { res: 'auto', fps: 60, detail: 1, particles: 1, weather: 1, chars3d: 1, fpsShow: 0, lightHz: 60, uiHz: 30, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
+  v: { res: 'auto', fps: 60, detail: 1, particles: 1, weather: 1, chars3d: 1, fpsShow: 0, lightHz: 60, uiHz: 30, zLazy: 1, zAdapt: 1, chunkLazy: 1, lodDist: 1, lodMax: 40 },
   listeners: [],
   load() {
     try {
