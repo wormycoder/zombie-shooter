@@ -205,24 +205,38 @@ const Game = {
   },
 
   // ------------------------------------------------------------------ main loop
-  last: 0, acc: 0, fpsN: 0, fpsT: 0,
+  last: 0, acc: 0, fpsN: 0, fpsT: 0, rLast: 0, rIv: 16.7, capNext: 0,
   pf: { sim: 0, steps: 0, rend: 0, ui: 0, uiMs: 0, frame: 0 },
   loop(ts) {
     requestAnimationFrame((t) => this.loop(t));
-    // frame rate cap (settings): skip this display refresh if the last frame was too recent
+    // frame rate cap (settings): run on the display refresh nearest each due time, so a 144 Hz screen capped at 60
+    // gets about 60 frames (skipping refreshes by a minimum gap gave it 48)
     const cap = Settings.v.fps;
-    if (cap && this.last && ts - this.last < 1000 / cap - 2.5) return;
+    if (this.rLast) this.rIv += (Math.min(50, ts - this.rLast) - this.rIv) * 0.1;
+    this.rLast = ts;
+    if (cap && this.last) {
+      if (ts < this.capNext - this.rIv * 0.5) return;
+      this.capNext = ts - this.capNext > 1000 / cap ? ts + 1000 / cap : this.capNext + 1000 / cap;
+    }
+    const iv = this.last ? ts - this.last : 16.7;
     let dt = (ts - this.last) / 1000;
     this.last = ts;
     if (!(dt > 0)) dt = 0.016;
     dt = Math.min(dt, 0.1);
     if (G.mode === 'play' || G.mode === 'dead') {
+      let simMs = 0, uiMs = 0;
       if (G.mode === 'play' && !G.paused && !UI.modalPause()) {
         const sim = dt * G.speed;
-        const steps = Math.min(60, Math.max(1, Math.ceil(sim / (1 / 30))));
+        // fast-forward (x8 and up, sleeping, not driving) takes steps of up to 1/10 s: the same game time for a third
+        // of the work (25 crowd updates a frame at x50 dragged the frame rate down)
+        const sd = G.speed >= 8 && !(G.player && G.player.inCar) ? 1 / 10 : 1 / 30;
+        const steps = Math.min(60, Math.max(1, Math.ceil(sim / sd)));
         const t0 = performance.now();
-        for (let i = 0; i < steps; i++) this.step(sim / steps);
-        this.pf.sim += performance.now() - t0; this.pf.steps += steps;
+        // past ~12 ms of simulation in one frame the rest of its game time is let go (fast-forward runs a little
+        // slower) instead of each long frame asking for more steps the next frame
+        for (let i = 0; i < steps; i++) { this.step(sim / steps); if (i > 0 && performance.now() - t0 > 12) break; }
+        simMs = performance.now() - t0;
+        this.pf.sim += simMs; this.pf.steps += steps;
         Input.handleGameKeys();
       } else if (G.mode === 'dead') {
         this.step(dt);
@@ -235,7 +249,8 @@ const Game = {
       this.pf.rend += t2 - t1;
       // HUD and panels refresh at the configured rate
       this.uiAcc = (this.uiAcc || 0) + dt;
-      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); Dash.update(); this.uiAcc = 0; this.pf.ui++; this.pf.uiMs += performance.now() - t2; }
+      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); Dash.update(); this.uiAcc = 0; this.pf.ui++; uiMs = performance.now() - t2; this.pf.uiMs += uiMs; }
+      Perf.frame(iv, t2 - t1, simMs, uiMs);
       Music.update(dt);
     } else if (G.mode === 'menu' || G.mode === 'create') {
       Menu.drawBackground(dt);
@@ -365,6 +380,7 @@ const Game = {
   worldTick(gm) {
     const p = G.player;
     const powered = !G.events.powerOff;
+    Fx.capDecals();
     // containers: spoilage & cooking
     const lazy = Settings.v.chunkLazy;
     this.wtick = (this.wtick || 0) + 1;
@@ -595,17 +611,35 @@ const Save = {
   exists() { try { return !!localStorage.getItem(this.KEY); } catch (e) { return false; } },
   meta() { try { const m = localStorage.getItem(this.KEY + '_meta'); return m ? JSON.parse(m) : null; } catch (e) { return null; } },
   wipe() { try { localStorage.removeItem(this.KEY); localStorage.removeItem(this.KEY + '_meta'); } catch (e) { /* ignore */ } },
+  ZSKIP: { path: 1, obE: 1, obTo: 1, cFrom: 1, dcOk: 1, look: 1 },
+  // base64 of a world array, reused while its bytes are unchanged (comparing is far cheaper than encoding: the
+  // autosave is one long frame, and most of the map never changes)
+  b64c: new WeakMap(),
+  b64(a) {
+    const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+    let e = this.b64c.get(a);
+    if (e && e.copy.length === u.length) {
+      let same = true;
+      if (!(u.byteOffset & 3) && !(u.length & 3)) { const A = new Uint32Array(u.buffer, u.byteOffset, u.length >> 2), B = new Uint32Array(e.copy.buffer); for (let i = 0; i < A.length; i++) if (A[i] !== B[i]) { same = false; break; } }
+      else for (let i = 0; i < u.length; i++) if (u[i] !== e.copy[i]) { same = false; break; }
+      if (same) return e.s;
+    }
+    if (!e) this.b64c.set(a, e = { copy: null, s: '' });
+    e.copy = u.slice(); e.s = Bin.toB64(u);
+    return e.s;
+  },
   serialize() {
     const w = Wd, p = G.player;
     const objs = [];
     for (let i = 0; i < w.obj.length; i++) if (w.obj[i]) objs.push([i, w.obj[i]]);
-    const u8 = (a) => Bin.toB64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
+    const u8 = (a) => this.b64(a);
     const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null });
-    const rd = (v) => Math.round(v * 100) / 100;
+    const rd = (v) => Math.round(v * 100) / 100, SK = this.ZSKIP;
+    // (copied field by field: assign-then-delete leaves slow dictionary objects for JSON.stringify)
     const zs = G.zombies.map(z => {
-      const o = Object.assign({}, z);
-      delete o.path; delete o.obE; delete o.obTo; delete o.cFrom; delete o.dcOk;
-      if (!o.keepLook) delete o.look; // rebuilt from clothes on load
+      const o = {};
+      for (const k in z) if (!SK[k]) o[k] = z[k];
+      if (z.keepLook) o.look = z.look; // else rebuilt from clothes on load
       o.x = rd(o.x); o.y = rd(o.y); o.tx = rd(o.tx); o.ty = rd(o.ty); o.a = rd(o.a); o.ph = rd(o.ph || 0); o.hp = rd(o.hp);
       return o;
     });
