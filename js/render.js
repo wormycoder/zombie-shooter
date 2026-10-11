@@ -102,6 +102,8 @@ const Render = {
     if (!w) return;
     this.fno++; this.tnow = performance.now() / 1000;
     const W0 = LV.W0, HH = WALL_H;
+    // the player's tile (visual x): objects within reach have their sprite looked up every frame
+    this.npx = p ? Math.floor(vxOf(p.x)) : -99; this.npy = p ? Math.floor(p.y) : -99;
     cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 10);
     const z = cam.zoom, dpr = this.dpr;
     this.camIX = (cam.x - cam.y) * HTW;
@@ -908,12 +910,13 @@ const Render = {
     ctx.fillStyle = Col.shade('#d8d0c0', Math.max(0.3, s));
     for (let k = 1; k < n; k += 2) { const q = pt(k); if (q[2] > z1 || q[2] < z0) continue; ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, 7); ctx.fill(); }
   },
-  wmemo: new Map(), wmemoW: null, omemo: new WeakMap(), anims: {},
+  wmemo: new Map(), wmemoW: null, omemo: new WeakMap(), anims: {}, npx: -99, npy: -99,
   drawObj(o, x, y, X, Y, p, t, vx) {
     const def = OBJ[o.t];
-    // the sprite (a key string built from a dozen fields) is looked up again every 8th frame, staggered by tile
+    // the sprite (a key string built from a dozen fields) is looked up again every 8th frame, staggered by tile, and
+    // every frame within reach of the player (what they switch on, open or fill shows at once)
     let m = this.omemo.get(o);
-    if (!m || !((this.fno + x + y) & 7)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
+    if (!m || !((this.fno + x + y) & 7) || (Math.abs(vx - this.npx) < 4 && Math.abs(y - this.npy) < 4)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
     const rec = m.rec;
     let alpha = 1;
     if (p && def.h > 1.1 && o.t !== 'stairs' && o.t !== 'landing') {

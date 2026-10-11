@@ -82,6 +82,8 @@ const Perf = {
   // Windows of 30 frames, judged by their median (a single hitch does not count). Below target while the scripts are not
   // the bottleneck (fewer pixels do not make them faster): one step down, kept only if the next window is faster. At
   // target with headroom for 2 s: one step up; a step up that does not hold doubles the wait before the next try.
+  // (automated test browsers keep full resolution unless the URL asks for it: their software rendering is always slow)
+  auto: !(navigator.webdriver && !/[?&]dynres/.test(location.search)),
   win: new Float32Array(30),
   dyn(iv, js) {
     if (!Settings.v.dynRes || !this.auto) { this.setScale(1); this.wN = 0; return; }
