@@ -226,7 +226,7 @@ const Zombie = {
     // fake-dead: lies still until the player is close
     if (z.fake) {
       z.va = vis ? 1 : z.va;
-      if (!p.dead && !p.inCar && d < 2.2) { z.fake = false; z.st = 'getup'; z.downT = 0; z.canSee = true; Sfx.groan(z, d, true); }
+      if (!p.dead && !p.inCar && d < 2.2) { z.fake = false; z.st = 'getup'; z.getT = 0; z.downT = 0; z.canSee = true; Sfx.groan(z, d, true); }
       return;
     }
     // knocked down
@@ -234,16 +234,19 @@ const Zombie = {
       z.lie = Math.min(1, z.lie + dt * 3);
       z.downT -= dt;
       this.slide(z, dt);
-      if (z.downT <= 0 && !z.crawl) { z.st = 'getup'; }
+      if (z.downT <= 0 && !z.crawl) { z.st = 'getup'; z.getT = 0; }
       if (z.crawl && z.downT <= 0) { z.st = 'chase'; }
       return;
     }
     if (z.st === 'getup') {
-      z.lie = Math.max(0, z.lie - dt * 1.4);
-      if (z.lie <= 0) { z.st = 'chase'; z.mem = 4; z.tx = px; z.ty = py; }
+      // rolling over, onto a knee and up takes a while (lie stays meaningful for what can hit it)
+      z.getT = (z.getT || 0) + dt;
+      z.lie = Math.min(z.lie, Math.max(0, 1 - z.getT / this.GETUP));
+      if (z.getT >= this.GETUP) { z.st = 'chase'; z.lie = 0; z.getT = 0; z.mem = 4; z.tx = px; z.ty = py; }
       return;
     }
     if (z.stag > 0) { z.stag -= dt; this.slide(z, dt); return; }
+    if (z.biteT > 0) z.biteT -= dt;
     if (z.st === 'climb') { this.climbUpdate(z, dt); return; }
     // perception
     z.think -= dt;
@@ -263,7 +266,7 @@ const Zombie = {
         if (p.inCar) { if (d < 2.2) Vehicles.zombieHit(p.inCar, z); }
         else if (d < 1.05 && World.lineClear(z.x, z.y, px, py, 'move') && !p.dead) Player.zombieAttack(z);
         z.cd = R.f(0.9, 1.4);
-        z.st = 'chase';
+        z.st = 'chase'; z.biteT = 0.4;
       }
       return;
     }
@@ -274,7 +277,7 @@ const Zombie = {
       speed = z.speed * (d < 2.5 ? 1.25 : 1);
       if (!p.dead && z.canSee) { z.tx = px; z.ty = py; }
       const reach = p.inCar ? 1.9 : 0.85;
-      if (!p.dead && d < reach && z.cd <= 0 && (z.canSee || d < 1) && (p.inCar || World.lineClear(z.x, z.y, px, py, 'move'))) { z.st = 'attack'; z.atkT = R.f(0.55, 0.85) * (z.crawl ? 1.4 : 1); Sfx.play('zattack', z.x, z.y); return; }
+      if (!p.dead && d < reach && z.cd <= 0 && (z.canSee || d < 1) && (p.inCar || World.lineClear(z.x, z.y, px, py, 'move'))) { z.st = 'attack'; z.atkT = z.atk0 = R.f(0.55, 0.85) * (z.crawl ? 1.4 : 1); Sfx.play('zattack', z.x, z.y); return; }
     } else if (z.st === 'investigate') speed = z.speed * 0.8;
     else if (z.st === 'wander') speed = 0.32;
     else {
@@ -398,7 +401,7 @@ const Zombie = {
       f.open = true; Sfx.play('doorOpen', x + 0.5, y + 0.5); z.path = null; return;
     }
     if (f && (f.k === 'door' || (f.k === 'window' && (f.barricade > 0 || (!f.smashed && !f.open))))) {
-      z.st = 'thump'; z.thumpT = R.f(0.3, 1.0);
+      z.st = 'thump'; z.thumpT = R.f(0.3, 1.0); z.thump0 = 1;
       return;
     }
     if ((f && f.k === 'window') || (!f && WALL_INFO[t] && WALL_INFO[t].climb)) {
@@ -422,8 +425,7 @@ const Zombie = {
     if (z.think <= 0) { z.think = 0.5; const p = G.player; this.perceive(z, p, p.x, p.y, U.dist(z.x, z.y, p.x, p.y)); if (z.canSee && World.pathClear(z.x, z.y, z.tx, z.ty, z.r)) { z.st = 'chase'; return; } }
     z.thumpT -= dt;
     if (z.thumpT > 0) return;
-    z.thumpT = R.f(1.0, 1.6);
-    z.thumping = 0.25;
+    z.thumpT = z.thump0 = R.f(1.0, 1.6);
     Interact.damageEdge(x, y, d, R.f(2, 5), z);
   },
   climbUpdate(z, dt) {
@@ -433,7 +435,7 @@ const Zombie = {
     z.a = Math.atan2(z.obTo[1] - z.cFrom[1], z.obTo[0] - z.cFrom[0]);
     if (k >= 1) {
       z.path = null;
-      if (z.fall) { z.st = 'down'; z.downT = R.f(1, 2); z.lieDir = -1; }
+      if (z.fall) this.knockDown(z, z.a, 0, R.f(1, 2), -1);
       else z.st = z.canSee ? 'chase' : 'investigate';
       if (z.st === 'investigate' && U.dist(z.x, z.y, z.tx, z.ty) < 1) z.st = 'idle';
       World.resolve(z, z.r);
@@ -446,28 +448,51 @@ const Zombie = {
     if (z.fake) { z.fake = false; z.downT = R.f(0.8, 1.6); }
     if (z.st === 'down') dmg *= 1.5;
     z.hp -= dmg;
-    Fx.blood(z.x, z.y, Math.round(4 + dmg * 6), fromA);
+    const n0 = Fx.parts.length;
+    Fx.blood(o.at ? o.at[0] : z.x, o.at ? o.at[1] : z.y, Math.round(4 + dmg * 6), fromA);
+    // a body on the ground bleeds from where it lies, not from chest height
+    if (z.lie > 0.5) for (let i = n0; i < Fx.parts.length; i++) Fx.parts[i].z *= 0.2;
     z.blood = Math.min(1, z.blood + 0.2);
     z.look.blood = z.blood;
     const p = G.player;
-    if (z.st !== 'down' && z.st !== 'climb') { z.st = 'chase'; z.mem = 10; z.tx = p.x; z.ty = p.y; z.canSee = true; }
+    if (z.st !== 'down' && z.st !== 'climb' && z.st !== 'getup') { z.st = 'chase'; z.mem = 10; z.tx = p.x; z.ty = p.y; z.canSee = true; }
     if (z.hp <= 0) { this.kill(z, fromA, o); return; }
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
-    if (o.knock && z.st !== 'down' && z.st !== 'climb') {
-      z.st = 'down'; z.downT = R.f(1.8, 3.6); z.lieDir = 1;
-      z.svx = Math.cos(pushA) * 1.6; z.svy = Math.sin(pushA) * 1.6;
+    // a blow while it is still half way up puts it back down
+    if ((o.knock || (z.st === 'getup' && z.lie > 0.35 && o.stag !== 0)) && z.st !== 'down' && z.st !== 'climb') {
+      this.knockDown(z, pushA, 1.6, R.f(1.8, 3.6), z.st === 'getup' ? z.lieDir : 0);
       if (R.chance(0.08)) z.crawl = true;
       Sfx.play('zfall', z.x, z.y);
-    } else if (z.st !== 'down' && z.st !== 'climb') {
-      z.stag = o.stag || R.f(0.35, 0.6);
-      z.svx = Math.cos(pushA) * (o.push || 1.2); z.svy = Math.sin(pushA) * (o.push || 1.2);
-      if (z.st === 'attack') z.st = 'chase';
-    }
+    } else if (z.st !== 'down' && z.st !== 'climb' && z.st !== 'getup' && o.stag !== 0) this.stagger(z, pushA, o.stag || R.f(0.35, 0.6), o.push || 1.2);
   },
+  // knocked off its feet by a push from angle a: it falls away from the push (on its back when hit from the front)
+  knockDown(z, a, push, dur, dir) {
+    z.st = 'down'; z.downT = dur; z.downAt = G.time; z.stag = 0; z.getT = 0;
+    z.lieDir = dir || (Math.cos(U.angDiff(z.a, a)) < 0.2 ? 1 : -1);
+    z.svx = Math.cos(a) * push; z.svy = Math.sin(a) * push;
+  },
+  // where a body on the ground lies, as drawn: head and hips (it falls away from where it stood: back down, the
+  // head ends up behind its feet; face down or crawling, ahead)
+  bodyLine(z) {
+    const down = z.crawl && !z.dead ? -1 : (z.lieDir || 1), c = Math.cos(z.a), s = Math.sin(z.a);
+    const hip = z.crawl && !z.dead ? 0.1 : down > 0 ? -0.42 : 0.4, head = hip + down * -0.76;
+    return [z.x + c * head, z.y + s * head, z.x + c * hip, z.y + s * hip];
+  },
+  // reeling back from a blow or a shove
+  stagger(z, a, t, push) {
+    z.stag = z.stag0 = t;
+    z.stagA = U.angDiff(z.a, a);
+    z.svx = Math.cos(a) * push; z.svy = Math.sin(a) * push;
+    if (z.st === 'attack') { z.st = 'chase'; z.cd = Math.max(z.cd, 0.6); }
+  },
+  GETUP: 1.6,
   kill(z, fromA, o) {
+    const wasDown = (z.st === 'down' || z.crawl) && z.lie > 0.5;
     z.dead = true; z.st = 'dead'; z.hp = 0;
-    z.diedAt = G.time;
-    z.lieDir = R.chance(0.7) ? 1 : -1;
+    z.diedAt = G.time; z.fallAt = wasDown ? undefined : G.time;
+    // dropped on its back by a blow from the front, on its face from behind; already down it stays as it lies
+    if (z.crawl) z.lieDir = -1;
+    else if (!wasDown) z.lieDir = fromA !== undefined ? (Math.cos(U.angDiff(z.a, fromA)) < 0.3 ? 1 : -1) * (R.chance(0.85) ? 1 : -1) : R.chance(0.7) ? 1 : -1;
     if (z.lie < 0.01) z.lie = 0.05;
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
     World.move(z, Math.cos(pushA) * 0.3, Math.sin(pushA) * 0.3, z.r);
@@ -491,18 +516,31 @@ const Zombie = {
     let s = Math.max(0.12, Render.shadeSmooth(z.x, z.y));
     const rot = z.dead ? this.rot(z) : 0;
     if (rot > 0) s *= 1 - rot * 0.35;
-    const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1 };
-    if (z.st === 'attack') { pose.reach = 1 - Math.max(0, z.atkT) / 0.8; pose.lean = 0.3; }
-    if (z.thumping > 0) { pose.reach = 1; pose.lean = 0.3; }
-    if (z.st === 'climb') { pose.arms = 'climb'; pose.crouch = Math.sin(z.climbT / z.climbDur * Math.PI) * 0.5; }
+    // animation state for Char3D (mode, prog 0..1 through it) plus the simpler fields the 2D painter reads
+    const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
+      mode: 'loco', gait: z.speed > 2 ? 'run' : 'shamble' };
+    const since = (t) => t === undefined ? 1e9 : (G.time - t) / MIN_PER_SEC;
+    if (z.st === 'chase' || z.st === 'attack') {
+      const p = G.player, d = U.dist(z.x, z.y, p.x, p.y);
+      pose.reach = U.clamp(1.6 - d * 0.4, 0, 1);
+      if (z.canSee || d < 3) pose.look = U.clamp(U.angDiff(z.a, Math.atan2(p.y - z.y, p.x - z.x)), -1, 1);
+    }
+    if (z.st === 'attack') { pose.mode = 'attack'; pose.prog = 0.82 * U.clamp(1 - Math.max(0, z.atkT) / (z.atk0 || 0.7), 0, 1); pose.reach = 1; pose.lean = 0.3; }
+    else if (z.biteT > 0 && !z.crawl && z.st !== 'down') { pose.mode = 'attack'; pose.prog = 1 - z.biteT / 0.4 * 0.18; }
+    if (z.st === 'thump') { pose.arms = 'thump'; pose.reach = 1; pose.lean = 0.3; pose.prog = U.clamp(1 - z.thumpT / (z.thump0 || 1), 0, 1); }
+    if (z.stag > 0) { pose.mode = 'stagger'; pose.prog = U.clamp(1 - z.stag / (z.stag0 || 0.6), 0, 1); pose.stagA = z.stagA || Math.PI; }
+    if (z.st === 'climb') { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = U.clamp(z.climbT / z.climbDur, 0, 1); pose.crouch = Math.sin(pose.prog * Math.PI) * 0.5; }
     if (z.lie > 0 || z.dead) { pose.lie = z.lie; pose.lieDir = z.lieDir; pose.amp = z.crawl && !z.dead ? z.amp : 0; pose.arms = z.dead ? 'idle' : 'zombie'; pose.lieOff = 0; }
+    if (z.dead || z.fake) { pose.mode = 'dead'; pose.prog = z.fake ? 1 : U.clamp(since(z.fallAt) / 0.9, 0, 1); }
+    else if (z.st === 'down') { pose.mode = z.crawl ? 'crawl' : 'fall'; pose.prog = U.clamp(since(z.downAt) / 0.7, 0, 1); }
+    else if (z.st === 'getup') { pose.mode = 'getup'; pose.prog = U.clamp((z.getT || 0) / this.GETUP, 0, 1); }
+    else if (z.crawl) pose.mode = 'crawl';
     if (z.crawl && !z.dead && z.st !== 'down') { pose.lie = 1; pose.lieDir = -1; pose.arms = 'zombie'; }
     return { pose, s, alpha, rot };
   },
   draw(ctx, z, flat) {
     void flat;
     const d = this.drawInfo(z);
-    if (z.thumping > 0) z.thumping -= 0.016;
     if (!d) return;
     const [X, Y] = Render.epos(z);
     const alpha = d.alpha, rot = d.rot;

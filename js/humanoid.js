@@ -49,7 +49,11 @@ const Humanoid = {
     // limping: the bad leg takes short steps and the body dips onto it
     const limp = pose.limp || 0, ls_ = pose.limpSide || 1;
     const hip = 0.86 - cr * 0.3 - limp * 0.07 * (pose.amp || 0) * Math.max(0, Math.sin((pose.walk || 0) + (ls_ > 0 ? Math.PI : 0)));
-    const lean = (pose.lean || 0) + cr * 0.12;
+    // a stomp: the right knee comes up, then the foot is driven down ahead (contact at 0.5)
+    const stT = pose.arms === 'stomp' ? U.clamp(pose.swingT || 0, 0, 1) : -1;
+    const stUp = stT < 0 ? 0 : stT < 0.32 ? U.smooth(stT / 0.32) : stT < 0.5 ? 1 - U.smooth((stT - 0.32) / 0.18) : 0;
+    const stFw = stT < 0 ? 0 : stT < 0.5 ? U.smooth(stT / 0.5) : stT < 0.75 ? 1 : 1 - U.smooth((stT - 0.75) / 0.25);
+    const lean = (pose.lean || 0) + cr * 0.12 + stFw * 0.18;
     const ph = pose.walk || 0, amp = pose.amp || 0;
     const t = pose.t || 0;
     const els = [];
@@ -61,7 +65,7 @@ const Humanoid = {
       const la = limp && side === ls_ ? 1 - limp * 0.6 : 1;
       const ff = Math.sin(p) * 0.27 * amp * la + cr * 0.12;
       const fz = Math.max(0, Math.cos(p)) * 0.11 * amp * (la < 1 ? la * 0.5 : 1);
-      const H = [0, side * 0.1, hip], Ft = [ff, side * 0.11, fz + 0.04];
+      const H = [0, side * 0.1, hip], Ft = stT >= 0 && side > 0 ? [U.clamp(pose.stompD || 0.42, 0.3, 0.6) * stFw, 0.1, 0.04 + stUp * 0.36] : [ff, side * 0.11, fz + 0.04];
       const dx = Ft[0] - H[0], dz = Ft[2] - H[2];
       const d = Math.sqrt(dx * dx + dz * dz);
       const bend = Math.sqrt(Math.max(0, 0.46 * 0.46 - (d / 2) * (d / 2)));
@@ -163,7 +167,9 @@ const Humanoid = {
       const E = [mid[0] - bend * 0.5, mid[1] + side * bend * (bendOut || 0.6), mid[2] - bend * 0.4];
       arms.push({ side, S, E, Hd });
     };
-    const mode = pose.arms || 'idle';
+    // the 3D animator's finer arm states, as the nearest of these
+    const m0 = pose.arms || 'idle';
+    const mode = m0 === 'fire' ? 'aim' : m0 === 'ready' ? 'swing' : m0 === 'thump' ? 'zombie' : m0;
     if (mode === 'zombie') {
       for (const side of [-1, 1]) {
         const S = side < 0 ? shL : shR;

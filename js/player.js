@@ -314,7 +314,9 @@ const Player = {
     const [wx, wy] = Render.mouseWorld();
     const mouseA = Math.atan2(wy - p.y, wx - p.x);
     let target = p.angle;
-    if (aiming || (p.swing && p.swing.kind !== 'shove')) target = mouseA;
+    const sw = p.swing, stT = sw && (sw.kind === 'stomp' ? sw.target : sw.floor);
+    if (stT && !stT.dead) target = Math.atan2(sw.ty - p.y, sw.tx - p.x);   // keep over the body being stomped or struck
+    else if (aiming || (sw && sw.kind !== 'shove' && sw.kind !== 'stomp')) target = mouseA;
     else if (moving) target = Math.atan2(my, mx);
     else if (!Input.overUI) target = mouseA;
     const turnRate = aiming ? 9 : 11;
@@ -341,7 +343,7 @@ const Player = {
       if (back) sp *= 0.75;
       this.xp('Nimble', dt * 0.15);
     }
-    if (p.swing) sp *= 0.5;
+    if (p.swing) sp *= p.swing.kind === 'stomp' || p.swing.floor ? 0.12 : 0.5;
     sp *= this.speedMult() * Debug.speed;
     if (p.st.drunk > 0.3) { const wob = Math.sin(performance.now() / 300) * p.st.drunk * 0.5; const c = Math.cos(wob), s = Math.sin(wob); const tx = nx * c - ny * s; ny = nx * s + ny * c; nx = tx; }
     p.moveMode = mode;
@@ -392,7 +394,15 @@ const Player = {
     if (p.swing) {
       const s = p.swing;
       s.t += dt / s.dur;
-      if (!s.done && s.t >= (s.kind === 'shove' ? 0.4 : 0.48)) { s.done = true; Combat.resolveSwing(s); }
+      // over a body on the ground: follow it (it may crawl) and step in so the heel or the blow lands on it
+      if (s.tx !== undefined && !s.done) {
+        const z = s.target || s.floor, reach = s.kind === 'stomp' ? 1.0 : s.w.range + 0.1;
+        if (z && !z.dead) { const q = Combat.aimPoint(z, p.x, p.y, reach); s.tx = q[0]; s.ty = q[1]; }
+        const want = s.kind === 'stomp' ? 0.48 : U.clamp(s.w.range * 0.6, 0.5, 0.85), d = U.dist(p.x, p.y, s.tx, s.ty);
+        if (d > want + 0.03 && s.t < s.hit) { const m = Math.min(d - want, dt * 2.4); World.move(p, (s.tx - p.x) / d * m, (s.ty - p.y) / d * m, p.r); }
+      }
+      // the hit lands when the animation reaches its contact frame
+      if (!s.done && s.t >= (s.hit || (s.kind === 'shove' ? 0.4 : 0.48))) { s.done = true; Combat.resolveSwing(s); }
       if (s.t >= 1) p.swing = null;
     }
     if (G.build) {
@@ -764,41 +774,63 @@ const Player = {
   },
 
   // ------------------------------------------------------------------ rendering
+  // what the character model shows this frame (Char3D animates from it; Humanoid draws the 2D fallback).
+  // mode: loco / dead / sleep / sit / kneel / climb; gait: walk / run / sprint / sneak; arms: what the upper body does
   pose() {
     const p = G.player;
     const prim = this.primary(), sec = this.secondary();
     const pd = prim ? ITEMS[prim.id] : null;
-    const model = pd ? (pd.wpn ? pd.wpn.model : pd.gun ? pd.gun.model : (pd.light ? 'flashlight' : pd.generator ? 'generic' : (pd.throwable ? 'generic' : 'generic'))) : null;
-    const pose = { walk: p.anim.ph, amp: p.anim.amp * (p.moveMode === 'sprint' ? 1.25 : p.moveMode === 'run' ? 1.1 : 0.85), t: performance.now() / 1000, weapon: model, crouch: p.sneak ? 0.55 : 0 };
-    if (p.moveMode === 'sprint') pose.lean = 0.25; else if (p.moveMode === 'run') pose.lean = 0.12;
-    if (pd && pd.wpn && pd.wpn.two) pose.two = true;
+    const model = pd ? (pd.wpn ? pd.wpn.model : pd.gun ? pd.gun.model : (pd.light ? 'flashlight' : 'generic')) : null;
+    const mm = p.moveMode;
+    const pose = { walk: p.anim.ph, amp: p.anim.amp * (mm === 'sprint' ? 1.25 : mm === 'run' ? 1.1 : 0.85), t: performance.now() / 1000, weapon: model, crouch: p.sneak ? 0.55 : 0,
+      mode: 'loco', gait: mm === 'sprint' ? 'sprint' : mm === 'run' ? 'run' : p.sneak ? 'sneak' : 'walk' };
+    if (mm === 'sprint') pose.lean = 0.25; else if (mm === 'run') pose.lean = 0.12;
+    if (pd && (pd.wpn || pd.gun) && (pd.wpn || pd.gun).two) pose.two = true;
     if (sec && ITEMS[sec.id].light) { pose.offhand = 'flashlight'; pose.light = sec.on && sec.pow > 0; }
-    if (p.swing) {
-      if (p.swing.kind === 'shove' || p.swing.kind === 'stomp') { pose.arms = 'shove'; pose.swingT = p.swing.t; if (p.swing.kind === 'stomp') pose.crouch = 0.3; }
-      else if (p.swing.kind === 'fire') { pose.arms = 'aim'; pose.flash = p.swing.t < 0.25; }
-      else { pose.arms = 'swing'; pose.swingT = p.swing.t; pose.stab = pd && pd.wpn && (pd.wpn.sk === 'ShortBlade' || pd.wpn.sk === 'Spear'); }
+    // the head turns toward the cursor
+    if (!p.dead && !p.asleep && !p.action && !Input.overUI) { const [wx, wy] = Render.mouseWorld(); pose.look = U.clamp(U.angDiff(p.angle, Math.atan2(wy - p.y, wx - p.x)), -1.25, 1.25); }
+    const sw = p.swing;
+    if (sw) {
+      pose.swingT = sw.t;
+      if (sw.kind === 'shove') pose.arms = 'shove';
+      else if (sw.kind === 'stomp') { pose.arms = 'stomp'; if (sw.tx !== undefined) pose.stompD = U.dist(p.x, p.y, sw.tx, sw.ty) - 0.06; }
+      else if (sw.kind === 'fire') { pose.arms = 'fire'; pose.flash = sw.t < 0.25; }
+      else {
+        pose.arms = 'swing'; pose.style = this.swingStyle(pd, sw); pose.ready = !!sw.ready;
+        pose.stab = pose.style === 'stab' || pose.style === 'spear' || pose.style === 'floorStab';
+      }
     } else if (p.aiming && pd && pd.gun) pose.arms = 'aim';
-    else if (p.aiming) pose.arms = 'swing', pose.swingT = 0.2;
+    else if (p.aiming) { pose.arms = 'ready'; pose.style = this.swingStyle(pd, null); pose.swingT = 0.2; }
     else if (p.action && p.action.anim) {
       const an = p.action.anim;
       pose.arms = an;
       if (an === 'loot' || an === 'craft') pose.arms = 'work';
-      if (an === 'kneel') { pose.arms = 'work'; pose.crouch = 0.7; }
-      if (an === 'sit') pose.crouch = 0.8;
-      if (an === 'squat') { pose.arms = 'shove'; pose.swingT = 0.5; pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42; }
+      if (an === 'kneel') { pose.arms = 'work'; pose.crouch = 0.7; pose.mode = 'kneel'; }
+      if (an === 'sit') { pose.crouch = 0.8; pose.mode = 'sit'; }
+      if (an === 'shove') { pose.swingT = 0.42; }
+      if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
     }
-    if (p.climb) { pose.arms = 'climb'; pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4; }
+    if (p.climb) { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = p.climb.t; pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4; }
     for (const pt of LEG_PARTS) {
       const b = p.body[pt], w = b.w;
       const lv = w.fracture ? (b.splint ? 0.6 : 1) : (w.deep || w.bite) ? 0.5 : w.cut ? 0.3 : 0;
       if (lv > (pose.limp || 0)) { pose.limp = lv; pose.limpSide = pt.endsWith('L') ? -1 : 1; }
     }
-    if (p.sitting) pose.crouch = 0.8;
+    if (p.sitting) { pose.crouch = 0.8; pose.mode = 'sit'; }
     if (p.asleep || p.dead) {
       pose.lie = p.dead ? Math.min(1, (p.deadT || 0) * 2) : 1;
       pose.lieDir = 1; pose.arms = 'idle'; pose.amp = 0; pose.weapon = null; pose.lieOff = p.asleep ? 0.85 : 0;
+      pose.mode = p.dead ? 'dead' : 'sleep'; pose.prog = p.dead ? Math.min(1, (p.deadT || 0) / 0.9) : 1;
     }
     return pose;
+  },
+  // melee animation for the weapon in hand: 1h, 2h, heavy, stab, spear, punch, throw; floor / floorStab at a body on the ground
+  swingStyle(pd, sw) {
+    const w = pd && pd.wpn;
+    if (sw && sw.throw) return 'throw';
+    const st = !w ? 'punch' : w.sk === 'ShortBlade' ? 'stab' : w.model === 'spear' ? 'spear' : w.model === 'sledge' ? 'heavy' : w.two ? '2h' : '1h';
+    if (sw && sw.floor) return st === 'stab' || st === 'spear' ? 'floorStab' : 'floor';
+    return st;
   },
   // facing and light level the player is drawn with (null when not drawn)
   drawInfo() {

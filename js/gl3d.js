@@ -1,24 +1,32 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// GL3D: a small WebGL renderer for simple 3D models made of boxes (characters, props).
-// Each frame, models are queued into cells of an offscreen atlas canvas and drawn in one
-// instanced pass with the game's exact isometric projection; the 2D renderer then blits a
-// model's cell when the painter's algorithm reaches it.
+// GL3D: a small WebGL renderer for simple low-poly 3D models (characters, props).
+// Each frame, models are queued into cells of an offscreen atlas canvas and drawn with one
+// instanced call per mesh type, using the game's exact isometric projection; the 2D renderer then
+// blits a model's cell when the painter's algorithm reaches it.
 //   GL3D.ok()                     WebGL usable?
 //   GL3D.begin(scale)             start a frame (scale = screen px per world px)
+//   GL3D.prim(m, cx,cy,cz, X.., Y.., Z.., r,g,b, t0, t1)
+//                                 queue mesh m (GL3D.BOX/RBOX/CYL/SPH or one added with def) centred at c with
+//                                 orthogonal half-axes X, Y, Z; the cross-section scales from t0 (z=-1 end) to t1 (z=+1 end)
+//   GL3D.def(name, build)         add a mesh type before first use (build returns { v, i }); GL3D[name] is its index
+//   GL3D.lathe(rings, seg, axis)  a smooth closed mesh through superelliptic rings (see below)
+//   GL3D.mark(a) / GL3D.seal(cell, a, light, flash)
+//                                 remember the queue position, then stamp cell, light and flash on what followed
 //   GL3D.cell(w, h, ax, ay)       reserve a cell of w x h world px with the anchor (feet) at ax, ay
-//   GL3D.box(cell, c, X, Y, Z, col, light, flash)
-//                                 box centred at world-relative c[3] with half-axes X, Y, Z (vec3, orthogonal)
 //   GL3D.flush()                  render everything queued
 //   GL3D.blit(ctx, cell, x, y, alpha)  draw a cell with its anchor at world px x, y
-// Lighting follows the sprite convention: tops 1.0, +y faces 0.84, +x faces 0.68.
+// Lighting follows the sprite convention: tops 1.0, +y faces 0.84, +x faces 0.68; smooth meshes shade
+// smoothly. A colour channel above 1 marks an unlit (glowing) part: it is drawn as col - 1.
 // ---------------------------------------------------------------------------
 const GL3D = {
-  cv: null, gl: null, prog: null, failed: false, inst: null, n: 0, cap: 0,
+  cv: null, gl: null, prog: null, failed: false,
+  BOX: 0, RBOX: 1, CYL: 2, SPH: 3, NM: 4, defs: [],
+  inst: [], n: [0, 0, 0, 0], cap: [0, 0, 0, 0], meshes: [],
   // software WebGL (no GPU) is far too slow to redraw models every frame; ?soft3d forces it on for testing
   soft: false, allowSoft: /[?&]soft3d/.test(location.search), renderer: '',
   cells: [], cx: 0, cy: 0, rowH: 0, scale: 1, AW: 0, AH: 0,
-  FL: 20,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, pad 1
+  FL: 22,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, taper 2
   ok() {
     if (this.failed) return false;
     if (this.gl) return !this.gl.isContextLost();
@@ -43,23 +51,30 @@ const GL3D = {
       this.drawInst = v2 ? (m, n, t, o, k) => gl.drawElementsInstanced(m, n, t, o, k) : (m, n, t, o, k) => ext.drawElementsInstancedANGLE(m, n, t, o, k);
       const vs = `
         attribute vec3 aP; attribute vec3 aN;
-        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL;
+        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT;
         uniform vec2 uAtlas; uniform float uScale;
         varying vec3 vCol;
         void main() {
-          vec3 w = iC + iX * aP.x + iY * aP.y + iZ * aP.z;
-          vec3 n = normalize(iX * aN.x + iY * aN.y + iZ * aN.z);
-          // tops brightest, then +y, then +x; kept light so models read like the flat 2D figures
-          float b = 0.66 + 0.14 * n.x + 0.26 * n.y + 0.34 * n.z;
-          b = clamp(b, 0.35, 1.0);
+          // taper: the cross-section scales linearly along local z; the normal follows the slanted surface
+          float s = mix(iT.x, iT.y, aP.z * 0.5 + 0.5), sd = (iT.y - iT.x) * 0.5;
+          vec3 lp = vec3(aP.xy * s, aP.z);
+          vec3 ln = vec3(aN.xy, s * aN.z - sd * dot(aP.xy, aN.xy));
+          vec3 w = iC + iX * lp.x + iY * lp.y + iZ * lp.z;
+          // half-axes are orthogonal, so the inverse transpose only divides by their squared lengths
+          vec3 n = normalize(iX * (ln.x / dot(iX, iX)) + iY * (ln.y / dot(iY, iY)) + iZ * (ln.z / dot(iZ, iZ)));
+          // tops brightest, then +y, then +x; a soft wrap keeps undersides from going black
+          float b = 0.64 + 0.13 * n.x + 0.24 * n.y + 0.34 * n.z;
+          b = clamp(b, 0.36, 1.06);
+          b = b * 0.92 + 0.08 * b * b;
           vec3 c = mix(iCol * b, vec3(1.0, 0.25, 0.2), iL.y) * iL.x;
           // dim light shifts slightly blue, like the 2D shade() helper
           if (iL.x < 0.6) c.b *= 1.08;
           // rim: faces turned toward the camera get a faint lift so silhouettes read at night
           c += vec3(0.05, 0.06, 0.08) * clamp(n.x + n.y, 0.0, 1.0) * (1.0 - iL.x);
+          if (iCol.r > 1.0) c = iCol - 1.0;
           vCol = c;
-          vec2 s = vec2((w.x - w.y) * 32.0, (w.x + w.y) * 16.0 - w.z * 32.0) * uScale + iL.zw;
-          gl_Position = vec4(s.x / uAtlas.x * 2.0 - 1.0, 1.0 - s.y / uAtlas.y * 2.0, -(w.x + w.y + w.z) / 16.0, 1.0);
+          vec2 sc = vec2((w.x - w.y) * 32.0, (w.x + w.y) * 16.0 - w.z * 32.0) * uScale + iL.zw;
+          gl_Position = vec4(sc.x / uAtlas.x * 2.0 - 1.0, 1.0 - sc.y / uAtlas.y * 2.0, -(w.x + w.y + w.z) / 16.0, 1.0);
         }`;
       const fs = `precision mediump float; varying vec3 vCol; void main() { gl_FragColor = vec4(vCol, 1.0); }`;
       const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
@@ -68,24 +83,11 @@ const GL3D = {
       gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
       this.prog = p;
-      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL']) this.loc[a] = gl.getAttribLocation(p, a);
+      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT']) this.loc[a] = gl.getAttribLocation(p, a);
       this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale');
-      // unit cube with per-face normals (24 vertices, 36 indices)
-      const P = [], N = [], I = [];
-      const faces = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-      for (const n of faces) {
-        // two axes perpendicular to n span the face
-        const u = [0, 0, 0], v = [0, 0, 0];
-        if (n[0]) { u[1] = 1; v[2] = 1; } else if (n[1]) { u[0] = 1; v[2] = 1; } else { u[0] = 1; v[1] = 1; }
-        const base = P.length / 3;
-        for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { P.push(n[0] + u[0] * su + v[0] * sv, n[1] + u[1] * su + v[1] * sv, n[2] + u[2] * su + v[2] * sv); N.push(...n); }
-        I.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      }
       const buf = (data, T) => { const b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, data, gl.STATIC_DRAW); return b; };
-      this.bP = buf(new Float32Array(P), gl.ARRAY_BUFFER); this.bN = buf(new Float32Array(N), gl.ARRAY_BUFFER);
-      this.bI = buf(new Uint16Array(I), gl.ELEMENT_ARRAY_BUFFER);
-      this.bInst = gl.createBuffer();
-      this.grow(1024);
+      for (const m of this.buildMeshes().concat(this.defs.map(d => d.build()))) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
+      for (let k = 0; k < this.NM; k++) { this.n[k] = 0; this.grow(k, 512); }
       cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.failed = true; });
       return true;
     } catch (e) {
@@ -94,10 +96,123 @@ const GL3D = {
       return false;
     }
   },
-  grow(n) { this.cap = n; const a = new Float32Array(n * this.FL); if (this.inst) a.set(this.inst.subarray(0, this.n * this.FL)); this.inst = a; },
+  // unit meshes in [-1, 1]^3, interleaved position + normal
+  buildMeshes() {
+    const out = [];
+    // box: flat faces
+    {
+      const v = [], I = [];
+      for (const n of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+        const u = [0, 0, 0], w = [0, 0, 0];
+        if (n[0]) { u[1] = 1; w[2] = 1; } else if (n[1]) { u[0] = 1; w[2] = 1; } else { u[0] = 1; w[1] = 1; }
+        const b = v.length / 6;
+        for (const [a, c] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) v.push(n[0] + u[0] * a + w[0] * c, n[1] + u[1] * a + w[1] * c, n[2] + u[2] * a + w[2] * c, ...n);
+        I.push(b, b + 1, b + 2, b, b + 2, b + 3);
+      }
+      out.push({ v, i: I });
+    }
+    // rounded box: each cube face is a grid whose outer bands bend round the edges (radius r)
+    {
+      const r = 0.5, cs = [-1, -1 + r * 0.5, -1 + r, 1 - r, 1 - r * 0.5, 1], N = cs.length, v = [], I = [];
+      const cl = (q) => Math.max(-(1 - r), Math.min(1 - r, q));
+      for (let ax = 0; ax < 3; ax++) for (const sg of [-1, 1]) {
+        const b = v.length / 6, a1 = (ax + 1) % 3, a2 = (ax + 2) % 3;
+        for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+          const q = [0, 0, 0]; q[ax] = sg; q[a1] = cs[i]; q[a2] = cs[j];
+          const c = [cl(q[0]), cl(q[1]), cl(q[2])], d = [q[0] - c[0], q[1] - c[1], q[2] - c[2]], l = Math.hypot(d[0], d[1], d[2]);
+          v.push(c[0] + d[0] / l * r, c[1] + d[1] / l * r, c[2] + d[2] / l * r, d[0] / l, d[1] / l, d[2] / l);
+        }
+        for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) { const k = b + j * N + i; I.push(k, k + 1, k + N + 1, k, k + N + 1, k + N); }
+      }
+      out.push({ v, i: I });
+    }
+    // cylinder along z: smooth sides, flat caps
+    {
+      const S = 10, v = [], I = [];
+      for (let k = 0; k <= S; k++) { const a = k / S * Math.PI * 2, c = Math.cos(a), s = Math.sin(a); v.push(c, s, -1, c, s, 0, c, s, 1, c, s, 0); }
+      for (let k = 0; k < S; k++) { const b = k * 2; I.push(b, b + 2, b + 3, b, b + 3, b + 1); }
+      for (const z of [-1, 1]) {
+        const b = v.length / 6;
+        v.push(0, 0, z, 0, 0, z);
+        for (let k = 0; k < S; k++) { const a = k / S * Math.PI * 2; v.push(Math.cos(a), Math.sin(a), z, 0, 0, z); }
+        for (let k = 0; k < S; k++) I.push(b, b + 1 + k, b + 1 + (k + 1) % S);
+      }
+      out.push({ v, i: I });
+    }
+    // sphere
+    {
+      const S = 12, Rn = 8, v = [], I = [];
+      for (let j = 0; j <= Rn; j++) {
+        const t = j / Rn * Math.PI, z = -Math.cos(t), rr = Math.sin(t);
+        for (let k = 0; k <= S; k++) { const a = k / S * Math.PI * 2, x = Math.cos(a) * rr, y = Math.sin(a) * rr; v.push(x, y, z, x, y, z); }
+      }
+      for (let j = 0; j < Rn; j++) for (let k = 0; k < S; k++) { const a = j * (S + 1) + k, b = a + S + 1; I.push(a, a + 1, b + 1, a, b + 1, b); }
+      out.push({ v, i: I });
+    }
+    return out;
+  },
+  def(name, build) {
+    if (this.gl) throw new Error('GL3D.def after init');
+    this.defs.push({ name, build });
+    return (this[name] = this.NM++);
+  },
+  // A closed smooth mesh through rings along an axis ('z': rings in x-y, or 'x': rings in y-z).
+  // Each ring is [t, c1, r1, c2, r2, n, nb]: position along the axis, centre and half extent on the two
+  // cross axes, superellipse exponent (nb for the back half, c1 < 0 side). A ring with r1 = 0 is a pole;
+  // open ends get flat caps. Coordinates are used as given (keep them inside [-1, 1]).
+  lathe(rings, seg, axis) {
+    const S = seg || 16, R = rings.length, P = [], v = [], I = [];
+    const se = (c, n) => Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+    for (let j = 0; j < R; j++) {
+      const [t, c1, r1, c2, r2, n, nb] = rings[j];
+      for (let k = 0; k < S; k++) {
+        const a = k / S * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), e = ca < 0 && nb ? nb : n || 2;
+        const u = c1 + r1 * se(ca, e), w = c2 + r2 * se(sa, e);
+        P.push(axis === 'x' ? [t, u, w] : [u, w, t]);
+      }
+    }
+    const pt = (j, k) => P[j * S + ((k + S) % S)];
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const ai = axis === 'x' ? 0 : 2;
+    for (let j = 0; j < R; j++) {
+      const pole = rings[j][2] === 0;
+      for (let k = 0; k < S; k++) {
+        const p = pt(j, k);
+        let nx, ny, nz;
+        if (pole) { nx = 0; ny = 0; nz = 0; const d = j === 0 ? -1 : 1; if (ai === 0) nx = d; else nz = d; }
+        else {
+          // tangents round the ring and along the axis (one-sided at the ends)
+          const tu = sub(pt(j, k + 1), pt(j, k - 1)), tv = sub(pt(Math.min(R - 1, j + 1), k), pt(Math.max(0, j - 1), k));
+          nx = tu[1] * tv[2] - tu[2] * tv[1]; ny = tu[2] * tv[0] - tu[0] * tv[2]; nz = tu[0] * tv[1] - tu[1] * tv[0];
+          // point outward, away from the ring's centre line
+          const rc = rings[j], cx = axis === 'x' ? 0 : rc[1], cy = axis === 'x' ? rc[1] : rc[3], cz = axis === 'x' ? rc[3] : 0;
+          const ox = ai === 0 ? 0 : p[0] - cx, oy = p[1] - cy, oz = ai === 2 ? 0 : p[2] - cz;
+          if (nx * ox + ny * oy + nz * oz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+        }
+        const l = Math.hypot(nx, ny, nz) || 1;
+        v.push(p[0], p[1], p[2], nx / l, ny / l, nz / l);
+      }
+    }
+    for (let j = 0; j < R - 1; j++) for (let k = 0; k < S; k++) {
+      const a = j * S + k, b = j * S + (k + 1) % S;
+      I.push(a, b, b + S, a, b + S, a + S);
+    }
+    // flat caps on open ends
+    for (const j of [0, R - 1]) {
+      if (rings[j][2] === 0) continue;
+      const d = j === 0 ? -1 : 1, c = v.length / 6, rc = rings[j];
+      const cen = axis === 'x' ? [rc[0], rc[1], rc[3]] : [rc[1], rc[3], rc[0]];
+      v.push(cen[0], cen[1], cen[2], ai === 0 ? d : 0, 0, ai === 2 ? d : 0);
+      for (let k = 0; k < S; k++) { const p = pt(j, k); v.push(p[0], p[1], p[2], ai === 0 ? d : 0, 0, ai === 2 ? d : 0); }
+      for (let k = 0; k < S; k++) I.push(c, c + 1 + k, c + 1 + (k + 1) % S);
+    }
+    return { v, i: I };
+  },
+  grow(m, n) { this.cap[m] = n; const a = new Float32Array(n * this.FL); if (this.inst[m]) a.set(this.inst[m].subarray(0, this.n[m] * this.FL)); this.inst[m] = a; },
   // ---- frame
   begin(scale) {
-    this.scale = scale; this.n = 0; this.cells.length = 0;
+    this.scale = scale; this.cells.length = 0;
+    for (let k = 0; k < this.NM; k++) this.n[k] = 0;
     this.cx = 0; this.cy = 0; this.rowH = 0;
     if (!this.maxW) this.maxW = Math.min(this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE), 4096);
     // rows about as wide as the cells need keep the atlas near square (less to copy each frame)
@@ -108,28 +223,37 @@ const GL3D = {
     const s = this.scale, pw = Math.ceil(w * s) + 2, ph = Math.ceil(h * s) + 2;
     if (this.cx + pw > this.rowW) { this.cx = 0; this.cy += this.rowH; this.rowH = 0; }
     if (this.cy + ph > this.maxW) return null;
-    const c = { px: this.cx + 1, py: this.cy + 1, pw: pw - 2, ph: ph - 2, w, h, ax, ay, n0: this.n, n1: this.n };
+    const c = { px: this.cx + 1, py: this.cy + 1, pw: pw - 2, ph: ph - 2, w, h, ax, ay };
     this.cx += pw; this.rowH = Math.max(this.rowH, ph);
     this.cells.push(c);
     return c;
   },
-  box(c, C, X, Y, Z, col, light, flash) {
-    if (this.n >= this.cap) this.grow(this.cap * 2);
-    const a = this.inst, o = this.n * this.FL;
-    a[o] = C[0]; a[o + 1] = C[1]; a[o + 2] = C[2];
-    a[o + 3] = X[0]; a[o + 4] = X[1]; a[o + 5] = X[2];
-    a[o + 6] = Y[0]; a[o + 7] = Y[1]; a[o + 8] = Y[2];
-    a[o + 9] = Z[0]; a[o + 10] = Z[1]; a[o + 11] = Z[2];
-    a[o + 12] = col[0]; a[o + 13] = col[1]; a[o + 14] = col[2];
-    a[o + 15] = light; a[o + 16] = flash || 0;
-    a[o + 17] = c.px + c.ax * this.scale; a[o + 18] = c.py + c.ay * this.scale; a[o + 19] = 0;
-    this.n++; c.n1 = this.n;
+  prim(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, r, g, b, t0, t1) {
+    if (this.n[m] >= this.cap[m]) this.grow(m, this.cap[m] * 2);
+    const a = this.inst[m], o = this.n[m]++ * this.FL;
+    a[o] = cx; a[o + 1] = cy; a[o + 2] = cz;
+    a[o + 3] = xx; a[o + 4] = xy; a[o + 5] = xz;
+    a[o + 6] = yx; a[o + 7] = yy; a[o + 8] = yz;
+    a[o + 9] = zx; a[o + 10] = zy; a[o + 11] = zz;
+    a[o + 12] = r; a[o + 13] = g; a[o + 14] = b;
+    a[o + 20] = t0; a[o + 21] = t1;
+  },
+  mark(out) { for (let k = 0; k < this.NM; k++) out[k] = this.n[k]; return out; },
+  // drop everything queued since mark (no cell could be found)
+  undo(mk) { for (let k = 0; k < this.NM; k++) this.n[k] = mk[k]; },
+  seal(c, mk, light, flash) {
+    const ox = c.px + c.ax * this.scale, oy = c.py + c.ay * this.scale, F = this.FL;
+    for (let k = 0; k < this.NM; k++) {
+      const a = this.inst[k];
+      for (let i = mk[k], e = this.n[k]; i < e; i++) { const o = i * F; a[o + 15] = light; a[o + 16] = flash || 0; a[o + 17] = ox; a[o + 18] = oy; }
+    }
   },
   flush() {
     const gl = this.gl;
     if (!this.cells.length) return;
-    const W = Math.min(this.maxW, Math.max(256, ...this.cells.map(c => c.px + c.pw + 1)));
-    const H = Math.min(this.maxW, Math.max(256, ...this.cells.map(c => c.py + c.ph + 1)));
+    let W = 256, H = 256;
+    for (const c of this.cells) { if (c.px + c.pw + 1 > W) W = c.px + c.pw + 1; if (c.py + c.ph + 1 > H) H = c.py + c.ph + 1; }
+    W = Math.min(this.maxW, W); H = Math.min(this.maxW, H);
     // the atlas grows at once but only shrinks after it has been mostly empty for a while
     // (resizing reallocates the drawing buffer)
     let AW = Math.ceil(W / 256) * 256, AH = Math.ceil(H / 256) * 256;
@@ -142,22 +266,25 @@ const GL3D = {
     gl.viewport(0, 0, AW, AH);
     gl.clearColor(0, 0, 0, 0); gl.clearDepth(1);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
-    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
+    // faces wind either way once the projection flips y; draw both
+    gl.disable(gl.CULL_FACE);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(this.prog);
     gl.uniform2f(this.uAtlas, AW, AH); gl.uniform1f(this.uScale, this.scale);
-    const L = this.loc;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bP); gl.enableVertexAttribArray(L.aP); gl.vertexAttribPointer(L.aP, 3, gl.FLOAT, false, 0, 0); this.divisor(L.aP, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bN); gl.enableVertexAttribArray(L.aN); gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 0, 0); this.divisor(L.aN, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.bInst);
-    gl.bufferData(gl.ARRAY_BUFFER, this.inst.subarray(0, this.n * this.FL), gl.DYNAMIC_DRAW);
-    const st = this.FL * 4;
+    const L = this.loc, st = this.FL * 4;
     const at = (name, size, off) => { const l = L[name]; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, st, off * 4); this.divisor(l, 1); };
-    at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.bI);
-    // faces wind counter-clockwise seen from outside only after projection flips y; draw both to be safe
-    gl.disable(gl.CULL_FACE);
-    this.drawInst(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0, this.n);
+    for (let k = 0; k < this.NM; k++) {
+      const n = this.n[k], M = this.meshes[k];
+      if (!n) continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER, M.vb);
+      gl.enableVertexAttribArray(L.aP); gl.vertexAttribPointer(L.aP, 3, gl.FLOAT, false, 24, 0); this.divisor(L.aP, 0);
+      gl.enableVertexAttribArray(L.aN); gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 24, 12); this.divisor(L.aN, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, M.ibuf);
+      gl.bufferData(gl.ARRAY_BUFFER, this.inst[k].subarray(0, n * this.FL), gl.DYNAMIC_DRAW);
+      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iT', 2, 20);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ib);
+      this.drawInst(gl.TRIANGLES, M.ni, gl.UNSIGNED_SHORT, 0, n);
+    }
     // one copy of the used part into a 2D canvas: drawing many pieces straight from the WebGL
     // canvas can read the whole GL buffer back for every piece when the page canvas is not on the GPU
     if (!this.c2) { this.c2 = document.createElement('canvas'); this.g2 = this.c2.getContext('2d'); }
