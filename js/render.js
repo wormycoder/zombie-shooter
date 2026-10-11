@@ -404,8 +404,11 @@ const Render = {
         if ((f === FL.WATER || f === FL.DEEPWATER) && x >= x0 && x < x0 + CH && y >= y0 && y < y0 + CH) wet = 1;
       }
     }
-    return [h, wet];
+    // (whether the chunk has water goes in sigWet: no array per chunk per frame)
+    this.sigWet = wet;
+    return h;
   },
+  sigWet: 0,
   chunks: new Map(), chunkWorld: null, chunkTick: 0,
   drawGround(ctx, minX, minY, maxX, maxY, L, Rr, T, B, t, gs, snowA) {
     const w = Wd, CH = 8, detail = Settings.v.detail;
@@ -419,8 +422,10 @@ const Render = {
       return;
     }
     if (this.chunkWorld !== w) { this.chunks.clear(); this.chunkWorld = w; }
-    const tick = ++this.chunkTick;
-    let budget = 6;
+    const tick = ++this.chunkTick, t0 = performance.now();
+    // chunks are built while this frame has spent under ~5 ms on it (at least 6): drawing a missing chunk tile by tile
+    // costs as much as building it, and the next frame would have to do it again
+    let budget = 6, nvis = 0;
     const cx0 = Math.floor(minX / CH), cy0 = Math.floor(minY / CH), cx1 = Math.floor(maxX / CH), cy1 = Math.floor(maxY / CH);
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const x0 = cx * CH, y0 = cy * CH;
@@ -428,12 +433,13 @@ const Render = {
       const ox = (x0 - y0 - CH) * HTW - 1, oy = (x0 + y0) * HTH - 1;
       if (ox + 2 * CH * HTW + 2 < L - 40 || ox > Rr + 40 || oy + 2 * CH * HTH + 2 < T - 40 || oy > B + 10) continue;
       const key = cy * 4096 + cx;
-      const [sig, wet] = this.chunkSig(x0, y0, gs, snowA, detail);
+      const sig = this.chunkSig(x0, y0, gs, snowA, detail), wet = this.sigWet;
       let ch = this.chunks.get(key);
+      nvis++;
       if (!ch || ch.sig !== sig) {
-        if (budget > 0) {
+        if (budget > 0 || performance.now() - t0 < 5) {
           budget--;
-          if (!ch) { ch = { c: mkCanvas(2 * CH * HTW + 2, 2 * CH * HTH + 2), sig: 0, used: 0, wet: 0 }; this.chunks.set(key, ch); }
+          if (!ch) { ch = { c: this.chunkPool.pop() || mkCanvas(2 * CH * HTW + 2, 2 * CH * HTH + 2), sig: 0, used: 0, wet: 0 }; this.chunks.set(key, ch); }
           const g = ch.c.getContext('2d');
           g.clearRect(0, 0, ch.c.width, ch.c.height);
           for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(g, x, y, (x - y) * HTW - ox, (x + y) * HTH - oy, t, gs, snowA, detail, false);
@@ -451,12 +457,18 @@ const Render = {
         if (f === FL.WATER || f === FL.DEEPWATER) this.groundTile(ctx, x, y, (x - y) * HTW, (x + y) * HTH, t, gs, snowA, detail, true);
       }
     }
-    // keep the cache bounded (least recently drawn chunks go first)
-    if (this.chunks.size > 140) {
-      const arr = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used);
-      for (let k = 0; k < arr.length - 110; k++) this.chunks.delete(arr[k][0]);
+    // keep the cache bounded (least recently drawn chunks go first), but never below what is on screen: zoomed far out
+    // a fixed cap made every frame rebuild or tile-draw a good part of the ground. Freed canvases are reused.
+    this.chunkVis = nvis;
+    const cap = Math.max(this.chunkCap(), nvis + (nvis >> 2) + 8);
+    if (this.chunks.size > cap) {
+      const arr = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used), keep = Math.max(nvis, cap - 24);
+      for (let k = 0; k < arr.length - keep; k++) { this.chunks.delete(arr[k][0]); if (this.chunkPool.length < 32) this.chunkPool.push(arr[k][1].c); }
     }
   },
+  chunkPool: [], chunkVis: 0,
+  // chunks kept beyond those on screen (Sprite cache size setting)
+  chunkCap() { return [90, 140, 260][Settings.v.cache === undefined ? 1 : Settings.v.cache]; },
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
     const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);

@@ -43,19 +43,21 @@ const Spr = {
   get(key, w, h, ax, ay, draw) {
     let rec = this.cache.get(key);
     if (rec) return rec;
-    const c = mkCanvas(w, h);
-    const g = c.getContext('2d');
+    const c = mkCanvas(w, h), tr = !this.noTrim && c.width * c.height >= 4000;
+    // a sprite that is cropped is painted on a CPU canvas: reading a GPU canvas back stalls the graphics pipeline
+    const g = tr ? c.getContext('2d', { willReadFrequently: true }) : c.getContext('2d');
     draw(g, ax, ay);
-    rec = (!this.noTrim && this.trim(c, ax, ay)) || { c, ax, ay, sil: null };
+    rec = (tr && this.trim(c, ax, ay)) || { c, ax, ay, sil: null };
     this.cache.set(key, rec);
     return rec;
   },
-  // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory)
+  // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory). The result is
+  // always a new canvas (c may be a CPU canvas, which would be uploaded to the GPU again whenever it is drawn).
   trim(c, ax, ay) {
     const W = c.width, H = c.height;
     if (W * H < 4000) return null;
     let d;
-    try { d = c.getContext('2d').getImageData(0, 0, W, H).data; } catch (e) { return null; }
+    try { d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data; } catch (e) { return null; }
     let x0 = W, y0 = -1, x1 = -1, y1 = -1;
     for (let y = 0; y < H; y++) {
       let row = -1, rowEnd = -1;
@@ -69,8 +71,8 @@ const Spr = {
     if (y0 < 0) return { c: mkCanvas(1, 1), ax: 0, ay: 0, sil: null };
     // one pixel of margin keeps edge antialiasing intact
     x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); x1 = Math.min(W - 1, x1 + 1); y1 = Math.min(H - 1, y1 + 1);
-    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-    if (bw * bh > W * H * 0.85) return null;
+    let bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    if (bw * bh > W * H * 0.85) { x0 = 0; y0 = 0; bw = W; bh = H; }
     const c2 = mkCanvas(bw, bh);
     c2.getContext('2d').drawImage(c, -x0, -y0);
     return { c: c2, ax: ax - x0, ay: ay - y0, sil: null };
