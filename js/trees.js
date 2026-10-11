@@ -403,7 +403,7 @@ const Trees = {
     // ground: shadow and autumn litter
     const rx = pl.C * 45 * (pl.cone ? 1.0 : 0.95);
     this.shadow(g, bx, by, rx, sp.ev ? 0.36 : 0.12 + 0.24 * full);
-    if (!sp.ev && (s0 === 's' || s0 === 'a' || (s0 === 'b' && !snow)) && pl.age > 0) {
+    if (!sp.ev && sp.au && (s0 === 's' || s0 === 'a' || (s0 === 'b' && !snow)) && pl.age > 0) {
       const lr = new RNG(v * 17 + age), au = sp.au;
       for (let k = 0; k < (s0 === 'b' ? 10 : 34); k++) {
         const a = lr.f(-0.5, 3.6), d = rx * Math.sqrt(lr.next()) * 0.9, px = bx + Math.cos(a) * d, py = by + Math.sin(a) * d * 0.5 + 2;
@@ -459,10 +459,19 @@ const Trees = {
     }
     return pl;
   },
-  // bounds of a plan on screen relative to the base, for the sprite canvas
+  // bounds of a plan on screen relative to the base, for the sprite canvas: every cluster (with its
+  // leaves, needles and snow), limb and twig, the ground shadow and the leaf litter
   bounds(pl) {
-    const rx = pl.C * 45 + 26;
-    return { l: -Math.max(rx, pl.C * 45 * 0.95 * 0.75 + 4), r: Math.max(rx, pl.C * 45 * 0.95 * 1.25 + 4), t: -(pl.top * ZU + 22), b: pl.C * 45 * 0.46 + 10 };
+    if (pl.bd) return pl.bd;
+    let l = 1e9, r = -1e9, t = 1e9, b = -1e9;
+    const ext = (u, v, z, e) => { const X = (u - v) * HTW, Y = (u + v) * HTH - z * ZU; if (X - e < l) l = X - e; if (X + e > r) r = X + e; if (Y - e < t) t = Y - e; if (Y + e > b) b = Y + e; };
+    for (const c of pl.clusters) ext(c.u, c.v, c.z, c.r * 45 * 1.45 + 6);
+    for (const s of pl.segs) { ext(s[0], s[1], s[2], s[6] * 23 + 3); ext(s[3], s[4], s[5], s[7] * 23 + 3); }
+    for (const s of pl.twigs) { ext(s[0], s[1], s[2], 2); ext(s[3], s[4], s[5], 2); }
+    if (pl.fine) for (const s of pl.fine) ext(s[3], s[4], s[5], 2);
+    const R = Math.max(6, Math.round(pl.C * 45 * (pl.cone ? 1.0 : 0.95) / 2) * 2);
+    l = Math.min(l, -R * 1.05 - 4); r = Math.max(r, R * 1.3 + 6); t = Math.min(t, -20); b = Math.max(b, R * 0.62 + 6);
+    return (pl.bd = { l: Math.floor(l), r: Math.ceil(r), t: Math.floor(t), b: Math.ceil(b) });
   },
 
   // ------------------------------------------------------------------ sprite cache
