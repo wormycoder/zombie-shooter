@@ -13,13 +13,25 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '00.9.3.064', date: '2026-10-11', title: 'New characters and cars',
+    notes: [
+      'Survivors and zombies are rebuilt as rounded, realistically proportioned people: faces, hands, hair with volume, shirts with sleeves and collars, jackets, trousers and shoes; zombies with grey-green skin, blood soaked into torn clothes.',
+      'Animation blends between poses instead of snapping. Walk, run, sprint, sneak and shamble cycles follow the distance actually moved, so feet no longer slide; the body leans into sprints, breathes and shifts its weight when idle.',
+      'Swings for every weapon type with wind-up, strike and follow-through, timed to the hit; pistol and rifle aiming with recoil; a two-handed shove that can knock zombies down.',
+      'Stomping: Space near a zombie on the ground raises a knee and drives the heel into its head. A melee attack at a downed zombie chops at the ground and can hit it.',
+      'Zombies lunge and bite, reel back from hits in the direction they were struck, fall, get up, crawl, and lie naturally as corpses.',
+      'All 13 vehicle types remade as late-80s / early-90s American cars: longer hoods, chrome window surrounds and bumpers, wheel covers, arch lips, grilles and lamp clusters, mud flaps on trucks, and a V8 engine bay under an open hood.',
+    ],
+    commits: ['de2ea1f', '528d38c'], shots: ['v093_1', 'v093_2', 'v093_3', 'v093_4', 'v093_5'],
+  },
+  {
     v: '00.9.2.038', date: '2026-10-09', title: 'Version tracker',
     notes: [
       'This window: the version label and the "?" history button on the title screen.',
       'Every build since the first commit, grouped into versions with notes and screenshots taken during development.',
       'Builds whose screenshots were lost were rendered again from the old code.',
     ],
-    commits: [], shots: ['v092_1', 'v092_2'],
+    commits: ['788d9c1'], shots: ['v092_1', 'v092_2'],
   },
   {
     v: '00.9.1.037', date: '2026-10-09', title: '8x8 chunks, faster simulation, debug mode',
