@@ -468,7 +468,7 @@ const Render = {
   },
   chunkPool: [], chunkVis: 0,
   // chunks kept beyond those on screen (Sprite cache size setting)
-  chunkCap() { return [90, 140, 260][Settings.v.cache === undefined ? 1 : Settings.v.cache]; },
+  chunkCap() { return 140 * CACHE_K(); },
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
     const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);
@@ -1097,15 +1097,15 @@ const Fx = {
     if (G.world && R.chance(0.7)) this.decal(x + R.f(-0.4, 0.4), y + R.f(-0.4, 0.4));
   },
   scorch(x, y, s) {
-    const w = Wd;
-    w.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 5), age: -2000, s: s || R.f(0.8, 1.3), k: 1 });
-    if (w.decals.length > 450) w.decals.shift();
+    Wd.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 5), age: -2000, s: s || R.f(0.8, 1.3), k: 1 });
+    this.capDecals();
   },
   decal(x, y, s) {
-    const w = Wd;
-    w.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 7), age: 0, s: s || R.f(0.6, 1.1) });
-    if (w.decals.length > 450) w.decals.shift();
+    Wd.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 7), age: 0, s: s || R.f(0.6, 1.1) });
+    this.capDecals();
   },
+  // the oldest decals go past the Decal limit setting
+  capDecals() { const D = Wd.decals, m = Settings.v.decals || 450; if (D.length > m) D.splice(0, D.length - m); },
   shards(x, y, z, n, col) {
     n = Math.max(1, Math.round(n * Settings.v.particles));
     for (let i = 0; i < n; i++) {
@@ -1150,7 +1150,7 @@ const Fx = {
     for (const p of this.parts) {
       const s = P(p.x, p.y, p.z);
       const a = Math.min(1, p.life / p.max * 2);
-      if (p.smoke) { const sa = (p.dark ? 0.42 : 0.35) * p.life / p.max; ctx.fillStyle = (p.dark ? 'rgba(40,38,36,' : 'rgba(140,140,140,') + sa.toFixed(3) + ')'; ctx.beginPath(); ctx.arc(s[0], s[1], p.size, 0, 7); ctx.fill(); continue; }
+      if (p.smoke) { ctx.globalAlpha = (p.dark ? 0.42 : 0.35) * p.life / p.max; ctx.drawImage(this.disc(p.dark ? '40,38,36' : '140,140,140'), s[0] - p.size, s[1] - p.size, p.size * 2, p.size * 2); continue; }
       ctx.globalAlpha = a;
       ctx.fillStyle = p.col; ctx.fillRect(s[0] - p.size / 2, s[1] - p.size / 2, p.size, p.size);
     }
@@ -1172,6 +1172,13 @@ const Fx = {
       ctx.fillStyle = f.col; ctx.fillText(f.txt, s[0], s[1]);
     }
     ctx.globalAlpha = 1;
+  },
+  // a filled circle of one colour (radius 31 in a 64 px sprite: drawn at the size wanted) for smoke and puffs
+  discs: new Map(),
+  disc(rgb) {
+    let c = this.discs.get(rgb);
+    if (!c) { c = mkCanvas(64, 64); const g = c.getContext('2d'); g.fillStyle = 'rgb(' + rgb + ')'; g.beginPath(); g.arc(32, 32, 31, 0, 7); g.fill(); this.discs.set(rgb, c); }
+    return c;
   },
   // flames: a few pre-rendered flickering frames plus an additive glow
   flameFrames: null, glow: null,

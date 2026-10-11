@@ -25,6 +25,8 @@ const PAL_CARPET = ['#7a3a3a', '#3a4a6a', '#5a6a4a', '#8a7a5a', '#6a5a7a', '#a08
 const PAL_TILE = ['#d8d8d0', '#c8d8e0', '#e0d0c0', '#d0e0d0', '#e8e8e8', '#c0c8c0', '#d8c8d0', '#b8c8d8'];
 const PAL_LINO = ['#c8c0a8', '#b8c0b8', '#d0c8b0', '#a8b0b8', '#c0b8a0', '#d8d0c0', '#b0a898', '#c8c8c0'];
 
+// cache size factor (Sprite cache size setting: Small / Normal / Large)
+const CACHE_K = () => [0.5, 1, 2][Settings.v.cache === undefined ? 1 : Settings.v.cache] || 1;
 function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
 function poly(g, pts, fill, stroke, lw) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
@@ -303,8 +305,9 @@ const Spr = {
       this._drawWall(c.getContext('2d'), ax, ay, type, d, col, f, hz, cut, st, Facade.shash(key));
       rec = { c, ax, ay, sil: null, u: 0 };
       this.wcache.set(key, rec);
-      if (this.wcache.size > this.WCAP) {
-        let n = this.wcache.size - (this.WCAP * 0.8 | 0);
+      const cap = this.WCAP * CACHE_K();
+      if (this.wcache.size > cap) {
+        let n = this.wcache.size - (cap * 0.8 | 0);
         const old = Facade.tick - 2;
         for (const [k, r] of this.wcache) { if (n <= 0) break; if (r.u < old) { this.wcache.delete(k); n--; } }
       }
@@ -1946,9 +1949,10 @@ const Facade = {
       rec = this.buildRoof(b, sq, lf);
       this.rcache.set(key, rec);
       this.rpx += rec.c.width * rec.c.height;
-      if (this.rpx > this.RCAP) {
+      const cap = this.RCAP * CACHE_K();
+      if (this.rpx > cap) {
         const old = this.tick - 2;
-        for (const [k, r] of this.rcache) { if (this.rpx <= this.RCAP * 0.7) break; if (r.u < old) { this.rcache.delete(k); this.rpx -= r.c.width * r.c.height; } }
+        for (const [k, r] of this.rcache) { if (this.rpx <= cap * 0.7) break; if (r.u < old) { this.rcache.delete(k); this.rpx -= r.c.width * r.c.height; } }
       }
     }
     rec.u = this.tick;

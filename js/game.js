@@ -205,24 +205,33 @@ const Game = {
   },
 
   // ------------------------------------------------------------------ main loop
-  last: 0, acc: 0, fpsN: 0, fpsT: 0,
+  last: 0, acc: 0, fpsN: 0, fpsT: 0, rLast: 0, rIv: 16.7, capNext: 0,
   pf: { sim: 0, steps: 0, rend: 0, ui: 0, uiMs: 0, frame: 0 },
   loop(ts) {
     requestAnimationFrame((t) => this.loop(t));
-    // frame rate cap (settings): skip this display refresh if the last frame was too recent
+    // frame rate cap (settings): run on the display refresh nearest each due time, so a 144 Hz screen capped at 60
+    // gets about 60 frames (skipping refreshes by a minimum gap gave it 48)
     const cap = Settings.v.fps;
-    if (cap && this.last && ts - this.last < 1000 / cap - 2.5) return;
+    if (this.rLast) this.rIv += (Math.min(50, ts - this.rLast) - this.rIv) * 0.1;
+    this.rLast = ts;
+    if (cap && this.last) {
+      if (ts < this.capNext - this.rIv * 0.5) return;
+      this.capNext = ts - this.capNext > 1000 / cap ? ts + 1000 / cap : this.capNext + 1000 / cap;
+    }
+    const iv = this.last ? ts - this.last : 16.7;
     let dt = (ts - this.last) / 1000;
     this.last = ts;
     if (!(dt > 0)) dt = 0.016;
     dt = Math.min(dt, 0.1);
     if (G.mode === 'play' || G.mode === 'dead') {
+      let simMs = 0, uiMs = 0;
       if (G.mode === 'play' && !G.paused && !UI.modalPause()) {
         const sim = dt * G.speed;
         const steps = Math.min(60, Math.max(1, Math.ceil(sim / (1 / 30))));
         const t0 = performance.now();
         for (let i = 0; i < steps; i++) this.step(sim / steps);
-        this.pf.sim += performance.now() - t0; this.pf.steps += steps;
+        simMs = performance.now() - t0;
+        this.pf.sim += simMs; this.pf.steps += steps;
         Input.handleGameKeys();
       } else if (G.mode === 'dead') {
         this.step(dt);
@@ -235,7 +244,8 @@ const Game = {
       this.pf.rend += t2 - t1;
       // HUD and panels refresh at the configured rate
       this.uiAcc = (this.uiAcc || 0) + dt;
-      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); Dash.update(); this.uiAcc = 0; this.pf.ui++; this.pf.uiMs += performance.now() - t2; }
+      if (this.uiAcc >= 1 / (Settings.v.uiHz || 30) - 0.002) { UI.update(this.uiAcc); Dash.update(); this.uiAcc = 0; this.pf.ui++; uiMs = performance.now() - t2; this.pf.uiMs += uiMs; }
+      Perf.frame(iv, t2 - t1, simMs, uiMs);
       Music.update(dt);
     } else if (G.mode === 'menu' || G.mode === 'create') {
       Menu.drawBackground(dt);
@@ -365,6 +375,7 @@ const Game = {
   worldTick(gm) {
     const p = G.player;
     const powered = !G.events.powerOff;
+    Fx.capDecals();
     // containers: spoilage & cooking
     const lazy = Settings.v.chunkLazy;
     this.wtick = (this.wtick || 0) + 1;

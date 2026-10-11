@@ -194,6 +194,24 @@ const Zombie = {
       const idx = G.zombies.findIndex(z => z.dead && U.dist(z.x, z.y, px, py) > 40);
       if (idx >= 0) G.zombies.splice(idx, 1);
     }
+    if (Settings.v.corpses > 0 && tick % 15 === 7) this.corpseLimit(Settings.v.corpses, px, py);
+  },
+  // Corpse limit setting: past it, the oldest bodies out of sight (12+ tiles away, not visible) decay away and leave
+  // what they carried on the ground; at most 20 per pass
+  corpseLimit(max, px, py) {
+    let n = 0;
+    const C = [];
+    for (const z of G.zombies) {
+      if (!z.dead) continue;
+      n++;
+      if (World.lvDist(z.x, z.y, px, py) > 12 && !World.isVis(Math.floor(z.x), Math.floor(z.y))) C.push(z);
+    }
+    if (n <= max || !C.length) return;
+    C.sort((a, b) => (a.diedAt === undefined ? -1e9 : a.diedAt) - (b.diedAt === undefined ? -1e9 : b.diedAt));
+    const gone = new Set(C.slice(0, Math.min(20, n - max)));
+    for (const z of gone) if (z.loot) for (const it of z.loot) World.dropItem(z.x, z.y, it);
+    G.zombies = G.zombies.filter(z => !gone.has(z));
+    this.rebuildGrid();
   },
   farUpdate(z, dt) {
     if (z.st === 'investigate') {
@@ -555,11 +573,12 @@ const Zombie = {
     const alpha = d.alpha, rot = d.rot;
     if (!Char3D.draw(ctx, z, X, Y, d.s, alpha)) Humanoid.draw(ctx, X, Y, z.a, z.look, d.pose, d.s, alpha);
     // (flies are sub-pixel specks when zoomed far out)
-    if (rot > 0.15 && z.dead && Render.cam.zoom > 0.8 && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
+    const amb = Settings.v.ambient;
+    if (rot > 0.15 && z.dead && amb > 0 && Render.cam.zoom > 0.8 && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
       // flies buzzing over a rotting body
-      const t = performance.now() / 1000;
+      const t = Render.tnow;
       ctx.fillStyle = 'rgba(10,10,10,0.85)';
-      const n = 2 + Math.round(rot * 5);
+      const n = Math.round((2 + rot * 5) * amb);
       for (let k = 0; k < n; k++) {
         const a = t * (2.3 + k * 0.7) + k * 2.1 + z.id;
         ctx.fillRect(X + 10 + Math.cos(a) * (6 + k * 2) + Math.sin(a * 2.7) * 3, Y - 6 + Math.sin(a * 1.3) * 5 - (k % 3) * 3, 1.5, 1.5);

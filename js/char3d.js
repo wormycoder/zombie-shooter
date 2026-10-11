@@ -152,6 +152,8 @@ const C3Imp = {
   release(sl) { let fl = this.free.get(sl.key); if (!fl) this.free.set(sl.key, fl = []); fl.push(sl); this.n--; },
   reset() { this.shelves.length = 0; this.free.clear(); this.y = 0; this.n = 0; this.gen++; },
 };
+// settings change what goes into the sprites (shadows, detail): redraw them
+Settings.onChange(() => C3Imp.reset());
 
 const Char3D = {
   map: new Map(), cols: new Map(), st: new WeakMap(), pals: new WeakMap(), palK: new Map(),

@@ -263,9 +263,12 @@ const Menu = {
     }).join('');
     const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('') + '</div>';
     const tabs = [['display', 'Display'], ['perf', 'Performance'], ['audio', 'Audio'], ['controls', 'Controls']]
-      .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
+      .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab || (k === 'perf' && tab === 'report') ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
     let body = '';
-    if (tab === 'display' || tab === 'perf') body = presets + rows(tab) + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
+    if (tab === 'report') body = `<div class="sml" style="margin:2px 0 6px">Performance report: copy it and send it along with a description of what was slow.</div>
+      <textarea id="perfRep" readonly spellcheck="false" style="width:100%;height:300px;box-sizing:border-box;background:rgba(0,0,0,0.35);color:#e0d8c0;border:1px solid rgba(255,255,255,0.12);font:11px/1.45 Consolas,monospace;padding:6px;resize:vertical">${U.esc(Perf.report())}</textarea>
+      <div style="margin-top:6px"><span class="btn sm" data-prep="copy">Copy to clipboard</span><span class="btn sm" data-prep="again">Refresh</span><span class="sml" id="perfRepMsg" style="margin-left:8px;color:#9be08a"></span></div>`;
+    else if (tab === 'display' || tab === 'perf') body = presets + rows(tab) + (tab === 'perf' ? `<div style="margin-top:8px"><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></div>` : '') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
     else if (tab === 'audio') body = `<div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
       <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>`;
@@ -281,10 +284,18 @@ const Menu = {
       Settings.set(k, SETTINGS_OPTS[k].opts[+e.target.value][1]);
       this.options(inGame);
     };
-    m.onmouseover = (e) => { const r = e.target.closest('.opt[data-tip]'); const tip = $('#setTip'); if (tip) tip.textContent = r ? r.dataset.tip : ''; };
+    m.onmouseover = (e) => { const r = e.target.closest('.opt[data-tip], [data-tab][data-tip]'); const tip = $('#setTip'); if (tip) tip.textContent = r ? r.dataset.tip : ''; };
     m.onclick = (e) => {
       const tb = e.target.closest('[data-tab]');
       if (tb) { this.setTab = tb.dataset.tab; this.options(inGame); return; }
+      const pr = e.target.closest('[data-prep]');
+      if (pr) {
+        const ta = $('#perfRep'), msg = $('#perfRepMsg');
+        if (pr.dataset.prep === 'again') { ta.value = Perf.report(); return; }
+        const done = () => { if (msg) msg.textContent = 'Copied'; };
+        try { navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); document.execCommand('copy'); done(); }); } catch (er) { ta.select(); document.execCommand('copy'); done(); }
+        return;
+      }
       const gp = e.target.closest('[data-gpre]');
       if (gp) { Settings.usePreset(gp.dataset.gpre); this.options(inGame); return; }
       const b = e.target.closest('[data-m]'); if (!b) return;
