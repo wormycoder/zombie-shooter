@@ -225,7 +225,7 @@ const Trees = {
     }
     const s0 = st[0], au = sp.au, ai = hue % au.length;
     const auc = Col.mix(au[ai], au[(ai + 1) % au.length], (q * 7.3) % 1 * 0.55);
-    if (s0 === 'b') return sp.hold && pl.age < 2 && q < 0.16 ? Col.mix('#9a7448', '#7e5a3a', q * 6) : null;
+    if (s0 === 'b') return null;
     if (s0 === 'p') {
       if (sp.bloom) return q < 0.82 ? (q < 0.12 ? sp.sp : sp.bloom) : null;
       if (q > 0.85) return null;
