@@ -14,12 +14,12 @@
 // cb crown bottom and fk fork height (fractions of H), wk trunk thickness, cr leaf cluster radius (m)
 const TREE_SP = {
   oak: { n: 'Oak', f: 'spread', H: [2.3, 4.2, 5.8, 7.0], C: [0.55, 1.25, 1.7, 2.1], cb: 0.34, fk: 0.26, wk: 1.2, lobes: [2, 4, 6, 7], bark: '#57493c', lf: '#3e5b29', sp: '#86a64e', au: ['#9a4e22', '#a8682c', '#83391f', '#a88438'], hold: 1, leaf: 3.4, cr: 0.5 },
-  maple: { n: 'Maple', f: 'round', H: [2.4, 4.4, 6.0, 7.2], C: [0.5, 1.05, 1.45, 1.8], cb: 0.3, fk: 0.3, wk: 1, lobes: [2, 4, 5, 6], bark: '#62564a', lf: '#4a7130', sp: '#9cb24e', au: ['#c3331f', '#d4661e', '#d9a228', '#a32a26'], flow: '#a8503a', leaf: 3.2, cr: 0.48 },
+  maple: { n: 'Maple', f: 'round', H: [2.4, 4.4, 6.0, 7.2], C: [0.5, 1.05, 1.45, 1.8], cb: 0.3, fk: 0.3, wk: 1, lobes: [2, 4, 5, 6], bark: '#62564a', lf: '#4a7130', sp: '#9cb24e', au: ['#c3331f', '#d4661e', '#d9a228', '#a32a26'], flow: '#c0484a', leaf: 3.2, cr: 0.48 },
   elm: { n: 'Elm', f: 'vase', H: [2.6, 4.8, 6.8, 7.8], C: [0.5, 1.2, 1.75, 2.1], cb: 0.5, fk: 0.3, wk: 1.05, lobes: [2, 4, 6, 7], bark: '#4e4237', lf: '#4d6d2f', sp: '#92ae4a', au: ['#c8a43a', '#b88f2e', '#d0b048'], leaf: 2.9, cr: 0.44 },
   birch: { n: 'Birch', f: 'oval', H: [2.6, 4.6, 6.2, 7.0], C: [0.38, 0.78, 1.0, 1.2], cb: 0.3, fk: 0.85, wk: 0.68, lobes: [2, 4, 5, 6], bark: '#e4e0d4', white: 1, lf: '#64893b', sp: '#a6c660', au: ['#e0bc36', '#d3a52c', '#e8cc50'], leaf: 2.3, airy: 1, cr: 0.33 },
-  apple: { n: 'Apple', f: 'low', H: [1.8, 2.8, 3.6, 4.2], C: [0.5, 1.0, 1.4, 1.65], cb: 0.28, fk: 0.24, wk: 1.05, lobes: [2, 4, 5, 6], bark: '#5c4a3a', lf: '#4e7434', sp: '#8eae52', bloom: '#f6eaee', fruit: '#b8302a', au: ['#b09a3a', '#a8822e'], leaf: 3.0, cr: 0.42 },
+  apple: { n: 'Apple', f: 'low', H: [1.8, 2.8, 3.6, 4.2], C: [0.5, 1.0, 1.4, 1.65], cb: 0.28, fk: 0.24, wk: 1.05, lobes: [2, 4, 5, 6], bark: '#5c4a3a', lf: '#4e7434', sp: '#8eae52', bloom: '#f4e6ea', fruit: '#b8302a', au: ['#b09a3a', '#a8822e'], leaf: 3.0, cr: 0.42 },
   cherry: { n: 'Cherry', f: 'low', H: [1.9, 3.0, 4.0, 4.6], C: [0.5, 1.0, 1.35, 1.6], cb: 0.34, fk: 0.28, wk: 0.9, lobes: [2, 4, 5, 6], bark: '#5e3c36', lf: '#405d2d', sp: '#7e9e4a', bloom: '#f0b2c6', au: ['#c44a2a', '#b2302a', '#d0702a'], leaf: 3.0, lent: 1, cr: 0.4 },
-  pine: { n: 'Pine', f: 'pine', H: [2.2, 4.6, 6.8, 8.0], C: [0.5, 0.95, 1.3, 1.55], bark: '#6b4631', lf: '#3e5e38', sp: '#7aa452', wi: '#3a5636', ev: 1, wk: 1 },
+  pine: { n: 'Pine', f: 'pine', H: [2.2, 4.6, 6.8, 8.0], C: [0.5, 0.95, 1.3, 1.55], bark: '#62483a', lf: '#3e5e38', sp: '#7aa452', wi: '#3a5636', ev: 1, wk: 1 },
   spruce: { n: 'Spruce', f: 'cone', H: [1.8, 4.0, 6.2, 7.6], C: [0.55, 1.0, 1.35, 1.6], bark: '#4c3b2f', lf: '#2d4b35', sp: '#64985a', wi: '#2c4636', ev: 1, wk: 1 },
   cedar: { n: 'Cedar', f: 'column', H: [1.6, 3.4, 4.9, 5.8], C: [0.4, 0.7, 0.9, 1.05], bark: '#6c4733', lf: '#3b5631', sp: '#5f8040', wi: '#575a30', ev: 1, wk: 0.9 },
   dead: { n: 'Dead Tree', f: 'dead', H: [2.0, 4.0, 5.6, 6.6], C: [0.5, 1.0, 1.4, 1.7], cb: 0.4, fk: 0.34, wk: 1.1, lobes: [2, 3, 4, 5], bark: '#7a736b' },
@@ -115,6 +115,15 @@ const Trees = {
         }
       }
     }
+    // finer twigs off the twigs (own RNG so the crown keeps its shape): the grey haze of a bare crown
+    const fine = [], r2 = new RNG(rng.int(1, 1e6));
+    for (const t of twigs) for (let j = dead ? 0 : 4; j > 0; j--) {
+      const p = r2.f(0.25, 1), ou = U.lerp(t[0], t[3], p), ov = U.lerp(t[1], t[4], p), oz = U.lerp(t[2], t[5], p);
+      const l = Math.hypot(t[3] - t[0], t[4] - t[1], t[5] - t[2]) * r2.f(0.3, 0.6) + 0.04;
+      let du = (t[3] - t[0]) / l + r2.f(-1.2, 1.2), dv = (t[4] - t[1]) / l + r2.f(-1.2, 1.2), dz = (t[5] - t[2]) / l + r2.f(-0.3, 1.1);
+      const m = Math.hypot(du, dv, dz) || 1;
+      fine.push([ou, ov, oz, ou + du / m * l, ov + dv / m * l, oz + dz / m * l]);
+    }
     // leaf clusters: domes over each lobe (thin underneath, so limbs show going in), a dark fill inside
     if (!dead) {
       const cr = sp.cr * (age ? 1 : 0.7), cx = lean[0], cy = lean[1];
@@ -135,7 +144,7 @@ const Trees = {
       }
       if (!oval) for (let j = 0; j < nL; j++) { const a = rng.f(0, 6.283), d = C * rng.f(0, 0.35); add(cx + Math.cos(a) * d, cy + Math.sin(a) * d, zc + rng.f(-0.2, 0.4) * cv, cr * 1.2, Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.2); }
     }
-    return { H, C, cv, zc, segs, clusters, twigs, lobes, wT, top: zc + cv + 0.35, lu: lean[0], lv: lean[1] };
+    return { H, C, cv, zc, segs, clusters, twigs, fine, lobes, wT, top: zc + cv + 0.35, lu: lean[0], lv: lean[1] };
   },
   // spruce (cone) and cedar (column): tiers of boughs from near the ground to the tip
   planCone(sp, age, rng) {
@@ -219,7 +228,7 @@ const Trees = {
     if (s0 === 'p') {
       if (sp.bloom) return q < 0.82 ? (q < 0.12 ? sp.sp : sp.bloom) : null;
       if (q > 0.85) return null;
-      return sp.flow && q < 0.25 ? Col.mix(sp.flow, sp.sp, 0.35) : Col.mix(sp.sp, '#c8d888', q * 0.3);
+      return sp.flow && q < 0.18 ? Col.mix(sp.flow, sp.sp, 0.55) : Col.mix(sp.sp, '#c8d888', q * 0.3);
     }
     if (s0 === 'y') {
       // outer and upper clusters turn first
@@ -258,10 +267,18 @@ const Trees = {
     layer(Math.round(30 * k + 5), r * 0.02, r * 0.06, r * 1.04, tn * 0.8);
     layer(Math.round(28 * k + 5), -r * 0.14, -r * 0.18, r * 0.8, tn * 1.0);
     layer(Math.round(12 * k + 3), -r * 0.3, -r * 0.36, r * 0.48, tn * 1.18);
-    if (snow) {
-      g.fillStyle = this.tone(TREE_SNOW, U.clamp(0.72 + tn * 0.32, 0.6, 1.05));
-      g.beginPath(); g.ellipse(x - r * 0.12, y - r * 0.5, r * 0.62, r * 0.3, 0, 0, 6.283); g.fill();
-    }
+    if (snow) this.snowCap(g, x - r * 0.12, y - r * 0.5, r * 0.62, r * 0.3, tn, rng);
+  },
+  // lumpy snow lying on a clump: shaded lumps, then a brighter crest toward the sun
+  snowCap(g, x, y, w, h, tn, rng) {
+    g.fillStyle = this.tone(TREE_SNOW, U.clamp(0.7 + tn * 0.22, 0.6, 0.98));
+    g.beginPath();
+    for (let j = 0; j < 3; j++) { const cx = x + (j - 1) * w * 0.52 + rng.f(-0.1, 0.1) * w, cy = y + Math.abs(j - 1) * h * 0.35 + rng.f(-0.1, 0.1) * h, rx = w * rng.f(0.38, 0.55), ry = h * rng.f(0.6, 0.85); g.moveTo(cx + rx, cy); g.ellipse(cx, cy, rx, ry, 0, 0, 6.283); }
+    g.fill();
+    g.fillStyle = this.tone(TREE_SNOW, U.clamp(0.92 + tn * 0.14, 0.82, 1.08));
+    g.beginPath();
+    for (let j = 0; j < 2; j++) { const cx = x - w * (0.35 - j * 0.45) + rng.f(-0.08, 0.08) * w, cy = y - h * 0.3, rx = w * rng.f(0.25, 0.38), ry = h * 0.42; g.moveTo(cx + rx, cy); g.ellipse(cx, cy, rx, ry, 0, 0, 6.283); }
+    g.fill();
   },
   // conifer clumps. n: spruce bough - a flat-topped mound drooping at both ends with a fringe of
   // needles hanging from its lower edge; c: cedar - a rounder mound of fine scale dabs; p: pine tuft -
@@ -283,7 +300,7 @@ const Trees = {
       strokes(Math.round(20 * k + 8), tn * 0.62, 1.1, ray(0, false, 1));
       strokes(Math.round(16 * k + 6), tn * 0.92, 1.1, ray(0, true, 0.9));
       strokes(Math.round(8 * k + 3), tn * 1.18, 1, () => { const a = rng.f(-2.8, -1.2), d = r * 0.25 * Math.sqrt(rng.next()), sx = x - r * 0.15 + Math.cos(a) * d, sy = y - r * 0.1 + Math.sin(a) * d * 0.6, l = r * rng.f(0.35, 0.7); g.moveTo(sx, sy); g.lineTo(sx + Math.cos(a) * l, sy + Math.sin(a) * l * 0.55); });
-      if (snow) { g.fillStyle = this.tone(TREE_SNOW, U.clamp(0.8 + tn * 0.25, 0.7, 1.08)); g.beginPath(); g.ellipse(x - r * 0.1, y - r * 0.22, r * 0.62, r * 0.22, 0, 0, 6.283); g.fill(); }
+      if (snow) this.snowCap(g, x - r * 0.1, y - r * 0.2, r * 0.5, r * 0.17, tn, rng);
       g.lineCap = 'butt';
       return;
     }
@@ -404,9 +421,17 @@ const Trees = {
     if (pl.segs.length && pl.age > 0) this.roots(g, P, pl, bark, rng, sp.white);
     const leaf = sp.leaf || 3, ck = sp.f === 'column' ? 'c' : sp.f === 'pine' ? 'p' : sp.ev ? 'n' : 'l';
     const crownTop = pl.zc + pl.cv;
-    // fine twigs first when bare (a haze behind and among the limbs)
+    // fine twigs first when bare (a haze behind and among the limbs): the finest twigs paler (sky
+    // shows through them), then the twigs
     if ((bare || sp.f === 'dead' || pl.pine) && pl.twigs.length) {
-      g.strokeStyle = this.tone(sp.white ? '#5a4a48' : bark, sp.f === 'dead' ? 0.85 : 0.7); g.lineWidth = 0.8; g.globalAlpha = sp.f === 'dead' ? 0.9 : 0.7;
+      const tw = sp.white ? '#5a4a48' : bark;
+      if (pl.fine && pl.fine.length && !pl.pine) {
+        g.strokeStyle = this.tone(Col.mix(tw, '#8a847c', 0.25), 0.85); g.lineWidth = 0.7; g.globalAlpha = sp.f === 'dead' ? 0.6 : 0.62;
+        g.beginPath();
+        for (const t of pl.fine) { const a = P(t[0], t[1], t[2]), b = P(t[3], t[4], t[5]); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+        g.stroke();
+      }
+      g.strokeStyle = this.tone(tw, sp.f === 'dead' ? 0.85 : 0.7); g.lineWidth = 0.8; g.globalAlpha = sp.f === 'dead' ? 0.9 : 0.75;
       g.beginPath();
       for (const t of pl.twigs) { const a = P(t[0], t[1], t[2]), b = P(t[3], t[4], t[5]); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
       g.stroke(); g.globalAlpha = 1;
