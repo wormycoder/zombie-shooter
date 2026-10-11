@@ -70,7 +70,7 @@ Settings.load();
 const Perf = {
   N: 240, ft: new Float32Array(240), rt: new Float32Array(240), st: new Float32Array(240), ut: new Float32Array(240), n: 0, i: 0,
   // dynamic resolution: render scale 0.5 .. 1 applied on top of the resolution setting
-  scale: 1, wN: 0, wSum: 0, wJs: 0, wSlow: 0, good: 0, downT: 0, upT: 0, backoff: 4000, holdT: 0, probe: null,
+  scale: 1, wN: 0, wJs: 0, good: 0, downT: 0, upT: 0, backoff: 4000, holdT: 0, probe: null,
   // one rendered frame: ms since the previous one, and the render / simulation / UI ms it took
   frame(iv, r, s, u) {
     const k = this.i;
@@ -79,33 +79,33 @@ const Perf = {
     this.dyn(iv, r + s + u);
   },
   setScale(k) { if (k !== this.scale) { this.scale = k; if (typeof Render !== 'undefined' && Render.cv) Render.resize(); } },
-  // Windows of 30 frames. Below target (most frames slow) while the scripts are not the bottleneck (fewer pixels do not
-  // make them faster): one step down, kept only if the next window is faster. Steady at target with headroom for 2 s:
-  // one step up; a step up that does not hold doubles the wait before the next try.
-  // (automated test browsers keep full resolution unless the URL asks for it: their software rendering is always slow)
-  auto: !(navigator.webdriver && !/[?&]dynres/.test(location.search)),
+  // Windows of 30 frames, judged by their median (a single hitch does not count). Below target while the scripts are not
+  // the bottleneck (fewer pixels do not make them faster): one step down, kept only if the next window is faster. At
+  // target with headroom for 2 s: one step up; a step up that does not hold doubles the wait before the next try.
+  win: new Float32Array(30),
   dyn(iv, js) {
     if (!Settings.v.dynRes || !this.auto) { this.setScale(1); this.wN = 0; return; }
     const T = 1000 / (Settings.v.fps || 60);
-    this.wN++; this.wSum += iv; this.wJs += js; if (iv > T * 1.3) this.wSlow++;
+    this.win[this.wN++] = iv; this.wJs += js;
     if (this.wN < 30) return;
-    const avg = this.wSum / this.wN, jsAvg = this.wJs / this.wN, slow = this.wSlow / this.wN, now = performance.now();
-    this.wN = this.wSum = this.wJs = this.wSlow = 0;
+    this.win.sort();
+    const med = (this.win[14] + this.win[15]) / 2, jsAvg = this.wJs / this.wN, now = performance.now();
+    this.wN = 0; this.wJs = 0;
     if (G.paused || document.hidden || G.mode !== 'play') { this.probe = null; return; }
     const P = this.probe;
     if (P) {
       this.probe = null;
       // no faster with fewer pixels: not limited by the graphics card (or a capped display); back up and stay a while
-      if (avg > P.avg * 0.97) { this.setScale(P.k); this.holdT = now + 30000; return; }
+      if (med > P.med * 0.97) { this.setScale(P.k); this.holdT = now + 30000; return; }
     }
-    if (avg > T * 1.12 && slow > 0.3) {
+    if (med > T * 1.12) {
       this.good = 0;
-      if (jsAvg < avg * 0.75 && this.scale > 0.5 && now > this.holdT) {
+      if (jsAvg < med * 0.75 && this.scale > 0.5 && now > this.holdT) {
         if (now - this.upT < 3000) this.backoff = Math.min(60000, this.backoff * 2);
-        this.probe = { avg, k: this.scale };
+        this.probe = { med, k: this.scale };
         this.downT = now; this.setScale(Math.max(0.5, Math.round(this.scale * 10 - 1) / 10));
       }
-    } else if (avg < T * 1.04 && jsAvg < T * 0.6) {
+    } else if (med < T * 1.04 && jsAvg < T * 0.6) {
       if (now - this.upT > 15000) this.backoff = Math.max(4000, this.backoff / 2);
       if (++this.good >= 4 && this.scale < 1 && now - this.downT > this.backoff) { this.good = 0; this.upT = now; this.setScale(Math.min(1, Math.round(this.scale * 10 + 1) / 10)); }
     } else this.good = 0;
