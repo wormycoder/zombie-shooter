@@ -227,9 +227,14 @@ const Game = {
       let simMs = 0, uiMs = 0;
       if (G.mode === 'play' && !G.paused && !UI.modalPause()) {
         const sim = dt * G.speed;
-        const steps = Math.min(60, Math.max(1, Math.ceil(sim / (1 / 30))));
+        // fast-forward (x8 and up, sleeping, not driving) takes steps of up to 1/10 s: the same game time for a third
+        // of the work (25 crowd updates a frame at x50 dragged the frame rate down)
+        const sd = G.speed >= 8 && !(G.player && G.player.inCar) ? 1 / 10 : 1 / 30;
+        const steps = Math.min(60, Math.max(1, Math.ceil(sim / sd)));
         const t0 = performance.now();
-        for (let i = 0; i < steps; i++) this.step(sim / steps);
+        // past ~12 ms of simulation in one frame the rest of its game time is let go (fast-forward runs a little
+        // slower) instead of each long frame asking for more steps the next frame
+        for (let i = 0; i < steps; i++) { this.step(sim / steps); if (i > 0 && performance.now() - t0 > 12) break; }
         simMs = performance.now() - t0;
         this.pf.sim += simMs; this.pf.steps += steps;
         Input.handleGameKeys();
