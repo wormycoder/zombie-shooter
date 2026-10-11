@@ -830,6 +830,8 @@ Object.assign(MapGen, {
     const v = d > 0.55 ? (r < 0.4 ? 4 : r < 0.62 ? 0 : r < 0.8 ? 2 : 1) : (r < 0.15 ? 4 : r < 0.5 ? 0 : r < 0.75 ? 1 : r < 0.88 ? 2 : 3);
     return { t: 'bush', dir: 'S', v: v + 5 * (Trees.hash(x, y, 23) % 3), berries: v !== 4 && v !== 2 && this.treeRnd(x, y, 22) < 0.3 };
   },
+  // garden shrub variant: kind v (0 round, 1 low, 2 evergreen, 3 lilac) in one of three shapes
+  shrubV(x, y, v) { return v + 5 * (Trees.hash(x, y, 23) % 3); },
   // fallen logs and old stumps on the forest floor, or null
   deadwood(x, y, dens) {
     const r = this.treeRnd(x, y, 31);
@@ -837,13 +839,14 @@ Object.assign(MapGen, {
     if (r < dens * 0.012) return { t: 'tlog', dir: this.treeRnd(x, y, 32) < 0.5 ? 'E' : 'S', v: Trees.hash(x, y, 33) % 3 };
     return { t: 'tstump', dir: 'S', v: Trees.hash(x, y, 34) % 3 };
   },
-  // staggered rows of fruit trees on free grass
+  // staggered rows of fruit trees on free grass (apples, now and then a row of cherries)
   orchard(x0, y0, x1, y1, step) {
     for (let y = y0; y <= y1; y += step) for (let x = x0 + ((y - y0) / step % 2 ? 1 : 0); x <= x1; x += step) {
       if (!this.free(x, y)) continue;
       const f = this.w.floor[y * this.W + x];
       if (f !== FL.GRASS && f !== FL.GRASS2 && f !== FL.DIRT) continue;
-      this.w.obj[y * this.W + x] = { t: 'tree', dir: 'S', kind: 'apple', sz: Math.round((0.85 + this.treeRnd(x, y, 41) * 0.35) * 100) / 100, v: Trees.hash(x, y, 77) % Trees.NV };
+      const kind = Trees.hash(y0, (y - y0) / step | 0, 42) % 4 === 3 ? 'cherry' : 'apple';
+      this.w.obj[y * this.W + x] = { t: 'tree', dir: 'S', kind, sz: Math.round((0.85 + this.treeRnd(x, y, 41) * 0.35) * 100) / 100, v: Trees.hash(x, y, 77) % Trees.NV };
     }
   },
 });
