@@ -507,8 +507,17 @@ const Zombie = {
   // 0 = fresh .. 1 = badly decomposed (game days since death)
   rot(z) { const days = (G.time - (z.diedAt === undefined ? G.time - 2880 : z.diedAt)) / 1440; return U.clamp((days - 0.6) / 4, 0, 1); },
   // ------------------------------------------------------------------ draw
-  // pose, light level and fade a zombie is drawn with (null when it is not drawn)
+  // pose, light level and fade a zombie is drawn with (null when it is not drawn); worked out once per rendered frame
+  dim: new WeakMap(),
   drawInfo(z) {
+    const fno = Render.fno;
+    let m = this.dim.get(z);
+    if (m && m.f === fno) return m.d;
+    if (!m) this.dim.set(z, m = { f: 0, d: null });
+    m.f = fno;
+    return (m.d = this.info(z));
+  },
+  info(z) {
     let alpha = z.va;
     if (z.dead) alpha = 1;
     if (alpha < 0.02) return null;
@@ -517,7 +526,7 @@ const Zombie = {
     const rot = z.dead ? this.rot(z) : 0;
     if (rot > 0) s *= 1 - rot * 0.35;
     // animation state for Char3D (mode, prog 0..1 through it) plus the simpler fields the 2D painter reads
-    const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
+    const pose = { walk: z.ph, amp: z.amp, t: Render.tnow + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
       mode: 'loco', gait: z.speed > 2 ? 'run' : 'shamble' };
     const since = (t) => t === undefined ? 1e9 : (G.time - t) / MIN_PER_SEC;
     if (z.st === 'chase' || z.st === 'attack') {
@@ -545,7 +554,8 @@ const Zombie = {
     const [X, Y] = Render.epos(z);
     const alpha = d.alpha, rot = d.rot;
     if (!Char3D.draw(ctx, z, X, Y, d.s, alpha)) Humanoid.draw(ctx, X, Y, z.a, z.look, d.pose, d.s, alpha);
-    if (rot > 0.15 && z.dead && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
+    // (flies are sub-pixel specks when zoomed far out)
+    if (rot > 0.15 && z.dead && Render.cam.zoom > 0.8 && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
       // flies buzzing over a rotting body
       const t = performance.now() / 1000;
       ctx.fillStyle = 'rgba(10,10,10,0.85)';
