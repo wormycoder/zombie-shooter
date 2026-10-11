@@ -421,7 +421,7 @@ Object.assign(CarArt, {
   // arch (sorting it with the rest only adds cycles that can push it under the body); far-side outer passes
   // draw nothing and are dropped.
   paint(g, F, M, steer) {
-    if (Settings.v.shadows !== 0) this.drawShadow(g, F, M);
+    this.drawShadow(g, F, M);
     const parts = M.parts.slice(), outer = [];
     for (const p of this.wheelParts(M, steer)) {
       if (p.pass === 0) { parts.push(p); continue; }
@@ -487,36 +487,27 @@ Object.assign(CarArt, {
     return S;
   },
   // ---------------------------------------------------------------- sprite cache
-  // sprite resolution (Car detail): 2x, or 1x while zoomed out (Auto) or always (Low); shadows on or off
-  sc() { const d = Settings.v.carDetail, z = Render.cam.zoom * Render.dpr; return d === 2 || (d === 1 && z > 1.05) ? CA_SC : 1; },
-  sKey() { return (this.sc() === CA_SC ? '' : '|1') + (Settings.v.shadows === 0 ? '|n' : ''); },
   sprite(c, mk, bk, st) {
-    const sk = this.sKey(), key = mk + '|' + bk + st + sk;
+    const key = mk + '|' + bk + st;
     let rec = this.cache.get(key);
     if (rec) { this.cache.delete(key); this.cache.set(key, rec); return rec; }
     // per-frame budget for new sprites: past it, reuse the nearest cached heading of the same model
     const now = performance.now();
     if (now - this.bT > 12) { this.bT = now; this.bMs = 0; }
-    if (this.bMs > 5) {
-      for (let d = 1; d < CA_NB / 2; d++) for (const b2 of [bk - d, bk + d]) { const r2 = this.cache.get(mk + '|' + ((b2 + CA_NB) % CA_NB) + st + sk); if (r2) return r2; }
-      // (or this heading at the other resolution, while the zoom crosses over)
-      const r3 = this.cache.get(mk + '|' + bk + st + (sk.indexOf('|1') === 0 ? sk.slice(2) : '|1' + sk));
-      if (r3) return r3;
-    }
+    if (this.bMs > 5) for (let d = 1; d < CA_NB / 2; d++) for (const b2 of [bk - d, bk + d]) { const r2 = this.cache.get(mk + '|' + ((b2 + CA_NB) % CA_NB) + st); if (r2) return r2; }
     let M = this.models.get(mk);
     if (!M) {
       try { M = this.build(mk); } catch (e) { M = this.fallback(c, mk, e); }
       this.models.set(mk, M); this.stats.models++;
       if (this.models.size > 64) this.models.delete(this.models.keys().next().value);
     }
-    const sc = this.sc();
-    try { rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc); } catch (e) {
+    try { rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1); } catch (e) {
       M = this.fallback(c, mk, e); this.models.set(mk, M);
-      rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc);
+      rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1);
     }
     this.bMs += performance.now() - now;
     this.cache.set(key, rec); this.bytes += rec.bytes;
-    while (this.bytes > this.cap * CACHE_K() && this.cache.size > 12) {
+    while (this.bytes > this.cap && this.cache.size > 12) {
       const k0 = this.cache.keys().next().value, r0 = this.cache.get(k0);
       this.bytes -= r0.bytes * (r0.sil ? 2 : 1); this.cache.delete(k0); this.stats.evicted++;
     }
@@ -526,14 +517,13 @@ Object.assign(CarArt, {
   // turning); the render is reused while heading, state and steering stay the same
   liveSprite(c, mk, bk, st) {
     const L = this.live;
-    const sk = this.sKey();
-    if (L && L.id === c.id && L.mk === mk && L.st === st && L.sk === sk && Math.abs(U.angDiff(L.a, c.a)) < 0.003) return L.rec;
+    if (L && L.id === c.id && L.mk === mk && L.st === st && Math.abs(U.angDiff(L.a, c.a)) < 0.003) return L.rec;
     let M = this.models.get(mk);
     try {
       if (!M) { M = this.build(mk); this.models.set(mk, M); this.stats.models++; }
-      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1, this.sc(), (L && L.rec) || true);
-      rec.live = true; rec.silC = L ? L.rec.sil || L.rec.silC : null;
-      this.live = { id: c.id, mk, st, sk, a: c.a, rec };
+      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1);
+      rec.live = true;
+      this.live = { id: c.id, mk, st, a: c.a, rec };
       return rec;
     } catch (e) { return this.sprite(c, mk, bk, st); }
   },
@@ -544,13 +534,10 @@ Object.assign(CarArt, {
     if (!this.warned) { this.warned = true; console.warn('CarArt: model failed for ' + mk, e); }
     return this.build('sedan|' + (/^#[0-9a-fA-F]{6}$/.test(c.col) ? c.col : '#7a7a7a') + '|0|-|000000|0000|0|0|0000|0000||0');
   },
-  // render model M at heading a into a fresh canvas (sc: 2 or 1 px per world px) sized to its projected bounds;
-  // reuse (the driven car): true or the previous live render, whose canvas is repainted while it is big enough; new
-  // ones get room to spare, so a turn does not make a new canvas every few frames
-  render(M, a, steer, sc, reuse) {
+  // render model M at heading a into a fresh 2x canvas sized to its projected bounds
+  render(M, a, steer) {
     const t0 = performance.now();
-    sc = sc || CA_SC;
-    const F0 = this.proj(a, 0, 0, sc, M.tilt);
+    const F0 = this.proj(a, 0, 0, CA_SC, M.tilt);
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     const acc = (q) => { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; };
     const scan = (ps) => {
@@ -566,22 +553,19 @@ Object.assign(CarArt, {
     for (const f of [-M.hl - e, M.hl + e]) for (const s of [-M.hw - e, M.hw + e]) acc(F0.P(f, s, 0));
     for (const w of M.wheels) for (const f of [w.f - w.r, w.f + w.r]) for (const s of [w.s, w.s - w.side * w.w]) { acc(F0.P(f, s, 0)); acc(F0.P(f, s, w.r * 2)); }
     const pad = 4, W = Math.ceil(x1 - x0 + pad * 2), H = Math.ceil(y1 - y0 + pad * 2);
-    const rc = reuse && reuse.c, cv = rc && rc.width >= W && rc.height >= H && rc.width < W * 1.6 && rc.height < H * 1.6 ? rc : reuse ? mkCanvas(W * 1.3, H * 1.3) : mkCanvas(W, H), g = cv.getContext('2d');
-    if (cv === rc) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, cv.width, cv.height); }
+    const cv = mkCanvas(W, H), g = cv.getContext('2d');
     const ax = Math.round(-x0 + pad), ay = Math.round(-y0 + pad);
-    const F = this.proj(a, ax, ay, sc, M.tilt);
+    const F = this.proj(a, ax, ay, CA_SC, M.tilt);
     F.glass = [];
     g.lineJoin = 'round';
     this.paint(g, F, M, steer);
     const ms = performance.now() - t0;
     this.stats.sprites++; this.stats.ms += ms; if (ms > this.stats.maxMs) this.stats.maxMs = ms;
-    return { c: cv, ax, ay, sil: null, bytes: cv.width * cv.height * 4, glass: F.glass, a, M, sc };
+    return { c: cv, ax, ay, sil: null, bytes: W * H * 4, glass: F.glass, a, M };
   },
   silOf(rec) {
     if (!rec.sil) {
-      // (the live car's silhouette canvas is repainted, not made anew each frame)
-      const r0 = rec.silC, c = r0 && r0.width === rec.c.width && r0.height === rec.c.height ? r0 : mkCanvas(rec.c.width, rec.c.height), g = c.getContext('2d');
-      if (c === r0) { g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, c.width, c.height); }
+      const c = mkCanvas(rec.c.width, rec.c.height), g = c.getContext('2d');
       g.drawImage(rec.c, 0, 0);
       g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, c.width, c.height);
       rec.sil = c; if (!rec.live) this.bytes += rec.bytes;
@@ -611,7 +595,7 @@ Object.assign(CarArt, {
     const st = c.steer > 0.15 ? 2 : c.steer < -0.15 ? 0 : 1;
     const rec = G.player && G.player.inCar === c ? this.liveSprite(c, mk, bk, st) : this.sprite(c, mk, bk, st), M = rec.M;
     const X = (c.x - c.y) * HTW, Y = (c.x + c.y) * HTH;
-    const k = rec.sc || CA_SC, x0 = X - rec.ax / k, y0 = Y - rec.ay / k, w = rec.c.width / k, h = rec.c.height / k;
+    const x0 = X - rec.ax / CA_SC, y0 = Y - rec.ay / CA_SC, w = rec.c.width / CA_SC, h = rec.c.height / CA_SC;
     const lit = !!(c.engine && !c.burnt), night = 1 - U.clamp((G.light.amb - 0.25) / 0.5, 0, 1);
     const a = rec.a, ca = Math.cos(a), sa = Math.sin(a), tl = M.tilt;
     const LP = (f, sd, z) => { z -= tl[0] + tl[1] * f + tl[2] * sd; const dx = f * ca - sd * sa, dy = f * sa + sd * ca; return [X + (dx - dy) * HTW, Y + (dx + dy) * HTH - z * ZU]; };
@@ -653,9 +637,9 @@ Object.assign(CarArt, {
   },
   // warm interior light seen through the windows (doors open after dark)
   dome(ctx, rec, L, x0, y0, night) {
-    const sc = rec.sc || CA_SC, F = this.proj(rec.a, rec.ax, rec.ay, sc, rec.M.tilt), p = F.P(L.f, L.s, L.z - 0.12), r = 34 * sc;
+    const F = this.proj(rec.a, rec.ax, rec.ay, CA_SC, rec.M.tilt), p = F.P(L.f, L.s, L.z - 0.12), r = 34 * CA_SC;
     ctx.save();
-    ctx.translate(x0, y0); ctx.scale(1 / sc, 1 / sc);
+    ctx.translate(x0, y0); ctx.scale(1 / CA_SC, 1 / CA_SC);
     ctx.beginPath(); for (const pts of rec.glass) this.path(ctx, pts); ctx.clip();
     ctx.globalAlpha = 0.85 * night; ctx.drawImage(this.glow('d'), p[0] - r, p[1] - r, r * 2, r * 2);
     ctx.restore();
@@ -663,12 +647,12 @@ Object.assign(CarArt, {
   // head and shoulders of the player behind the glass
   drawDriver(ctx, c, rec, x0, y0) {
     const M = rec.M, look = Player.look();
-    const k = rec.sc || CA_SC, F = this.proj(rec.a, rec.ax, rec.ay, k, M.tilt);
+    const F = this.proj(rec.a, rec.ax, rec.ay, CA_SC, M.tilt);
     const [f, sd, z] = M.seat;
     ctx.save();
-    ctx.translate(x0, y0); ctx.scale(1 / k, 1 / k);
+    ctx.translate(x0, y0); ctx.scale(1 / CA_SC, 1 / CA_SC);
     ctx.beginPath(); for (const pts of rec.glass) this.path(ctx, pts); ctx.clip();
-    const sh = F.P(f - 0.04, sd, z), hd = F.P(f, sd, z + 0.2);
+    const sh = F.P(f - 0.04, sd, z), hd = F.P(f, sd, z + 0.2), k = CA_SC;
     ctx.fillStyle = look.jacket || look.shirt || '#4a5a6a';
     ctx.beginPath(); ctx.ellipse(sh[0], sh[1], 7.5 * k, 5 * k, 0, 0, 7); ctx.fill();
     ctx.fillStyle = look.skin || '#c8a080';

@@ -25,8 +25,6 @@ const PAL_CARPET = ['#7a3a3a', '#3a4a6a', '#5a6a4a', '#8a7a5a', '#6a5a7a', '#a08
 const PAL_TILE = ['#d8d8d0', '#c8d8e0', '#e0d0c0', '#d0e0d0', '#e8e8e8', '#c0c8c0', '#d8c8d0', '#b8c8d8'];
 const PAL_LINO = ['#c8c0a8', '#b8c0b8', '#d0c8b0', '#a8b0b8', '#c0b8a0', '#d8d0c0', '#b0a898', '#c8c8c0'];
 
-// cache size factor (Sprite cache size setting: Small / Normal / Large)
-const CACHE_K = () => [0.5, 1, 2][Settings.v.cache === undefined ? 1 : Settings.v.cache] || 1;
 function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
 function poly(g, pts, fill, stroke, lw) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
@@ -45,21 +43,19 @@ const Spr = {
   get(key, w, h, ax, ay, draw) {
     let rec = this.cache.get(key);
     if (rec) return rec;
-    const c = mkCanvas(w, h), tr = !this.noTrim && c.width * c.height >= 4000;
-    // a sprite that is cropped is painted on a CPU canvas: reading a GPU canvas back stalls the graphics pipeline
-    const g = tr ? c.getContext('2d', { willReadFrequently: true }) : c.getContext('2d');
+    const c = mkCanvas(w, h);
+    const g = c.getContext('2d');
     draw(g, ax, ay);
-    rec = (tr && this.trim(c, ax, ay)) || { c, ax, ay, sil: null };
+    rec = (!this.noTrim && this.trim(c, ax, ay)) || { c, ax, ay, sil: null };
     this.cache.set(key, rec);
     return rec;
   },
-  // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory). The result is
-  // always a new canvas (c may be a CPU canvas, which would be uploaded to the GPU again whenever it is drawn).
+  // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory)
   trim(c, ax, ay) {
     const W = c.width, H = c.height;
     if (W * H < 4000) return null;
     let d;
-    try { d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data; } catch (e) { return null; }
+    try { d = c.getContext('2d').getImageData(0, 0, W, H).data; } catch (e) { return null; }
     let x0 = W, y0 = -1, x1 = -1, y1 = -1;
     for (let y = 0; y < H; y++) {
       let row = -1, rowEnd = -1;
@@ -73,36 +69,32 @@ const Spr = {
     if (y0 < 0) return { c: mkCanvas(1, 1), ax: 0, ay: 0, sil: null };
     // one pixel of margin keeps edge antialiasing intact
     x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); x1 = Math.min(W - 1, x1 + 1); y1 = Math.min(H - 1, y1 + 1);
-    let bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-    if (bw * bh > W * H * 0.85) { x0 = 0; y0 = 0; bw = W; bh = H; }
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    if (bw * bh > W * H * 0.85) return null;
     const c2 = mkCanvas(bw, bh);
     c2.getContext('2d').drawImage(c, -x0, -y0);
     return { c: c2, ax: ax - x0, ay: ay - y0, sil: null };
   },
   draw(ctx, rec, sx, sy, s) { this.drawShaded(ctx, rec, sx - rec.ax, sy - rec.ay, s, 1); },
-  // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light). A darkened sprite comes from
-  // rec.sil, which holds the sprite and its silhouette side by side: both draws read one texture, so the graphics
-  // card gets them as one batch instead of two (outside the view cone nearly every wall and object is darkened).
+  // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light)
   drawShaded(ctx, rec, x, y, s, alpha) {
     const a = alpha === undefined ? 1 : alpha;
     if (a < 1) ctx.globalAlpha = a;
+    ctx.drawImage(rec.c, x, y);
     const dk = 1 - s;
     if (dk > 0.02) {
-      const w = rec.c.width, h = rec.c.height;
       if (!rec.sil) {
-        const c = mkCanvas(w * 2 + 2, h);
+        const c = mkCanvas(rec.c.width, rec.c.height);
         const g = c.getContext('2d');
         g.drawImage(rec.c, 0, 0);
-        g.drawImage(rec.c, w + 2, 0);
         g.globalCompositeOperation = 'source-atop';
         g.fillStyle = 'rgb(3,5,14)';
-        g.fillRect(w + 2, 0, w, h);
+        g.fillRect(0, 0, c.width, c.height);
         rec.sil = c;
       }
-      ctx.drawImage(rec.sil, 0, 0, w, h, x, y, w, h);
       ctx.globalAlpha = a * Math.min(1, dk);
-      ctx.drawImage(rec.sil, w + 2, 0, w, h, x, y, w, h);
-    } else ctx.drawImage(rec.c, x, y);
+      ctx.drawImage(rec.sil, x, y);
+    }
     ctx.globalAlpha = 1;
   },
 
@@ -305,9 +297,8 @@ const Spr = {
       this._drawWall(c.getContext('2d'), ax, ay, type, d, col, f, hz, cut, st, Facade.shash(key));
       rec = { c, ax, ay, sil: null, u: 0 };
       this.wcache.set(key, rec);
-      const cap = this.WCAP * CACHE_K();
-      if (this.wcache.size > cap) {
-        let n = this.wcache.size - (cap * 0.8 | 0);
+      if (this.wcache.size > this.WCAP) {
+        let n = this.wcache.size - (this.WCAP * 0.8 | 0);
         const old = Facade.tick - 2;
         for (const [k, r] of this.wcache) { if (n <= 0) break; if (r.u < old) { this.wcache.delete(k); n--; } }
       }
@@ -1949,10 +1940,9 @@ const Facade = {
       rec = this.buildRoof(b, sq, lf);
       this.rcache.set(key, rec);
       this.rpx += rec.c.width * rec.c.height;
-      const cap = this.RCAP * CACHE_K();
-      if (this.rpx > cap) {
+      if (this.rpx > this.RCAP) {
         const old = this.tick - 2;
-        for (const [k, r] of this.rcache) { if (this.rpx <= cap * 0.7) break; if (r.u < old) { this.rcache.delete(k); this.rpx -= r.c.width * r.c.height; } }
+        for (const [k, r] of this.rcache) { if (this.rpx <= this.RCAP * 0.7) break; if (r.u < old) { this.rcache.delete(k); this.rpx -= r.c.width * r.c.height; } }
       }
     }
     rec.u = this.tick;

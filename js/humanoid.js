@@ -41,11 +41,9 @@ const Humanoid = {
     };
     if (alpha !== undefined && alpha < 1) ctx.globalAlpha = alpha;
     // shadow
-    if (Settings.v.shadows !== 0) {
-      ctx.fillStyle = 'rgba(0,0,0,' + (0.28 * shade + 0.05).toFixed(2) + ')';
-      if (lie > 0.5) { const c = pr(0.8, 0, 0); ctx.beginPath(); ctx.ellipse(c[0], c[1], 22, 9, 0, 0, Math.PI * 2); ctx.fill(); }
-      else { ctx.beginPath(); ctx.ellipse(px, py, 10, 5, 0, 0, Math.PI * 2); ctx.fill(); }
-    }
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.28 * shade + 0.05).toFixed(2) + ')';
+    if (lie > 0.5) { const c = pr(0.8, 0, 0); ctx.beginPath(); ctx.ellipse(c[0], c[1], 22, 9, 0, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.beginPath(); ctx.ellipse(px, py, 10, 5, 0, 0, Math.PI * 2); ctx.fill(); }
 
     const cr = pose.crouch || 0;
     // limping: the bad leg takes short steps and the body dips onto it

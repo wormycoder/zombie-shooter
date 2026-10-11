@@ -1007,7 +1007,7 @@ const Vehicles = {
         tm.steam = 1;
         const [x, y] = at(T.len * 0.34, R.f(-0.25, 0.25));
         const dark = P.engine < 12;
-        this.puff({ x, y, z: T.h + 0.05, vx: vx * 0.3 + R.f(-0.2, 0.2), vy: vy * 0.3 + R.f(-0.2, 0.2), vz: R.f(0.7, 1.1), life: R.f(1.3, 2.2), max: 2.2, col: '#909090', size: R.f(2.5, 4), smoke: true, dark, rgb: dark ? null : '235,235,235', keep: true });
+        this.puff({ x, y, z: T.h + 0.05, vx: vx * 0.3 + R.f(-0.2, 0.2), vy: vy * 0.3 + R.f(-0.2, 0.2), vz: R.f(0.7, 1.1), life: R.f(1.3, 2.2), max: 2.2, col: '#909090', size: R.f(2.5, 4), smoke: true, dark, rgb: dark ? null : '235,235,235' });
       }
     }
     if (sp < 0.3 || c.burnt) { tm.wk[0] = tm.wk[1] = tm.wk[2] = tm.wk[3] = -1; return; }
@@ -1110,11 +1110,8 @@ const Vehicles = {
   },
   // ------------------------------------------------------------------ coloured smoke (exhaust, steam, dust, spray)
   pfx: [],
-  // (Ambient particles: thinned out or off, except smoke from a damaged engine, which tells you something)
   puff(o) {
     if (this.pfx.length > 480) return;
-    const am = Settings.v.ambient;
-    if (!o.keep && am < 1 && !(Math.random() < am)) return;
     o.rgb = o.rgb || (o.dark ? '38,36,34' : '150,150,150');
     o.al = o.dark ? 0.5 : o.al || 0.38;
     this.pfx.push(o);
@@ -1133,18 +1130,16 @@ const Vehicles = {
     }
     A.length = j;
   },
-  // (a disc sprite per colour drawn with an alpha: no path or colour string per puff per frame)
   drawPuffs(ctx) {
     const A = this.pfx;
     if (!A.length) return;
     const cam = Render.cam;
     for (const p of A) {
       if (Math.abs(p.x - cam.x) > 45 || Math.abs(p.y - cam.y) > 45) continue;
-      const s = Render.P(p.x, p.y, p.z), k = p.life / p.max, r = p.size;
-      ctx.globalAlpha = p.al * Math.min(1, k * 1.6) * Math.min(1, (p.max - p.life) * 8 + 0.3);
-      ctx.drawImage(Fx.disc(p.rgb), s[0] - r, s[1] - r, r * 2, r * 2);
+      const s = Render.P(p.x, p.y, p.z), k = p.life / p.max;
+      ctx.fillStyle = 'rgba(' + p.rgb + ',' + (p.al * Math.min(1, k * 1.6) * Math.min(1, (p.max - p.life) * 8 + 0.3)).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(s[0], s[1], p.size, 0, 7); ctx.fill();
     }
-    ctx.globalAlpha = 1;
   },
   // ------------------------------------------------------------------ drawing
   draw(ctx, c) {
