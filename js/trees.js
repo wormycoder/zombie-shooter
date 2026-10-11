@@ -535,7 +535,7 @@ const Trees = {
     const now = performance.now();
     this.dt = Math.min(0.1, (now - this.t0) / 1000); this.t0 = now;
     this.tick = typeof Facade !== 'undefined' ? Facade.tick : this.tick + 1; this.spent = 0;
-    this.holeN = this.holeC; this.holeC = 0;
+    this.holeN = this.holeC; this.holeC = 0; this.curN = this.curC; this.curC = 0;
     const w = G.weather || {};
     const tw = U.clamp(0.25 + (w.rain || 0) * 0.55 + (w.storm ? 0.7 : 0), 0, 1.3);
     this.wind += (tw - this.wind) * Math.min(1, this.dt * 0.5);
@@ -556,11 +556,12 @@ const Trees = {
     return Math.abs(px - bx) < m.tw && py < by && py > by + m.th;
   },
   // see-through, PZ style: every tree standing in front of the player gets a soft window erased around
-  // the player; a tree under the cursor fades as a whole. Both ease in and out per tree (fade: tile ->
-  // [hole, cursor]). In a forest a dozen trees stack over the player, and a dozen half-transparent
-  // layers add up to an opaque one, so each tree erases the N-th root of the wanted see-through
-  // (N = trees over the player last frame): the middle stays clear however dense the wood is.
-  HOLE: 84, holeN: 1, holeC: 0,
+  // the player, and every tree whose crown covers the cursor a smaller one around the cursor. Both ease
+  // in and out per tree (fade: tile -> [player, cursor]). In a forest a dozen trees stack over the
+  // spot, and a dozen half-transparent layers add up to an opaque one, so each tree erases the N-th root
+  // of the wanted see-through (N = trees over that spot last frame): the middle stays clear however
+  // dense the wood is.
+  HOLE: 84, CHOLE: 58, holeN: 1, holeC: 0, curN: 1, curC: 0,
   draw(o, x, y, X, Y, p, t, vx) {
     if (this.tick !== Facade.tick) this.frame();
     const ctx = Render.ctx, isT = o.t === 'tree';
@@ -576,7 +577,8 @@ const Trees = {
       let hole = false;
       if (p && (vx === undefined ? x : vx) + y + 1.2 > (p.x >= LV.W0 ? p.x - LV.W0 : p.x) + p.y) hole = hx + R > dx && hx - R < dx + dw && hy + R > dy && hy - R < dy + dh;
       if (hole && hx > dx && hx < dx + dw && hy > dy && hy < dy + dh) this.holeC++;
-      const cur = !hole && this.covers(rec.m || this.estM(rec), X, by, this.mx, this.my);
+      const cur = this.covers(rec.m || this.estM(rec), X, by, this.mx, this.my);
+      if (cur) this.curC++;
       const i = y * Wd.w + x, st = this.fade.get(i);
       if (hole || cur || st) {
         const e = st || [0, 0], up = this.dt * 4, dn = this.dt * 2.5;
@@ -587,23 +589,22 @@ const Trees = {
       }
     }
     const k = this.swayOn && !o.stump ? this.sway(x, y, t) : 0;
-    const ac = 1 - fc * 0.6;
-    if (fh > 0.01) {
-      // hole centre in sprite pixels (undo the sway shear and the half-size scale)
-      const S = this.holed(rec, s, (hx - k * (hy - by) - dx) / sc, (hy - dy) / sc, R / sc, fh);
-      ctx.globalAlpha = ac;
+    if (fh > 0.01 || fc > 0.01) {
+      // hole centres in sprite pixels (undo the sway shear and the half-size scale)
+      const S = this.holed(rec, s, sc, fh > 0.01 ? fh : 0, (hx - k * (hy - by) - dx) / sc, (hy - dy) / sc, R / sc,
+        fc > 0.01 ? fc : 0, (this.mx - k * (this.my - by) - dx) / sc, (this.my - dy) / sc, this.CHOLE / sc);
       if (k) ctx.transform(1, 0, k, 1, -k * by, 0);
       ctx.drawImage(S, 0, 0, rec.c.width, rec.c.height, dx, dy, dw, dh);
       if (k) ctx.transform(1, 0, -k, 1, k * by, 0);
-      ctx.globalAlpha = 1;
       return;
     }
     if (k) ctx.transform(1, 0, k, 1, -k * by, 0);
-    this.lit(ctx, rec, dx, dy, dw, dh, s, ac);
+    this.lit(ctx, rec, dx, dy, dw, dh, s, 1);
     if (k) ctx.transform(1, 0, -k, 1, k * by, 0);
   },
-  // the lit sprite composed in a scratch canvas with the soft window erased at hx, hy (sprite px)
-  holed(rec, s, hx, hy, R, fh) {
+  // the lit sprite composed in a scratch canvas with soft windows erased: around the player (f1 at
+  // x1, y1, radius r1) and around the cursor (f2 ...), all in sprite pixels
+  holed(rec, s, sc, f1, x1, y1, r1, f2, x2, y2, r2) {
     const w = rec.c.width, h = rec.c.height;
     let S = this.scr;
     if (!S || S.width < w || S.height < h) { S = this.scr = mkCanvas(Math.max(w, S ? S.width : 0, 320), Math.max(h, S ? S.height : 0, 400)); this.sg = S.getContext('2d'); }
@@ -612,9 +613,8 @@ const Trees = {
     if (dk > 0.02) { this.silOf(rec); g.drawImage(rec.sil, 0, 0); if (dk < 0.97) { g.globalAlpha = 1 - dk; g.drawImage(rec.c, 0, 0); g.globalAlpha = 1; } }
     else g.drawImage(rec.c, 0, 0);
     g.globalCompositeOperation = 'destination-out';
-    g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, this.holeN)), Math.round(fh * 8));
-    g.setTransform(R / 100, 0, 0, R * 1.1 / 100, hx, hy);
-    g.fillRect(-100, -100, 200, 200);
+    if (f1) { g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, this.holeN)), Math.round(f1 * 8)); g.setTransform(r1 / 100, 0, 0, r1 * 1.1 / 100, x1, y1); g.fillRect(-100, -100, 200, 200); }
+    if (f2) { g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, this.curN)), Math.round(f2 * 8)); g.setTransform(r2 / 100, 0, 0, r2 / 100, x2, y2); g.fillRect(-100, -100, 200, 200); }
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-over';
     return S;
