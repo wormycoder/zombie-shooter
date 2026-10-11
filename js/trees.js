@@ -483,13 +483,18 @@ const Trees = {
     const key = this.key(o, half);
     let rec = this.cache.get(key);
     if (!rec) {
-      if (half) rec = this.halve(this.sprite(o, false));
-      else {
+      if (half) {
+        // halve the real sprite, never a sibling borrowed while over budget (that one is drawn full size)
+        const f = this.sprite(o, false);
+        if (f.k !== this.key(o, false)) return f;
+        rec = this.halve(f);
+      } else {
         // over this frame's paint budget: borrow a finished sibling for now
         const lk = o.kind + this.age(o) + '|' + this.skey(o.kind), fb = this.last.get(lk);
         if (this.spent > this.BUDGET && fb && this.cache.has(fb)) { rec = this.cache.get(fb); rec.u = this.tick; return rec; }
         const t0 = performance.now();
         rec = this.build(o.kind, this.age(o), (o.v || 0) % this.NV, this.skey(o.kind));
+        rec.k = key;
         this.spent += performance.now() - t0;
         this.last.set(lk, key);
       }
