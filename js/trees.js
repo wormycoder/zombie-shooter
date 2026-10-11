@@ -14,7 +14,7 @@
 // cb crown bottom and fk fork height (fractions of H), wk trunk thickness, cr leaf cluster radius (m)
 const TREE_SP = {
   oak: { n: 'Oak', f: 'spread', H: [2.3, 4.2, 5.8, 7.0], C: [0.55, 1.25, 1.7, 2.1], cb: 0.34, fk: 0.26, wk: 1.2, lobes: [2, 4, 6, 7], bark: '#57493c', lf: '#3e5b29', sp: '#86a64e', au: ['#9a4e22', '#a8682c', '#83391f', '#a88438'], hold: 1, leaf: 3.4, cr: 0.5 },
-  maple: { n: 'Maple', f: 'round', H: [2.4, 4.4, 6.0, 7.2], C: [0.5, 1.05, 1.45, 1.8], cb: 0.3, fk: 0.3, wk: 1, lobes: [2, 4, 5, 6], bark: '#62564a', lf: '#4a7130', sp: '#9cb24e', au: ['#c3331f', '#d4661e', '#d9a228', '#a32a26'], flow: '#c0484a', leaf: 3.2, cr: 0.48 },
+  maple: { n: 'Maple', f: 'round', H: [2.4, 4.4, 6.0, 7.2], C: [0.5, 1.05, 1.45, 1.8], cb: 0.3, fk: 0.3, wk: 1, lobes: [2, 4, 5, 6], bark: '#62564a', lf: '#4a7130', sp: '#9cb24e', au: ['#c3331f', '#d4661e', '#d9a228', '#a32a26'], flow: '#c4383a', leaf: 3.2, cr: 0.48 },
   elm: { n: 'Elm', f: 'vase', H: [2.6, 4.8, 6.8, 7.8], C: [0.5, 1.2, 1.75, 2.1], cb: 0.5, fk: 0.3, wk: 1.05, lobes: [2, 4, 6, 7], bark: '#4e4237', lf: '#4d6d2f', sp: '#92ae4a', au: ['#c8a43a', '#b88f2e', '#d0b048'], leaf: 2.9, cr: 0.44 },
   birch: { n: 'Birch', f: 'oval', H: [2.6, 4.6, 6.2, 7.0], C: [0.38, 0.78, 1.0, 1.2], cb: 0.3, fk: 0.85, wk: 0.68, lobes: [2, 4, 5, 6], bark: '#e4e0d4', white: 1, lf: '#64893b', sp: '#a6c660', au: ['#e0bc36', '#d3a52c', '#e8cc50'], leaf: 2.3, airy: 1, cr: 0.33 },
   apple: { n: 'Apple', f: 'low', H: [1.8, 2.8, 3.6, 4.2], C: [0.5, 1.0, 1.4, 1.65], cb: 0.28, fk: 0.24, wk: 1.05, lobes: [2, 4, 5, 6], bark: '#5c4a3a', lf: '#4e7434', sp: '#8eae52', bloom: '#f4e6ea', fruit: '#b8302a', au: ['#b09a3a', '#a8822e'], leaf: 3.0, cr: 0.42 },
@@ -229,7 +229,7 @@ const Trees = {
     if (s0 === 'p') {
       if (sp.bloom) return q < 0.82 ? (q < 0.12 ? sp.sp : sp.bloom) : null;
       if (q > 0.85) return null;
-      return sp.flow && q < 0.18 ? Col.mix(sp.flow, sp.sp, 0.55) : Col.mix(sp.sp, '#c8d888', q * 0.3);
+      return Col.mix(sp.sp, '#c8d888', q * 0.3);
     }
     if (s0 === 'y') {
       // outer and upper clusters turn first
@@ -440,6 +440,8 @@ const Trees = {
     for (const it of items) {
       if (it.s) {
         const s = it.s, a = P(s[0], s[1], s[2]), b = P(s[3], s[4], s[5]);
+        // in leaf the outer branches stop inside the foliage instead of poking out of the crown
+        if (s[8] === 2 && !bare && !sp.ev) { b[0] = U.lerp(a[0], b[0], 0.72); b[1] = U.lerp(a[1], b[1], 0.72); }
         const lit = s[8] === 0 ? 1 : 0.9 - Math.max(0, (crownTop - s[5]) / (crownTop + 0.1)) * 0.2;
         this.limb(g, a, b, s[6] * 45, s[7] * 45, s[8] && sp.white ? '#5c5048' : bark, lit * (bare ? 1 : 0.92), snow && (bare || sp.f === 'dead'), s[8] === 0 || s[6] > 0.09 ? white : '');
         continue;
@@ -456,6 +458,8 @@ const Trees = {
       this.cluster(g, p[0], p[1], r, col, tn, cr, leaf * (s0 === 'p' && !sp.bloom ? 0.8 : 1), ck, sn);
       // fruit / blossom specks
       if (sp.fruit && (st[0] === 'f' || s0 === 'y') && c.q < 0.6) for (let k = 0; k < 3; k++) { g.fillStyle = this.tone(sp.fruit, tn * 1.05); g.fillRect(p[0] + cr.f(-r, r) * 0.6, p[1] + cr.f(-r, r) * 0.5, 2, 2); }
+      // maple: a haze of small red flowers among the young leaves
+      if (sp.flow && s0 === 'p' && c.q < 0.55) { g.fillStyle = this.tone(sp.flow, tn * 1.05); for (let k = 0; k < 5; k++) g.fillRect(p[0] + cr.f(-r, r) * 0.7, p[1] + cr.f(-r, r * 0.6) * 0.7, 1.5, 1.5); }
       if (sp.ev && s0 === 'p' && c.tip !== false && c.q < 0.7) { g.fillStyle = this.tone(sp.sp, tn * 1.15); for (let k = 0; k < 4; k++) g.fillRect(p[0] + cr.f(-r, r) * 0.8, p[1] + cr.f(-r * 0.6, r * 0.3), 1.5, 1.5); }
     }
     return pl;
