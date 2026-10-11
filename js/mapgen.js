@@ -807,8 +807,8 @@ const MapGen = {
     for (const [x, y] of yardTiles) {
       const nearHouse = DIR8.some(([dx, dy]) => World.room(x + dx, y + dy) >= 0);
       if (bins && nearHouse && this.w.floor[y * this.W + x] !== FL.SIDEWALK) { this.put(x, y, 'trash', 'S'); bins--; continue; }
-      if (trees && !nearHouse && r.chance(0.5)) { this.put(x, y, 'tree', 'S', { kind: r.pick(['oak', 'maple', 'birch', 'pine']), sz: r.f(0.8, 1.15) }); trees--; continue; }
-      if (bushes && nearHouse && r.chance(0.4)) { this.put(x, y, 'bush', 'S', { v: r.int(0, 2) }); bushes--; continue; }
+      if (trees && !nearHouse && r.chance(0.5)) { this.put(x, y, 'tree', 'S', this.tree(x, y, r.f(0.8, 1.15), 0, r.pick(['oak', 'maple', 'birch', 'pine']))); trees--; continue; }
+      if (bushes && nearHouse && r.chance(0.4)) { this.put(x, y, 'bush', 'S', { v: this.shrubV(x, y, r.int(0, 3)) }); bushes--; continue; }
     }
     // occasional BBQ / garden plots in back yards
     if (r.chance(0.15)) {
@@ -1170,8 +1170,8 @@ const MapGen = {
     for (let k = 0; k < 40; k++) {
       const x = r.int(x0, x1), y = r.int(y0, y1);
       if (!this.free(x, y) || this.w.floor[y * this.W + x] !== FL.GRASS && this.w.floor[y * this.W + x] !== FL.GRASS2) continue;
-      if (r.chance(0.6)) this.put(x, y, 'tree', 'S', { kind: r.pick(['oak', 'maple', 'birch', 'pine']), sz: r.f(0.9, 1.3) });
-      else this.put(x, y, 'bush', 'S', { v: r.int(0, 2) });
+      if (r.chance(0.6)) this.put(x, y, 'tree', 'S', this.tree(x, y, r.f(0.9, 1.3), 0, r.pick(['oak', 'maple', 'birch', 'pine'])));
+      else this.put(x, y, 'bush', 'S', { v: this.shrubV(x, y, r.int(0, 3)) });
     }
     for (let t = x0 + 2; t <= x1 - 2; t += 4) { if (this.free(t, cy - 1)) this.put(t, cy - 1, 'bench', 'S'); if (this.free(t, cy + 2)) this.put(t, cy + 2, 'bench', 'N'); }
     for (let t = y0 + 2; t <= y1 - 2; t += 4) { if (this.free(cx - 1, t)) this.put(cx - 1, t, 'bench', 'E'); if (this.free(cx + 2, t)) this.put(cx + 2, t, 'bench', 'W'); }
@@ -1210,7 +1210,7 @@ const MapGen = {
     // playground / field
     this.fill(x0, y0 + 17, x1, y1, FL.GRASS2, 1);
     this.fenceLine(x0, y0 + 17, bw + 2, 0, WT.CHAIN, 0.1);
-    for (let k = 0; k < 5; k++) { const x = r.int(x0, x1), y = r.int(y0 + 18, y1); if (this.free(x, y)) this.put(x, y, 'tree', 'S', { kind: 'oak', sz: 1.1 }); }
+    for (let k = 0; k < 5; k++) { const x = r.int(x0, x1), y = r.int(y0 + 18, y1); if (this.free(x, y)) this.put(x, y, 'tree', 'S', this.tree(x, y, 1.1, 0, 'oak')); }
     this.fill(x0, y0, x1, y0 + 1, FL.CONCRETE, 0);
     this.w.labels.push({ x: (x0 + x1) / 2, y: y0 + 8, text: 'Elementary School' });
   },
@@ -1233,7 +1233,7 @@ const MapGen = {
     this.place(nave, 'shelf');
     // graveyard
     for (let y = y0 + 2; y <= y1 - 1; y += 2) for (let x = x0 + 13; x <= x1 - 1; x += 2) if (this.free(x, y) && r.chance(0.8)) this.put(x, y, 'grave', 'S', { v: r.int(0, 2) });
-    for (let k = 0; k < 3; k++) { const x = r.int(x0 + 12, x1), y = r.int(y0, y1); if (this.free(x, y)) this.put(x, y, 'tree', 'S', { kind: 'pine', sz: 1.2 }); }
+    for (let k = 0; k < 3; k++) { const x = r.int(x0 + 12, x1), y = r.int(y0, y1); if (this.free(x, y)) this.put(x, y, 'tree', 'S', this.tree(x, y, 1.2, 0, 'cedar')); }
     this.fenceLine(x0 + 12, y0, x1 - x0 - 11, 0, WT.PICKET, 0.1);
     this.w.labels.push({ x: x0 + 6, y: y0 + 6, text: 'Church' });
   },
@@ -1303,6 +1303,7 @@ const MapGen = {
     };
     field(6, 152, 22, 168); field(6, 176, 22, 196); field(6, 204, 22, 228); field(33, 186, 41, 214);
     this.w.labels.push({ x: 14, y: 180, text: 'Farmland' });
+    this.orchard(4, 141, 25, 149, 3);
     // --- cabins
     this.cabin(13, 18, 7, 6, 'S');
     this.cabin(213, 56, 7, 6, 'W');
@@ -1355,6 +1356,7 @@ const MapGen = {
     }
     this.fenceLine(87, 257, 43, 0, WT.PICKET, 0.04); this.fenceLine(87, 297, 43, 0, WT.PICKET, 0.04);
     this.w.labels.push({ x: 108, y: 276, text: 'McCoy Farm' });
+    this.orchard(86, 237, 96, 251, 3);
     this.w.zones.push({ x0: 84, y0: 236, x1: 131, y1: 300, n: 12 });
     // --- gas station where the Millbrook road meets the highway
     this.fill(304, 92, 326, 101, FL.CONCRETE, 1);
@@ -1397,12 +1399,10 @@ const MapGen = {
       const n = this.nC(x / 22, y / 22, 3);
       const dens = wild * U.clamp((n - 0.32) * 2.6, 0, 1);
       if (dens > 0.35) this.sf(x, y, FL.FOREST, r.int(0, 3));
-      if (r.next() < dens * 0.45) {
-        const pine = this.nB(x / 40 + 9, y / 40, 2) > 0.5;
-        this.w.obj[i] = { t: 'tree', dir: 'S', kind: pine ? 'pine' : r.pick(['oak', 'maple', 'birch', 'oak']), sz: r.f(0.85, 1.35) };
-      } else if (r.next() < dens * 0.12 + 0.004) {
-        this.w.obj[i] = { t: 'bush', dir: 'S', v: r.int(0, 2), berries: r.chance(0.25) };
-      }
+      // species, size, shrubs and deadwood by biome: MapGen.tree / shrub / deadwood (trees.js)
+      if (r.next() < dens * 0.45) this.w.obj[i] = this.tree(x, y, 0, dens);
+      else if (r.next() < dens * 0.12 + 0.004) this.w.obj[i] = this.shrub(x, y, dens);
+      else if (dens > 0.2) this.w.obj[i] = this.deadwood(x, y, dens);
     }
   },
   finalize() {
