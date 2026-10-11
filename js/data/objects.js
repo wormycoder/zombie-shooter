@@ -58,9 +58,6 @@ const OBJ = {
   stairtop: { n: 'Stairs', solid: false, h: 0.3 },
   ash: { n: 'Burnt Remains', solid: false, h: 0.35 },
   trap: { n: 'Trap', solid: false, h: 0.45 },
-  // forest floor deadwood (art in trees.js)
-  tstump: { n: 'Tree Stump', solid: 'circle', rad: 0.2, h: 0.45, fuel: 30 },
-  tlog: { n: 'Fallen Log', solid: true, h: 0.5, fuel: 45, burnGone: true },
 };
 
 // Furniture that can be picked up and carried: weight in kg. Two-tile pieces and how their 2nd tile sits.

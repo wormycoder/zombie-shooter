@@ -1,6 +1,6 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Procedural sprite generation & caching (floors, walls, furniture; trees in trees.js)
+// Procedural sprite generation & caching (floors, walls, furniture, trees)
 // ---------------------------------------------------------------------------
 const isoP = (ax, ay, u, v, z) => [ax + (u - v) * HTW, ay + (u + v) * HTH - (z || 0) * ZU];
 const FACE_S = 0.84, FACE_E = 0.68;
@@ -310,19 +310,21 @@ const Spr = {
 
   // ------------------------------------------------------------ furniture / objects
   obj(o) {
-    // trees have their own sprite cache (trees.js)
-    if (o.t === 'tree') return Trees.sprite(o);
     const d = OBJ[o.t];
     let key = 'o' + o.t + '|' + o.dir + '|' + (o.part === undefined ? '' : o.part) + '|' + (o.col || '') + '|' + (o.kind || '') + '|' + (o.v === undefined ? '' : o.v);
+    if (o.t === 'tree') key += '|' + Math.round((o.sz || 1) * 10) + (o.stump ? 's' : '') + (o.burnt ? 'x' : '') + '|' + (o.kind === 'pine' ? '' : Season.tree) + (Season.snow > 0.3 ? 'S' : '');
+    if (o.t === 'bush') key += '|' + Season.tree + (Season.snow > 0.3 ? 'S' : '');
     if (o.t === 'trap') key += '|' + (o.bait ? 'b' : '') + (o.caught || '');
     if (o.t === 'crop') key = 'ocrop|' + o.crop + '|' + o.stage + '|' + (o.dead ? 1 : 0) + (o.seed ? 'x' : '');
     if (o.t === 'campfire') key += '|' + (o.lit ? 1 : 0);
     if (o.t === 'barrel') key += '|' + Math.round((o.water || 0) * 4);
+    if (o.t === 'bush') key += '|' + (o.berries ? 1 : 0);
     if (o.t === 'hay') key += o.sandbag ? 's' : '';
     // optional per-type cache-key extension: ObjArt.k_<type>(o) -> string
     const kf = ObjArt['k_' + o.t];
     if (kf) key += '|' + kf.call(ObjArt, o);
     let w = 110, h = (d.h + 1.6) * ZU + 30, ax = 55, ay = (d.h + 0.6) * ZU + 14;
+    if (o.t === 'tree') { w = 200; h = 260; ax = 100; ay = 220; }
     if (o.t === 'lamppost') { w = 110; h = 200; ax = 55; ay = 170; }
     // optional canvas override for big sprites: OBJ[t].spr = { w, h, ax, ay }
     if (d.spr) { w = d.spr.w; h = d.spr.h; ax = d.spr.ax; ay = d.spr.ay; }
@@ -719,6 +721,89 @@ const ObjArt = {
   d_mailbox() {
     line(this.g, this.P(0.5, 0.5, 0), this.P(0.5, 0.5, 1.0), '#5a4030', 3);
     this.box(0.35, 0.4, 1.0, 0.65, 0.6, 1.22, '#4a5a7a');
+  },
+  d_tree(o) {
+    const g = this.g, sz = o.sz || 1;
+    const rng = new RNG((o.kind || 'oak').length * 101 + Math.round(sz * 100));
+    const base = this.P(0.5, 0.5, 0);
+    const snow = Season.snow > 0.3;
+    if (o.stump) {
+      this.box(0.38, 0.38, 0, 0.62, 0.62, 0.3, o.burnt ? '#2a2420' : '#6a4a2e');
+      if (snow) poly(g, [this.P(0.38, 0.38, 0.31), this.P(0.62, 0.38, 0.31), this.P(0.62, 0.62, 0.31), this.P(0.38, 0.62, 0.31)], '#eef2f6');
+      return;
+    }
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.ellipse(base[0] + 6, base[1] + 2, 34 * sz, 15 * sz, 0, 0, Math.PI * 2); g.fill();
+    if (o.kind === 'pine') {
+      const trunkTop = this.P(0.5, 0.5, 1.0);
+      line(g, base, trunkTop, '#5a3a22', 6 * sz);
+      for (let k = 0; k < 4; k++) {
+        const z0 = 0.6 + k * 0.85 * sz, z1 = z0 + 1.5 * sz;
+        const w = (36 - k * 7) * sz;
+        const p0 = this.P(0.5, 0.5, z0), p1 = this.P(0.5, 0.5, z1);
+        const col = ['#1e4a2a', '#24502e', '#2a5834', '#30603a'][k];
+        poly(g, [[p0[0] - w, p0[1]], [p1[0], p1[1]], [p0[0] + w, p0[1]], [p0[0], p0[1] + w * 0.25]], col);
+        poly(g, [[p0[0], p0[1] + w * 0.25], [p1[0], p1[1]], [p0[0] + w, p0[1]]], 'rgba(0,0,0,0.18)');
+        if (snow) poly(g, [[p0[0] - w * 0.55, U.lerp(p0[1], p1[1], 0.42)], [p1[0], p1[1]], [p0[0] + w * 0.3, U.lerp(p0[1], p1[1], 0.5)], [p0[0] - w * 0.1, U.lerp(p0[1], p1[1], 0.3)]], 'rgba(238,242,246,0.85)');
+      }
+      return;
+    }
+    const tr = o.kind === 'birch' ? '#d8d4c8' : '#5a3e28';
+    const top = this.P(0.5, 0.5, 2.0 * sz);
+    line(g, base, top, tr, 7 * sz);
+    if (o.kind === 'birch') for (let k = 0; k < 6; k++) { const p = this.P(0.5, 0.5, 0.3 + k * 0.3); g.fillStyle = '#303030'; g.fillRect(p[0] - 2, p[1], 3, 1); }
+    line(g, this.P(0.5, 0.5, 1.4 * sz), [top[0] - 16 * sz, top[1] - 6 * sz], tr, 3 * sz);
+    line(g, this.P(0.5, 0.5, 1.6 * sz), [top[0] + 14 * sz, top[1] - 8 * sz], tr, 3 * sz);
+    const st = Season.tree;
+    const cz = this.P(0.5, 0.5, 2.9 * sz);
+    if (st === 'b') {
+      // bare winter branches
+      for (let k = 0; k < 9; k++) {
+        const a = rng.f(Math.PI * 1.05, Math.PI * 1.95), l = rng.f(14, 30) * sz;
+        const s0 = this.P(0.5, 0.5, rng.f(1.5, 2.6) * sz);
+        const e = [s0[0] + Math.cos(a) * l, s0[1] + Math.sin(a) * l * 0.9 - 8 * sz];
+        line(g, s0, e, tr, rng.f(1.5, 2.5) * sz);
+        for (let j = 0; j < 3; j++) { const q = rng.f(0.4, 1), b0 = [U.lerp(s0[0], e[0], q), U.lerp(s0[1], e[1], q)]; line(g, b0, [b0[0] + rng.f(-9, 9) * sz, b0[1] - rng.f(4, 10) * sz], tr, 1); }
+        if (snow) { g.fillStyle = 'rgba(238,242,246,0.9)'; g.fillRect(e[0] - 3, e[1] - 1, 6, 2); }
+      }
+      return;
+    }
+    const cols = Season.leafCols(o.kind, st) || (o.kind === 'maple' ? ['#3a6a2a', '#447832', '#4e8438', '#2f5a24'] : o.kind === 'birch' ? ['#5a8a3a', '#6a9a44', '#4e7e34', '#76a650'] : ['#2e5626', '#36622c', '#3e6e32', '#284c22']);
+    if (st === 's' || st === 'a') {
+      // fallen leaves under the tree
+      for (let k = 0; k < (st === 's' ? 26 : 12); k++) { const p = this.P(0.5 + rng.f(-0.9, 0.9), 0.5 + rng.f(-0.9, 0.9), 0); g.fillStyle = cols[k % 4]; g.fillRect(p[0], p[1], 3, 2); }
+    }
+    const nBlobs = st === 's' ? 6 : st === 'p' ? 9 : 13, rMul = st === 's' ? 0.7 : st === 'p' ? 0.8 : 1;
+    if (st === 's') for (let k = 0; k < 5; k++) { const a = rng.f(Math.PI * 1.1, Math.PI * 1.9), l = rng.f(14, 26) * sz, s0 = this.P(0.5, 0.5, 2.0 * sz); line(g, s0, [s0[0] + Math.cos(a) * l, s0[1] + Math.sin(a) * l - 6], tr, 2 * sz); }
+    for (let k = 0; k < nBlobs; k++) {
+      const a = rng.f(0, Math.PI * 2), r = rng.f(0, 24) * sz;
+      const x = cz[0] + Math.cos(a) * r * 1.2, y = cz[1] + Math.sin(a) * r * 0.7 - rng.f(0, 10) * sz;
+      const rad = rng.f(13, 21) * sz * rMul;
+      g.fillStyle = cols[k % 4];
+      g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+    }
+    for (let k = 0; k < 8; k++) {
+      const a = rng.f(Math.PI * 1.1, Math.PI * 1.9), r = rng.f(10, 26) * sz;
+      g.fillStyle = 'rgba(200,230,140,0.12)';
+      g.beginPath(); g.arc(cz[0] + Math.cos(a) * r, cz[1] + Math.sin(a) * r * 0.6 - 8, rng.f(6, 11) * sz, 0, Math.PI * 2); g.fill();
+    }
+    if (st === 'p' && (o.kind === 'maple' || rng.chance(0.3))) for (let k = 0; k < 14; k++) { g.fillStyle = rng.chance(0.5) ? '#f4e8f0' : '#f0c8d8'; g.fillRect(cz[0] + rng.f(-24, 24) * sz, cz[1] + rng.f(-20, 10) * sz, 2, 2); }
+    if (snow) for (let k = 0; k < 6; k++) { g.fillStyle = 'rgba(238,242,246,0.8)'; g.beginPath(); g.ellipse(cz[0] + rng.f(-18, 18) * sz, cz[1] - rng.f(8, 22) * sz, rng.f(6, 10) * sz, 3 * sz, 0, 0, 7); g.fill(); }
+  },
+  d_bush(o) {
+    const g = this.g;
+    const rng = new RNG((o.v || 0) * 37 + 11);
+    const c = this.P(0.5, 0.5, 0.3);
+    g.fillStyle = 'rgba(0,0,0,0.2)'; g.beginPath(); g.ellipse(c[0] + 3, c[1] + 10, 18, 7, 0, 0, Math.PI * 2); g.fill();
+    const st = Season.tree;
+    const bc = st === 'b' ? null : Season.leafCols('oak', st === 'y' || st === 'a' || st === 's' ? st : 'g') || ['#2e5a26', '#3a6a2e', '#447634', '#2a5022'];
+    if (!bc) {
+      for (let k = 0; k < 12; k++) { const a = rng.f(Math.PI * 1.0, Math.PI * 2.0), l = rng.f(6, 14); line(g, [c[0], c[1] + 6], [c[0] + Math.cos(a) * l, c[1] + 6 + Math.sin(a) * l], '#5a4430', 1.2); }
+    } else for (let k = 0; k < (st === 's' ? 4 : 7); k++) {
+      g.fillStyle = bc[k % 4];
+      g.beginPath(); g.arc(c[0] + rng.f(-12, 12), c[1] + rng.f(-6, 6), rng.f(7, 11), 0, Math.PI * 2); g.fill();
+    }
+    if (Season.snow > 0.3) for (let k = 0; k < 4; k++) { g.fillStyle = 'rgba(238,242,246,0.85)'; g.beginPath(); g.ellipse(c[0] + rng.f(-10, 10), c[1] - rng.f(2, 8), rng.f(5, 8), 2.5, 0, 0, 7); g.fill(); }
+    if (o.berries) for (let k = 0; k < 8; k++) { g.fillStyle = '#5a1a6a'; g.fillRect(c[0] + rng.f(-12, 12), c[1] + rng.f(-8, 6), 2, 2); }
   },
   d_lamppost() {
     const g = this.g;

@@ -1397,10 +1397,12 @@ const MapGen = {
       const n = this.nC(x / 22, y / 22, 3);
       const dens = wild * U.clamp((n - 0.32) * 2.6, 0, 1);
       if (dens > 0.35) this.sf(x, y, FL.FOREST, r.int(0, 3));
-      // species, size, shrubs and deadwood by biome: MapGen.tree / shrub / deadwood (trees.js)
-      if (r.next() < dens * 0.45) this.w.obj[i] = this.tree(x, y, 0, dens);
-      else if (r.next() < dens * 0.12 + 0.004) this.w.obj[i] = this.shrub(x, y, dens);
-      else if (dens > 0.2) this.w.obj[i] = this.deadwood(x, y, dens);
+      if (r.next() < dens * 0.45) {
+        const pine = this.nB(x / 40 + 9, y / 40, 2) > 0.5;
+        this.w.obj[i] = { t: 'tree', dir: 'S', kind: pine ? 'pine' : r.pick(['oak', 'maple', 'birch', 'oak']), sz: r.f(0.85, 1.35) };
+      } else if (r.next() < dens * 0.12 + 0.004) {
+        this.w.obj[i] = { t: 'bush', dir: 'S', v: r.int(0, 2), berries: r.chance(0.25) };
+      }
     }
   },
   finalize() {
