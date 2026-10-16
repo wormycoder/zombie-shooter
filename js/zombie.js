@@ -194,6 +194,24 @@ const Zombie = {
       const idx = G.zombies.findIndex(z => z.dead && U.dist(z.x, z.y, px, py) > 40);
       if (idx >= 0) G.zombies.splice(idx, 1);
     }
+    if (Settings.v.corpses > 0 && tick % 15 === 7) this.corpseLimit(Settings.v.corpses, px, py);
+  },
+  // Corpse limit setting: past it, the oldest bodies out of sight (12+ tiles away, not visible) decay away and leave
+  // what they carried on the ground; at most 20 per pass
+  corpseLimit(max, px, py) {
+    let n = 0;
+    const C = [];
+    for (const z of G.zombies) {
+      if (!z.dead) continue;
+      n++;
+      if (World.lvDist(z.x, z.y, px, py) > 12 && !World.isVis(Math.floor(z.x), Math.floor(z.y))) C.push(z);
+    }
+    if (n <= max || !C.length) return;
+    C.sort((a, b) => (a.diedAt === undefined ? -1e9 : a.diedAt) - (b.diedAt === undefined ? -1e9 : b.diedAt));
+    const gone = new Set(C.slice(0, Math.min(20, n - max)));
+    for (const z of gone) if (z.loot) for (const it of z.loot) World.dropItem(z.x, z.y, it);
+    G.zombies = G.zombies.filter(z => !gone.has(z));
+    this.rebuildGrid();
   },
   farUpdate(z, dt) {
     if (z.st === 'investigate') {
@@ -507,8 +525,17 @@ const Zombie = {
   // 0 = fresh .. 1 = badly decomposed (game days since death)
   rot(z) { const days = (G.time - (z.diedAt === undefined ? G.time - 2880 : z.diedAt)) / 1440; return U.clamp((days - 0.6) / 4, 0, 1); },
   // ------------------------------------------------------------------ draw
-  // pose, light level and fade a zombie is drawn with (null when it is not drawn)
+  // pose, light level and fade a zombie is drawn with (null when it is not drawn); worked out once per rendered frame
+  dim: new WeakMap(),
   drawInfo(z) {
+    const fno = Render.fno;
+    let m = this.dim.get(z);
+    if (m && m.f === fno) return m.d;
+    if (!m) this.dim.set(z, m = { f: 0, d: null, dead: null });
+    m.f = fno;
+    return (m.d = this.info(z, m));
+  },
+  info(z, m) {
     let alpha = z.va;
     if (z.dead) alpha = 1;
     if (alpha < 0.02) return null;
@@ -516,8 +543,11 @@ const Zombie = {
     let s = Math.max(0.12, Render.shadeSmooth(z.x, z.y));
     const rot = z.dead ? this.rot(z) : 0;
     if (rot > 0) s *= 1 - rot * 0.35;
+    // a settled body keeps its pose and result objects: only light and decay change
+    const D0 = m && m.dead;
+    if (D0 && z.dead && !z.fake && D0.pose.lieDir === z.lieDir) { D0.s = s; D0.rot = rot; return D0; }
     // animation state for Char3D (mode, prog 0..1 through it) plus the simpler fields the 2D painter reads
-    const pose = { walk: z.ph, amp: z.amp, t: performance.now() / 1000 + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
+    const pose = { walk: z.ph, amp: z.amp, t: Render.tnow + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
       mode: 'loco', gait: z.speed > 2 ? 'run' : 'shamble' };
     const since = (t) => t === undefined ? 1e9 : (G.time - t) / MIN_PER_SEC;
     if (z.st === 'chase' || z.st === 'attack') {
@@ -536,7 +566,9 @@ const Zombie = {
     else if (z.st === 'getup') { pose.mode = 'getup'; pose.prog = U.clamp((z.getT || 0) / this.GETUP, 0, 1); }
     else if (z.crawl) pose.mode = 'crawl';
     if (z.crawl && !z.dead && z.st !== 'down') { pose.lie = 1; pose.lieDir = -1; pose.arms = 'zombie'; }
-    return { pose, s, alpha, rot };
+    const res = { pose, s, alpha, rot };
+    if (m) m.dead = z.dead && !z.fake && pose.prog === 1 ? res : null;
+    return res;
   },
   draw(ctx, z, flat) {
     void flat;
@@ -545,11 +577,13 @@ const Zombie = {
     const [X, Y] = Render.epos(z);
     const alpha = d.alpha, rot = d.rot;
     if (!Char3D.draw(ctx, z, X, Y, d.s, alpha)) Humanoid.draw(ctx, X, Y, z.a, z.look, d.pose, d.s, alpha);
-    if (rot > 0.15 && z.dead && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
+    // (flies are sub-pixel specks when zoomed far out)
+    const amb = Settings.v.ambient;
+    if (rot > 0.15 && z.dead && amb > 0 && Render.cam.zoom > 0.8 && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {
       // flies buzzing over a rotting body
-      const t = performance.now() / 1000;
+      const t = Render.tnow;
       ctx.fillStyle = 'rgba(10,10,10,0.85)';
-      const n = 2 + Math.round(rot * 5);
+      const n = Math.round((2 + rot * 5) * amb);
       for (let k = 0; k < n; k++) {
         const a = t * (2.3 + k * 0.7) + k * 2.1 + z.id;
         ctx.fillRect(X + 10 + Math.cos(a) * (6 + k * 2) + Math.sin(a * 2.7) * 3, Y - 6 + Math.sin(a * 1.3) * 5 - (k % 3) * 3, 1.5, 1.5);

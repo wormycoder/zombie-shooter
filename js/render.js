@@ -96,10 +96,14 @@ const Render = {
   },
 
   // ------------------------------------------------------------------ frame
+  fno: 0, tnow: 0,
   frame(dt) {
     const w = Wd, ctx = this.ctx, cam = this.cam, p = G.player;
     if (!w) return;
+    this.fno++; this.tnow = performance.now() / 1000;
     const W0 = LV.W0, HH = WALL_H;
+    // the player's tile (visual x): objects within reach have their sprite looked up every frame
+    this.npx = p ? Math.floor(vxOf(p.x)) : -99; this.npy = p ? Math.floor(p.y) : -99;
     cam.zoom += (cam.tz - cam.zoom) * Math.min(1, dt * 10);
     const z = cam.zoom, dpr = this.dpr;
     this.camIX = (cam.x - cam.y) * HTW;
@@ -165,12 +169,13 @@ const Render = {
     ctx.globalAlpha = 1;
     // ground-level overlays from other modules (tyre marks etc.), drawn under entities
     for (const fn of FLOOR_HOOKS) fn(ctx, minX, minY, maxX, maxY);
-    // floor items
-    for (const [i, arr] of w.items) {
-      const x = i % W_, y = (i / W_) | 0;
-      if (x < minX || x > maxX || y < minY || y > maxY) continue;
-      this.drawItems(ctx, x, y, arr, 0);
-    }
+    // floor items (forEach: no entry arrays)
+    this.itemArgs[0] = ctx; this.itemArgs[1] = minX; this.itemArgs[2] = minY; this.itemArgs[3] = maxX; this.itemArgs[4] = maxY;
+    w.items.forEach(this.itemFn || (this.itemFn = (arr, i) => {
+      const A = this.itemArgs, W1 = Wd.w, x = i % W1, y = (i / W1) | 0;
+      if (x < A[1] || x > A[3] || y < A[2] || y > A[4]) return;
+      this.drawItems(A[0], x, y, arr, 0);
+    }));
     // corpses & downed bodies (flat things)
     const flat1 = new Map();
     for (const zb of G.zombies) {
@@ -186,20 +191,21 @@ const Render = {
     // ---------------- light overlay on floors
     this.drawLightOverlay();
     // ---------------- main pass
-    const buckets = new Map();
-    const addB = (x, y, e, k) => { const key = Math.floor(y) * W_ + Math.floor(x); let a = buckets.get(key); if (!a) { a = []; buckets.set(key, a); } a.push([k, e]); };
-    if (p && !p.dead && !p.inCar) addB(p.x, p.y, p, 'p');
-    if (G.corpse && p && p.dead && p.x >= W0) addB(p.x, p.y, p, 'p');
+    // what stands on each tile of the view: linked lists in typed arrays, in depth order within a tile
+    this.bkReset(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    if (p && !p.dead && !p.inCar) this.bkAdd(p, 0);
+    if (G.corpse && p && p.dead && p.x >= W0) this.bkAdd(p, 0);
     for (const zb of G.zombies) {
       if (zb.dead && (zb.lie || 0) >= 0.99) continue;
       const ex = zb.x >= W0 ? zb.x - W0 : zb.x;
       if (ex < minX - 2 || ex > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
-      addB(zb.x, zb.y, zb, 'z');
+      this.bkAdd(zb, 1);
     }
     for (const c of G.cars) {
       if (c.x < minX - 3 || c.x > maxX + 3 || c.y < minY - 3 || c.y > maxY + 3) continue;
-      addB(c.x, c.y, c, 'c');
+      this.bkAdd(c, 2);
     }
+    const BH = this.bkH, BH1 = this.bkH1, BN = this.bkN, BE = this.bkE, BK = this.bkK, BVW = this.bvw;
     // buildings roofs by diagonal
     const roofs = new Map();
     for (const b of w.buildings) {
@@ -236,47 +242,47 @@ const Render = {
       let a = roofFire.get(bid); if (!a) { a = []; roofFire.set(bid, a); }
       if (a.length < 24) a.push([i % W_ >= W0 ? i % W_ - W0 : i % W_, (i / W_) | 0, e, i]);
     }
-    const dMin = minX + minY, dMax = maxX + maxY;
+    const dMin = minX + minY, dMax = maxX + maxY, WN = w.wallN, WW = w.wallW, OB = w.obj;
+    // the columns of a diagonal that can be on screen (X = (2x - d) * HTW within L - 110 .. Rr + 110), a tile of slack
+    const xl = (L - 110) / HTW, xr = (Rr + 110) / HTW;
     for (let d = dMin; d <= dMax; d++) {
-      const xa = Math.max(minX, d - maxY), xb = Math.min(maxX, d - minY);
+      const xa = Math.max(minX, d - maxY, Math.floor((d + xl) / 2) - 1), xb = Math.min(maxX, d - minY, Math.ceil((d + xr) / 2) + 1);
+      const Yd = d * HTH, rowG = Yd >= T - 40 && Yd <= B + 280;
       // ---- ground level
-      for (let x = xa; x <= xb; x++) {
+      if (rowG) for (let x = xa; x <= xb; x++) {
         const y = d - x;
-        const X = (x - y) * HTW, Y = (x + y) * HTH;
-        if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 280) continue;
+        const X = (x - y) * HTW, Y = Yd;
+        if (X < L - 110 || X > Rr + 110) continue;
         const i = y * W_ + x;
         const inOpen = openB && x >= openB.x0 && x <= openB.x1 && y >= openB.y0 && y <= openB.y1;
-        const bk = buckets.get(i);
+        let bk = BH[(y - minY) * BVW + x - minX];
         if (inOpen) {
           if (!see.has(i)) continue;
-          if (w.wallN[i] || w.wallW[i] || w.obj[i] || (FM && FM.has(i))) {
+          if (WN[i] || WW[i] || OB[i] || (FM && FM.has(i))) {
             ctx.save(); ctx.clip(openPath);
-            if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-            if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
-            if (w.obj[i]) this.drawObj(w.obj[i], x, y, X, Y, pl, t, x);
+            if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+            if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+            if (OB[i]) this.drawObj(OB[i], x, y, X, Y, pl, t, x);
             if (FM && FM.has(i)) Fire.drawFlames(ctx, X, Y, FM.get(i), t, i * 0.37);
             ctx.restore();
           }
-          if (bk) for (const [k, e] of bk) {
+          for (; bk >= 0; bk = BN[bk]) {
             // whatever rises above the upper floor (someone on the stairs) shows outside the opening too
-            const cp = new Path2D(openPath);
+            const e = BE[bk], cp = new Path2D(openPath);
             const yl = (e.x + e.y) * HTH - HH * ZU;
             cp.rect(L - 200, T - 600, (Rr - L) + 400, yl - (T - 600));
             ctx.save(); ctx.clip(cp);
-            this.drawEnt(ctx, k, e);
+            this.drawEnt(ctx, BK[bk], e);
             ctx.restore();
           }
           continue;
         }
-        if (w.wallN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-        if (w.wallW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
-        const o = w.obj[i];
+        if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+        if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+        const o = OB[i];
         if (o) this.drawObj(o, x, y, X, Y, pl, t, x);
         if (FM) { const fe = FM.get(i); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i * 0.37); }
-        if (bk) {
-          if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
-          for (const [k, e] of bk) this.drawEnt(ctx, k, e);
-        }
+        for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
       }
       // ---- upper floors
       if (any2) {
@@ -284,13 +290,15 @@ const Render = {
           if (d === dMin) this.drawUpFloor(ctx, openB, d, flat1);
           this.drawUpFloor(ctx, openB, d + 1, flat1);
         }
-        for (let x = xa; x <= xb; x++) {
+        const Y1 = Yd - HH * ZU;
+        if (Y1 >= T - 40 && Y1 <= B + 200) for (let x = xa; x <= xb; x++) {
           const y = d - x;
           const i1 = y * W_ + x + W0;
-          const wn = w.wallN[i1], ww = w.wallW[i1], o = w.obj[i1], bk = buckets.get(i1);
-          if (!wn && !ww && !o && !bk && !(FM && FM.has(i1))) continue;
-          const X = (x - y) * HTW, Y = (x + y) * HTH - HH * ZU;
-          if (X < L - 110 || X > Rr + 110 || Y < T - 40 || Y > B + 200) continue;
+          const wn = WN[i1], ww = WW[i1], o = OB[i1];
+          let bk = BH1[(y - minY) * BVW + x - minX];
+          if (!wn && !ww && !o && bk < 0 && !(FM && FM.has(i1))) continue;
+          const X = (x - y) * HTW, Y = Y1;
+          if (X < L - 110 || X > Rr + 110) continue;
           if (wn && wn !== WT.BOUND) {
             const bid = this.edgeB(x + W0, y, 0);
             if (bid >= 0 && bid !== hiddenId && ((openB && bid === openB.id) || this._ext)) this.drawWall(x + W0, y, 0, X, Y, pb, pl, 1);
@@ -302,10 +310,7 @@ const Render = {
           if (!openB || x < openB.x0 || x > openB.x1 || y < openB.y0 || y > openB.y1) continue;
           if (o) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
           if (FM) { const fe = FM.get(i1); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i1 * 0.37); }
-          if (bk) {
-            if (bk.length > 1) bk.sort((a, b) => (a[1].x + a[1].y) - (b[1].x + b[1].y));
-            for (const [k, e] of bk) this.drawEnt(ctx, k, e);
-          }
+          for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
         }
       }
       const rl = roofs.get(d);
@@ -332,10 +337,36 @@ const Render = {
     this.drawVignette(ctx);
     if (Debug.on) Debug.drawScreen(ctx, this.W, this.H);
   },
+  // k: 0 the player, 1 a zombie, 2 a car
   drawEnt(ctx, k, e) {
-    if (k === 'p') Player.draw(ctx);
-    else if (k === 'z') Zombie.draw(ctx, e, false);
-    else if (k === 'c') Vehicles.draw(ctx, e);
+    if (k === 0) Player.draw(ctx);
+    else if (k === 1) Zombie.draw(ctx, e, false);
+    else Vehicles.draw(ctx, e);
+  },
+  // per-tile entity lists over the view (ground bkH, upstairs bkH1): heads, next links, entity, kind, depth
+  bkH: null, bkH1: null, bkN: new Int32Array(256), bkD: new Float64Array(256), bkE: [], bkK: new Uint8Array(256), bkC: 0, bvw: 0, bx0: 0, by0: 0, bvh: 0, itemArgs: [null, 0, 0, 0, 0],
+  bkReset(x0, y0, vw, vh) {
+    const n = vw * vh;
+    if (!this.bkH || this.bkH.length < n) { this.bkH = new Int32Array(n + (n >> 2)); this.bkH1 = new Int32Array(n + (n >> 2)); }
+    this.bkH.fill(-1, 0, n); this.bkH1.fill(-1, 0, n);
+    for (let k = 0; k < this.bkC; k++) this.bkE[k] = null;
+    this.bkC = 0; this.bx0 = x0; this.by0 = y0; this.bvw = vw; this.bvh = vh;
+  },
+  bkAdd(e, k) {
+    const up = e.x >= LV.W0, ex = up ? e.x - LV.W0 : e.x, tx = Math.floor(ex) - this.bx0, ty = Math.floor(e.y) - this.by0;
+    if (tx < 0 || ty < 0 || tx >= this.bvw || ty >= this.bvh) return;
+    let n = this.bkC++;
+    if (n >= this.bkN.length) {
+      const N = new Int32Array(n * 2), D = new Float64Array(n * 2), K = new Uint8Array(n * 2);
+      N.set(this.bkN); D.set(this.bkD); K.set(this.bkK); this.bkN = N; this.bkD = D; this.bkK = K;
+    }
+    const H = up ? this.bkH1 : this.bkH, j = ty * this.bvw + tx, dep = e.x + e.y, BN = this.bkN, BD = this.bkD;
+    this.bkE[n] = e; this.bkK[n] = k; BD[n] = dep;
+    // insert after everything not deeper (keeps the order of equals, like a stable sort)
+    let prev = -1, cur = H[j];
+    while (cur >= 0 && BD[cur] <= dep) { prev = cur; cur = BN[cur]; }
+    BN[n] = cur;
+    if (prev < 0) H[j] = n; else BN[prev] = n;
   },
   // one ground tile: floor, markings, grass creeping over hard edges, snow. water: animate (else skipped)
   groundTile(g, x, y, X, Y, t, gs, snowA, detail, water) {
@@ -375,8 +406,11 @@ const Render = {
         if ((f === FL.WATER || f === FL.DEEPWATER) && x >= x0 && x < x0 + CH && y >= y0 && y < y0 + CH) wet = 1;
       }
     }
-    return [h, wet];
+    // (whether the chunk has water goes in sigWet: no array per chunk per frame)
+    this.sigWet = wet;
+    return h;
   },
+  sigWet: 0,
   chunks: new Map(), chunkWorld: null, chunkTick: 0,
   drawGround(ctx, minX, minY, maxX, maxY, L, Rr, T, B, t, gs, snowA) {
     const w = Wd, CH = 8, detail = Settings.v.detail;
@@ -390,8 +424,10 @@ const Render = {
       return;
     }
     if (this.chunkWorld !== w) { this.chunks.clear(); this.chunkWorld = w; }
-    const tick = ++this.chunkTick;
-    let budget = 6;
+    const tick = ++this.chunkTick, t0 = performance.now();
+    // chunks are built while this frame has spent under ~5 ms on it (at least 6): drawing a missing chunk tile by tile
+    // costs as much as building it, and the next frame would have to do it again
+    let budget = 6, nvis = 0;
     const cx0 = Math.floor(minX / CH), cy0 = Math.floor(minY / CH), cx1 = Math.floor(maxX / CH), cy1 = Math.floor(maxY / CH);
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const x0 = cx * CH, y0 = cy * CH;
@@ -399,12 +435,13 @@ const Render = {
       const ox = (x0 - y0 - CH) * HTW - 1, oy = (x0 + y0) * HTH - 1;
       if (ox + 2 * CH * HTW + 2 < L - 40 || ox > Rr + 40 || oy + 2 * CH * HTH + 2 < T - 40 || oy > B + 10) continue;
       const key = cy * 4096 + cx;
-      const [sig, wet] = this.chunkSig(x0, y0, gs, snowA, detail);
+      const sig = this.chunkSig(x0, y0, gs, snowA, detail), wet = this.sigWet;
       let ch = this.chunks.get(key);
+      nvis++;
       if (!ch || ch.sig !== sig) {
-        if (budget > 0) {
+        if (budget > 0 || performance.now() - t0 < 5) {
           budget--;
-          if (!ch) { ch = { c: mkCanvas(2 * CH * HTW + 2, 2 * CH * HTH + 2), sig: 0, used: 0, wet: 0 }; this.chunks.set(key, ch); }
+          if (!ch) { ch = { c: this.chunkPool.pop() || mkCanvas(2 * CH * HTW + 2, 2 * CH * HTH + 2), sig: 0, used: 0, wet: 0 }; this.chunks.set(key, ch); }
           const g = ch.c.getContext('2d');
           g.clearRect(0, 0, ch.c.width, ch.c.height);
           for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(g, x, y, (x - y) * HTW - ox, (x + y) * HTH - oy, t, gs, snowA, detail, false);
@@ -422,12 +459,18 @@ const Render = {
         if (f === FL.WATER || f === FL.DEEPWATER) this.groundTile(ctx, x, y, (x - y) * HTW, (x + y) * HTH, t, gs, snowA, detail, true);
       }
     }
-    // keep the cache bounded (least recently drawn chunks go first)
-    if (this.chunks.size > 140) {
-      const arr = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used);
-      for (let k = 0; k < arr.length - 110; k++) this.chunks.delete(arr[k][0]);
+    // keep the cache bounded (least recently drawn chunks go first), but never below what is on screen: zoomed far out
+    // a fixed cap made every frame rebuild or tile-draw a good part of the ground. Freed canvases are reused.
+    this.chunkVis = nvis;
+    const cap = Math.max(this.chunkCap(), nvis + (nvis >> 2) + 8);
+    if (this.chunks.size > cap) {
+      const arr = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used), keep = Math.max(nvis, cap - 24);
+      for (let k = 0; k < arr.length - keep; k++) { this.chunks.delete(arr[k][0]); if (this.chunkPool.length < 32) this.chunkPool.push(arr[k][1].c); }
     }
   },
+  chunkPool: [], chunkVis: 0,
+  // chunks kept beyond those on screen (Sprite cache size setting)
+  chunkCap() { return 140 * CACHE_K(); },
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
     const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);
@@ -518,89 +561,40 @@ const Render = {
   },
 
   // ------------------------------------------------------------------ lighting
+  // Light grid over the view plus a margin (it moves only when the view nears its edge). The static part - daylight,
+  // lit rooms, lamps, lampposts, campfires, windows, porch lanterns, building fires - is cached and redone about 12 times
+  // a second or when the grid, the daylight or the power changes; moving lights (flashlight, headlights, muzzle flashes,
+  // sirens, burning zombies) and visibility are added every update.
+  statB: new Float32Array(1), statB1: new Float32Array(1), sT: 0, sAmb: -1, sPow: null, lLayers: 0,
+  LP: (() => { const a = new Float32Array(258); for (let i = 0; i < 258; i++) a[i] = Math.pow(Math.max(0, 1 - i / 256), 1.4); return a; })(),
   computeLight() {
-    const w = Wd, p = G.player;
-    // when lighting is throttled, cover a margin around the view so camera moves between updates stay lit
-    const M = (Settings.v.lightHz || 60) >= 60 ? 0 : 6, GW = w.gw || w.w;
-    this.lx0 = Math.max(0, this.vx0 - M); this.ly0 = Math.max(0, this.vy0 - M);
-    this.lw = Math.min(GW, this.vx0 + this.vw + M) - this.lx0; this.lh = Math.min(w.h, this.vy0 + this.vh + M) - this.ly0;
+    const w = Wd, p = G.player, M = 6, GW = w.gw || w.w;
+    const layers = this.has1 ? 2 : 1;
+    let regrid = !this.lw || this.vx0 < this.lx0 || this.vy0 < this.ly0 || this.vx0 + this.vw > this.lx0 + this.lw || this.vy0 + this.vh > this.ly0 + this.lh
+      || layers !== this.lLayers || this.lGrid !== w;
+    if (regrid) {
+      this.lx0 = Math.max(0, this.vx0 - M); this.ly0 = Math.max(0, this.vy0 - M);
+      this.lw = Math.min(GW, this.vx0 + this.vw + M) - this.lx0; this.lh = Math.min(w.h, this.vy0 + this.vh + M) - this.ly0;
+      this.lLayers = layers; this.lGrid = w;
+    }
     const n = this.lw * this.lh;
     if (this.lightB.length < n) {
       const m = n * 1.3 | 0;
       this.lightB = new Float32Array(m); this.shadeB = new Float32Array(m);
       this.lightB1 = new Float32Array(m); this.shadeB1 = new Float32Array(m);
+      this.statB = new Float32Array(m); this.statB1 = new Float32Array(m);
+      regrid = true;
     }
-    const amb = G.light.amb;
+    const amb = G.light.amb, powered = !G.events.powerOff, now = performance.now();
+    if (regrid || Math.abs(amb - this.sAmb) > 0.004 || powered !== this.sPow || now - this.sT > 80) {
+      this.staticLight(layers);
+      this.sAmb = amb; this.sPow = powered; this.sT = now;
+    }
+    this.lightB.set(this.statB.subarray(0, n));
+    if (layers > 1) this.lightB1.set(this.statB1.subarray(0, n));
     const vx0 = this.lx0, vy0 = this.ly0, vw = this.lw, vh = this.lh, W_ = w.w, W0 = LV.W0;
-    const powered = !G.events.powerOff;
-    const lights = [];
-    const layers = this.has1 ? 2 : 1;
-    for (let lv = 0; lv < layers; lv++) {
-      const LB = lv ? this.lightB1 : this.lightB, off = lv ? W0 : 0;
-      for (let j = 0; j < vh; j++) {
-        const y = vy0 + j;
-        for (let i = 0; i < vw; i++) {
-          const x = vx0 + i + off;
-          const idx = y * W_ + x, k = j * vw + i;
-          const r = w.room[idx];
-          let l;
-          if (r < 0) l = amb;
-          else {
-            l = amb * 0.74;
-            const rm = w.rooms[r];
-            if (rm.lights && (powered || World.hasPower(x, y))) l = Math.max(l, 0.9);
-          }
-          LB[k] = l;
-          const o = w.obj[idx];
-          if (o) {
-            if (o.t === 'lamppost' && amb < 0.6 && powered) lights.push({ x: x + 0.5, y: y + 1, r: 7.5, p: 0.75, out: true });
-            else if (o.t === 'lamp' && r >= 0 && w.rooms[r].lights && (powered || World.hasPower(x, y))) lights.push({ x: x + 0.5, y: y + 0.5, r: 4, p: 0.4, room: r });
-            else if ((o.t === 'campfire' && o.lit) || (o.t === 'bbq' && o.lit)) lights.push({ x: x + 0.5, y: y + 0.5, r: 6, p: 0.85 + Math.sin(performance.now() / 90) * 0.06, warm: true });
-            else if (o.t === 'tv' && o.on) lights.push({ x: x + 0.5, y: y + 0.5, r: 3, p: 0.3 });
-            else {
-              // generic emitters: OBJ[t].emit(o, x, y, amb, powered, room) -> light | null
-              const em = OBJ[o.t] && OBJ[o.t].emit;
-              if (em) { const lt = em(o, x, y, amb, powered, r); if (lt) lights.push(lt); }
-            }
-          }
-        }
-      }
-    }
+    const lights = this.dynL; lights.length = 0;
     for (const f of Fx.fires) lights.push({ x: f.x, y: f.y, r: 6, p: 0.9 });
-    // porch lanterns beside house doors, on after dark while the grid is up
-    if (amb < 0.6 && powered) for (const L of Facade.lamps()) {
-      if (L.x < vx0 - 4 || L.x > vx0 + vw + 4 || L.y < vy0 - 4 || L.y > vy0 + vh + 4 || L.b.roofGone) continue;
-      lights.push({ x: L.x, y: L.y, r: 3.6, p: 0.5, out: true, warm: true });
-    }
-    if (amb < 0.6) {
-      for (const rm of w.rooms) {
-        if (!rm.lights) continue;
-        const rx0 = rm.x0 >= W0 ? rm.x0 - W0 : rm.x0, rx1 = rm.x1 >= W0 ? rm.x1 - W0 : rm.x1;
-        if (rx1 < vx0 - 4 || rx0 > vx0 + vw + 4 || rm.y1 < vy0 - 4 || rm.y0 > vy0 + vh + 4) continue;
-        if (!powered && !World.hasPower(rm.x0, rm.y0)) continue;
-        const spill = (ex, ey, d, ox, oy) => {
-          const f = World.feat(ex, ey, d);
-          if (!f || f.k !== 'window' || (f.barricade || 0) >= 2) return;
-          if (World.room(ox, oy) >= 0) return;
-          // light from an upstairs window falls on the ground below
-          const up = ox >= W0, gx = up ? ox - W0 : ox;
-          lights.push({ x: gx + 0.5 - (d ? (ox < ex ? -0.35 : 0.35) : 0) + (up ? 0.6 : 0), y: oy + 0.5 - (d ? 0 : (oy < ey ? -0.35 : 0.35)) + (up ? 0.6 : 0), r: up ? 4.2 : 3.6, p: (f.curtainsClosed && !f.smashed ? 0.16 : 0.34) * (up ? 0.6 : 1), out: true, warm: true });
-        };
-        for (let x = rm.x0; x <= rm.x1; x++) { spill(x, rm.y0, 0, x, rm.y0 - 1); spill(x, rm.y1 + 1, 0, x, rm.y1 + 1); }
-        for (let y = rm.y0; y <= rm.y1; y++) { spill(rm.x0, y, 1, rm.x0 - 1, y); spill(rm.x1 + 1, y, 1, rm.x1 + 1, y); }
-      }
-    }
-    if (w.fire && w.fire.size) {
-      const fl = [];
-      for (const [i, e] of w.fire) {
-        const fx = i % W_, fy = (i / W_) | 0, vx = fx >= W0 ? fx - W0 : fx;
-        if (vx < vx0 - 4 || vx > vx0 + vw + 4 || fy < vy0 - 4 || fy > vy0 + vh + 4) continue;
-        fl.push([e.i, fx, fy]);
-      }
-      if (fl.length > 48) { fl.sort((a, b) => b[0] - a[0]); fl.length = 48; }
-      const fk = 0.9 + Math.sin(performance.now() / 70) * 0.06;
-      for (const [fi, fx, fy] of fl) lights.push({ x: fx + 0.5, y: fy + 0.5, r: 3.5 + fi * 3.5, p: (0.35 + fi * 0.55) * fk, fire: true });
-    }
     for (const z of G.zombies) if (z.fire > 0 && Math.abs(vxOf(z.x) - (vx0 + vw / 2)) < vw && Math.abs(z.y - (vy0 + vh / 2)) < vh) lights.push({ x: z.x, y: z.y, r: 4, p: 0.6, fire: true });
     for (const fl of Fx.flashes) lights.push({ x: fl.x, y: fl.y, r: fl.r, p: fl.p * (fl.t / fl.max) });
     for (const c of G.cars) if (c.siren && c.engine && Math.floor(performance.now() / 200) % 2) lights.push({ x: c.x, y: c.y, r: 6, p: 0.45, out: true });
@@ -616,33 +610,7 @@ const Render = {
       if (fl) lights.push({ x: p.x, y: p.y, r: 13, p: 0.95, cone: p.angle, cw: 0.42, vis: true });
       if (fl) lights.push({ x: p.x, y: p.y, r: 2.6, p: 0.35 });
     }
-    for (const lt of lights) {
-      const lv = lt.x >= W0 ? 1 : 0;
-      if (lv >= layers) continue;
-      const LB = lv ? this.lightB1 : this.lightB, off = lv ? W0 : 0;
-      const lx = lt.x - off, r = lt.r;
-      const ix0 = Math.max(vx0, Math.floor(lx - r)), ix1 = Math.min(vx0 + vw - 1, Math.ceil(lx + r));
-      const iy0 = Math.max(vy0, Math.floor(lt.y - r)), iy1 = Math.min(vy0 + vh - 1, Math.ceil(lt.y + r));
-      for (let y = iy0; y <= iy1; y++) for (let x = ix0; x <= ix1; x++) {
-        const dx = x + 0.5 - lx, dy = y + 0.5 - lt.y;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        if (d >= r) continue;
-        const ax = x + off, idx = y * W_ + ax;
-        const rm = w.room[idx];
-        if (lt.out && rm >= 0) continue;
-        if (lt.room !== undefined && rm !== lt.room) continue;
-        let f = lt.p * Math.pow(1 - d / r, 1.4);
-        if (lt.cone !== undefined) {
-          const a = Math.atan2(dy, dx);
-          const ad = Math.abs(U.angDiff(lt.cone, a));
-          if (d > 1.2) { if (ad > lt.cw) continue; f *= 1 - Math.pow(ad / lt.cw, 2) * 0.6; }
-          if (lt.vis && World.visGen[idx] !== World.gen) continue;
-          if (lt.ox !== undefined && !World.lineClear(lt.ox, lt.oy, ax + 0.5, y + 0.5, 'sight')) continue;
-        } else if (!lt.out && lt.room === undefined && d > 1.5 && !(lt.fire && d < 2.6) && !World.lineClear(lt.x, lt.y, ax + 0.5, y + 0.5, 'sight')) continue;
-        const k = (y - vy0) * vw + (x - vx0);
-        LB[k] = Math.min(1.15, LB[k] + f);
-      }
-    }
+    this.applyLights(lights, this.lightB, this.lightB1, layers);
     // visibility
     const gen = World.gen, VG = World.visGen;
     const plv = p && !p.dead && p.x >= W0 ? 1 : 0;
@@ -679,6 +647,109 @@ const Render = {
           }
           SB[k] = Math.min(1, l * vf);
         }
+      }
+    }
+  },
+  dynL: [],
+  staticLight(layers) {
+    const w = Wd, amb = G.light.amb, powered = !G.events.powerOff;
+    const vx0 = this.lx0, vy0 = this.ly0, vw = this.lw, vh = this.lh, W_ = w.w, W0 = LV.W0;
+    const lights = [];
+    for (let lv = 0; lv < layers; lv++) {
+      const LB = lv ? this.statB1 : this.statB, off = lv ? W0 : 0;
+      for (let j = 0; j < vh; j++) {
+        const y = vy0 + j;
+        for (let i = 0; i < vw; i++) {
+          const x = vx0 + i + off;
+          const idx = y * W_ + x, k = j * vw + i;
+          const r = w.room[idx];
+          let l;
+          if (r < 0) l = amb;
+          else {
+            l = amb * 0.74;
+            const rm = w.rooms[r];
+            if (rm.lights && (powered || World.hasPower(x, y))) l = Math.max(l, 0.9);
+          }
+          LB[k] = l;
+          const o = w.obj[idx];
+          if (o) {
+            if (o.t === 'lamppost' && amb < 0.6 && powered) lights.push({ x: x + 0.5, y: y + 1, r: 7.5, p: 0.75, out: true });
+            else if (o.t === 'lamp' && r >= 0 && w.rooms[r].lights && (powered || World.hasPower(x, y))) lights.push({ x: x + 0.5, y: y + 0.5, r: 4, p: 0.4, room: r });
+            else if ((o.t === 'campfire' && o.lit) || (o.t === 'bbq' && o.lit)) lights.push({ x: x + 0.5, y: y + 0.5, r: 6, p: 0.85 + Math.sin(performance.now() / 90) * 0.06, warm: true });
+            else if (o.t === 'tv' && o.on) lights.push({ x: x + 0.5, y: y + 0.5, r: 3, p: 0.3 });
+            else {
+              // generic emitters: OBJ[t].emit(o, x, y, amb, powered, room) -> light | null
+              const em = OBJ[o.t] && OBJ[o.t].emit;
+              if (em) { const lt = em(o, x, y, amb, powered, r); if (lt) lights.push(lt); }
+            }
+          }
+        }
+      }
+    }
+    // porch lanterns beside house doors, on after dark while the grid is up
+    if (amb < 0.6 && powered) for (const L of Facade.lamps()) {
+      if (L.x < vx0 - 4 || L.x > vx0 + vw + 4 || L.y < vy0 - 4 || L.y > vy0 + vh + 4 || L.b.roofGone) continue;
+      lights.push({ x: L.x, y: L.y, r: 3.6, p: 0.5, out: true, warm: true });
+    }
+    if (amb < 0.6) {
+      for (const rm of w.rooms) {
+        if (!rm.lights) continue;
+        const rx0 = rm.x0 >= W0 ? rm.x0 - W0 : rm.x0, rx1 = rm.x1 >= W0 ? rm.x1 - W0 : rm.x1;
+        if (rx1 < vx0 - 4 || rx0 > vx0 + vw + 4 || rm.y1 < vy0 - 4 || rm.y0 > vy0 + vh + 4) continue;
+        if (!powered && !World.hasPower(rm.x0, rm.y0)) continue;
+        const spill = (ex, ey, d, ox, oy) => {
+          const f = World.feat(ex, ey, d);
+          if (!f || f.k !== 'window' || (f.barricade || 0) >= 2) return;
+          if (World.room(ox, oy) >= 0) return;
+          // light from an upstairs window falls on the ground below
+          const up = ox >= W0, gx = up ? ox - W0 : ox;
+          lights.push({ x: gx + 0.5 - (d ? (ox < ex ? -0.35 : 0.35) : 0) + (up ? 0.6 : 0), y: oy + 0.5 - (d ? 0 : (oy < ey ? -0.35 : 0.35)) + (up ? 0.6 : 0), r: up ? 4.2 : 3.6, p: (f.curtainsClosed && !f.smashed ? 0.16 : 0.34) * (up ? 0.6 : 1), out: true, warm: true });
+        };
+        for (let x = rm.x0; x <= rm.x1; x++) { spill(x, rm.y0, 0, x, rm.y0 - 1); spill(x, rm.y1 + 1, 0, x, rm.y1 + 1); }
+        for (let y = rm.y0; y <= rm.y1; y++) { spill(rm.x0, y, 1, rm.x0 - 1, y); spill(rm.x1 + 1, y, 1, rm.x1 + 1, y); }
+      }
+    }
+    if (w.fire && w.fire.size) {
+      const fl = [];
+      for (const [i, e] of w.fire) {
+        const fx = i % W_, fy = (i / W_) | 0, vx = fx >= W0 ? fx - W0 : fx;
+        if (vx < vx0 - 4 || vx > vx0 + vw + 4 || fy < vy0 - 4 || fy > vy0 + vh + 4) continue;
+        fl.push([e.i, fx, fy]);
+      }
+      if (fl.length > 48) { fl.sort((a, b) => b[0] - a[0]); fl.length = 48; }
+      const fk = 0.9 + Math.sin(performance.now() / 70) * 0.06;
+      for (const [fi, fx, fy] of fl) lights.push({ x: fx + 0.5, y: fy + 0.5, r: 3.5 + fi * 3.5, p: (0.35 + fi * 0.55) * fk, fire: true });
+    }
+    this.applyLights(lights, this.statB, this.statB1, layers);
+  },
+  // add lights onto grids B0 (ground) and B1 (upstairs)
+  applyLights(lights, B0, B1, layers) {
+    const w = Wd, vx0 = this.lx0, vy0 = this.ly0, vw = this.lw, vh = this.lh, W_ = w.w, W0 = LV.W0, LP = this.LP;
+    for (const lt of lights) {
+      const lv = lt.x >= W0 ? 1 : 0;
+      if (lv >= layers) continue;
+      const LB = lv ? B1 : B0, off = lv ? W0 : 0;
+      const lx = lt.x - off, r = lt.r;
+      const ix0 = Math.max(vx0, Math.floor(lx - r)), ix1 = Math.min(vx0 + vw - 1, Math.ceil(lx + r));
+      const iy0 = Math.max(vy0, Math.floor(lt.y - r)), iy1 = Math.min(vy0 + vh - 1, Math.ceil(lt.y + r));
+      for (let y = iy0; y <= iy1; y++) for (let x = ix0; x <= ix1; x++) {
+        const dx = x + 0.5 - lx, dy = y + 0.5 - lt.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d >= r) continue;
+        const ax = x + off, idx = y * W_ + ax;
+        const rm = w.room[idx];
+        if (lt.out && rm >= 0) continue;
+        if (lt.room !== undefined && rm !== lt.room) continue;
+        let f = lt.p * LP[(d / r * 256) | 0];
+        if (lt.cone !== undefined) {
+          const a = Math.atan2(dy, dx);
+          const ad = Math.abs(U.angDiff(lt.cone, a));
+          if (d > 1.2) { if (ad > lt.cw) continue; f *= 1 - Math.pow(ad / lt.cw, 2) * 0.6; }
+          if (lt.vis && World.visGen[idx] !== World.gen) continue;
+          if (lt.ox !== undefined && !World.lineClear(lt.ox, lt.oy, ax + 0.5, y + 0.5, 'sight')) continue;
+        } else if (!lt.out && lt.room === undefined && d > 1.5 && !(lt.fire && d < 2.6) && !World.lineClear(lt.x, lt.y, ax + 0.5, y + 0.5, 'sight')) continue;
+        const k = (y - vy0) * vw + (x - vx0);
+        LB[k] = Math.min(1.15, LB[k] + f);
       }
     }
   },
@@ -723,7 +794,6 @@ const Render = {
     const t = d ? w.wallW[y * w.w + x] : w.wallN[y * w.w + x];
     if (t === WT.BOUND) return;
     const f = World.feat(x, y, d);
-    const col = this.wallColor(x, y, d, t);
     let cut = false, alpha = 1;
     const lw = lv || 0, same = lw === this.plv_;
     // an upper storey can also hide a player standing behind the building on the ground
@@ -744,10 +814,20 @@ const Render = {
       }
     }
     if (cut && WALL_INFO[t].fence) { cut = false; }
-    // facade descriptor (material, trim, fixtures); a shared scratch record, so read what we need now
-    const st = Facade.edge(x, y, d, t, f, col);
-    const rec = Spr.wall(t, d, col, f, cut, st);
-    const fx0 = cut ? '' : st.fx.charAt(0), lampB = st.b, neon = st.pst === 9;
+    // The face sprite (facade descriptor + string key) is worked out again every 8th frame (staggered), or at once when
+    // the wall, its door / window or the cutaway changes; in between the last answer is reused.
+    if (this.wmemoW !== w || this.wmemo.size > 30000) { this.wmemo.clear(); this.wmemoW = w; }
+    const eid = ((y * w.w + x) << 1) | d, fs = f ? (f.open ? 1 : 0) | (f.smashed ? 2 : 0) | (f.glassOut ? 4 : 0) | (f.broken ? 8 : 0) | (f.curtainsClosed ? 16 : 0) | (f.curtains ? 32 : 0) | ((f.barricade || 0) << 6) : -1;
+    let m = this.wmemo.get(eid);
+    if (!m || m.f !== f || m.fs !== fs || m.cut !== cut || m.t !== t || !((this.fno + eid) & 7)) {
+      const col = this.wallColor(x, y, d, t);
+      // facade descriptor (material, trim, fixtures); a shared scratch record, so read what we need now
+      const st = Facade.edge(x, y, d, t, f, col);
+      if (!m) { m = { rec: null, fx0: '', lampB: null, neon: false, f: null, fs: 0, cut: false, t: 0 }; this.wmemo.set(eid, m); }
+      m.rec = Spr.wall(t, d, col, f, cut, st); m.fx0 = cut ? '' : st.fx.charAt(0); m.lampB = st.b; m.neon = st.pst === 9;
+      m.f = f; m.fs = fs; m.cut = cut; m.t = t;
+    } else m.rec.u = Facade.tick;
+    const rec = m.rec, fx0 = m.fx0, lampB = m.lampB, neon = m.neon;
     // shading: the face tile, but walls bordering visible tiles stay readable
     let s = this.shadeAt(x, y);
     const so = d ? this.shadeAt(x - 1, y) : this.shadeAt(x, y - 1);
@@ -830,9 +910,14 @@ const Render = {
     ctx.fillStyle = Col.shade('#d8d0c0', Math.max(0.3, s));
     for (let k = 1; k < n; k += 2) { const q = pt(k); if (q[2] > z1 || q[2] < z0) continue; ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, 7); ctx.fill(); }
   },
+  wmemo: new Map(), wmemoW: null, omemo: new WeakMap(), anims: {}, npx: -99, npy: -99,
   drawObj(o, x, y, X, Y, p, t, vx) {
     const def = OBJ[o.t];
-    const rec = Spr.obj(o);
+    // the sprite (a key string built from a dozen fields) is looked up again every 8th frame, staggered by tile, and
+    // every frame within reach of the player (what they switch on, open or fill shows at once)
+    let m = this.omemo.get(o);
+    if (!m || !((this.fno + x + y) & 7) || (Math.abs(vx - this.npx) < 4 && Math.abs(y - this.npy) < 4)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
+    const rec = m.rec;
     let alpha = 1;
     if (p && def.h > 1.1 && o.t !== 'stairs' && o.t !== 'landing') {
       const by = Y + HTH;
@@ -858,7 +943,8 @@ const Render = {
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(h[0], h[1], 16, 0, 7); ctx.fill();
     }
     // per-type animated overlay: ObjArt.a_<type>(ctx, o, X, Y, t, shade, x, y)
-    const an = ObjArt['a_' + o.t];
+    let an = this.anims[o.t];
+    if (an === undefined) an = this.anims[o.t] = ObjArt['a_' + o.t] || null;
     if (an) an.call(ObjArt, ctx, o, X, Y, t, s, x, y);
     if (o.t === 'generator' && o.on && o.fuel > 0) { const c = isoP(X, Y, 0.3, 0.3, 0.9); ctx.fillStyle = 'rgba(120,120,120,0.4)'; ctx.beginPath(); ctx.arc(c[0] + Math.sin(t * 9) * 2, c[1] - (t * 20 % 12), 3, 0, 7); ctx.fill(); }
   },
@@ -1028,15 +1114,15 @@ const Fx = {
     if (G.world && R.chance(0.7)) this.decal(x + R.f(-0.4, 0.4), y + R.f(-0.4, 0.4));
   },
   scorch(x, y, s) {
-    const w = Wd;
-    w.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 5), age: -2000, s: s || R.f(0.8, 1.3), k: 1 });
-    if (w.decals.length > 450) w.decals.shift();
+    Wd.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 5), age: -2000, s: s || R.f(0.8, 1.3), k: 1 });
+    this.capDecals();
   },
   decal(x, y, s) {
-    const w = Wd;
-    w.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 7), age: 0, s: s || R.f(0.6, 1.1) });
-    if (w.decals.length > 450) w.decals.shift();
+    Wd.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 7), age: 0, s: s || R.f(0.6, 1.1) });
+    this.capDecals();
   },
+  // the oldest decals go past the Decal limit setting
+  capDecals() { const D = Wd.decals, m = Settings.v.decals || 450; if (D.length > m) D.splice(0, D.length - m); },
   shards(x, y, z, n, col) {
     n = Math.max(1, Math.round(n * Settings.v.particles));
     for (let i = 0; i < n; i++) {
@@ -1081,7 +1167,7 @@ const Fx = {
     for (const p of this.parts) {
       const s = P(p.x, p.y, p.z);
       const a = Math.min(1, p.life / p.max * 2);
-      if (p.smoke) { const sa = (p.dark ? 0.42 : 0.35) * p.life / p.max; ctx.fillStyle = (p.dark ? 'rgba(40,38,36,' : 'rgba(140,140,140,') + sa.toFixed(3) + ')'; ctx.beginPath(); ctx.arc(s[0], s[1], p.size, 0, 7); ctx.fill(); continue; }
+      if (p.smoke) { ctx.globalAlpha = (p.dark ? 0.42 : 0.35) * p.life / p.max; ctx.drawImage(this.disc(p.dark ? '40,38,36' : '140,140,140'), s[0] - p.size, s[1] - p.size, p.size * 2, p.size * 2); continue; }
       ctx.globalAlpha = a;
       ctx.fillStyle = p.col; ctx.fillRect(s[0] - p.size / 2, s[1] - p.size / 2, p.size, p.size);
     }
@@ -1103,6 +1189,13 @@ const Fx = {
       ctx.fillStyle = f.col; ctx.fillText(f.txt, s[0], s[1]);
     }
     ctx.globalAlpha = 1;
+  },
+  // a filled circle of one colour (radius 31 in a 64 px sprite: drawn at the size wanted) for smoke and puffs
+  discs: new Map(),
+  disc(rgb) {
+    let c = this.discs.get(rgb);
+    if (!c) { c = mkCanvas(64, 64); const g = c.getContext('2d'); g.fillStyle = 'rgb(' + rgb + ')'; g.beginPath(); g.arc(32, 32, 31, 0, 7); g.fill(); this.discs.set(rgb, c); }
+    return c;
   },
   // flames: a few pre-rendered flickering frames plus an additive glow
   flameFrames: null, glow: null,

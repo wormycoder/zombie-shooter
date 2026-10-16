@@ -231,6 +231,13 @@ const Debug = {
       case 'zaggro': for (const z of this.near(60, true)) { z.st = 'chase'; z.tx = p.x; z.ty = p.y; z.mem = 12; z.canSee = true; z.path = null; } break;
       case 'zcalm': for (const z of G.zombies) if (!z.dead && (z.st === 'chase' || z.st === 'investigate' || z.st === 'attack')) { z.st = 'idle'; z.canSee = false; z.path = null; z.mem = 0; } break;
       case 'corpses': G.zombies = G.zombies.filter(z => !z.dead); break;
+      case 'perfrep': {
+        const t = Perf.report(), ta = document.getElementById('dbgrep');
+        if (ta) { ta.value = t; ta.style.display = 'block'; }
+        const ok = () => UI.hint('Performance report copied', 1.5);
+        try { navigator.clipboard.writeText(t).then(ok, () => { if (ta) { ta.select(); document.execCommand('copy'); ok(); } }); } catch (e) { if (ta) { ta.select(); document.execCommand('copy'); ok(); } }
+        break;
+      }
       case 'carplace': this.startPlace('Place ' + CAR_TYPES[q.car].n, (x, y) => this.spawnCar(x, y)); break;
       case 'carfix': { const c = this.nearCar(); if (!c) return; for (const k of PART_KEYS) c.parts[k] = 100; c.dmg = { front: 0, rear: 0, left: 0, right: 0 }; c.burnt = false; c.charge = 1; Vehicles.recalc(c); break; }
       case 'carfuel': { const c = this.nearCar(); if (c) c.gas = 1; break; }
@@ -416,7 +423,10 @@ const Debug = {
       + '<div class="dbg-legend"><i style="background:#e8e8e8"></i>frame <i style="background:#ffa040"></i>render <i style="background:#60d070"></i>simulation <i style="background:#60a8ff"></i>UI</div>'
       + '<div class="dbg-kv dbg-kv3"><span>FPS</span><b data-live="fps"></b><span>Frame avg / worst</span><b data-live="ft"></b><span>Render avg</span><b data-live="rt"></b><span>Sim avg</span><b data-live="simt"></b><span>UI avg</span><b data-live="uit"></b>'
       + '<span>Zombies (alive/updated)</span><b data-live="zs"></b><span>Cars (all/active)</span><b data-live="cs"></b><span>Fires</span><b data-live="fires"></b><span>Blood decals</span><b data-live="decals"></b><span>Floor item piles</span><b data-live="piles"></b>'
-      + '<span>Sprite cache</span><b data-live="spr"></b><span>Ground chunks</span><b data-live="gch"></b><span>Light grid</span><b data-live="lgrid"></b><span>3D characters</span><b data-live="gl"></b><span>JS heap</span><b data-live="heap"></b></div>';
+      + '<span>Sprite cache</span><b data-live="spr"></b><span>Ground chunks</span><b data-live="gch"></b><span>Light grid</span><b data-live="lgrid"></b><span>3D characters</span><b data-live="gl"></b>'
+      + '<span>Characters by detail</span><b data-live="lod"></b><span>Render scale</span><b data-live="rscale"></b><span>JS heap</span><b data-live="heap"></b></div>'
+      + '<div class="dbg-row">' + this.btn('perfrep', 'Copy performance report', '', 'Frame times, graphics card, screen, caches and settings as plain text (also shown below)') + '</div>'
+      + '<textarea id="dbgrep" readonly spellcheck="false" style="display:none;width:100%;height:150px;box-sizing:border-box;background:rgba(0,0,0,0.35);color:#ddd;border:1px solid rgba(255,255,255,0.12);font:10px/1.4 Consolas,monospace"></textarea>';
   },
   // refresh live values without rebuilding the tab (keeps sliders and inputs usable)
   live() {
@@ -450,7 +460,9 @@ const Debug = {
       let a = 0; for (const z of G.zombies) if (!z.dead) a++;
       set('zs', a + ' / ' + (Zombie.updN || 0)); set('cs', G.cars.length + ' / ' + (Vehicles.active ? Vehicles.active.length : '-'));
       set('fires', Wd.fire ? Wd.fire.size : 0); set('decals', Wd.decals.length); set('piles', Wd.items.size);
-      set('spr', Spr.cache.size); set('gch', Render.chunks.size); set('lgrid', (Render.lw || 0) + ' × ' + (Render.lh || 0));
+      set('spr', Spr.cache.size + ' · walls ' + Spr.wcache.size + ' · roofs ' + Facade.rcache.size); set('gch', Render.chunks.size + ' (' + Render.chunkVis + ' on screen)'); set('lgrid', (Render.lw || 0) + ' × ' + (Render.lh || 0));
+      const ln = Char3D.lodN; set('lod', `full ${ln[0]} · simple ${ln[1]} · box ${ln[2]} · far ${ln[3]} · still ${ln[4]}`);
+      set('rscale', Render.dpr.toFixed(2) + (Settings.v.dynRes ? ' (dynamic ' + Math.round(Perf.scale * 100) + '%)' : '') + ' · ' + Render.cv.width + '×' + Render.cv.height);
       set('gl', !Settings.v.chars3d ? 'off (setting)' : GL3D.failed ? 'unavailable' : GL3D.gl ? `WebGL${GL3D.soft ? ' (software' + (GL3D.allowSoft ? ')' : ', 2D fallback)') : ''} · atlas ${GL3D.AW}×${GL3D.AH}` : 'not started');
       set('heap', performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' MB' : 'n/a');
     }
