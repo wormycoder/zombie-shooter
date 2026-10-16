@@ -13,6 +13,17 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.011.000.104', date: '2026-10-16', title: 'Bigger worlds (experimental) and better culling',
+    notes: [
+      'A new Experimental tab in Settings with a World size option for new games: Normal (400 x 400), Large (2.5x), Huge (4x) or Massive (5x). Games already started keep their size.',
+      'In a bigger world Hollow Creek and Millbrook keep their place in the north-west, and the new land around them is blocked out: Route 9 and Main Street run on to the edge of the map, two county roads cross the woods, a divided interstate runs down the far east of the Huge and Massive maps, and dirt logging tracks lead into the forest. No buildings out there yet.',
+      'Forest, meadows, grass verges along the roads and a thin scatter of zombies fill the new land; the map window now zooms out far enough to see all of it.',
+      'Better culling: characters, objects, walls, trees, bodies, blood and items that are off screen are no longer posed, painted or sent to the graphics card (in a busy town about 40% fewer 3D characters posed and 10-25% fewer draw calls), curbs are part of the cached ground instead of being redrawn every frame, and the ground cache checks itself less often.',
+      'Smaller saves and a shorter autosave freeze: trees are stored compactly and the map data is no longer copied into one huge piece of text (about 40% less freeze on a normal map), and the list of things that tick (fires, crops, traps) is rebuilt a slice at a time.',
+    ],
+    commits: ['5eb1063'], shots: ['v011000_1', 'v011000_2', 'v011000_3', 'v011000_4'],
+  },
+  {
     v: '000.010.000.102', date: '2026-10-16', title: 'Optimization update and new trees',
     notes: [
       'A new Optimization tab in Settings: quality presets, a live frame-rate readout, a "Pick for me" button that chooses a preset from how the game actually runs on your machine, every performance setting in one place, and a performance report you can copy and send.',
