@@ -1,0 +1,1954 @@
+'use strict';
+// ---------------------------------------------------------------------------
+// Detailed vehicle art: pre-rendered car sprites per heading, damage states, lights.
+// Every vehicle type is a low-poly model in car-local coordinates (f forward, s right,
+// z up; FL = driver side = s < 0). Convex parts are painted back to front (pairwise
+// separating planes + a topological sort), faces are shaded by their normal and
+// back-face culled. Sprites are rendered at 2x into a bounded LRU cache keyed by type,
+// colour, state bits and one of 64 heading buckets; head/tail/reverse lights, light
+// bars, the dome light and the driver are cheap per-frame overlays (cached glows).
+// ---------------------------------------------------------------------------
+const CA_NB = 64, CA_SC = 2;
+const CA_COL = {
+  tyre: '#1e1e20', tread: '#141416', wall: '#2c2c2e', rim: '#c2c7cc', steel: '#80868c', hub: '#585d62',
+  chrome: '#d2d8de', black: '#202124', glass: '#30465a', inside: '#2a2b2f', seat: '#3c3a38',
+  head: '#e4e6d8', tail: '#b01e14', amber: '#dc8e1c', plate: '#e8e4ce', rust: '#7c3e1c', burnt: '#2b2521',
+};
+const CarArt = {
+  cache: new Map(), bytes: 0, cap: 48e6, models: new Map(), bT: 0, bMs: 0, warned: false,
+  stats: { sprites: 0, ms: 0, evicted: 0, models: 0, maxMs: 0 },
+};
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- geometry
+  // unit outward normal of polygon p (Newell's method), oriented away from centre c; null if degenerate
+  normal(p, c) {
+    let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]);
+      cx += a[0]; cy += a[1]; cz += a[2];
+    }
+    const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (l < 1e-9) return null;
+    const k = p.length;
+    if ((cx / k - c[0]) * nx + (cy / k - c[1]) * ny + (cz / k - c[2]) * nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    return [nx / l, ny / l, nz / l];
+  },
+  tagOf(n) {
+    if (n[2] > 0.72) return 'T';
+    if (n[2] < -0.72) return 'D';
+    return ['F', 'FR', 'R', 'BR', 'B', 'BL', 'L', 'FL'][(Math.round(Math.atan2(n[1], n[0]) / (Math.PI / 4)) + 8) % 8];
+  },
+  // convex solid between two matching outlines A and B ([f, s, z] points). o: { skip: tags to
+  // leave out, tags: per-side tags, cols / mats: per-tag overrides, body: wheels may overlap it }
+  solid(A, B, col, o) {
+    o = o || {};
+    const all = A.concat(B), n = all.length, c = [0, 0, 0], bb = [1e9, -1e9, 1e9, -1e9, 1e9, -1e9];
+    for (const q of all) {
+      c[0] += q[0] / n; c[1] += q[1] / n; c[2] += q[2] / n;
+      for (let k = 0; k < 3; k++) { if (q[k] < bb[k * 2]) bb[k * 2] = q[k]; if (q[k] > bb[k * 2 + 1]) bb[k * 2 + 1] = q[k]; }
+    }
+    const P = { faces: [], bb, c, body: !!o.body, k: o.k || '' };
+    const add = (p, tag) => {
+      const nm = this.normal(p, c);
+      if (!nm) return;
+      const t = tag || this.tagOf(nm);
+      if (o.skip && o.skip.indexOf(t) >= 0) return;
+      P.faces.push({ p, n: nm, t, col: (o.cols && o.cols[t]) || col, mat: (o.mats && o.mats[t]) || o.mat || 'paint', fx: null, win: null });
+    };
+    if (!o.noA) add(A.slice().reverse(), o.tA);
+    if (!o.noB) add(B, o.tB);
+    for (let i = 0; i < A.length; i++) { const j = (i + 1) % A.length; add([A[i], A[j], B[j], B[i]], o.tags && o.tags[i]); }
+    return P;
+  },
+  // prism over a 2D outline [[f, s]...] from z0 up to zt (number or fn(f, s))
+  prism(ol, z0, zt, col, o) {
+    const A = ol.map(q => [q[0], q[1], z0]);
+    const B = ol.map(q => [q[0], q[1], typeof zt === 'function' ? zt(q[0], q[1]) : zt]);
+    return this.solid(A, B, col, o);
+  },
+  // rectangle outline with chamfered front (cf) and back (cb) corners; left side first, going forward
+  rect(f0, f1, s0, s1, cf, cb) {
+    cf = cf || 0; cb = cb || 0;
+    const p = [[f0 + cb, s0], [f1 - cf, s0], [f1, s0 + cf], [f1, s1 - cf], [f1 - cf, s1], [f0 + cb, s1], [f0, s1 - cb], [f0, s0 + cb]];
+    return p.filter((q, i) => { const r = p[(i + 1) % p.length]; return Math.abs(q[0] - r[0]) + Math.abs(q[1] - r[1]) > 1e-6; });
+  },
+  box(f0, f1, s0, s1, z0, z1, col, o) { return this.prism(this.rect(f0, f1, s0, s1), z0, z1, col, o); },
+  // attach a feature painter fn(g, F, face) to the faces of part P with tag t
+  fx(P, t, fn) { for (const fc of P.faces) if (fc.t === t) (fc.fx || (fc.fx = [])).push(fn); return P; },
+  face(P, t) { return P.faces.find(fc => fc.t === t); },
+  // point on a quad face from (u, v): u runs with +f on side faces and +s on front/back faces, v bottom -> top
+  uv(fc, u, v) {
+    const [p0, p1, p2, p3] = fc.p;
+    const ax = fc.t === 'L' || fc.t === 'R' ? 0 : 1;
+    if (p0[ax] > p1[ax]) u = 1 - u;
+    const L3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    return L3(L3(p0, p1, u), L3(p3, p2, u), v);
+  },
+  // window (hole + glass) on face fc between u0..u1, v0..v1
+  win(fc, id, u0, u1, v0, v1, st) {
+    if (!fc) return;
+    (fc.win || (fc.win = [])).push({ id, st: st || 0, p: [this.uv(fc, u0, v0), this.uv(fc, u1, v0), this.uv(fc, u1, v1), this.uv(fc, u0, v1)] });
+  },
+  // ---------------------------------------------------------------- projection
+  // F maps car-local points to canvas pixels for heading a at scale sc around (ox, oy).
+  // tilt [d0, df, ds] lowers the body by d0 + df*f + ds*s (missing tyres, burnt shells).
+  proj(a, ox, oy, sc, tilt) {
+    const ca = Math.cos(a), sa = Math.sin(a), kx = HTW * sc, ky = HTH * sc, kz = ZU * sc;
+    const t = tilt || [0, 0, 0];
+    return {
+      ca, sa, sc, ox, oy, b: 1, tilt: true, glass: null, cf: ca + sa, cs: ca - sa,
+      P(f, s, z) {
+        if (this.tilt) z -= t[0] + t[1] * f + t[2] * s;
+        const dx = f * ca - s * sa, dy = f * sa + s * ca;
+        return [ox + (dx - dy) * kx, oy + (dx + dy) * ky - z * kz];
+      },
+      V(f, s, z) {
+        if (this.tilt) z -= t[1] * f + t[2] * s;
+        const dx = f * ca - s * sa, dy = f * sa + s * ca;
+        return [(dx - dy) * kx, (dx + dy) * ky - z * kz];
+      },
+      // > 0 when a face with local normal n looks toward the camera (world view axis (1, 1, 1))
+      vis(n) { return n[0] * (ca + sa) + n[1] * (ca - sa) + n[2]; },
+      depth(f, s, z) { return f * (ca + sa) + s * (ca - sa) + z; },
+      // light model: tops 1.0, faces looking +y FACE_S, faces looking +x FACE_E
+      bright(n) {
+        const wx = n[0] * ca - n[1] * sa, wy = n[0] * sa + n[1] * ca, nz = n[2];
+        const h = Math.sqrt(wx * wx + wy * wy);
+        const side = h > 1e-6 ? FACE_E + (FACE_S - FACE_E) * U.clamp((wy - wx) / h * 0.5 + 0.5, 0, 1) : 1;
+        return nz >= 0 ? side + (1 - side) * Math.pow(nz, 0.9) : side * (1 + nz * 0.35);
+      },
+      sh(col, m) { return Col.shade(col, this.b * (m === undefined ? 1 : m)); },
+      // canvas transform so that (x, y) draws at local point o + (x*u + y*v)*k
+      frame(g, o, u, v, k) {
+        k = k || 1;
+        const p = this.P(o[0], o[1], o[2]), U_ = this.V(u[0] * k, u[1] * k, u[2] * k), V_ = this.V(v[0] * k, v[1] * k, v[2] * k);
+        g.setTransform(U_[0], U_[1], V_[0], V_[1], p[0], p[1]);
+      },
+    };
+  },
+  rgba(hex, b, a) {
+    const c = Col.rgb(hex);
+    return 'rgba(' + Math.min(255, c[0] * b | 0) + ',' + Math.min(255, c[1] * b | 0) + ',' + Math.min(255, c[2] * b | 0) + ',' + a + ')';
+  },
+});
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- painting
+  path(g, pts, rev) {
+    const n = pts.length;
+    g.moveTo(pts[rev ? n - 1 : 0][0], pts[rev ? n - 1 : 0][1]);
+    for (let i = 1; i < n; i++) { const q = pts[rev ? n - 1 - i : i]; g.lineTo(q[0], q[1]); }
+    g.closePath();
+  },
+  ybox(pts) { let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9; for (const q of pts) { if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; } return [x0, y0, x1, y1]; },
+  fillFor(g, F, fc, pts, b) {
+    const m = fc.mat;
+    if (m === 'chrome') {
+      const bx = this.ybox(pts), gr = g.createLinearGradient(0, bx[1], 0, bx[3] + 0.01);
+      gr.addColorStop(0, Col.shade('#f2f6fa', b)); gr.addColorStop(0.45, Col.shade('#9aa2aa', b)); gr.addColorStop(0.55, Col.shade('#6c737a', b)); gr.addColorStop(1, Col.shade('#c8ced4', b));
+      return gr;
+    }
+    if (m === 'paint' && fc.t === 'T' && !fc.flat) {
+      // glossy panels: the far part of a roof / hood mirrors the bright sky, the near part the dark street
+      const bx = this.ybox(pts), gr = g.createLinearGradient(bx[0], bx[1], bx[0] + (bx[2] - bx[0]) * 0.3, bx[3] + 0.01);
+      gr.addColorStop(0, Col.shade(fc.col, b * 1.09)); gr.addColorStop(0.55, Col.shade(fc.col, b * 1.0)); gr.addColorStop(1, Col.shade(fc.col, b * 0.9));
+      return gr;
+    }
+    if (m === 'paint' && fc.t !== 'T' && fc.t !== 'D' && fc.t !== 'bv') {
+      // painted sides catch more light near the top: reads as a rounded panel
+      const bx = this.ybox(pts), gr = g.createLinearGradient(0, bx[1], 0, bx[3] + 0.01);
+      gr.addColorStop(0, Col.shade(fc.col, b * 1.07)); gr.addColorStop(1, Col.shade(fc.col, b * 0.86));
+      return gr;
+    }
+    return Col.shade(fc.col, b);
+  },
+  // one face: fill (with window holes), panel edge, glass, then attached feature painters
+  drawFace(g, F, fc, see) {
+    const pts = fc.p.map(q => F.P(q[0], q[1], q[2]));
+    const b = F.b = F.bright(fc.n) * (fc.gain || 1);
+    if (fc.mat === 'none') { if (fc.fx) for (const fn of fc.fx) { F.b = b; g.save(); fn(g, F, fc); g.restore(); g.setTransform(1, 0, 0, 1, 0, 0); } return; }
+    const fill = this.fillFor(g, F, fc, pts, b);
+    g.fillStyle = fill;
+    if (fc.win) {
+      const ws = fc.win.map(w => w.p.map(q => F.P(q[0], q[1], q[2])));
+      g.beginPath(); this.path(g, pts); for (const w of ws) this.path(g, w, true);
+      g.fill('evenodd');
+      for (let i = 0; i < ws.length; i++) this.glass(g, F, fc.win[i], ws[i], b, see);
+    } else { g.beginPath(); this.path(g, pts); g.fill(); g.strokeStyle = fill; g.lineWidth = 0.8; g.stroke(); }
+    if (fc.mat !== 'glass' && !fc.noEdge) { g.beginPath(); this.path(g, pts); g.strokeStyle = this.rgba(fc.col, b * 0.62, 0.55); g.lineWidth = 1; g.stroke(); }
+    if (fc.fx) for (const fn of fc.fx) { F.b = b; g.save(); fn(g, F, fc); g.restore(); g.setTransform(1, 0, 0, 1, 0, 0); }
+  },
+  // window glass: st 0 intact, 1 cracked, 2 smashed (shards), 3 opaque panel, 4 empty frame (open door, burnt)
+  glass(g, F, w, pts, b, see) {
+    if (see && F.glass) F.glass.push(pts);
+    const bx = this.ybox(pts), W = bx[2] - bx[0], H = bx[3] - bx[1];
+    if (w.st === 4) { /* nothing in the frame */ } else if (w.st === 2) {
+      // empty frame with a few shards left in it
+      g.fillStyle = 'rgba(200,225,240,0.45)';
+      for (let k = 0; k < 4; k++) {
+        const t = (k + 0.5) / 4, a = pts[0], c = pts[1];
+        const x = a[0] + (c[0] - a[0]) * t, y = a[1] + (c[1] - a[1]) * t;
+        g.beginPath(); g.moveTo(x - W * 0.05, y); g.lineTo(x + W * 0.05, y); g.lineTo(x + W * 0.01 * (k - 1.5), y - H * (0.1 + 0.1 * (k & 1))); g.fill();
+      }
+    } else {
+      g.save(); g.beginPath(); this.path(g, pts); g.clip();
+      const gr = g.createLinearGradient(bx[0], bx[1], bx[0] + W * 0.3, bx[3]);
+      const al = see && w.st !== 3 ? 0.8 : 1;
+      gr.addColorStop(0, this.rgba('#8ea6b8', b, al)); gr.addColorStop(0.42, this.rgba(CA_COL.glass, b * 1.1, al)); gr.addColorStop(1, this.rgba('#1c2a36', b, al));
+      g.fillStyle = gr; g.fillRect(bx[0] - 1, bx[1] - 1, W + 2, H + 2);
+      g.fillStyle = 'rgba(255,255,255,0.13)';
+      g.beginPath(); g.moveTo(bx[0] + W * 0.12, bx[3] + 1); g.lineTo(bx[0] + W * 0.34, bx[3] + 1); g.lineTo(bx[0] + W * 0.62, bx[1] - 1); g.lineTo(bx[0] + W * 0.4, bx[1] - 1); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.08)';
+      g.beginPath(); g.moveTo(bx[0] + W * 0.42, bx[3] + 1); g.lineTo(bx[0] + W * 0.48, bx[3] + 1); g.lineTo(bx[0] + W * 0.76, bx[1] - 1); g.lineTo(bx[0] + W * 0.7, bx[1] - 1); g.fill();
+      if (w.st === 1) {
+        // spider-web crack
+        const cx = bx[0] + W * 0.35, cy = bx[1] + H * 0.45;
+        g.strokeStyle = 'rgba(230,240,245,0.75)'; g.lineWidth = 0.8; g.beginPath();
+        for (let k = 0; k < 7; k++) { const an = k * 0.9 + 0.3, r = Math.max(W, H) * (0.3 + (k % 3) * 0.12); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(an) * r, cy + Math.sin(an) * r * 0.8); }
+        g.stroke(); g.beginPath(); g.ellipse(cx, cy, W * 0.08, H * 0.1, 0, 0, 7); g.stroke();
+      }
+      g.restore();
+    }
+    g.beginPath(); this.path(g, pts); g.strokeStyle = 'rgba(16,17,19,0.9)'; g.lineWidth = w.trim ? 2.6 : 1.3; g.stroke();
+    // bright-metal window surround (chrome-trim cars)
+    if (w.trim) { g.strokeStyle = Col.shade(w.trim, b * 1.05); g.lineWidth = 1.2; g.stroke(); }
+  },
+  // hollow part (cabin): inside of the far walls, then the interior, then near walls with see-through glass
+  drawHollow(g, F, P) {
+    const near = [];
+    for (const fc of P.faces) {
+      if (F.vis(fc.n) > 1e-4) { near.push(fc); continue; }
+      const pts = fc.p.map(q => F.P(q[0], q[1], q[2]));
+      const b = fc.t === 'D' ? 0.62 : 0.78;
+      g.fillStyle = Col.shade(P.inCol || CA_COL.inside, b);
+      g.beginPath(); this.path(g, pts); g.fill(); g.strokeStyle = g.fillStyle; g.lineWidth = 0.8; g.stroke();
+      if (fc.win) for (const w of fc.win) {
+        if (w.st === 3) continue;
+        g.fillStyle = this.rgba('#6c7c88', 0.9, 0.9);
+        g.beginPath(); this.path(g, w.p.map(q => F.P(q[0], q[1], q[2]))); g.fill();
+      }
+    }
+    if (P.inner) for (const q of this.order(P.inner, F)) this.drawPart(g, F, q);
+    for (const fc of near) this.drawFace(g, F, fc, true);
+  },
+  // ---------------------------------------------------------------- wheels
+  // wheel spec w: { f, s (outer face), r, w (width), side, steer, st (0 ok / 1 flat / 2 missing), rim, burnt }
+  wheelParts(M, steer) {
+    const out = [];
+    for (const w of M.wheels) {
+      const ang = w.steer ? steer * 0.36 : 0;
+      const bb = [w.f - w.r - 0.02, w.f + w.r + 0.02, w.side > 0 ? w.s - w.w : w.s, w.side > 0 ? w.s : w.s + w.w, 0, w.r * 2];
+      const c = [w.f, w.s - w.side * w.w / 2, w.r];
+      out.push({ wheel: w.side, pass: 0, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
+      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
+    }
+    return out;
+  },
+  drawWheel(g, F, P) {
+    const w = P.spec, near = w.side * F.cs > 0;
+    if (P.pass === 1 && !near) return;
+    if (P.pass === 1) {
+      // the outer pass shows the tyre in its arch over the body side; clip it to the side plane so that in
+      // near end-on views it cannot paint over the front / rear face. It runs down to the ground: a seam at the
+      // sill line would cut across the hub of a low car.
+      const e = w.r + 0.08, zl = -0.05, zh = w.r * 2 + 0.08;
+      g.save(); g.beginPath(); this.path(g, [F.P(w.f - e, w.s, zl), F.P(w.f + e, w.s, zl), F.P(w.f + e, w.s, zh), F.P(w.f - e, w.s, zh)]); g.clip();
+    }
+    F.tilt = false;
+    const cs = Math.cos(P.ang), sn = Math.sin(P.ang);
+    const fw = [cs, sn, 0], ax = [-sn * w.side, cs * w.side, 0];
+    const bare = w.st === 2 || w.burnt;
+    const r = bare ? w.r * 0.66 : w.r, cz = bare ? r : w.st === 1 ? w.r * 0.82 : w.r;
+    const th = P.pass === 1 ? Math.min(w.w, 0.07) : w.w;
+    const O = [w.f, w.s, cz], I = [w.f - ax[0] * th, w.s - ax[1] * th, cz];
+    const N = 16, po = [], pi = [];
+    for (let k = 0; k < N; k++) {
+      const t = k / N * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+      const z = Math.max(0, cz + r * s);
+      po.push(F.P(O[0] + fw[0] * r * c, O[1] + fw[1] * r * c, z));
+      pi.push(F.P(I[0] + fw[0] * r * c, I[1] + fw[1] * r * c, z));
+    }
+    const tyre = bare ? (w.burnt ? '#3a2a22' : CA_COL.steel) : CA_COL.tread;
+    // tread band: quads whose radial normal faces the camera
+    for (let k = 0; k < N; k++) {
+      const j = (k + 1) % N, t = (k + 0.5) / N * Math.PI * 2;
+      const n = [fw[0] * Math.cos(t), fw[1] * Math.cos(t), Math.sin(t)];
+      if (F.vis(n) <= 0) continue;
+      g.fillStyle = Col.shade(tyre, F.bright(n)); g.beginPath(); g.moveTo(po[k][0], po[k][1]); g.lineTo(po[j][0], po[j][1]); g.lineTo(pi[j][0], pi[j][1]); g.lineTo(pi[k][0], pi[k][1]); g.closePath(); g.fill();
+      g.strokeStyle = g.fillStyle; g.lineWidth = 0.6; g.stroke();
+    }
+    const outV = F.vis(ax) > 0, disc = outV ? po : pi, b = F.bright(outV ? ax : [-ax[0], -ax[1], 0]);
+    g.fillStyle = Col.shade(bare ? tyre : CA_COL.wall, b * (outV ? 1 : 0.7)); g.beginPath(); this.path(g, disc); g.fill();
+    if (outV) {
+      // rim / wheel cover painted in the wheel plane (x forward, y down; units of 0.01)
+      F.frame(g, O, fw, [0, 0, -1], 0.01);
+      const R = r * 100, st = bare ? 'bare' : w.rim || 'cap', C = (c, m) => Col.shade(c, b * (m || 1));
+      const disc = (rr, c) => { g.fillStyle = c; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); };
+      const ring = (rr, lw, c) => { g.strokeStyle = c; g.lineWidth = lw; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.stroke(); };
+      const dots = (n, rr, d, c, a0) => { g.fillStyle = c; for (let k = 0; k < n; k++) { const an = (a0 || 0) + k * Math.PI * 2 / n; g.beginPath(); g.arc(Math.cos(an) * rr, Math.sin(an) * rr, d, 0, 7); g.fill(); } };
+      // tyre shoulder catches a little light; whitewall / white-letter band
+      ring(R * 0.93, R * 0.08, C('#3a3a3c'));
+      if (!bare && w.white) ring(R * 0.77, R * 0.13, C('#e6e4da'));
+      if (st === 'bare') {
+        const m = w.burnt ? '#4a3a30' : CA_COL.steel;
+        disc(R * 0.96, C(m)); disc(R * 0.7, C(m, 0.7)); dots(5, R * 0.36, R * 0.07, C(m, 1.2), 0.3); disc(R * 0.2, C(m, 0.85));
+      } else if (st === 'cap') {
+        // full 80s wheel cover: domed silver disc, slotted ring, small centre cap
+        const m = w.rimCol || CA_COL.rim;
+        disc(R * 0.68, C(m, 0.82)); disc(R * 0.6, C(m)); disc(R * 0.36, C(m, 1.12));
+        g.strokeStyle = C('#2a2c30'); g.lineWidth = R * 0.07; g.beginPath();
+        for (let k = 0; k < 10; k++) { const an = k * 0.6283; g.moveTo(Math.cos(an) * R * 0.42, Math.sin(an) * R * 0.42); g.lineTo(Math.cos(an) * R * 0.55, Math.sin(an) * R * 0.55); }
+        g.stroke();
+        disc(R * 0.15, C('#8a9096')); disc(R * 0.08, C('#e2e6ea'));
+      } else if (st === 'alloy') {
+        // five-spoke alloy: bright disc with dark pockets between the spokes
+        const m = w.rimCol || '#d4d8dc';
+        disc(R * 0.66, C(m, 0.9)); disc(R * 0.58, C('#2a2c30'));
+        g.fillStyle = C(m, 1.08); g.beginPath();
+        for (let k = 0; k < 5; k++) { const an = k * 1.2566 - 1.57, ca = Math.cos(an), sa = Math.sin(an), px = -sa, py = ca; g.moveTo(px * R * 0.1, py * R * 0.1); g.lineTo(ca * R * 0.58 + px * R * 0.13, sa * R * 0.58 + py * R * 0.13); g.lineTo(ca * R * 0.58 - px * R * 0.13, sa * R * 0.58 - py * R * 0.13); g.lineTo(-px * R * 0.1, -py * R * 0.1); }
+        g.fill(); disc(R * 0.2, C(m, 1.1)); disc(R * 0.08, C('#5a5e62'));
+      } else if (st === 'dog') {
+        // black steel wheel with a chrome dog-dish cap (police, taxis)
+        disc(R * 0.62, C('#26282b')); ring(R * 0.5, R * 0.04, C('#3a3c40'));
+        disc(R * 0.36, C('#9aa0a6')); disc(R * 0.3, C(CA_COL.chrome)); disc(R * 0.12, C('#7a8086'));
+      } else if (st === 'mil') {
+        const m = w.rimCol || '#4a5238';
+        disc(R * 0.64, C(m)); ring(R * 0.48, R * 0.05, C(m, 0.7)); dots(8, R * 0.38, R * 0.045, C(m, 1.25)); disc(R * 0.24, C(m, 0.85)); disc(R * 0.14, C('#2a2c26'));
+      } else {
+        // painted steel wheel: dished centre, five lug nuts, small chrome cap
+        const m = w.rimCol || CA_COL.steel;
+        disc(R * 0.62, C(m)); ring(R * 0.5, R * 0.05, C(m, 0.72)); disc(R * 0.34, C(m, 0.86));
+        dots(5, R * 0.24, R * 0.045, C('#c8ccd0'), 0.3); disc(R * 0.12, C(CA_COL.chrome));
+      }
+      if (w.dual) ring(R * 0.46, R * 0.05, C('#222222'));
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    F.tilt = true;
+    if (P.pass === 1) g.restore();
+  },
+  // soft contact shadow under the whole vehicle
+  drawShadow(g, F, M) {
+    F.tilt = false;
+    const sx = F.sc * 2.4, sy = -F.sc * 1.2;
+    for (const [e, a] of [[0.2, 0.08], [0.12, 0.1], [0.05, 0.14], [-0.04, 0.16]]) {
+      const ol = this.rect(-M.hl - e, M.hl + e, -M.hw - e, M.hw + e, 0.25 + e, 0.2 + e);
+      g.fillStyle = 'rgba(0,0,0,' + a + ')'; g.beginPath(); this.path(g, ol.map(q => { const p = F.P(q[0], q[1], 0); p[0] += sx; p[1] += sy; return p; })); g.fill();
+    }
+    F.tilt = true;
+  },
+  // ---------------------------------------------------------------- painter order
+  // A before B? -1 A first, 1 B first. Separating planes along f, s, z decide; wheels straddle the
+  // body so their full pass goes before it and the outer pass (near side only) after it.
+  before(A, B, cf, cs) {
+    if (A.on === B) return 1;
+    if (B.on === A) return -1;
+    // a part lying against a slanted face of another (bumper wraps on chamfered corners) carries that plane
+    // (seen edge-on either order is right; leave it to the other tests)
+    if (A.sep && A.sep.of === B) { const v = A.sep.n[0] * cf + A.sep.n[1] * cs + A.sep.n[2]; if (Math.abs(v) > 1e-3) return v > 0 ? 1 : -1; }
+    if (B.sep && B.sep.of === A) { const v = B.sep.n[0] * cf + B.sep.n[1] * cs + B.sep.n[2]; if (Math.abs(v) > 1e-3) return v > 0 ? -1 : 1; }
+    const a = A.bb, b = B.bb, e = 1e-4;
+    // a horizontal separating plane is always valid (camera above) and keeps low wheels consistent
+    if (a[5] <= b[4] + e) return -1;
+    if (b[5] <= a[4] + e) return 1;
+    if (a[1] <= b[0] + e) return cf > 0 ? -1 : 1;
+    if (b[1] <= a[0] + e) return cf > 0 ? 1 : -1;
+    if (a[3] <= b[2] + e) return cs > 0 ? -1 : 1;
+    if (b[3] <= a[2] + e) return cs > 0 ? 1 : -1;
+    if (A.wheel && B.wheel) return A.pass - B.pass || (A._d < B._d ? -1 : 1);
+    if (A.wheel) return A.pass ? 1 : -1;
+    if (B.wheel) return B.pass ? -1 : 1;
+    return A._d < B._d ? -1 : 1;
+  },
+  // convex hull (monotone chain) of screen points
+  hull(pts) {
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+    for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    lo.pop(); up.pop();
+    return lo.concat(up);
+  },
+  // do two convex screen polygons overlap by more than m pixels? (separating axis test)
+  overlap(P, Q, m) {
+    for (let r = 0; r < 2; r++) {
+      const A = r ? Q : P, B = r ? P : Q;
+      for (let i = 0; i < A.length; i++) {
+        const a = A[i], b = A[(i + 1) % A.length], nx = a[1] - b[1], ny = b[0] - a[0], l = Math.hypot(nx, ny);
+        if (l < 1e-6) continue;
+        let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+        for (const p of A) { const d = (p[0] * nx + p[1] * ny) / l; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+        for (const p of B) { const d = (p[0] * nx + p[1] * ny) / l; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+        if (a1 < b0 + m || b1 < a0 + m) return false;
+      }
+    }
+    return true;
+  },
+  // Pairs are only constrained where the projected outlines of their boxes overlap (convex hexagons, much
+  // tighter than screen rectangles), so parts that merely share a screen rectangle add no edges and no cycles.
+  order(parts, F) {
+    const n = parts.length;
+    if (n < 2) return parts;
+    for (const p of parts) {
+      const bb = p.bb, pts = [];
+      p._d = F.depth(p.c[0], p.c[1], p.c[2]);
+      F.tilt = !p.wheel; for (let k = 0; k < 8; k++) pts.push(F.P(bb[k & 1], bb[2 + ((k >> 1) & 1)], bb[4 + (k >> 2)])); F.tilt = true;
+      const h = p._h = this.hull(pts);
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const q of h) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+      p._s = [x0, y0, x1, y1];
+    }
+    const nxt = [], indeg = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) nxt.push([]);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const A = parts[i], B = parts[j], sa = A._s, sb = B._s;
+      if (sa[2] < sb[0] || sb[2] < sa[0] || sa[3] < sb[1] || sb[3] < sa[1]) continue;
+      if (!this.overlap(A._h, B._h, 0.5)) continue;
+      if (this.before(A, B, F.cf, F.cs) < 0) { nxt[i].push(j); indeg[j]++; } else { nxt[j].push(i); indeg[i]++; }
+    }
+    const out = [], ready = [];
+    for (let i = 0; i < n; i++) if (!indeg[i]) ready.push(i);
+    while (out.length < n) {
+      if (!ready.length) { let bi = -1; for (let i = 0; i < n; i++) if (indeg[i] > 0 && (bi < 0 || parts[i]._d < parts[bi]._d)) bi = i; indeg[bi] = 0; ready.push(bi); }
+      let k = 0;
+      for (let q = 1; q < ready.length; q++) if (parts[ready[q]]._d < parts[ready[k]]._d) k = q;
+      const i = ready.splice(k, 1)[0];
+      out.push(parts[i]); indeg[i] = -1;
+      for (const j of nxt[i]) if (indeg[j] > 0 && --indeg[j] === 0) ready.push(j);
+    }
+    return out;
+  },
+  // A near-side wheel's outer pass is painted straight after the last-drawn body part whose side carries its
+  // arch (sorting it with the rest only adds cycles that can push it under the body); far-side outer passes
+  // draw nothing and are dropped.
+  paint(g, F, M, steer) {
+    if (Settings.v.shadows !== 0) this.drawShadow(g, F, M);
+    const parts = M.parts.slice(), outer = [];
+    for (const p of this.wheelParts(M, steer)) {
+      if (p.pass === 0) { parts.push(p); continue; }
+      if (p.spec.side * F.cs <= 0) continue;
+      const hs = this.hostsOf(M, p.spec);
+      if (hs.length) outer.push([hs, p]); else parts.push(p);
+    }
+    const ord = this.order(parts, F), after = [];
+    for (const [hs, p] of outer) { let k = -1; for (const h of hs) k = Math.max(k, ord.indexOf(h)); (after[k] || (after[k] = [])).push(p); }
+    for (let i = 0; i < ord.length; i++) { this.drawPart(g, F, ord[i]); if (after[i]) for (const q of after[i]) this.drawPart(g, F, q); }
+  },
+  // body parts reaching out to wheel w's side over its arch (cached on the wheel spec)
+  hostsOf(M, w) {
+    if (w.hosts) return w.hosts;
+    const out = [];
+    for (const p of M.parts) {
+      if (!p.body) continue;
+      const bb = p.bb, sOut = w.side > 0 ? bb[3] : -bb[2];
+      if (sOut < Math.abs(w.s) - 0.03 || bb[4] > w.r * 2) continue;
+      if (Math.min(bb[1], w.f + w.r) - Math.max(bb[0], w.f - w.r) > 0.02) out.push(p);
+    }
+    return (w.hosts = out);
+  },
+});
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- state key
+  // The model depends only on this key (it is parsed back in build): type|col|dmg|sides|glass|doors|hood|trunk|tyres|lights|flags|seed
+  GLASS: ['windshield', 'rearWindow', 'winFL', 'winFR', 'winRL', 'winRR'],
+  DOORS: ['doorFL', 'doorFR', 'doorRL', 'doorRR'],
+  TYRES: ['tireFL', 'tireFR', 'tireRL', 'tireRR'],
+  LIGHTS: ['lightFL', 'lightFR', 'lightRL', 'lightRR'],
+  pv(p, k) { if (!p) return 100; const v = p[k]; return typeof v === 'number' ? v : 100; },
+  mkey(c) {
+    const p = c.parts && typeof c.parts === 'object' ? c.parts : null, dm = c.dmg && typeof c.dmg === 'object' ? c.dmg : null;
+    const hp = Number.isFinite(c.hp) ? c.hp : 100;
+    const d = hp >= 72 ? 0 : hp >= 48 ? 1 : hp >= 22 ? 2 : 3;
+    const q = (v) => Math.max(0, Math.min(3, Math.round((+v || 0) * 3)));
+    const sd = dm ? '' + q(dm.front) + q(dm.rear) + q(dm.left) + q(dm.right) : '-';
+    let gl = '', smashed = false;
+    for (const k of this.GLASS) { const v = this.pv(p, k), s = v <= 0 ? 2 : v < 40 ? 1 : 0; if (s === 2) smashed = true; gl += s; }
+    if (c.winBroken && !smashed) gl = gl.slice(0, 2) + '2' + gl.slice(3);
+    let dr = '';
+    const dob = c.doorOpen | 0;
+    for (let i = 0; i < 4; i++) dr += this.pv(p, this.DOORS[i]) === -1 ? 2 : (dob >> i) & 1;
+    const ho = this.pv(p, 'hood') === -1 ? 2 : c.hoodOpen ? 1 : 0, tr = this.pv(p, 'trunkLid') === -1 ? 2 : c.trunkOpen ? 1 : 0;
+    let ty = '', li = '';
+    for (const k of this.TYRES) { const v = this.pv(p, k); ty += v === -1 ? 2 : v < 10 ? 1 : 0; }
+    for (const k of this.LIGHTS) li += this.pv(p, k) < 10 ? 1 : 0;
+    const fl = (c.burnt ? 'B' : '') + (Season.snow > 0.3 && !c.engine ? 'S' : '') + (c.type === 'sports' && c.lightsOn && c.engine ? 'P' : '');
+    const seed = d || sd !== '-' ? (c.id | 0) & 3 : 0;
+    return c.type + '|' + c.col + '|' + d + '|' + sd + '|' + gl + '|' + dr + '|' + ho + '|' + tr + '|' + ty + '|' + li + '|' + fl + '|' + seed;
+  },
+  parseKey(mk) {
+    const a = mk.split('|');
+    const S = { type: a[0], col: /^#[0-9a-fA-F]{6}$/.test(a[1]) || /^#[0-9a-fA-F]{3}$/.test(a[1]) ? a[1] : '#7a7a7a', d: +a[2], seed: +a[11] || 0 };
+    S.sides = a[3] === '-' ? null : { front: +a[3][0], rear: +a[3][1], left: +a[3][2], right: +a[3][3] };
+    S.glass = {}; this.GLASS.forEach((k, i) => { S.glass[k] = +a[4][i]; });
+    S.doors = [0, 1, 2, 3].map(i => +a[5][i]);
+    S.hood = +a[6]; S.trunk = +a[7];
+    S.tyres = [0, 1, 2, 3].map(i => +a[8][i]);
+    S.lights = [0, 1, 2, 3].map(i => +a[9][i]);
+    S.burnt = a[10].indexOf('B') >= 0; S.snow = a[10].indexOf('S') >= 0; S.pop = a[10].indexOf('P') >= 0;
+    return S;
+  },
+  // ---------------------------------------------------------------- sprite cache
+  // sprite resolution (Car detail): 2x, or 1x while zoomed out (Auto) or always (Low); shadows on or off
+  sc() { const d = Settings.v.carDetail, z = Render.cam.zoom * Render.dpr; return d === 2 || (d === 1 && z > 1.05) ? CA_SC : 1; },
+  sKey() { return (this.sc() === CA_SC ? '' : '|1') + (Settings.v.shadows === 0 ? '|n' : ''); },
+  sprite(c, mk, bk, st) {
+    const sk = this.sKey(), key = mk + '|' + bk + st + sk;
+    let rec = this.cache.get(key);
+    if (rec) { this.cache.delete(key); this.cache.set(key, rec); return rec; }
+    // per-frame budget for new sprites: past it, reuse the nearest cached heading of the same model
+    const now = performance.now();
+    if (now - this.bT > 12) { this.bT = now; this.bMs = 0; }
+    if (this.bMs > 5) {
+      for (let d = 1; d < CA_NB / 2; d++) for (const b2 of [bk - d, bk + d]) { const r2 = this.cache.get(mk + '|' + ((b2 + CA_NB) % CA_NB) + st + sk); if (r2) return r2; }
+      // (or this heading at the other resolution, while the zoom crosses over)
+      const r3 = this.cache.get(mk + '|' + bk + st + (sk.indexOf('|1') === 0 ? sk.slice(2) : '|1' + sk));
+      if (r3) return r3;
+    }
+    let M = this.models.get(mk);
+    if (!M) {
+      try { M = this.build(mk); } catch (e) { M = this.fallback(c, mk, e); }
+      this.models.set(mk, M); this.stats.models++;
+      if (this.models.size > 64) this.models.delete(this.models.keys().next().value);
+    }
+    const sc = this.sc();
+    try { rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc); } catch (e) {
+      M = this.fallback(c, mk, e); this.models.set(mk, M);
+      rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc);
+    }
+    this.bMs += performance.now() - now;
+    this.cache.set(key, rec); this.bytes += rec.bytes;
+    while (this.bytes > this.cap * CACHE_K() && this.cache.size > 12) {
+      const k0 = this.cache.keys().next().value, r0 = this.cache.get(k0);
+      this.bytes -= r0.bytes * (r0.sil ? 2 : 1); this.cache.delete(k0); this.stats.evicted++;
+    }
+    return rec;
+  },
+  // the car being driven is rendered at its exact heading (no 64-step snapping or stale headings while
+  // turning); the render is reused while heading, state and steering stay the same
+  liveSprite(c, mk, bk, st) {
+    const L = this.live;
+    const sk = this.sKey();
+    if (L && L.id === c.id && L.mk === mk && L.st === st && L.sk === sk && Math.abs(U.angDiff(L.a, c.a)) < 0.003) return L.rec;
+    let M = this.models.get(mk);
+    try {
+      if (!M) { M = this.build(mk); this.models.set(mk, M); this.stats.models++; }
+      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1, this.sc(), (L && L.rec) || true);
+      rec.live = true; rec.silC = L ? L.rec.sil || L.rec.silC : null;
+      this.live = { id: c.id, mk, st, sk, a: c.a, rec };
+      return rec;
+    } catch (e) { return this.sprite(c, mk, bk, st); }
+  },
+  // drop every cached sprite and model (e.g. after loading a save)
+  flush() { this.cache.clear(); this.models.clear(); this.bytes = 0; this.live = null; },
+  // never let one broken model stop the frame: fall back to a plain sedan of the same colour
+  fallback(c, mk, e) {
+    if (!this.warned) { this.warned = true; console.warn('CarArt: model failed for ' + mk, e); }
+    return this.build('sedan|' + (/^#[0-9a-fA-F]{6}$/.test(c.col) ? c.col : '#7a7a7a') + '|0|-|000000|0000|0|0|0000|0000||0');
+  },
+  // render model M at heading a into a fresh canvas (sc: 2 or 1 px per world px) sized to its projected bounds;
+  // reuse (the driven car): true or the previous live render, whose canvas is repainted while it is big enough; new
+  // ones get room to spare, so a turn does not make a new canvas every few frames
+  render(M, a, steer, sc, reuse) {
+    const t0 = performance.now();
+    sc = sc || CA_SC;
+    const F0 = this.proj(a, 0, 0, sc, M.tilt);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    const acc = (q) => { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; };
+    const scan = (ps) => {
+      for (const P of ps) {
+        for (const fc of P.faces) for (const q of fc.p) acc(F0.P(q[0], q[1], q[2]));
+        if (!P.faces.length) for (let k = 0; k < 8; k++) acc(F0.P(P.bb[k & 1], P.bb[2 + ((k >> 1) & 1)], P.bb[4 + (k >> 2)]));
+        if (P.inner) scan(P.inner);
+      }
+    };
+    scan(M.parts);
+    F0.tilt = false;
+    const e = 0.24;
+    for (const f of [-M.hl - e, M.hl + e]) for (const s of [-M.hw - e, M.hw + e]) acc(F0.P(f, s, 0));
+    for (const w of M.wheels) for (const f of [w.f - w.r, w.f + w.r]) for (const s of [w.s, w.s - w.side * w.w]) { acc(F0.P(f, s, 0)); acc(F0.P(f, s, w.r * 2)); }
+    const pad = 4, W = Math.ceil(x1 - x0 + pad * 2), H = Math.ceil(y1 - y0 + pad * 2);
+    const rc = reuse && reuse.c, cv = rc && rc.width >= W && rc.height >= H && rc.width < W * 1.6 && rc.height < H * 1.6 ? rc : reuse ? mkCanvas(W * 1.3, H * 1.3) : mkCanvas(W, H), g = cv.getContext('2d');
+    if (cv === rc) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, cv.width, cv.height); }
+    const ax = Math.round(-x0 + pad), ay = Math.round(-y0 + pad);
+    const F = this.proj(a, ax, ay, sc, M.tilt);
+    F.glass = [];
+    g.lineJoin = 'round';
+    this.paint(g, F, M, steer);
+    const ms = performance.now() - t0;
+    this.stats.sprites++; this.stats.ms += ms; if (ms > this.stats.maxMs) this.stats.maxMs = ms;
+    return { c: cv, ax, ay, sil: null, bytes: cv.width * cv.height * 4, glass: F.glass, a, M, sc };
+  },
+  silOf(rec) {
+    if (!rec.sil) {
+      // (the live car's silhouette canvas is repainted, not made anew each frame)
+      const r0 = rec.silC, c = r0 && r0.width === rec.c.width && r0.height === rec.c.height ? r0 : mkCanvas(rec.c.width, rec.c.height), g = c.getContext('2d');
+      if (c === r0) { g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, c.width, c.height); }
+      g.drawImage(rec.c, 0, 0);
+      g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, c.width, c.height);
+      rec.sil = c; if (!rec.live) this.bytes += rec.bytes;
+    }
+    return rec.sil;
+  },
+  // cached additive glow sprite for an rgb triple
+  glows: {},
+  glow(k) {
+    let c = this.glows[k];
+    if (c) return c;
+    const rgb = { h: [255, 244, 210], r: [255, 36, 24], b: [40, 90, 255], w: [255, 255, 255], a: [255, 166, 40], d: [255, 210, 150], v: [255, 250, 240] }[k] || [255, 255, 255];
+    c = mkCanvas(64, 64);
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    const s = rgb.join(',');
+    gr.addColorStop(0, 'rgba(' + s + ',1)'); gr.addColorStop(0.18, 'rgba(' + s + ',0.55)'); gr.addColorStop(0.5, 'rgba(' + s + ',0.14)'); gr.addColorStop(1, 'rgba(' + s + ',0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    this.glows[k] = c;
+    return c;
+  },
+  // ---------------------------------------------------------------- per frame
+  draw(ctx, c) {
+    const s = Math.max(0.12, Render.shadeSmooth(c.x, c.y));
+    if (!World.isVis(c.x | 0, c.y | 0) && !World.isVis((c.x + Math.cos(c.a)) | 0, (c.y + Math.sin(c.a)) | 0) && G.player && !G.player.inCar && Render.shadeAt(c.x, c.y) < 0.05) return;
+    const mk = this.mkey(c);
+    const bk = ((Math.round((Number.isFinite(c.a) ? c.a : 0) / (Math.PI * 2) * CA_NB) % CA_NB) + CA_NB) % CA_NB;
+    const st = c.steer > 0.15 ? 2 : c.steer < -0.15 ? 0 : 1;
+    const rec = G.player && G.player.inCar === c ? this.liveSprite(c, mk, bk, st) : this.sprite(c, mk, bk, st), M = rec.M;
+    const X = (c.x - c.y) * HTW, Y = (c.x + c.y) * HTH;
+    const k = rec.sc || CA_SC, x0 = X - rec.ax / k, y0 = Y - rec.ay / k, w = rec.c.width / k, h = rec.c.height / k;
+    const lit = !!(c.engine && !c.burnt), night = 1 - U.clamp((G.light.amb - 0.25) / 0.5, 0, 1);
+    const a = rec.a, ca = Math.cos(a), sa = Math.sin(a), tl = M.tilt;
+    const LP = (f, sd, z) => { z -= tl[0] + tl[1] * f + tl[2] * sd; const dx = f * ca - sd * sa, dy = f * sa + sd * ca; return [X + (dx - dy) * HTW, Y + (dx + dy) * HTH - z * ZU]; };
+    const heads = lit && c.lightsOn && M.lt.some(L => L.k === 'h' && !L.broken);
+    // headlight beam on the ground ahead (under the car)
+    if (heads && night > 0.05) {
+      const C = LP(M.hl + 2.3, 0, 0), u = [(ca - sa) * HTW * 2.4, (ca + sa) * HTH * 2.4], v = [(-sa - ca) * HTW * 1.25, (-sa + ca) * HTH * 1.25];
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.3 * night;
+      ctx.transform(u[0], u[1], v[0], v[1], C[0], C[1]); ctx.drawImage(this.glow('h'), -1, -1, 2, 2);
+      ctx.restore();
+    }
+    ctx.drawImage(rec.c, x0, y0, w, h);
+    if (G.player && G.player.inCar === c && rec.glass.length) this.drawDriver(ctx, c, rec, x0, y0);
+    if (1 - s > 0.02) { ctx.globalAlpha = Math.min(1, 1 - s); ctx.drawImage(this.silOf(rec), x0, y0, w, h); ctx.globalAlpha = 1; }
+    if (!lit && !(c.doorOpen && night > 0.3)) return;
+    // lamps: additive glows that stay bright in the dark
+    const t = performance.now() / 1000, fv = ca + sa;
+    const op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    const spot = (L, key, r, al) => { const p = LP(L.f, L.s, L.z); ctx.globalAlpha = Math.min(1, al); ctx.drawImage(this.glow(key), p[0] - r, p[1] - r, r * 2, r * 2); };
+    const k8 = Math.floor(t * 8) % 8;
+    for (const L of M.lt) {
+      if (L.broken) continue;
+      if (L.k === 'h') { if (heads && fv > -0.15) spot(L, 'h', 7 + 9 * night, (0.55 + 0.45 * night) * Math.min(1, (fv + 0.15) * 2)); }
+      else if (L.k === 't') { if (lit && (c.braking || c.lightsOn) && fv < 0.15) spot(L, 'r', c.braking ? 9 + 5 * night : 6 + 4 * night, (c.braking ? 0.95 : 0.5) * Math.min(1, (0.15 - fv) * 2)); }
+      else if (L.k === 'c') { if (lit && c.braking && fv < 0.3) spot(L, 'r', 6, 0.8); }
+      else if (L.k === 'r') { if (lit && c.rev && fv < 0.15) spot(L, 'v', 6 + 4 * night, 0.85); }
+      else if (L.k === 'b') {
+        if (L.taxi) { if (lit && c.lightsOn) spot(L, 'a', 9 + 9 * night, 0.35 + 0.4 * night); }
+        else if (lit && c.siren) { const ph = (k8 - L.ph + 8) % 8; if (ph === 0 || ph === 2) { spot(L, L.c, 10 + 10 * night, 0.95); spot(L, 'w', 4, 0.8); } }
+      } else if (L.k === 'd') { if (c.doorOpen && night > 0.3 && rec.glass.length) this.dome(ctx, rec, L, x0, y0, night); }
+    }
+    // siren wash on the ground around the car
+    if (lit && c.siren && M.bar && night > 0.1 && (k8 & 2) === 0) {
+      const p = LP(0, 0, 0), r = (M.hl + 2.5) * 32, key = k8 < 4 ? M.bar[0] : M.bar[1];
+      ctx.globalAlpha = 0.22 * night; ctx.drawImage(this.glow(key), p[0] - r, p[1] - r * 0.6, r * 2, r * 1.2);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = op;
+  },
+  // warm interior light seen through the windows (doors open after dark)
+  dome(ctx, rec, L, x0, y0, night) {
+    const sc = rec.sc || CA_SC, F = this.proj(rec.a, rec.ax, rec.ay, sc, rec.M.tilt), p = F.P(L.f, L.s, L.z - 0.12), r = 34 * sc;
+    ctx.save();
+    ctx.translate(x0, y0); ctx.scale(1 / sc, 1 / sc);
+    ctx.beginPath(); for (const pts of rec.glass) this.path(ctx, pts); ctx.clip();
+    ctx.globalAlpha = 0.85 * night; ctx.drawImage(this.glow('d'), p[0] - r, p[1] - r, r * 2, r * 2);
+    ctx.restore();
+  },
+  // head and shoulders of the player behind the glass
+  drawDriver(ctx, c, rec, x0, y0) {
+    const M = rec.M, look = Player.look();
+    const k = rec.sc || CA_SC, F = this.proj(rec.a, rec.ax, rec.ay, k, M.tilt);
+    const [f, sd, z] = M.seat;
+    ctx.save();
+    ctx.translate(x0, y0); ctx.scale(1 / k, 1 / k);
+    ctx.beginPath(); for (const pts of rec.glass) this.path(ctx, pts); ctx.clip();
+    const sh = F.P(f - 0.04, sd, z), hd = F.P(f, sd, z + 0.2);
+    ctx.fillStyle = look.jacket || look.shirt || '#4a5a6a';
+    ctx.beginPath(); ctx.ellipse(sh[0], sh[1], 7.5 * k, 5 * k, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = look.skin || '#c8a080';
+    ctx.beginPath(); ctx.arc(hd[0], hd[1], 4.4 * k, 0, 7); ctx.fill();
+    if (look.hat) { ctx.fillStyle = look.hat.col || '#333'; ctx.beginPath(); ctx.arc(hd[0], hd[1] - 1.2 * k, 4.6 * k, Math.PI, Math.PI * 2); ctx.fill(); }
+    else if (look.hair && look.hairStyle !== 'bald') { ctx.fillStyle = look.hair; ctx.beginPath(); ctx.arc(hd[0], hd[1] - 0.8 * k, 4.4 * k, Math.PI * 0.95, Math.PI * 2.05); ctx.fill(); }
+    // glass tint and reflection over the driver
+    ctx.fillStyle = 'rgba(40,60,80,0.28)'; ctx.fillRect(sh[0] - 20 * k, hd[1] - 12 * k, 40 * k, 30 * k);
+    ctx.restore();
+  },
+});
+// Per-type body styling for the passenger-car builder. The footprint (len, wid) is the physics one from
+// CAR_TYPES (about half a real car's length); heights are scaled from real late-80s cars by the width ratio so
+// the bodies keep their real long-and-low proportions: h beltline / hood line, cabH greenhouse height, cab
+// greenhouse base [rear, front] as fractions of len, axF / axR axles (fractions of len), bv / rb rounded
+// shoulder and roof edge. Long hoods, thin pillars, big wheels in dark arches, thin chrome bumpers.
+const CA_CARS = {
+  // full-size rear-drive sedan (Caprice / Crown Victoria class): formal roof, long hood and trunk
+  base: { h: 0.55, cabH: 0.36, cab: [-0.33, 0.175], z0: 0.12, r: 0.21, axF: 0.3, axR: -0.245, nose: 0.06, tail: 0.02, chF: 0.05, chR: 0.05, rakeF: 0.32, rakeR: 0.2, tum: 0.07, gin: 0.04, bv: 0.035, rb: 0.03, doors: 4, bump: 'chrome', grille: 'chrome', lamps: 'quad', tails: 'wide', trim: 'chrome', rim: 'cap', opera: true, crease: true },
+  sedan: { vinyl: true, white: true, orn: true },
+  police: { bar: 'police', pushbar: true, trim: 'black', rim: 'dog', livery: 'bw', spot: true },
+  taxi: { sign: true, checker: true, trim: 'black', rim: 'steel' },
+  // small front-drive hatchback: short nose, upright hatch
+  hatchback: { h: 0.52, cabH: 0.34, cab: [-0.45, 0.23], z0: 0.11, r: 0.185, axF: 0.31, axR: -0.305, nose: 0.06, tail: 0, chF: 0.06, chR: 0.04, rakeF: 0.3, rakeR: 0.16, tum: 0.06, opera: false, hatch: true, bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', trim: 'black', rim: 'steel' },
+  // full-size wagon: long roof to a near-upright tailgate, wood-grain sides, roof rack
+  wagon: { cab: [-0.45, 0.17], axR: -0.215, rakeR: 0.04, opera: false, hatch: true, wood: true, rack: true, tails: 'vert', quarter: true, white: true },
+  // pony car / sports coupe: low wedge nose, long hood, fastback glass
+  sports: { h: 0.44, cabH: 0.27, cab: [-0.38, 0.12], z0: 0.1, r: 0.19, axF: 0.3, axR: -0.27, nose: 0.13, tail: 0.03, chF: 0.12, chR: 0.06, rakeF: 0.36, rakeR: 0.4, tum: 0.08, rb: 0.025, opera: false, crease: false, doors: 2, bump: 'body', grille: 'none', lamps: 'popup', tails: 'band', spoiler: true, trim: 'black', rim: 'alloy' },
+  // full-size 4x4 (Blazer / Bronco class): tall, upright glass, two-tone, flares, spare on the tailgate
+  suv: { h: 0.7, cabH: 0.4, cab: [-0.47, 0.2], z0: 0.24, r: 0.23, axF: 0.3, axR: -0.27, nose: 0.03, tail: 0, chF: 0.05, chR: 0.04, rakeF: 0.2, rakeR: 0.03, tum: 0.05, opera: false, hatch: true, rack: true, spare: true, two: '#a4a9ae', bump: 'black', grille: 'black', lamps: 'rect', tails: 'vert', flares: true, rim: 'steel', quarter: true },
+};
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- model helpers
+  // part-level painters run after all faces of the part when the direction n faces the camera
+  pfx(P, n, fn) { (P.pfx || (P.pfx = [])).push({ n, fn }); return P; },
+  drawPart(g, F, P) {
+    if (P.draw) return P.draw.call(this, g, F, P);
+    if (P.hollow) this.drawHollow(g, F, P);
+    else for (const fc of P.faces) if (F.vis(fc.n) > 1e-4) this.drawFace(g, F, fc, false);
+    if (P.pfx) for (const x of P.pfx) if (F.vis(x.n) > 1e-4) { F.b = F.bright(x.n); g.save(); x.fn.call(this, g, F); g.restore(); g.setTransform(1, 0, 0, 1, 0, 0); }
+  },
+  // deterministic small hash of a string (colour / type) for styling choices
+  hash(s) { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; },
+  seatCol(col) {
+    const c = Col.rgb(col);
+    if (c[0] > c[1] + 40 && c[0] > c[2] + 30) return '#5a2828';
+    if (c[2] > c[0] + 25) return '#2e3a58';
+    if (c[0] > 140 && c[1] > 120 && c[2] < 130) return '#7a6648';
+    return '#3c3c40';
+  },
+  // lower body as one convex part from f0 (rear) to f1 (front): hood slopes from fC down to noseZ,
+  // trunk deck from fR down to tailZ; faces: sides, chamfers, front, rear, tops 'hood' / 'deck' / 'trunk'
+  // convex plan outline [[f, s]...] moved inward by ds on edges running along f (the sides) and by de on the
+  // others (ends; chamfers take the mean)
+  inset(ol, ds, de) {
+    const n = ol.length, L = [];
+    let ar = 0;
+    for (let i = 0; i < n; i++) { const a = ol[i], b = ol[(i + 1) % n]; ar += a[0] * b[1] - b[0] * a[1]; }
+    const sg = ar > 0 ? 1 : -1;
+    for (let i = 0; i < n; i++) {
+      const a = ol[i], b = ol[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+      const nx = -dy / l * sg, ny = dx / l * sg, al = Math.abs(dx) / l, d = al > 0.9 ? ds : al < 0.1 ? de : (ds + de) / 2;
+      L.push([nx, ny, nx * a[0] + ny * a[1] + d]);
+    }
+    return ol.map((q, i) => {
+      const p = L[(i + n - 1) % n], c = L[i], det = p[0] * c[1] - p[1] * c[0];
+      if (Math.abs(det) < 1e-6) { const d = c[2] - c[0] * q[0] - c[1] * q[1]; return [q[0] + c[0] * d, q[1] + c[1] * d]; }
+      return [(p[2] * c[1] - c[2] * p[1]) / det, (p[0] * c[2] - c[0] * p[2]) / det];
+    });
+  },
+  // quads between two matching rings R0 -> R1 added to part P as bevel faces (rounded shoulders / roof edges:
+  // a lit strip between top and side instead of a hard box edge)
+  bevel(P, R0, R1, col) {
+    for (let i = 0; i < R0.length; i++) {
+      const j = (i + 1) % R0.length, p = [R0[i], R0[j], R1[j], R1[i]], n = this.normal(p, P.c);
+      if (n) P.faces.push({ p, n, t: 'bv', col, mat: 'paint', fx: null, win: null, gain: 1.07, noEdge: true });
+    }
+  },
+  // lower body as one convex part from f0 (rear) to f1 (front): hood slopes from fC down to noseZ,
+  // trunk deck from fR down to tailZ; faces: sides, chamfers, front, rear, tops 'hood' / 'deck' / 'trunk'.
+  // bv rounds the shoulder: the sides stop bv under the top line and a bevel runs in to the top faces.
+  lowerBody(o) {
+    const { f0, f1, hw, z0, zb, fC, fR, noseZ, tailZ, chF, chR, col } = o, bv = o.bv || 0;
+    const zf = (f) => f > fC ? zb - (zb - noseZ) * (f - fC) / (f1 - fC) : f < fR ? zb - (zb - tailZ) * (fR - f) / Math.max(1e-6, fR - f0) : zb;
+    let ol = [[f0 + chR, -hw], [fR, -hw], [fC, -hw], [f1 - chF, -hw], [f1, -hw + chF], [f1, hw - chF], [f1 - chF, hw], [fC, hw], [fR, hw], [f0 + chR, hw], [f0, hw - chR], [f0, -hw + chR]];
+    ol = ol.filter((q, i) => { const r = ol[(i + 1) % ol.length]; return Math.abs(q[0] - r[0]) + Math.abs(q[1] - r[1]) > 1e-6; });
+    const A = ol.map(q => [q[0], q[1], z0]), C = ol.map(q => [q[0], q[1], zf(q[0]) - bv]);
+    const B = bv ? this.inset(ol, bv, bv * (o.bvE === undefined ? 0.5 : o.bvE)).map(q => [q[0], q[1], zf(q[0])]) : C;
+    const P = this.solid(A, C, col, { noA: true, noB: true, body: true });
+    if (bv) this.bevel(P, C, B, col);
+    const top = (pred, id) => {
+      const p = B.filter(q => pred(q[0]));
+      const n = p.length >= 3 && this.normal(p, P.c);
+      if (n) P.faces.push({ p, n, t: 'T', id, col, mat: 'paint', fx: null, win: null });
+    };
+    top(f => f >= fC - 1e-6, 'hood'); top(f => f >= fR - 1e-6 && f <= fC + 1e-6, 'deck'); top(f => f <= fR + 1e-6, 'trunk');
+    P.zf = zf; P.bv = bv;
+    P.sideOl = [[f0 + chR, z0], [f1 - chF, z0], [f1 - chF, zf(f1 - chF) - bv], [fC, zb - bv], [fR, zb - bv], [f0 + chR, zf(f0 + chR) - bv]];
+    return P;
+  },
+  // greenhouse: hollow part between the beltline outline and the roof outline; rb rounds the roof edge
+  // (the glass faces stop rb under the roof, a bevel strip runs in to the roof panel)
+  cabin(o) {
+    const { fR, fC, gw, gwT, zb, zr, rakeF, rakeR, col } = o, rb = o.rb || 0, H = zr - zb, t = rb ? (H - rb) / H : 1;
+    const A = [[fR, -gw, zb], [fC, -gw, zb], [fC, gw, zb], [fR, gw, zb]];
+    const B = [[fR + rakeR, -gwT, zr], [fC - rakeF, -gwT, zr], [fC - rakeF, gwT, zr], [fR + rakeR, gwT, zr]];
+    const C = rb ? A.map((a, i) => [a[0] + (B[i][0] - a[0]) * t, a[1] + (B[i][1] - a[1]) * t, zb + H * t]) : B;
+    const roof = o.roof || col;
+    const P = this.solid(A, C, col, { tags: ['L', 'F', 'R', 'B'], tA: 'D', tB: 'T', noB: !!rb, cols: { T: roof } });
+    if (rb) {
+      const e = rb * 0.7, D = [[C[0][0] + e, C[0][1] + rb, zr], [C[1][0] - e, C[1][1] + rb, zr], [C[2][0] - e, C[2][1] - rb, zr], [C[3][0] + e, C[3][1] - rb, zr]];
+      this.bevel(P, C, D, o.bvCol || roof);
+      P.faces.push({ p: D, n: [0, 0, 1], t: 'T', col: roof, mat: 'paint', fx: null, win: null });
+    }
+    P.hollow = true; P.inner = []; P.inCol = o.inCol; P.rb = rb;
+    return P;
+  },
+  // rounded roof panel for a box body whose top is the plan outline ol at height z: a slab up to z + rb with
+  // bevelled edges (ef scales the bevel at the ends); its own part, so it sorts above the box by height
+  roofCap(ol, z, rb, col, ef) {
+    const A = ol.map(q => [q[0], q[1], z]), B = this.inset(ol, rb, rb * (ef === undefined ? 1 : ef)).map(q => [q[0], q[1], z + rb]);
+    let f0 = 1e9, f1 = -1e9, s0 = 1e9, s1 = -1e9;
+    for (const q of ol) { f0 = Math.min(f0, q[0]); f1 = Math.max(f1, q[0]); s0 = Math.min(s0, q[1]); s1 = Math.max(s1, q[1]); }
+    const P = { faces: [], bb: [f0, f1, s0, s1, z, z + rb], c: [(f0 + f1) / 2, (s0 + s1) / 2, z + rb * 0.4], body: false, k: '' };
+    this.bevel(P, A, B, col);
+    P.faces.push({ p: B, n: [0, 0, 1], t: 'T', col, mat: 'paint', fx: null, win: null });
+    return P;
+  },
+  // bumper bar across the flat end of the body (dir 1 front at fe, -1 rear) plus two short wraps along the
+  // chamfered corners. Every piece lies outside the body so the separating planes order it exactly.
+  // Returns [bar, wrapL, wrapR]; chrome bars get a black rubber rub strip.
+  bumper(dir, fe, hw, ch, z0, z1, mat, col, o) {
+    o = o || {};
+    const d = o.d || 0.045, sx = hw - ch, e = 0.005;
+    const C = mat === 'chrome' ? CA_COL.chrome : mat === 'body' ? col : CA_COL.black, mo = mat === 'chrome' ? 'chrome' : 'paint';
+    const bar = this.box(dir > 0 ? fe : fe - d, dir > 0 ? fe + d : fe, -sx, sx, z0, z1, C, { mat: mo, skip: ['L', 'R', dir > 0 ? 'B' : 'F'] });
+    const out = [bar], strip = mat === 'chrome' && !o.noStrip;
+    const rub = (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#1c1d20'); g.fillRect(-1, 38, 102, 26); g.fillStyle = F.sh('#3a3c40'); g.fillRect(-1, 58, 102, 4); };
+    if (strip) this.fx(bar, dir > 0 ? 'F' : 'B', rub);
+    if (ch > 0.012) for (const sd of [-1, 1]) {
+      // quad in plan: bar end (inner, outer), side end flush with the body side, chamfer start
+      const p = [[fe, sd * sx], [fe + dir * d, sd * sx], [fe - dir * (ch - d * 0.5), sd * (hw + e)], [fe - dir * ch, sd * hw]];
+      const w = this.prism(p, z0, z1, C, { mat: mo, tags: ['x', 'W', 'x', 'x'] });
+      w.faces = w.faces.filter(fc => fc.t !== 'x');
+      if (o.body) w.sep = { n: [dir * Math.SQRT1_2, sd * Math.SQRT1_2, 0], of: o.body };
+      if (strip) this.fx(w, 'W', rub);
+      out.push(w);
+    }
+    return out;
+  },
+  // front bucket seats (+ headrests) at fs, optional rear bench at fr; w = half width available
+  seats(P, fs, fr, zb, w, col, burnt) {
+    const sc = burnt ? '#2a2420' : col;
+    for (const sd of [-1, 1]) {
+      const s0 = sd < 0 ? -w : 0.035, s1 = sd < 0 ? -0.035 : w;
+      P.inner.push(this.box(fs - 0.07, fs, s0, s1, zb - 0.02, zb + 0.19, sc));
+      if (!burnt) P.inner.push(this.box(fs - 0.06, fs - 0.015, s0 + (s1 - s0) * 0.25, s1 - (s1 - s0) * 0.25, zb + 0.19, zb + 0.26, sc));
+    }
+    if (fr !== null) P.inner.push(this.box(fr - 0.07, fr, -w, w, zb - 0.02, zb + 0.15, sc));
+  },
+  wheel(M, f, side, r, o) {
+    const idx = (f > 0 ? 0 : 2) + (side > 0 ? 1 : 0);
+    M.wheels.push(Object.assign({ f, s: side * (M.hw - 0.012), r, w: 0.15, side, steer: f > 0, st: M.S.tyres[idx], burnt: M.S.burnt, idx }, o || {}));
+  },
+  lamp(M, k, f, s, z, idx) {
+    const broken = M.S.burnt || (idx !== undefined && M.S.lights[idx] === 1);
+    M.lt.push({ k, f, s, z, broken, ph: 0, c: 'w' });
+  },
+});
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- painted detail
+  // frame on a quad face: (x, y) in 0..k across the face (p0 -> p1) and up (p0 -> p3)
+  qframe(g, F, fc, k) {
+    const [p0, p1, , p3] = fc.p, K = 1 / (k || 1);
+    F.frame(g, p0, [(p1[0] - p0[0]) * K, (p1[1] - p0[1]) * K, (p1[2] - p0[2]) * K], [(p3[0] - p0[0]) * K, (p3[1] - p0[1]) * K, (p3[2] - p0[2]) * K]);
+  },
+  snowCap(g, F, fc, ins) {
+    let cx = 0, cy = 0;
+    const pts = fc.p.map(q => F.P(q[0], q[1], q[2]));
+    for (const q of pts) { cx += q[0] / pts.length; cy += q[1] / pts.length; }
+    const k = 1 - (ins || 0.1);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = Col.shade('#eef2f6', F.b * 0.98);
+    g.beginPath(); this.path(g, pts.map(q => [cx + (q[0] - cx) * k, cy + (q[1] - cy) * k - 1.5])); g.fill();
+    g.fillStyle = Col.shade('#ffffff', F.b); g.beginPath(); this.path(g, pts.map(q => [cx + (q[0] - cx) * k * 0.8, cy + (q[1] - cy) * k * 0.8 - 2.5])); g.fill();
+  },
+  // dents, scratches and rust inside the current frame (units * 100); lvl 0..3
+  dmgArt(g, F, M, lvl, seed, a0, a1, b0, b1, col) {
+    if (lvl <= 0 && !M.S.burnt) return;
+    const rng = new RNG(seed), k = 100;
+    if (M.S.burnt) lvl = 3;
+    for (let i = 0; i < lvl * 3; i++) {
+      const x = rng.f(a0, a1) * k, y = rng.f(b0, b0 + (b1 - b0) * 0.45) * k, r = rng.f(2.5, 6) * (0.6 + lvl * 0.25);
+      g.fillStyle = Col.shade(i & 1 ? '#5a2e16' : CA_COL.rust, F.b);
+      g.globalAlpha = 0.85;
+      for (let j = 0; j < 4; j++) { g.beginPath(); g.arc(x + rng.f(-r, r), y + rng.f(-r * 0.5, r * 0.5), r * rng.f(0.35, 0.8), 0, 7); g.fill(); }
+    }
+    g.globalAlpha = 1;
+    if (lvl >= 2) for (let i = 0; i < lvl * 2 - 1; i++) {
+      const x = rng.f(a0, a1) * k, y = rng.f(b0, b1) * k, rx = rng.f(5, 11) * lvl * 0.5, ry = rx * rng.f(0.5, 0.8);
+      g.fillStyle = 'rgba(0,0,0,0.34)'; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 7); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.2)'; g.beginPath(); g.ellipse(x - rx * 0.2, y + ry * 0.15, rx * 0.55, ry * 0.5, 0, 0, 7); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.28)'; g.lineWidth = 1.4; g.beginPath(); g.ellipse(x, y + ry * 0.2, rx * 0.85, ry * 0.75, 0, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+    }
+    g.strokeStyle = 'rgba(235,235,230,0.45)'; g.lineWidth = 0.7;
+    for (let i = 0; i < lvl * 2; i++) { const x = rng.f(a0, a1) * k, y = rng.f(b0, b1) * k; g.beginPath(); g.moveTo(x, y); g.lineTo(x + rng.f(6, 16), y + rng.f(-3, 3)); g.stroke(); }
+  },
+  star(g, F, x, y, r, col) {
+    g.fillStyle = F.sh(col); g.beginPath();
+    for (let i = 0; i < 10; i++) { const an = Math.PI / 2 + i * Math.PI / 5, rr = i & 1 ? r * 0.42 : r; g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); }
+    g.fill();
+  },
+  sideLvl(M, side) { const S = M.S; return S.sides ? S.sides[side] : S.d >= 3 ? 3 : S.d >= 2 ? ((S.seed + (side === 'left' ? 0 : 1)) & 1 ? 2 : 1) : S.d; },
+  sideArt(g, F, M, side) {
+    const sp = M.sp, S = M.S, k = 100, zb = M.zb, z0 = M.z0, B = M.body, hw = M.sideHw || M.hw;
+    F.frame(g, [0, side * hw, 0], [1, 0, 0], [0, 0, 1], 0.01);
+    g.beginPath(); B.sideOl.forEach((q, i) => i ? g.lineTo(q[0] * k, q[1] * k) : g.moveTo(q[0] * k, q[1] * k)); g.closePath(); g.clip();
+    const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
+    const f0 = M.f0, f1 = M.f1, zt = M.zTrim, live = !S.burnt;
+    if (sp.two && live) { g.fillStyle = F.sh(sp.two); if (M.band) R(f0, zt - 0.04, f1, zt + 0.05); else { R(f0, z0, f1, zt); g.fillStyle = F.sh(sp.two, 0.8); R(f0, zt, f1, zt + 0.012); } }
+    if (M.wood && live) {
+      const a = f0 + 0.08, b = M.fC + 0.04;
+      g.fillStyle = F.sh('#7a5030'); R(a, z0 + 0.09, b, zb - 0.05);
+      g.strokeStyle = F.sh('#5a3820'); g.lineWidth = 0.8; g.beginPath();
+      for (let z = z0 + 0.12; z < zb - 0.055; z += 0.035) { g.moveTo(a * k, z * k); for (let f = a; f < b; f += 0.12) g.lineTo(f * k, (z + Math.sin(f * 37 + z * 50) * 0.006) * k); }
+      g.stroke(); g.strokeStyle = F.sh('#d8c49a'); g.lineWidth = 2; g.strokeRect(a * k, (z0 + 0.09) * k, (b - a) * k, (zb - z0 - 0.14) * k);
+    }
+    // shoulder crease under the beltline: a lit edge over a shadow line reads as a folded panel
+    if (sp.crease && live) { g.fillStyle = 'rgba(255,255,255,0.14)'; R(f0, zb - 0.052, f1, zb - 0.042); g.fillStyle = 'rgba(0,0,0,0.14)'; R(f0, zb - 0.042, f1, zb - 0.034); }
+    const di = side < 0 ? [0, 2] : [1, 3], trim = sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black;
+    for (let j = 0; j < M.doorF.length; j++) {
+      const [a, b] = M.doorF[j], ds = S.doors[di[j]];
+      if (ds) {
+        // open or missing door: door aperture, sill and the seat inside
+        g.fillStyle = F.sh(CA_COL.inside, 0.75); R(a, z0 + 0.05, b, zb + 0.02);
+        g.fillStyle = F.sh(M.seat2 || CA_COL.seat, 0.95); R(a + 0.05, zb - 0.17, b - 0.04, zb - 0.07);
+        g.fillStyle = F.sh(CA_COL.black, 0.8); R(a, z0 + 0.05, b, z0 + 0.09);
+        continue;
+      }
+      if (sp.livery === 'bw' && live) { g.fillStyle = F.sh(S.col); R(a, z0 + 0.035, b, zb + 0.02); }
+      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.1; g.strokeRect(a * k, (z0 + 0.035) * k, (b - a) * k, (zb - z0) * k);
+      // pull handle near the rear edge, just under the shoulder line
+      g.fillStyle = F.sh(trim, 0.95); R(b - 0.1, zb - 0.085, b - 0.04, zb - 0.068);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; R(b - 0.1, zb - 0.068, b - 0.04, zb - 0.063);
+    }
+    // body side molding at the widest point
+    if (sp.livery !== 'bw' && !M.wood) { g.fillStyle = F.sh(trim, 0.92); R(f0 + 0.08, zt - 0.011, f1 - 0.08, zt + 0.011); if (trim === CA_COL.chrome) { g.fillStyle = F.sh('#1c1c1e'); R(f0 + 0.08, zt - 0.004, f1 - 0.08, zt + 0.004); } }
+    if (live) {
+      // side marker lamps; fuel filler door on the driver-side rear quarter
+      g.fillStyle = F.sh(CA_COL.amber); R(f1 - sp.chF - 0.085, M.noseZ - 0.11, f1 - sp.chF - 0.025, M.noseZ - 0.075);
+      if (!M.noRear) {
+        g.fillStyle = F.sh(CA_COL.tail); R(f0 + M.chR + 0.025, M.tailZ - 0.11, f0 + M.chR + 0.085, M.tailZ - 0.075);
+        if (side < 0 && M.fR - f0 > 0.25) { g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1; g.strokeRect((M.fR - 0.03) * k, (zb - 0.135) * k, 0.075 * k, 0.065 * k); }
+      }
+    }
+    if (sp.livery === 'bw' && live) {
+      const [a, b] = M.doorF[0], cx = (a + b) / 2;
+      this.star(g, F, cx * k, (zb - 0.17) * k, 0.055 * k, '#d8b040');
+      const [c0, c1] = M.doorF[1] || M.doorF[0];
+      F.frame(g, [(c0 + c1) / 2, side * hw, zb - 0.15], [side, 0, 0], [0, 0, -1], 0.01);
+      g.fillStyle = F.sh('#111'); g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('POLICE', 0, 0);
+      F.frame(g, [0, side * hw, 0], [1, 0, 0], [0, 0, 1], 0.01);
+    }
+    if (M.star) { const [a, b] = M.doorF[0]; this.star(g, F, (a + b) / 2 * k, (zb - 0.2) * k, 0.1 * k, '#e8e8e0'); }
+    if (sp.checker && live) {
+      for (let f = M.fR + 0.02, i = 0; f < M.fC + 0.06; f += 0.045, i++) for (let r = 0; r < 2; r++) { g.fillStyle = F.sh((i + r) & 1 ? '#111111' : '#f2f2ea'); R(f, zb - 0.13 + r * 0.04, f + 0.045, zb - 0.09 + r * 0.04); }
+    }
+    if (S.d && live) { const gr = g.createLinearGradient(0, z0 * k, 0, (z0 + 0.24) * k); gr.addColorStop(0, 'rgba(70,56,40,' + (0.16 * S.d) + ')'); gr.addColorStop(1, 'rgba(70,56,40,0)'); g.fillStyle = gr; R(f0, z0, f1, z0 + 0.24); }
+    this.dmgArt(g, F, M, this.sideLvl(M, side < 0 ? 'left' : 'right'), S.seed * 131 + side * 17 + 5, f0 + 0.15, f1 - 0.15, z0 + 0.04, zb - 0.06);
+    this.wells(g, F, M, side, z0, sp.flares && live ? CA_COL.black : null);
+    g.fillStyle = F.sh(CA_COL.black, 0.85); R(f0, z0, f1, z0 + 0.03);
+  },
+  frontArt(g, F, M) {
+    const sp = M.sp, S = M.S, k = 100, w = M.hw - sp.chF, z0 = M.z0, zt = M.noseZ - (M.bv || 0), live = !S.burnt;
+    F.frame(g, [M.f1, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
+    g.beginPath(); g.rect(-w * k, z0 * k, 2 * w * k, (zt - z0) * k); g.clip();
+    const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
+    const lz1 = zt - 0.028, lz0 = lz1 - (sp.lamps === 'round' ? 0.11 : 0.072), gw = w - 0.215;
+    // hood leading edge and the dark lower valance under the bumper
+    g.fillStyle = 'rgba(0,0,0,0.35)'; R(-w, zt - 0.012, w, zt - 0.006);
+    g.fillStyle = F.sh('#18191c'); R(-w + 0.05, z0, w - 0.05, z0 + 0.055);
+    if (sp.grille === 'chrome' || sp.grille === 'black') {
+      const ch = sp.grille === 'chrome' && live;
+      g.fillStyle = F.sh(ch ? CA_COL.chrome : '#2a2b2e'); R(-gw, lz0 - 0.022, gw, lz1 + 0.006);
+      g.fillStyle = F.sh('#121214'); R(-gw + 0.016, lz0 - 0.01, gw - 0.016, lz1 - 0.008);
+      g.fillStyle = F.sh(ch ? '#aab2ba' : '#3a3c40');
+      if (ch) { for (let s = -gw + 0.04; s < gw - 0.02; s += 0.042) R(s, lz0 - 0.01, s + 0.008, lz1 - 0.008); R(-gw + 0.016, (lz0 + lz1) / 2 - 0.01, gw - 0.016, (lz0 + lz1) / 2 - 0.003); g.fillStyle = F.sh('#e8ecf0'); R(-0.022, lz0 - 0.01, 0.022, lz1 - 0.008); }
+      else for (let z = lz0 - 0.002; z < lz1 - 0.012; z += 0.02) R(-gw + 0.016, z, gw - 0.016, z + 0.007);
+    } else if (sp.grille === 'army') {
+      g.fillStyle = F.sh('#1a1c18'); R(-gw - 0.04, z0 + 0.1, gw + 0.04, zt - 0.03);
+      g.fillStyle = F.sh(M.paint, 0.9); for (let s = -gw - 0.02; s < gw + 0.03; s += 0.05) R(s, z0 + 0.12, s + 0.02, zt - 0.05);
+    } else { g.fillStyle = F.sh('#141416'); R(-w + 0.1, z0 + 0.09, w - 0.1, z0 + 0.13); }
+    for (const sd of [-1, 1]) {
+      const a = sd * (w - 0.02), b = sd * (w - 0.2), s0 = Math.min(a, b), s1 = Math.max(a, b);
+      const broken = S.burnt || S.lights[sd < 0 ? 0 : 1] === 1;
+      if (sp.lamps === 'popup') { if (live) { g.fillStyle = F.sh(CA_COL.amber); R(s0 + 0.02, z0 + 0.1, s0 + 0.1, z0 + 0.14); } continue; }
+      // bezel, then the lens(es)
+      g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : '#1a1a1c'); R(s0 - 0.012, lz0 - 0.012, s1 + 0.012, lz1 + 0.01);
+      const lens = (x0, x1) => {
+        g.fillStyle = broken ? F.sh('#2c2c2a') : F.sh(CA_COL.head, 1.05); R(x0, lz0, x1, lz1);
+        if (!broken) { g.fillStyle = 'rgba(255,255,255,0.6)'; R(x0 + 0.008, lz1 - 0.022, x0 + (x1 - x0) * 0.45, lz1 - 0.01); g.fillStyle = 'rgba(120,110,80,0.25)'; R(x0, lz0, x1, lz0 + 0.012); }
+        else { g.strokeStyle = 'rgba(200,200,190,0.6)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x0 * k, lz0 * k); g.lineTo(x1 * k, lz1 * k); g.moveTo(x0 * k, lz1 * k); g.lineTo((x0 + x1) / 2 * k, lz0 * k); g.stroke(); }
+      };
+      if (sp.lamps === 'round') {
+        const cx = (s0 + s1) / 2 * k, cz = (lz0 + lz1) / 2 * k, r = Math.min(s1 - s0, 0.11) * 45;
+        g.fillStyle = F.sh(CA_COL.black); g.beginPath(); g.arc(cx, cz, r * 1.25, 0, 7); g.fill();
+        g.fillStyle = broken ? F.sh('#2c2c2a') : F.sh(CA_COL.head, 1.05); g.beginPath(); g.arc(cx, cz, r, 0, 7); g.fill();
+        if (!broken) { g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.arc(cx - r * 0.3, cz + r * 0.3, r * 0.35, 0, 7); g.fill(); }
+        continue;
+      }
+      if (sp.lamps === 'quad') { const m = (s0 + s1) / 2; lens(s0, m - 0.006); lens(m + 0.006, s1); } else lens(s0, s1);
+      // parking / turn lamps under the headlamps
+      if (live) { g.fillStyle = F.sh('#1a1a1c'); R(s0 - 0.004, lz0 - 0.058, s1 + 0.004, lz0 - 0.022); g.fillStyle = F.sh(CA_COL.amber); R(s0, lz0 - 0.054, s1, lz0 - 0.026); }
+    }
+    const fl = M.S.sides ? M.S.sides.front : S.d >= 3 ? 3 : S.d >= 2 ? 1 : 0;
+    this.dmgArt(g, F, M, fl, S.seed * 7 + 3, -w, w, z0 + 0.03, zt - 0.02);
+  },
+  rearArt(g, F, M) {
+    const sp = M.sp, S = M.S, k = 100, w = M.hw - M.chR, z0 = M.z0, zt = M.tailZ - (M.bv || 0), live = !S.burnt;
+    F.frame(g, [M.f0, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
+    g.beginPath(); g.rect(-w * k, z0 * k, 2 * w * k, (zt - z0) * k); g.clip();
+    const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
+    const bz = z0 + 0.15 + (sp.bump === 'black' ? 0.03 : 0);
+    g.fillStyle = F.sh('#18191c'); R(-w + 0.04, z0, w - 0.04, z0 + 0.05);
+    for (const sd of [-1, 1]) {
+      const broken = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1;
+      const red = broken ? F.sh('#3a1a16') : F.sh(CA_COL.tail, 1.08);
+      if (sp.tails === 'vert') {
+        const a = sd * (w - 0.012), b = sd * (w - 0.11), s0 = Math.min(a, b), s1 = Math.max(a, b);
+        g.fillStyle = F.sh(CA_COL.black); R(s0 - 0.008, bz + 0.01, s1 + 0.008, zt - 0.012);
+        g.fillStyle = red; R(s0, bz + 0.02, s1, zt - 0.02);
+        if (live) { g.fillStyle = F.sh('#e8e8e4'); R(s0, bz + 0.02, s1, bz + 0.06); g.fillStyle = F.sh(CA_COL.amber); R(s0, bz + 0.06, s1, bz + 0.09); g.fillStyle = 'rgba(0,0,0,0.25)'; for (let z = bz + 0.1; z < zt - 0.03; z += 0.035) R(s0, z, s1, z + 0.005); }
+      } else {
+        const a = sd * (w - 0.012), b = sd * (sp.tails === 'band' ? 0.02 : w - 0.3), s0 = Math.min(a, b), s1 = Math.max(a, b);
+        g.fillStyle = F.sh(sp.trim === 'chrome' && live ? CA_COL.chrome : CA_COL.black); R(s0 - 0.01, zt - 0.15, s1 + 0.01, zt - 0.022);
+        g.fillStyle = red; R(s0, zt - 0.14, s1, zt - 0.032);
+        if (live) {
+          g.fillStyle = 'rgba(0,0,0,0.3)'; for (let s = s0 + 0.03; s < s1 - 0.01; s += 0.04) R(s, zt - 0.14, s + 0.005, zt - 0.032);
+          g.fillStyle = 'rgba(255,190,170,0.35)'; R(s0, zt - 0.06, s1, zt - 0.05);
+          const r0 = sd < 0 ? s1 - 0.06 : s0, r1 = sd < 0 ? s1 : s0 + 0.06;
+          g.fillStyle = F.sh('#e8e8e4'); R(r0, zt - 0.14, r1, zt - 0.086);
+          g.fillStyle = F.sh(CA_COL.amber); R(r0, zt - 0.086, r1, zt - 0.032);
+        }
+      }
+    }
+    if (sp.hatch && S.trunk) { g.fillStyle = F.sh('#1c1c1e'); R(-(w - 0.13), bz + 0.01, w - 0.13, zt + 0.01); this.dmgArt(g, F, M, S.d >= 2 ? 1 : 0, S.seed * 11 + 9, -w, w, z0 + 0.03, bz); return; }
+    // lid seam, plate in a lit recess, lock and badge
+    const sz = sp.hatch ? bz + 0.01 : zt - 0.14;
+    g.strokeStyle = 'rgba(0,0,0,0.42)'; g.lineWidth = 1.1;
+    g.beginPath(); g.moveTo(-(w - 0.02) * k, sz * k); g.lineTo((w - 0.02) * k, sz * k); g.stroke();
+    const pz = bz + 0.015;
+    g.fillStyle = F.sh('#1a1a1c'); R(-0.09, pz, 0.09, pz + 0.095);
+    g.fillStyle = F.sh(live ? CA_COL.plate : '#4a443e'); R(-0.075, pz + 0.01, 0.075, pz + 0.085);
+    if (live) { g.fillStyle = F.sh('#2a3a7a'); R(-0.075, pz + 0.068, 0.075, pz + 0.085); g.fillStyle = F.sh('#202020'); for (let i = 0; i < 5; i++) R(-0.06 + i * 0.025, pz + 0.028, -0.043 + i * 0.025, pz + 0.058); }
+    if (live) { g.fillStyle = F.sh(CA_COL.chrome); R(w - 0.22, zt - 0.02, w - 0.12, zt - 0.01); g.fillStyle = F.sh('#202022'); g.beginPath(); g.arc(0, (sz + 0.035) * k, 1.6, 0, 7); g.fill(); }
+    const rl = M.S.sides ? M.S.sides.rear : S.d >= 3 ? 2 : S.d >= 2 ? 1 : 0;
+    this.dmgArt(g, F, M, rl, S.seed * 11 + 9, -w, w, z0 + 0.03, zt - 0.02);
+  },
+  // hood plane: x along the hood from the cowl, y across
+  hoodArt(g, F, fc, M) {
+    const S = M.S, sp = M.sp, k = 100, len = M.f1 - M.fC, dz = -(M.zb - M.noseZ) / len, w = M.hw;
+    F.frame(g, [M.fC, 0, M.zb], [1, 0, dz], [0, 1, 0], 0.01);
+    const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
+    if (S.hood) { this.engineBay(g, F, M, len, w); return; }
+    g.fillStyle = F.sh(CA_COL.black, 0.9); R(0.005, -M.gw + 0.02, 0.05, M.gw - 0.02);
+    g.strokeStyle = F.sh('#101010'); g.lineWidth = 1.2; g.beginPath(); g.moveTo(2, -M.gw * 60); g.lineTo(4.5, -M.gw * 10); g.moveTo(2, M.gw * 30); g.lineTo(4.5, M.gw * 80); g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1;
+    g.beginPath(); for (const sd of [-1, 1]) { g.moveTo(5, sd * (w - 0.075) * k); g.lineTo((len - 0.02) * k, sd * (w - sp.chF * 0.7 - 0.05) * k); } g.stroke();
+    if (sp.trim === 'chrome' && !S.burnt) { g.fillStyle = F.sh(CA_COL.chrome); g.beginPath(); g.arc((len - 0.06) * k, 0, 1.8, 0, 7); g.fill(); }
+    if (M.star) { g.strokeStyle = F.sh('#e8e8e0'); g.lineWidth = 1.5; g.beginPath(); g.arc(len * 0.5 * k, 0, 0.17 * k, 0, 7); g.stroke(); this.star(g, F, len * 0.5 * k, 0, 0.15 * k, '#e8e8e0'); }
+    if (sp.lamps === 'popup' && !S.pop) { g.strokeStyle = 'rgba(0,0,0,0.45)'; for (const sd of [-1, 1]) g.strokeRect((len - 0.17) * k, sd > 0 ? (w - 0.27) * k : -(w - 0.07) * k, 0.12 * k, 0.2 * k); }
+    const fl = M.S.sides ? M.S.sides.front : S.d >= 3 ? 3 : S.d >= 2 ? 2 : 0;
+    this.dmgArt(g, F, M, fl, S.seed * 23 + 1, 0.05, len - 0.05, -w + 0.1, w - 0.1);
+    if (S.snow) this.snowCap(g, F, fc, 0.12);
+  },
+  // open bay seen from above (hood frame: x forward from the cowl, y across): a V8 between the fender aprons with
+  // two ribbed valve covers, a round air cleaner, radiator and fan at the front, battery and washer bottle beside
+  engineBay(g, F, M, len, w) {
+    const k = 100, R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k), bt = M.S.burnt;
+    const C = (c, m) => F.sh(bt ? '#2a2420' : c, m), disc = (x, y, r) => { g.beginPath(); g.arc(x * k, y * k, r * k, 0, 7); g.fill(); };
+    const vc = bt ? '#3a2c24' : ['#b4562c', '#2e4c8a', '#8c9298', '#2a2a2e'][this.hash(M.S.col0 + M.S.type) % 4];
+    const e0 = len * 0.13, e1 = len * 0.66, bw = w * 0.42, fr = len - 0.1;
+    g.fillStyle = F.sh('#131315'); R(0.015, -w + 0.055, len - 0.025, w - 0.055);
+    // fender aprons, cowl / firewall with the brake booster on the driver side
+    g.fillStyle = C('#252629'); R(0.06, -w + 0.055, fr, -w + 0.1); R(0.06, w - 0.1, fr, w - 0.055); R(0.015, -w + 0.055, 0.06, w - 0.055);
+    g.fillStyle = C('#303135'); disc(0.1, -w * 0.62, Math.min(0.055, w * 0.12));
+    // radiator core support, radiator with fins and cap, fan shroud
+    g.fillStyle = C('#2a2b2e'); R(fr, -w + 0.08, len - 0.03, w - 0.08);
+    g.fillStyle = C('#3c3e42'); for (let s = -w + 0.11; s < w - 0.1; s += 0.025) R(fr + 0.012, s, len - 0.045, s + 0.01);
+    g.fillStyle = C('#1a1a1c'); R(e1 + 0.02, -bw * 0.9, fr, bw * 0.9);
+    g.fillStyle = C('#2c2d30'); disc((e1 + fr) / 2 + 0.01, 0, Math.min(bw * 0.7, (fr - e1) * 0.6));
+    // block, valve covers (ribbed, lit top edge), aluminium intake between them
+    g.fillStyle = C('#2c2e32'); R(e0, -bw, e1, bw);
+    for (const sd of [-1, 1]) {
+      const a = sd * bw * 0.42, b = sd * bw * 0.96, s0 = Math.min(a, b), s1 = Math.max(a, b);
+      g.fillStyle = F.sh(vc); R(e0 + 0.02, s0, e1 - 0.02, s1);
+      g.fillStyle = 'rgba(0,0,0,0.3)'; for (let f = e0 + 0.05; f < e1 - 0.03; f += 0.04) R(f, s0 + 0.01, f + 0.012, s1 - 0.01);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; R(e0 + 0.02, sd < 0 ? s0 : s1 - 0.012, e1 - 0.02, sd < 0 ? s0 + 0.012 : s1);
+    }
+    g.fillStyle = C('#6a6e74'); R(e0 + 0.03, -bw * 0.36, e1 - 0.03, bw * 0.36);
+    // air cleaner: black can, chrome lid, wing nut; snorkel towards the front
+    const ac = (e0 + e1) / 2, ar = Math.min(w * 0.26, (e1 - e0) * 0.42);
+    g.fillStyle = C('#161618'); R(ac, -ar * 0.25, e1 + 0.04, ar * 0.25); disc(ac, 0, ar);
+    g.fillStyle = C('#aab0b6'); disc(ac, 0, ar * 0.78);
+    g.fillStyle = C('#d8dde2'); disc(ac - ar * 0.12, -ar * 0.12, ar * 0.4);
+    g.fillStyle = C('#3a3c40'); disc(ac, 0, ar * 0.12);
+    // upper radiator hose, alternator
+    g.strokeStyle = C('#101012'); g.lineWidth = 3; g.beginPath(); g.moveTo((e1 - 0.04) * k, bw * 0.3 * k); g.quadraticCurveTo((e1 + 0.04) * k, bw * 0.75 * k, (fr + 0.01) * k, bw * 0.6 * k); g.stroke();
+    g.fillStyle = C('#7c8086'); disc(e1 + 0.01, -bw * 0.78, 0.028);
+    // battery (red / black posts) on the passenger apron, washer bottle on the driver side
+    const b0 = Math.max(e1 - 0.12, len * 0.42), s0 = Math.max(bw + 0.03, w - 0.27);
+    if (w - 0.1 - s0 > 0.06) {
+      g.fillStyle = C('#1c1c1e'); R(b0, s0, fr - 0.015, w - 0.1);
+      g.fillStyle = C('#34363a'); R(b0 + 0.012, s0 + 0.012, fr - 0.027, w - 0.112);
+      g.fillStyle = F.sh(bt ? '#3a2a22' : '#c42a1e'); R(fr - 0.06, s0 + 0.025, fr - 0.035, s0 + 0.05);
+      g.fillStyle = C('#101012'); R(b0 + 0.025, s0 + 0.025, b0 + 0.05, s0 + 0.05);
+      g.fillStyle = F.sh(bt ? '#2a2420' : '#9aa294', 0.9); R(fr - 0.15, -w + 0.11, fr - 0.03, -w + 0.2);
+      g.fillStyle = C('#2a4a8a'); disc(fr - 0.12, -w + 0.155, 0.016);
+    }
+    if (bt) { g.fillStyle = 'rgba(90,50,30,0.35)'; for (let i = 0; i < 6; i++) disc(e0 + (e1 - e0) * ((i * 37 % 10) / 10), (i * 53 % 9 - 4) / 9 * bw, 0.03); }
+  },
+  trunkArt(g, F, fc, M) {
+    const S = M.S, k = 100, len = M.fR - M.f0, w = M.hw;
+    if (len < 0.08) return;
+    const dz = (M.tailZ - M.zb) / len;
+    F.frame(g, [M.fR, 0, M.zb], [-1, 0, dz], [0, 1, 0], 0.01);
+    const R = (a, b, c, d) => g.fillRect(a * k, b * k, (c - a) * k, (d - b) * k);
+    if (S.trunk && !M.sp.hatch) {
+      g.fillStyle = F.sh('#1a1a1c'); R(0.04, -w + 0.07, len - 0.03, w - 0.07);
+      g.strokeStyle = F.sh('#2c2c2e'); g.lineWidth = 6; g.beginPath(); g.arc(len * 0.5 * k, -w * 0.4 * k, w * 0.28 * k, 0, 7); g.stroke();
+      return;
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.38)'; g.lineWidth = 1.1; g.strokeRect(0.035 * k, -(w - 0.07) * k, (len - 0.06) * k, (w - 0.07) * 2 * k);
+    if (!S.burnt) { g.fillStyle = F.sh(CA_COL.chrome); g.beginPath(); g.arc((len - 0.05) * k, 0, 1.4, 0, 7); g.fill(); }
+    if (S.snow) this.snowCap(g, F, fc, 0.14);
+  },
+  roofArt(g, F, fc, M) {
+    const S = M.S, k = 100, rb = M.rb || 0, x0 = M.fR + M.sp.rakeR + rb * 0.7, len = M.fC - M.sp.rakeF - rb * 0.7 - x0, w = M.gwT - rb;
+    F.frame(g, [x0, 0, M.zr], [1, 0, 0], [0, 1, 0], 0.01);
+    if (M.vinyl && !S.burnt) { g.fillStyle = F.sh(M.vinyl); g.fillRect(-1, -w * k, (len * 0.82) * k, w * 2 * k); g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 0.6; for (let x = 4; x < len * 80; x += 5) { g.beginPath(); g.moveTo(x, -w * k); g.lineTo(x, w * k); g.stroke(); } }
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1;
+    g.beginPath(); for (const sd of [-1, 1]) { g.moveTo(1, sd * (w - 0.01) * k); g.lineTo((len - 0.01) * k, sd * (w - 0.01) * k); } g.stroke();
+    if (S.snow) this.snowCap(g, F, fc, 0.08);
+  },
+  // cabin sides: belt molding, black B-pillar; windshield wipers / mirror; rear defroster lines
+  cabinArt(M, P) {
+    const sp = M.sp, S = M.S, bl = (sp.trim === 'chrome' && !S.burnt) ? CA_COL.chrome : CA_COL.black;
+    for (const t of ['L', 'R']) this.fx(P, t, (g, F, fc) => {
+      const q = (u, v) => { const p = this.uv(fc, u, v); return F.P(p[0], p[1], p[2]); };
+      g.fillStyle = F.sh(bl); g.beginPath(); this.path(g, [q(0, 0), q(1, 0), q(1, 0.06), q(0, 0.06)]); g.fill();
+      if (sp.doors === 4 && !S.burnt) { g.fillStyle = F.sh(CA_COL.black, 0.9); g.beginPath(); this.path(g, [q(0.475, 0.07), q(0.525, 0.07), q(0.525, 0.93), q(0.475, 0.93)]); g.fill(); }
+    });
+    this.fx(P, 'F', (g, F, fc) => {
+      if (S.glass.windshield === 2 || S.burnt) return;
+      const q = (u, v) => { const p = this.uv(fc, u, v); return F.P(p[0], p[1], p[2]); };
+      g.strokeStyle = '#0c0c0c'; g.lineWidth = 1.4; g.beginPath();
+      for (const [a, b] of [[0.12, 0.45], [0.55, 0.88]]) { const p0 = q(a, 0.1), p1 = q(b, 0.16); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); }
+      g.stroke();
+      const m = q(0.5, 0.86); g.fillStyle = '#18181a'; g.fillRect(m[0] - 3, m[1] - 1, 6, 2.5);
+    });
+    this.fx(P, 'B', (g, F, fc) => {
+      if (S.glass.rearWindow || S.burnt || (sp.hatch && S.trunk)) return;
+      const q = (u, v) => { const p = this.uv(fc, u, v); return F.P(p[0], p[1], p[2]); };
+      g.strokeStyle = 'rgba(150,90,60,0.35)'; g.lineWidth = 0.6; g.beginPath();
+      for (let v = 0.3; v < 0.8; v += 0.09) { const a = q(0.12, v), b = q(0.88, v); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+      g.stroke();
+    });
+    this.fx(P, 'T', (g, F, fc) => this.roofArt(g, F, fc, M));
+  },
+});
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- model assembly
+  build(mk) {
+    const S = this.parseKey(mk);
+    const T = CAR_TYPES[S.type] || { len: 2.3, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52 };
+    const M = { parts: [], wheels: [], lt: [], tilt: [0, 0, 0], S, T, hl: T.len / 2, hw: T.wid / 2, seat: [0, -T.wid * 0.2, T.h + 0.12], bar: null };
+    // cosmetic damage derived from the key: faded paint, crumpled ends, a cracked windshield
+    S.col0 = S.col;
+    if (!S.burnt) {
+      S.col = Col.mix(S.col, '#6a6258', [0, 0.07, 0.15, 0.26][S.d] || 0);
+      if (S.d >= 2 && !S.glass.windshield) S.glass.windshield = 1;
+      S.crF = (S.sides ? S.sides.front >= 3 : S.d >= 3) ? 0.09 : 0;
+      S.crR = S.sides && S.sides.rear >= 3 ? 0.07 : 0;
+    } else S.crF = S.crR = 0;
+    const b = this['b_' + S.type];
+    if (b) b.call(this, M, S, T); else if (T.bed && this.b_pickup) this.b_pickup(M, S, T); else this.b_car(M, S, T);
+    this.finish(M);
+    return M;
+  },
+  // text on the outside of a face (reads correctly from outside); o centre, u reading direction
+  text(g, F, o, u, txt, px, col) {
+    F.frame(g, o, u, [0, 0, -1], 0.01);
+    g.fillStyle = col; g.font = 'bold ' + px + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 0, 0);
+  },
+  // reading direction for a vertical face tag
+  tdir(t) { return t === 'L' ? [-1, 0, 0] : t === 'R' ? [1, 0, 0] : t === 'F' ? [0, -1, 0] : [0, 1, 0]; },
+  // label all four vertical faces of box part P
+  label(P, txt, px, col, only) {
+    for (const fc of P.faces) {
+      if ('LRFB'.indexOf(fc.t) < 0 || (only && only.indexOf(fc.t) < 0)) continue;
+      (fc.fx || (fc.fx = [])).push((g, F, f) => {
+        const o = [0, 0, 0]; for (const q of f.p) { o[0] += q[0] / 4; o[1] += q[1] / 4; o[2] += q[2] / 4; }
+        const n = f.n; o[0] += n[0] * 0.002; o[1] += n[1] * 0.002;
+        this.text(g, F, o, this.tdir(f.t), txt, px, F.sh(col));
+      });
+    }
+    return P;
+  },
+  // thin line part (antenna) from (f, s, z) up by h
+  stick(f, s, z, h, col) {
+    return { bb: [f - 0.01, f + 0.01, s - 0.01, s + 0.01, z, z + h], c: [f, s, z + h / 2], faces: [], draw(g, F) { const a = F.P(f, s, z), b = F.P(f - 0.05, s, z + h); g.strokeStyle = col; g.lineWidth = 1.2; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); } };
+  },
+  b_car(M, S, T) {
+    const sp = Object.assign({}, CA_CARS.base, CA_CARS[S.type] || {});
+    const L = T.len, W = T.wid, hl = L / 2, hw = W / 2, h = this.hash(S.col0), live = !S.burnt;
+    const paint = S.burnt ? CA_COL.burnt : sp.livery === 'bw' ? '#1a1b1e' : S.col;
+    const z0 = sp.z0, zb = sp.h, zr = sp.h + sp.cabH;
+    const fC = Math.min(hl - 0.3, L * sp.cab[1]);
+    const fR = Math.max(-hl + (sp.hatch ? 0.06 : 0.32), Math.min(fC - 0.5, L * sp.cab[0]));
+    const chR = Math.min(sp.chR, Math.max(0, (fR + hl) * 0.7));
+    // keep a roof: windshield + rear window rake must leave at least 0.28 of roof
+    const rk = sp.rakeF + sp.rakeR, room = fC - fR - 0.28;
+    if (rk > room) { sp.rakeF *= room / rk; sp.rakeR *= room / rk; }
+    Object.assign(M, { sp, L, W, hl, hw, z0, zb, zr, fC, fR, chR, f0: -hl + S.crR, f1: hl - S.crF, noseZ: zb - sp.nose - S.crF * 0.5, tailZ: zb - sp.tail - S.crR * 0.5, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: z0 + (zb - z0) * 0.5, seat2: sp.livery === 'bw' ? '#2a2a2e' : this.seatCol(S.col) });
+    const c3 = Col.rgb(S.col0), dark = c3[0] * 0.3 + c3[1] * 0.59 + c3[2] * 0.11 < 110;
+    if (sp.vinyl && h % 3 === 0) M.vinyl = dark ? '#e2ddd0' : '#3a2c26';
+    // trim-level variety per colour: single rectangular sealed beams instead of the quad lamps
+    if (S.type === 'sedan' && (h >> 3) % 3 === 0) sp.lamps = 'rect';
+    if (sp.wood && h % 3 !== 1) M.wood = true;
+    // lower body with painted sides, front, rear, hood and trunk
+    M.bv = sp.bv;
+    const body = M.body = this.lowerBody({ f0: M.f0, f1: M.f1, hw, z0, zb, fC, fR, noseZ: M.noseZ, tailZ: M.tailZ, chF: sp.chF, chR, col: paint, bv: sp.bv });
+    M.parts.push(body);
+    // door cuts: the front door runs from the B-pillar to just ahead of the windshield base, the rear door
+    // stops at the C-pillar (opera window / quarter glass behind it)
+    const fB = fR + (fC - fR) * 0.5, qr = sp.quarter ? 0.29 : sp.opera ? 0.19 : 0.03;
+    M.doorF = sp.doors === 4 ? [[fB + 0.012, fC + 0.06], [fR + (fC - fR) * qr, fB - 0.012]] : [[fR + (fC - fR) * 0.34, fC + 0.06]];
+    this.pfx(body, [0, -1, 0], (g, F) => this.sideArt(g, F, M, -1));
+    this.pfx(body, [0, 1, 0], (g, F) => this.sideArt(g, F, M, 1));
+    this.pfx(body, [1, 0, 0], (g, F) => this.frontArt(g, F, M));
+    this.pfx(body, [-1, 0, 0], (g, F) => this.rearArt(g, F, M));
+    for (const fc of body.faces) {
+      if (fc.id === 'hood') fc.fx = [(g, F, f) => this.hoodArt(g, F, f, M)];
+      if (fc.id === 'trunk') fc.fx = [(g, F, f) => this.trunkArt(g, F, f, M)];
+    }
+    // greenhouse with windows, seats, dash and steering wheel
+    const cabCol = S.burnt ? CA_COL.burnt : sp.livery === 'bw' ? S.col : paint;
+    const cab = M.cab = this.cabin({ fR, fC, gw: M.gw, gwT: M.gwT, zb, zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cabCol, roof: cabCol, inCol: S.burnt ? '#1a1612' : null, rb: sp.rb, bvCol: M.vinyl && live ? M.vinyl : null });
+    M.rb = sp.rb;
+    M.parts.push(cab);
+    const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
+    this.win(this.face(cab, 'F'), 'windshield', 0.04, 0.96, 0.05, 0.94, gs('windshield'));
+    this.win(this.face(cab, 'B'), 'rearWindow', 0.06, 0.94, 0.07, 0.92, sp.hatch && S.trunk ? 4 : gs('rearWindow'));
+    for (const [t, sd] of [['L', 0], ['R', 1]]) {
+      const fc = this.face(cab, t), fr = sd ? 'winFR' : 'winFL', rr = sd ? 'winRR' : 'winRL';
+      if (sp.doors === 4) {
+        if (sp.quarter) this.win(fc, 'q', 0.035, 0.26, 0.09, 0.9, S.burnt ? 4 : 0);
+        else if (sp.opera && !M.vinyl) this.win(fc, 'q', 0.07, 0.165, 0.2, 0.84, S.burnt ? 4 : 0);
+        this.win(fc, rr, sp.quarter ? 0.305 : sp.opera ? 0.205 : 0.07, 0.475, 0.09, 0.9, gs(rr, sd ? 3 : 2));
+        this.win(fc, fr, 0.525, 0.955, 0.09, 0.9, gs(fr, sd));
+      } else {
+        this.win(fc, rr, 0.06, 0.3, 0.12, 0.88, gs(rr));
+        this.win(fc, fr, 0.35, 0.955, 0.09, 0.9, gs(fr, sd));
+      }
+    }
+    if (sp.trim === 'chrome' && live) for (const fc of cab.faces) if (fc.win) for (const w of fc.win) w.trim = CA_COL.chrome;
+    const sw = M.gwT - 0.035;
+    const fs = fR + (fC - fR) * (sp.doors === 4 ? (sp.quarter ? 0.68 : 0.64) : 0.56);
+    const fr2 = S.type === 'sports' ? null : sp.quarter ? fR + (fC - fR) * 0.42 : sp.hatch ? fR + (fC - fR) * 0.3 : fR + 0.19;
+    this.seats(cab, fs, fr2, zb, sw, M.seat2, S.burnt);
+    cab.inner.push(this.box(fC - 0.19, fC - 0.09, -sw, sw, zb - 0.02, zb + 0.065, '#222226'));
+    if (live) cab.inner.push(this.steer(fC - 0.215, -sw * 0.5, zb + 0.1, 0.058));
+    M.seat = [fs - 0.02, -sw * 0.5, zb + 0.08];
+    this.cabinArt(M, cab);
+    // thin bumpers with rub strips, mirrors at the front corner of the door glass, wheels, lamps
+    const bm = S.burnt ? 'black' : sp.bump, thick = bm === 'black' ? 0.03 : 0;
+    const bz0 = z0 + 0.06, bz1 = z0 + 0.145 + thick;
+    const fbp = this.bumper(1, M.f1, hw, sp.chF, bz0 - S.crF * 0.3, bz1 - S.crF * 0.3, bm, paint, { body }), rbp = this.bumper(-1, M.f0, hw, chR, bz0, bz1, bm, paint, { body });
+    if (!(S.crF && S.seed & 1)) M.parts.push(...fbp);
+    M.parts.push(...rbp);
+    if (live && S.type !== 'sports') this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.86));
+    this.fx(rbp[0], 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = '#0c0c0c'; g.beginPath(); g.ellipse(18, -4, 3, 8, 0, 0, 7); g.fill(); });
+    const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : CA_COL.black;
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) this.mirror(M, fC - 0.115, sd, M.gw, hw + 0.045, zb + 0.025, mc);
+    const white = sp.white && h % 2 === 0;
+    for (const f of [L * sp.axF, L * sp.axR]) for (const sd of [-1, 1]) this.wheel(M, f, sd, sp.r, { rim: sp.rim, white });
+    const wf = hw - sp.chF, wr = hw - chR;
+    if (sp.lamps !== 'popup') for (const sd of [-1, 1]) this.lamp(M, 'h', M.f1 + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.064, sd < 0 ? 0 : 1);
+    for (const sd of [-1, 1]) {
+      const i = sd < 0 ? 2 : 3;
+      if (sp.tails === 'vert') { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - 0.06), (bz1 + M.tailZ - M.bv) / 2 + 0.03, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.06), bz1 + 0.04, i); }
+      else { this.lamp(M, 't', M.f0 - 0.004, sd * (wr - (sp.tails === 'band' ? 0.2 : 0.14)), M.tailZ - M.bv - 0.086, i); this.lamp(M, 'r', M.f0 - 0.004, sd * (wr - 0.27), M.tailZ - M.bv - 0.11, i); }
+    }
+    this.lamp(M, 'c', sp.hatch ? fR + sp.rakeR - 0.012 : fR + 0.05, 0, sp.hatch ? zr - 0.025 : zb + 0.03);
+    this.lamp(M, 'd', (fR + fC) / 2, 0, zr - 0.02);
+    this.carExtras(M, S, sp);
+  },
+  // door mirror: a small head on a stalk from the glass line out past the body side
+  mirror(M, f, sd, sIn, sOut, z, col) {
+    const s0 = sd > 0 ? sIn : -sOut, s1 = sd > 0 ? sOut : -sIn;
+    M.parts.push(this.box(f, f + 0.05, s0, s1, z, z + 0.05, col, { mat: col === CA_COL.chrome ? 'chrome' : 'paint' }));
+  },
+  // steering wheel ring seen through the glass (custom-drawn part inside a hollow cabin)
+  steer(f, s, z, r) {
+    return { bb: [f - 0.03, f + 0.03, s - r, s + r, z - r, z + r], c: [f, s, z], faces: [], draw(g, F) {
+      F.frame(g, [f, s, z], [0, 1, 0], [0.55, 0, -0.84], 0.01);
+      g.strokeStyle = '#141416'; g.lineWidth = r * 26; g.beginPath(); g.arc(0, 0, r * 100, 0, 7); g.stroke();
+      g.lineWidth = r * 18; g.beginPath(); g.moveTo(-r * 100, 0); g.lineTo(r * 100, 0); g.stroke();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    } };
+  },
+  // licence plate centred on a bumper face (qframe units): w plate width as a fraction of the face
+  plate(g, F, fc, w, h) {
+    this.qframe(g, F, fc, 100);
+    const x0 = 50 - w * 50, x1 = 50 + w * 50, y0 = 50 - h * 50, y1 = 50 + h * 50;
+    g.fillStyle = F.sh('#141416'); g.fillRect(x0 - 1.5, y0 - 4, x1 - x0 + 3, y1 - y0 + 8);
+    g.fillStyle = F.sh(CA_COL.plate); g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.fillStyle = F.sh('#2a3a7a'); g.fillRect(x0, y1 - (y1 - y0) * 0.2, x1 - x0, (y1 - y0) * 0.2);
+    g.fillStyle = F.sh('#2a2a2a'); g.fillRect(x0 + (x1 - x0) * 0.15, y0 + (y1 - y0) * 0.28, (x1 - x0) * 0.7, (y1 - y0) * 0.36);
+  },
+  carExtras(M, S, sp) {
+    const live = !S.burnt, rf0 = M.fR + sp.rakeR, rf1 = M.fC - sp.rakeF, rc = (rf0 + rf1) / 2, zr = M.zr, w = M.gwT;
+    if (sp.bar && live) {
+      // low light bar on two feet: red / clear / blue lens segments
+      const f0 = rc - 0.035, f1 = rc + 0.075;
+      for (const sd of [-1, 1]) M.parts.push(this.box(f0 + 0.02, f1 - 0.02, sd * (w - 0.04) - 0.02, sd * (w - 0.04) + 0.02, zr, zr + 0.018, CA_COL.black));
+      this.lightbar(M, f0, f1, w + 0.015, zr + 0.018, ['#c41c1c', '#d8dcdc', '#1c34c8'], ['r', 'b']);
+    }
+    if (sp.pushbar && live) {
+      const fe = M.f1 + 0.05;
+      const zt = M.noseZ - M.bv;
+      for (const sd of [-1, 1]) M.parts.push(this.box(fe, fe + 0.035, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.05, M.z0 + 0.17, CA_COL.black), this.box(fe, fe + 0.035, sd * 0.2 - 0.022, sd * 0.2 + 0.022, M.z0 + 0.2, zt, CA_COL.black));
+      M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, zt, zt + 0.035, CA_COL.black));
+      M.parts.push(this.box(fe, fe + 0.035, -0.26, 0.26, M.z0 + 0.17, M.z0 + 0.2, CA_COL.black));
+    }
+    if (sp.spot && live) M.parts.push(this.box(M.fC - 0.055, M.fC - 0.005, -M.hw - 0.05, -M.hw + 0.005, M.zb + 0.1, M.zb + 0.15, CA_COL.chrome, { mat: 'chrome' }));
+    if (live && S.type === 'police') for (const sd of [-0.5, 0.5]) { const a = this.stick(M.f0 + 0.14, sd * M.hw, M.tailZ, 0.46, '#202020'); a.on = M.body; M.parts.push(a); }
+    else if (live && (S.type === 'sedan' || S.type === 'wagon' || S.type === 'taxi')) { const a = this.stick(M.f1 - 0.28, M.hw - 0.07, M.noseZ + 0.03, 0.4, '#303030'); a.on = M.body; M.parts.push(a); }
+    if (sp.sign && live) {
+      const sg = this.prism([[rc - 0.1, -0.15], [rc + 0.1, -0.15], [rc + 0.1, 0.15], [rc - 0.1, 0.15]], zr + 0.012, zr + 0.1, '#f2eedc');
+      this.label(sg, 'TAXI', 6, '#1a1a1a', 'LR');
+      M.parts.push(this.box(rc - 0.07, rc + 0.07, -0.12, 0.12, zr, zr + 0.012, CA_COL.black), sg);
+      M.lt.push({ k: 'b', f: rc, s: 0, z: zr + 0.065, c: 'a', ph: 0, taxi: true });
+    }
+    if (sp.rack && live) {
+      const mat = S.type === 'wagon' ? 'chrome' : 'paint', col = S.type === 'wagon' ? CA_COL.chrome : CA_COL.black;
+      for (const sd of [-1, 1]) M.parts.push(this.box(rf0 + 0.03, rf1 - 0.02, sd * (w - 0.015) - 0.012, sd * (w - 0.015) + 0.012, zr, zr + 0.028, col, { mat }));
+      for (const f of [rf0 + 0.14, rf1 - 0.14]) M.parts.push(this.box(f - 0.014, f + 0.014, -w + 0.035, w - 0.035, zr + 0.028, zr + 0.046, col, { mat }));
+    }
+    if (sp.spare && live) M.parts.push(this.spare(M.f0, 0, (M.z0 + M.zb) / 2 + 0.05, 0.21));
+    if (sp.spoiler && live) {
+      // low rear-deck wing on two short stands
+      const zd = M.body.zf(M.f0 + 0.11);
+      for (const sd of [-1, 1]) { const p = this.box(M.f0 + 0.05, M.f0 + 0.09, sd * (M.hw - 0.17) - 0.014, sd * (M.hw - 0.17) + 0.014, zd - 0.01, zd + 0.03, CA_COL.black); p.on = M.body; M.parts.push(p); }
+      const wing = this.box(M.f0 + 0.02, M.f0 + 0.12, -M.hw + 0.07, M.hw - 0.07, zd + 0.03, zd + 0.05, M.paint); wing.on = M.body;
+      M.parts.push(wing);
+    }
+    if (sp.lamps === 'popup' && S.pop) {
+      const wf = M.hw - sp.chF;
+      for (const sd of [-1, 1]) {
+        const a = sd * (wf - 0.03), b = sd * (wf - 0.24), zh = M.body.zf(M.f1 - 0.14);
+        const p = this.box(M.f1 - 0.2, M.f1 - 0.08, Math.min(a, b), Math.max(a, b), zh, zh + 0.09, M.paint);
+        this.fx(p, 'F', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#141416'); g.fillRect(4, 8, 92, 80); g.fillStyle = F.sh(CA_COL.head, 1.05); g.fillRect(10, 15, 80, 65); });
+        p.on = M.body; M.parts.push(p);
+        this.lamp(M, 'h', M.f1 - 0.075, (a + b) / 2, zh + 0.045, sd < 0 ? 0 : 1);
+      }
+    }
+  },
+  // spare wheel on the back, axis along f, outer face at f0 - 0.1
+  spare(f0, s, z, r) {
+    return { bb: [f0 - 0.11, f0 - 0.001, s - r, s + r, z - r, z + r], c: [f0 - 0.05, s, z], faces: [], draw(g, F) {
+      const ring = (f) => { const p = []; for (let k = 0; k < 16; k++) { const t = k / 16 * Math.PI * 2; p.push(F.P(f, s + Math.cos(t) * r, z + Math.sin(t) * r)); } return p; };
+      const a = ring(f0 - 0.001), b = ring(f0 - 0.1), v = F.vis([-1, 0, 0]) > 0;
+      for (let k = 0; k < 16; k++) {
+        const j = (k + 1) % 16, t = (k + 0.5) / 16 * Math.PI * 2, n = [0, Math.cos(t), Math.sin(t)];
+        if (F.vis(n) <= 0) continue;
+        g.fillStyle = Col.shade('#1a1a1c', F.bright(n)); g.beginPath(); g.moveTo(a[k][0], a[k][1]); g.lineTo(a[j][0], a[j][1]); g.lineTo(b[j][0], b[j][1]); g.lineTo(b[k][0], b[k][1]); g.closePath(); g.fill();
+      }
+      if (v) {
+        const bb = F.bright([-1, 0, 0]);
+        g.fillStyle = Col.shade('#202022', bb); g.beginPath(); CarArt.path(g, b); g.fill();
+        F.frame(g, [f0 - 0.1, s, z], [0, 1, 0], [0, 0, 1], 0.01);
+        g.strokeStyle = Col.shade('#d8d8d0', bb); g.lineWidth = 2; g.beginPath(); g.arc(0, 0, r * 70, 0, 7); g.stroke();
+        g.fillStyle = Col.shade('#5a5e62', bb); g.beginPath(); g.arc(0, 0, r * 30, 0, 7); g.fill();
+        g.setTransform(1, 0, 0, 1, 0, 0);
+      }
+    } };
+  },
+});
+Object.assign(CarArt, {
+  // ride height (missing / flat tyres, burnt shells) as a least-squares plane, then opened panels
+  finish(M) {
+    const d = [0, 0, 0, 0];
+    let fA = -1e9, fB = 1e9;
+    for (const w of M.wheels) {
+      const dr = w.burnt || w.st === 2 ? w.r * 0.34 : w.st === 1 ? w.r * 0.18 : 0;
+      d[w.idx] = Math.max(d[w.idx], dr);
+      fA = Math.max(fA, w.f); fB = Math.min(fB, w.f);
+    }
+    if (M.wheels.length && fA > fB) {
+      const sw = M.hw, mean = (d[0] + d[1] + d[2] + d[3]) / 4;
+      const ds = ((d[1] + d[3]) - (d[0] + d[2])) / (4 * sw), df = ((d[0] + d[1]) - (d[2] + d[3])) / (2 * (fA - fB));
+      M.tilt = [mean - df * (fA + fB) / 2, df, ds];
+    }
+    if (M.body && M.doorF) this.openParts(M);
+  },
+  // thin panel solid: base edge a -> b (local points), extruded by vector e (height) and thickness n*t
+  panel(a, b, e, n, col, o) {
+    const A = [a, b, [b[0] + e[0], b[1] + e[1], b[2] + e[2]], [a[0] + e[0], a[1] + e[1], a[2] + e[2]]];
+    const B = A.map(q => [q[0] - n[0] * 0.025, q[1] - n[1] * 0.025, q[2] - n[2] * 0.025]);
+    return this.solid(A, B, col, o);
+  },
+  openParts(M) {
+    const S = M.S, sp = M.sp || {}, live = !S.burnt;
+    const inner = '#3a3a3e';
+    // doors swing out about their front hinge
+    for (let j = 0; j < M.doorF.length; j++) for (const sd of [-1, 1]) {
+      const id = (j ? 2 : 0) + (sd > 0 ? 1 : 0);
+      if (S.doors[id] !== 1) continue;
+      const [a, b] = M.doorF[j], Ld = b - a, th = 1.0, hw = M.hw + 0.02;
+      const H = [b, sd * hw], u = [-Math.cos(th), sd * Math.sin(th)], on = [Math.sin(th), sd * Math.cos(th), 0];
+      const E = [H[0] + u[0] * Ld, H[1] + u[1] * Ld];
+      const col = live ? (sp.livery === 'bw' ? S.col : M.paint) : CA_COL.burnt;
+      const lo = this.panel([H[0], H[1], M.z0 + 0.04], [E[0], E[1], M.z0 + 0.04], [0, 0, M.zb - M.z0 - 0.04], on, col, { cols: {} });
+      for (const fc of lo.faces) if (F_dot(fc.n, on) < -0.5) fc.col = inner;
+      lo.k = 'door'; M.parts.push(lo);
+      if (M.cab && M.zr) {
+        const wh = (M.zr - M.zb) * 0.86, ins = sp.rakeF ? Math.min(0.2, sp.rakeF * 0.6) : 0;
+        const a2 = [H[0] + u[0] * (j ? 0 : ins), H[1] + u[1] * (j ? 0 : ins), M.zb], b2 = [E[0], E[1], M.zb];
+        const up = this.panel(a2, b2, [0, 0, wh], on, col, {});
+        for (const fc of up.faces) if (Math.abs(F_dot(fc.n, on)) > 0.5) { this.win(fc, 'door', 0.08, 0.92, 0.1, 0.88, S.burnt ? 4 : S.glass[['winFL', 'winFR', 'winRL', 'winRR'][id]]); if (F_dot(fc.n, on) < 0) fc.col = inner; }
+        M.parts.push(up);
+      }
+    }
+    // hood hinged at the cowl
+    if (S.hood === 1 && M.noseZ !== undefined && !M.noHood) {
+      const th = 1.05, Lh = M.f1 - (sp.chF || 0.08) * 0.5 - M.fC - 0.03, w = M.hw - 0.03;
+      const h0 = [M.fC + 0.03, -w, M.zb + 0.002], h1 = [M.fC + 0.03, w, M.zb + 0.002];
+      const nrm = [-Math.sin(th), 0, Math.cos(th)];
+      const hp = this.panel(h0, h1, [Math.cos(th) * Lh, 0, Math.sin(th) * Lh], [-nrm[0], 0, -nrm[2]], live ? M.paint : CA_COL.burnt, {});
+      for (const fc of hp.faces) if (F_dot(fc.n, nrm) < -0.5) fc.col = '#3c3c3a';
+      M.parts.push(hp);
+    }
+    // trunk lid hinged at the rear window, or the hatch hinged at the roof
+    if (S.trunk === 1 && M.fR !== undefined && !M.noTrunk) {
+      if (sp.hatch && M.zr) {
+        const ph = 0.38, hf = M.fR + sp.rakeR, Lh = Math.hypot(sp.rakeR, M.zr - M.zb) + (M.zb - M.z0) * 0.45, w = M.gw;
+        const nrm = [Math.sin(ph), 0, Math.cos(ph)];
+        const hp = this.panel([hf, -w, M.zr + 0.03], [hf, w, M.zr + 0.03], [-Math.cos(ph) * Lh, 0, Math.sin(ph) * Lh], [nrm[0], 0, nrm[2]], live ? M.paint : CA_COL.burnt, {});
+        for (const fc of hp.faces) { const dd = F_dot(fc.n, nrm); if (dd < -0.5) fc.col = inner; else if (dd > 0.5) this.win(fc, 'hatch', 0.08, 0.92, 0.32, 0.94, S.burnt ? 4 : S.glass.rearWindow); }
+        M.parts.push(hp);
+      } else if (M.fR - M.f0 > 0.15) {
+        const th = 1.2, hf = M.fR - 0.035, Lt = M.fR - M.f0 - (M.chR || 0) * 0.5 - 0.04, w = M.hw - 0.04;
+        const nrm = [Math.sin(th), 0, Math.cos(th)];
+        const tp = this.panel([hf, -w, M.zb + 0.002], [hf, w, M.zb + 0.002], [-Math.cos(th) * Lt, 0, Math.sin(th) * Lt], [-nrm[0], 0, -nrm[2]], live ? M.paint : CA_COL.burnt, {});
+        for (const fc of tp.faces) if (F_dot(fc.n, nrm) < -0.5) fc.col = '#3c3c3a';
+        M.parts.push(tp);
+      }
+    }
+  },
+});
+function F_dot(a, b) { return a[0] * b[0] + a[1] * b[1] + (a[2] || 0) * (b[2] || 0); }
+Object.assign(CarArt, {
+  // ---------------------------------------------------------------- trucks & box bodies
+  // side-profile extrusion: convex [f, z] profile swept across s0..s1 (caps are the L / R sides)
+  xbody(prof, s0, s1, col, o) { return this.solid(prof.map(q => [q[0], s0, q[1]]), prof.map(q => [q[0], s1, q[1]]), col, o); },
+  // window on a vertical side face between f0..f1, z0..z1
+  sideWin(fc, id, f0, f1, z0, z1, st, f1t) {
+    if (!fc) return;
+    const s = fc.p[0][1];
+    (fc.win || (fc.win = [])).push({ id, st: st || 0, p: [[f0, s, z0], [f1, s, z0], [f1t === undefined ? f1 : f1t, s, z1], [f0, s, z1]] });
+  },
+  sideFace(P, sd) { return P.faces.find(fc => fc.t === (sd < 0 ? 'L' : 'R') && Math.abs(fc.n[1]) > 0.95); },
+  // painter on the side plane s = sd*hw clipped to the face: fn(g, R, k) in (f, z) units * 100
+  sidePaint(P, sd, hw, fn) {
+    return this.pfx(P, [0, sd, 0], (g, F) => {
+      const fc = this.sideFace(P, sd);
+      if (!fc) return;
+      F.frame(g, [0, sd * hw, 0], [1, 0, 0], [0, 0, 1], 0.01);
+      g.beginPath(); fc.p.forEach((q, i) => i ? g.lineTo(q[0] * 100, q[2] * 100) : g.moveTo(q[0] * 100, q[2] * 100)); g.closePath(); g.clip();
+      fn(g, F, (a, b, c, d) => g.fillRect(a * 100, b * 100, (c - a) * 100, (d - b) * 100));
+    });
+  },
+  // wheel arches for the wheels on side sd (inside a side frame, units * 100): a lit lip round the opening or
+  // a black plastic flare, then the dark well; the tyre is painted over it afterwards
+  wells(g, F, M, sd, z0, flare) {
+    for (const w of M.wheels) {
+      if (w.side !== sd || w.dup) continue;
+      const r0 = (w.r + 0.035) * 100, cx = w.f * 100, cy = w.r * 100;
+      if (flare) { g.strokeStyle = F.sh(flare); g.lineWidth = 7; g.beginPath(); g.arc(cx, cy, r0 + 2.5, -0.05, Math.PI + 0.05); g.stroke(); }
+      else if (!M.S.burnt) { g.strokeStyle = F.sh(M.paint, 1.18); g.lineWidth = 1.8; g.beginPath(); g.arc(cx, cy, r0 + 1.2, 0.08, Math.PI - 0.08); g.stroke(); }
+      g.fillStyle = F.sh('#0e0e10'); g.beginPath(); g.arc(cx, cy, r0, 0, 7); g.rect(cx - r0, z0 * 100 - 6, r0 * 2, cy - z0 * 100 + 6); g.fill();
+    }
+  },
+  // shared truck front: hood slab + 2-door cab (lower body + greenhouse) from fb (cab back) to the nose
+  truckFront(M, S, o) {
+    const sp = Object.assign({}, CA_CARS.base, { opera: false }, o.sp || {});
+    const hl = M.hl, hw = o.hw || M.hw, live = !S.burnt;
+    const paint = o.paint || (S.burnt ? CA_COL.burnt : S.col);
+    const bv = o.bv === undefined ? 0.03 : o.bv, rb = o.rb === undefined ? 0.025 : o.rb;
+    Object.assign(M, { sp, hw, sideHw: hw, z0: o.z0, zb: o.zb, zr: o.zr, fC: o.fC, fR: o.fb, chR: 0, f0: o.fb, f1: hl, noseZ: o.zb - sp.nose, tailZ: o.zb, gw: hw - sp.gin, gwT: hw - sp.gin - sp.tum, paint, zTrim: o.z0 + (o.zb - o.z0) * 0.5, seat2: this.seatCol(S.col), noRear: true, noTrunk: true, bv, rb });
+    const body = M.body = this.lowerBody({ f0: o.fb, f1: hl, hw, z0: o.z0, zb: o.zb, fC: o.fC, fR: o.fb, noseZ: M.noseZ, tailZ: o.zb, chF: sp.chF, chR: 0, col: paint, bv, bvE: 0.4 });
+    M.parts.push(body);
+    M.doorF = [[o.fb + 0.035, o.fC + 0.06]];
+    this.pfx(body, [0, -1, 0], (g, F) => this.sideArt(g, F, M, -1));
+    this.pfx(body, [0, 1, 0], (g, F) => this.sideArt(g, F, M, 1));
+    this.pfx(body, [1, 0, 0], (g, F) => this.frontArt(g, F, M));
+    for (const fc of body.faces) if (fc.id === 'hood') fc.fx = [(g, F, f) => this.hoodArt(g, F, f, M)];
+    const cc = o.cabCol || paint;
+    const cab = M.cab = this.cabin({ fR: o.fb, fC: o.fC, gw: M.gw, gwT: M.gwT, zb: o.zb, zr: o.zr, rakeF: sp.rakeF, rakeR: sp.rakeR, col: cc, roof: o.roof || cc, inCol: S.burnt ? '#1a1612' : null, rb });
+    M.parts.push(cab);
+    const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
+    this.win(this.face(cab, 'F'), 'windshield', 0.04, 0.96, 0.05, 0.94, gs('windshield'));
+    this.win(this.face(cab, 'B'), 'rearWindow', 0.15, 0.85, 0.28, 0.88, gs('rearWindow'));
+    this.win(this.face(cab, 'L'), 'winFL', 0.1, 0.955, 0.09, 0.9, gs('winFL', 0));
+    this.win(this.face(cab, 'R'), 'winFR', 0.1, 0.955, 0.09, 0.9, gs('winFR', 1));
+    const sw = M.gwT - 0.035, fs = o.fb + (o.fC - o.fb) * 0.48;
+    this.seats(cab, fs, null, o.zb, sw, M.seat2, S.burnt);
+    cab.inner.push(this.box(o.fC - 0.19, o.fC - 0.09, -sw, sw, o.zb - 0.02, o.zb + 0.065, '#222226'));
+    if (live) cab.inner.push(this.steer(o.fC - 0.215, -sw * 0.5, o.zb + 0.1, 0.065));
+    M.seat = [fs - 0.02, -sw * 0.5, o.zb + 0.12];
+    this.cabinArt(M, cab);
+    const fbp = this.bumper(1, hl, hw, sp.chF, o.z0 + 0.03, o.z0 + 0.15, S.burnt ? 'black' : sp.bump, paint, { d: 0.05, body });
+    M.parts.push(...fbp);
+    if (live) this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.8));
+    // tall truck mirrors on stalks
+    const mc = S.burnt ? CA_COL.burnt : sp.trim === 'chrome' ? CA_COL.chrome : CA_COL.black;
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) {
+      const s0 = sd > 0 ? M.gw : -hw - 0.075, s1 = sd > 0 ? hw + 0.075 : -M.gw;
+      M.parts.push(this.box(o.fC - 0.13, o.fC - 0.09, s0, s1, o.zb + 0.03, o.zb + 0.045, CA_COL.black));
+      M.parts.push(this.box(o.fC - 0.13, o.fC - 0.08, sd > 0 ? hw + 0.03 : -hw - 0.08, sd > 0 ? hw + 0.08 : -hw - 0.03, o.zb + 0.045, o.zb + 0.15, mc, { mat: mc === CA_COL.chrome ? 'chrome' : 'paint' }));
+    }
+    const wf = hw - sp.chF;
+    for (const sd of [-1, 1]) this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - bv - (sp.lamps === 'round' ? 0.083 : 0.064), sd < 0 ? 0 : 1);
+    this.lamp(M, 'd', (o.fb + o.fC) / 2, 0, o.zr - 0.02);
+    return { body, cab, sp };
+  },
+  // mud flap hanging behind a wheel, just inside the body side, down from the body bottom z1
+  mudflap(M, f, sd, s, z1, col) {
+    // thick enough to read as a rubber flap (not a hairline) when seen edge-on from the side
+    const p = this.box(f - 0.028, f, sd > 0 ? s - 0.14 : -s, sd > 0 ? s : -s + 0.14, 0.075, z1, col || '#18181a');
+    this.fx(p, 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(10, 55, 80, 6); });
+    M.parts.push(p);
+  },
+  b_pickup(M, S, T) {
+    const L = T.len, hl = M.hl, hw = M.hw, h = this.hash(S.col0), live = !S.burnt;
+    const z0 = 0.22, zb = 0.68, zr = 1.08, fb = -L * 0.07, fC = L * 0.2;
+    const two = h % 2 ? null : (Col.rgb(S.col)[0] > 150 ? '#8a3a2a' : '#c8c0a8');
+    const { sp } = this.truckFront(M, S, { z0, zb, zr, fb, fC, sp: { r: 0.225, nose: 0.04, chF: 0.05, rakeF: 0.2, rakeR: 0.02, tum: 0.05, gin: 0.035, doors: 2, lamps: h % 3 ? 'quad' : 'rect', grille: 'chrome', two } });
+    M.band = true;
+    const paint = M.paint, zf = z0 + 0.22, bf = fb - 0.03, t = 0.05;
+    // bed: ribbed floor, side walls with chrome rail caps, front wall, tailgate
+    const floor = this.box(-hl + t, bf - t, -hw + t, hw - t, z0, zf, '#232325', { body: true });
+    this.fx(floor, 'T', (g, F, fc) => { g.strokeStyle = 'rgba(0,0,0,0.38)'; g.lineWidth = 1; for (let s = -hw + t + 0.05; s < hw - t; s += 0.06) { const a = F.P(-hl + t, s, zf), b = F.P(bf - t, s, zf); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); } if (S.snow) this.snowCap(g, F, fc, 0.1); });
+    M.parts.push(floor);
+    for (const sd of [-1, 1]) {
+      const wall = this.box(-hl, bf, sd < 0 ? -hw : hw - t, sd < 0 ? -hw + t : hw, z0, zb - 0.015, paint, { body: true });
+      this.sidePaint(wall, sd, hw, (g, F, R) => {
+        if (sp.two && live) { g.fillStyle = F.sh(sp.two); R(-hl, M.zTrim - 0.04, bf, M.zTrim + 0.05); }
+        else { g.fillStyle = F.sh(CA_COL.chrome); R(-hl, M.zTrim - 0.009, bf, M.zTrim + 0.009); }
+        if (live) {
+          g.fillStyle = 'rgba(255,255,255,0.13)'; R(-hl, zb - 0.067, bf, zb - 0.057); g.fillStyle = 'rgba(0,0,0,0.13)'; R(-hl, zb - 0.057, bf, zb - 0.049);
+          g.fillStyle = F.sh(CA_COL.tail); R(-hl + 0.02, zb - 0.13, -hl + 0.075, zb - 0.095);
+          if (sd < 0) { g.strokeStyle = 'rgba(0,0,0,0.42)'; g.lineWidth = 1; g.strokeRect((bf - 0.26) * 100, (zb - 0.19) * 100, 7.5, 6.5); }
+        }
+        this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 37 + sd * 3, -hl + 0.1, bf - 0.1, z0 + 0.04, zb - 0.06);
+        this.wells(g, F, M, sd, z0);
+        g.fillStyle = F.sh(CA_COL.black, 0.85); R(-hl, z0, bf, z0 + 0.03);
+      });
+      // tall tail lamp at the back of each bed side
+      this.fx(wall, 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh('#141416'); g.fillRect(4, 30, 92, 66); g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail, 1.08); g.fillRect(10, 34, 80, 58); if (!br) { g.fillStyle = F.sh('#e8e8e4'); g.fillRect(10, 34, 80, 14); g.fillStyle = F.sh(CA_COL.amber); g.fillRect(10, 48, 80, 9); } });
+      this.fx(wall, 'T', (g, F, fc) => { if (live) { g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = Col.shade(CA_COL.chrome, F.b * 0.95); g.beginPath(); this.path(g, fc.p.map(q => F.P(q[0], q[1], q[2]))); g.fill(); } });
+      M.parts.push(wall);
+    }
+    M.parts.push(this.box(bf - t, bf, -hw + t, hw - t, zf, zb - 0.015, paint, { body: true }));
+    if (S.trunk === 0) {
+      const tg = this.box(-hl, -hl + 0.045, -hw + t, hw - t, z0 + 0.03, zb - 0.015, paint, { body: true });
+      this.fx(tg, 'B', (g, F, fc) => { this.qframe(g, F, fc, 100); g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2; g.strokeRect(5, 14, 90, 72); g.fillStyle = F.sh(live ? CA_COL.chrome : CA_COL.black); g.fillRect(42, 70, 16, 7); if (live) { g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(5, 80, 90, 4); } });
+      M.parts.push(tg);
+    } else if (S.trunk === 1) {
+      const tg = this.box(-hl - 0.34, -hl, -hw + t, hw - t, zf - 0.045, zf, paint);
+      this.fx(tg, 'T', (g, F, fc) => { this.qframe(g, F, fc, 100); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 3; g.strokeRect(8, 8, 84, 84); });
+      M.parts.push(tg);
+    }
+    // chrome step bumper with a black tread pad, plate in the middle
+    const rbp = this.bumper(-1, -hl, hw, 0, z0 - 0.01, z0 + 0.11, S.burnt ? 'black' : 'chrome', paint, { d: 0.06, noStrip: true });
+    if (live) this.fx(rbp[0], 'B', (g, F, fc) => this.plate(g, F, fc, 0.15, 0.7));
+    this.fx(rbp[0], 'T', (g, F, fc) => { this.qframe(g, F, fc, 100); g.fillStyle = F.sh('#1c1c1e'); g.fillRect(35, 10, 30, 80); });
+    M.parts.push(...rbp);
+    for (const f of [L * 0.33, L * -0.255]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.225, { rim: h % 3 === 1 ? 'steel' : 'cap', white: h % 3 === 0 });
+    if (live) for (const sd of [-1, 1]) this.mudflap(M, L * -0.255 - 0.28, sd, hw - 0.01, z0);
+    for (const sd of [-1, 1]) { const i = sd < 0 ? 2 : 3; this.lamp(M, 't', -hl - 0.004, sd * (hw - t / 2), zb - 0.16, i); this.lamp(M, 'r', -hl - 0.004, sd * (hw - t / 2), zb - 0.2, i); }
+    this.lamp(M, 'c', fb + 0.01, 0, zr - 0.03);
+  },
+  b_van(M, S, T) {
+    const L = T.len, hl = M.hl, hw = M.hw, h = this.hash(S.col0), live = !S.burnt;
+    const paint = S.burnt ? CA_COL.burnt : S.col;
+    const z0 = 0.2, zh = 0.64, zr = 1.22, rb = 0.03, zt = zr - rb, fC = L * 0.33, rake = 0.25, win = h % 2 === 0;
+    const sp = Object.assign({}, CA_CARS.base, { nose: 0.07, chF: 0.06, lamps: h % 3 ? 'rect' : 'quad', grille: h % 3 ? 'black' : 'chrome', bump: 'chrome', trim: 'black', opera: false, crease: false });
+    Object.assign(M, { sp, z0, zb: zh, zr, fC, fR: -hl, chR: 0.04, f0: -hl, f1: hl, noseZ: zh - sp.nose, tailZ: zh, gw: hw, gwT: hw, paint, zTrim: z0 + 0.3, seat2: this.seatCol(S.col), noTrunk: true, bv: 0.025 });
+    const hood = M.body = this.lowerBody({ f0: fC, f1: hl, hw, z0, zb: zh, fC, fR: fC, noseZ: M.noseZ, tailZ: zh, chF: sp.chF, chR: 0, col: paint, bv: M.bv, bvE: 0.4 });
+    M.doorF = [];
+    this.pfx(hood, [1, 0, 0], (g, F) => this.frontArt(g, F, M));
+    for (const fc of hood.faces) if (fc.id === 'hood') fc.fx = [(g, F, f) => this.hoodArt(g, F, f, M)];
+    for (const sd of [-1, 1]) this.sidePaint(hood, sd, hw, (g, F, R) => { this.wells(g, F, M, sd, z0); if (live) { g.fillStyle = F.sh(CA_COL.amber); R(hl - 0.13, zh - 0.17, hl - 0.07, zh - 0.135); } g.fillStyle = F.sh(CA_COL.black, 0.85); R(fC, z0, hl, z0 + 0.03); });
+    M.parts.push(hood);
+    // tall body with a raked windshield, hollow so the seats show through the glass
+    const prof = [[-hl, z0], [fC, z0], [fC, zh], [fC - rake, zt], [-hl, zt]];
+    const box = M.cab = this.xbody(prof, -hw, hw, paint, { body: true });
+    box.hollow = true; box.inner = []; box.inCol = S.burnt ? '#1a1612' : null;
+    const cap = this.roofCap(this.rect(-hl, fC - rake, -hw, hw), zt, rb, paint, 0.6);
+    M.parts.push(box, cap);
+    const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
+    const ws = box.faces.find(fc => fc.n[0] > 0.6 && fc.n[2] > 0.2 && fc.n[2] < 0.75);
+    this.win(ws, 'windshield', 0.035, 0.965, 0.06, 0.93, gs('windshield'));
+    const fd0 = fC - 0.46, zw0 = zh + 0.04, zw1 = zr - 0.11, sl0 = fd0 - 0.6, sl1 = fd0 - 0.03;
+    M.doorF = [[fd0, fC - 0.02]];
+    // side glass: front door window follows the A-pillar; passenger vans get three windows a side
+    for (const sd of [-1, 1]) {
+      const fc = this.sideFace(box, sd);
+      const fe = (z) => fC - rake * (z - zh) / (zt - zh) - 0.04;
+      this.sideWin(fc, sd < 0 ? 'winFL' : 'winFR', fd0 + 0.04, fe(zw0), zw0, zw1, gs(sd < 0 ? 'winFL' : 'winFR', sd < 0 ? 0 : 1), fe(zw1));
+      if (win) for (const [a, b] of [[sl0 + 0.05, sl1 - 0.05], [-hl + 0.4, sl0 - 0.06], [-hl + 0.06, -hl + 0.34]]) {
+        const open = sd > 0 && S.doors[3] && a > sl0;
+        this.sideWin(fc, sd < 0 ? 'winRL' : 'winRR', a, b, zw0, zw1, S.burnt || open ? 4 : S.glass[sd < 0 ? 'winRL' : 'winRR']);
+      }
+    }
+    const rf = box.faces.find(fc => fc.n[0] < -0.95);
+    if (rf) { rf.win = []; for (const sd of [-1, 1]) rf.win.push({ id: 'rearWindow', st: S.trunk ? 4 : gs('rearWindow'), p: [[-hl, sd * 0.045, zw0 + 0.04], [-hl, sd * (hw - 0.09), zw0 + 0.04], [-hl, sd * (hw - 0.09), zw1], [-hl, sd * 0.045, zw1]] }); }
+    const stripe = live && h % 3 !== 2 ? (h % 2 ? ['#7a3a1a', '#c86a20', '#e0b040'] : ['#1c2c5a', '#3a5aa0']) : null;
+    for (const sd of [-1, 1]) this.sidePaint(box, sd, hw, (g, F, R) => {
+      if (stripe) stripe.forEach((c, i) => { g.fillStyle = F.sh(c); R(-hl, zh - 0.1 - i * 0.035, fC + 0.1, zh - 0.072 - i * 0.035); });
+      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.1;
+      g.strokeRect(fd0 * 100, (z0 + 0.035) * 100, (fC - 0.02 - fd0) * 100, (zr - z0 - 0.09) * 100);
+      g.fillStyle = F.sh(CA_COL.black); R(fC - 0.12, zh - 0.07, fC - 0.06, zh - 0.05);
+      if (sd > 0) {
+        // sliding side door: open it slides back along its track over the rear quarter
+        g.strokeStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.moveTo((sl0 - 0.62) * 100, (zw1 + 0.02) * 100); g.lineTo(sl1 * 100, (zw1 + 0.02) * 100); g.stroke();
+        if (S.doors[3]) { g.fillStyle = F.sh(CA_COL.inside, 0.7); R(sl0, z0 + 0.04, sl1, zr - 0.07); g.fillStyle = F.sh(M.seat2, 0.9); R(sl0 + 0.05, zh - 0.12, sl1 - 0.1, zh + 0.02); g.strokeStyle = 'rgba(0,0,0,0.5)'; g.strokeRect((sl0 - 0.55) * 100, (z0 + 0.03) * 100, (sl1 - sl0) * 100, (zr - z0 - 0.1) * 100); }
+        else { g.strokeRect(sl0 * 100, (z0 + 0.035) * 100, (sl1 - sl0) * 100, (zr - z0 - 0.09) * 100); g.fillStyle = F.sh(CA_COL.black); R(sl1 - 0.1, zh - 0.07, sl1 - 0.04, zh - 0.05); }
+      }
+      if (live) { g.fillStyle = F.sh(CA_COL.tail); R(-hl + 0.015, z0 + 0.12, -hl + 0.06, z0 + 0.155); }
+      this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 41 + sd, -hl + 0.15, fC - 0.1, z0 + 0.05, zh);
+      this.wells(g, F, M, sd, z0);
+      g.fillStyle = F.sh(CA_COL.black, 0.85); R(-hl, z0, fC, z0 + 0.03);
+    });
+    if (rf) (rf.fx || (rf.fx = [])).push((g, F, fc) => {
+      F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
+      const R = (a, b, c, d) => g.fillRect(a * 100, b * 100, (c - a) * 100, (d - b) * 100);
+      if (S.trunk) { g.fillStyle = F.sh('#1c1c1e'); R(-hw + 0.06, z0 + 0.06, hw - 0.06, zr - 0.06); }
+      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, (z0 + 0.05) * 100); g.lineTo(0, (zr - 0.05) * 100); g.stroke();
+      if (!S.trunk && live) { g.fillStyle = F.sh(CA_COL.chrome); R(-0.07, zh - 0.06, -0.02, zh - 0.04); }
+      for (const sd of [-1, 1]) {
+        const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1, s0 = sd < 0 ? -hw + 0.008 : hw - 0.075, s1 = sd < 0 ? -hw + 0.075 : hw - 0.008;
+        g.fillStyle = F.sh('#141416'); R(s0 - 0.004, z0 + 0.16, s1 + 0.004, zh + 0.01);
+        g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail, 1.08); R(s0, z0 + 0.17, s1, zh);
+        if (!br) { g.fillStyle = F.sh('#e8e8e4'); R(s0, z0 + 0.17, s1, z0 + 0.23); }
+      }
+      g.fillStyle = F.sh(CA_COL.plate); R(-0.075, z0 + 0.16, 0.075, z0 + 0.235);
+    });
+    const top = this.face(cap, 'T');
+    if (top) top.fx = [(g, F, fc) => {
+      F.frame(g, [0, 0, zr], [1, 0, 0], [0, 1, 0], 0.01);
+      g.fillStyle = 'rgba(0,0,0,0.1)'; for (let f = -hl + 0.2; f < fC - rake - 0.15; f += 0.3) g.fillRect(f * 100, -(hw - rb - 0.03) * 100, 2, (hw - rb - 0.03) * 200);
+      if (S.snow) this.snowCap(g, F, fc, 0.06);
+    }];
+    // seats behind the glass
+    const sw = hw - 0.08, fs = fC - 0.34;
+    this.seats(box, fs, win ? fs - 0.55 : null, zh - 0.05, sw, M.seat2, S.burnt);
+    if (win) box.inner.push(this.box(fs - 1.07, fs - 1.0, -sw, sw, zh - 0.07, zh + 0.12, S.burnt ? '#2a2420' : M.seat2));
+    box.inner.push(this.box(fC - 0.24, fC - 0.13, -sw, sw, zh - 0.06, zh + 0.04, '#222226'));
+    if (live) box.inner.push(this.steer(fC - 0.27, -sw * 0.5, zh + 0.08, 0.07));
+    M.seat = [fs - 0.02, -sw * 0.5, zh + 0.07];
+    const fbp = this.bumper(1, hl, hw, sp.chF, z0 + 0.03, z0 + 0.14, S.burnt ? 'black' : 'chrome', paint, { body: hood }), rbp = this.bumper(-1, -hl, hw, 0, z0 + 0.02, z0 + 0.13, S.burnt ? 'black' : 'chrome', paint);
+    if (live) this.fx(fbp[0], 'F', (g, F, fc) => this.plate(g, F, fc, 0.13 / (2 * (hw - sp.chF)), 0.8));
+    M.parts.push(...fbp, ...rbp);
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] === 0) {
+      M.parts.push(this.box(fC - 0.2, fC - 0.16, sd > 0 ? hw : -hw - 0.07, sd > 0 ? hw + 0.07 : -hw, zh + 0.05, zh + 0.065, CA_COL.black));
+      M.parts.push(this.box(fC - 0.2, fC - 0.15, sd > 0 ? hw + 0.03 : -hw - 0.08, sd > 0 ? hw + 0.08 : -hw - 0.03, zh + 0.065, zh + 0.18, CA_COL.black));
+    }
+    for (const f of [hl - 0.43, -hl + 0.61]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.215, { rim: h % 2 ? 'steel' : 'cap', rimCol: h % 2 ? '#d8d8d0' : null });
+    const wf = hw - sp.chF;
+    for (const sd of [-1, 1]) {
+      this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.064, sd < 0 ? 0 : 1);
+      this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.04), zh - 0.15, sd < 0 ? 2 : 3); this.lamp(M, 'r', -hl - 0.004, sd * (hw - 0.04), z0 + 0.2, sd < 0 ? 2 : 3);
+    }
+    this.lamp(M, 'c', -hl - 0.004, 0, zr - 0.06);
+    this.lamp(M, 'd', fC - 0.4, 0, zr - 0.02);
+  },
+});
+Object.assign(CarArt, {
+  // light-bar of boxes across the roof at f0..f1; cols left / middle / right; adds flashing lamps
+  lightbar(M, f0, f1, w, z, cols, glow) {
+    M.parts.push(this.box(f0, f1, -w, w, z, z + 0.025, CA_COL.black));
+    M.parts.push(this.box(f0 + 0.005, f1 - 0.005, -w + 0.01, -0.07, z + 0.025, z + 0.085, cols[0]));
+    M.parts.push(this.box(f0 + 0.01, f1 - 0.01, -0.06, 0.06, z + 0.025, z + 0.075, cols[1], { mat: 'chrome' }));
+    M.parts.push(this.box(f0 + 0.005, f1 - 0.005, 0.07, w - 0.01, z + 0.025, z + 0.085, cols[2]));
+    M.lt.push({ k: 'b', f: (f0 + f1) / 2, s: -w * 0.55, z: z + 0.06, c: glow[0], ph: 0 }, { k: 'b', f: (f0 + f1) / 2, s: w * 0.55, z: z + 0.06, c: glow[1], ph: 4 });
+    M.bar = glow;
+  },
+  // rear barn doors swung open against the sides
+  barnDoors(M, z0, z1, col) {
+    for (const sd of [-1, 1]) {
+      const p = this.box(-M.hl - M.hw * 0.92, -M.hl - 0.004, sd < 0 ? -M.hw - 0.03 : M.hw, sd < 0 ? -M.hw : M.hw + 0.03, z0, z1, col);
+      for (const fc of p.faces) if (fc.n[1] * sd < -0.5) fc.col = '#8a8a88';
+      M.parts.push(p);
+    }
+  },
+  b_ambulance(M, S, T) {
+    const L = T.len, hl = M.hl, hw = M.hw, live = !S.burnt, white = S.burnt ? CA_COL.burnt : S.col;
+    const z0 = 0.22, zb = 0.66, zr = 1.16, fC = hl - 0.4, fb = fC - 0.6, zB = 1.54, rb = 0.03;
+    this.truckFront(M, S, { z0, zb, zr, fb, fC, hw: hw - 0.05, paint: white, sp: { r: 0.215, nose: 0.06, chF: 0.07, rakeF: 0.2, rakeR: 0.02, tum: 0.05, doors: 2, lamps: 'rect', grille: 'chrome', trim: 'black' } });
+    M.sideHw = hw - 0.05; M.hw = hw; M.f0 = -hl;
+    const red = live ? '#c41e1e' : '#3a2a24', bx1 = fb - 0.04;
+    // stripe on the cab sides
+    for (const sd of [-1, 1]) this.pfx(M.body, [0, sd, 0], (g, F) => { F.frame(g, [0, sd * (hw - 0.05), 0], [1, 0, 0], [0, 0, 1], 0.01); g.fillStyle = F.sh(red); g.fillRect(fb * 100, (zb - 0.2) * 100, (hl - 0.06 - fb) * 100, 7); });
+    const bol = this.rect(-hl, bx1, -hw, hw, 0.04, 0.04), box = this.prism(bol, z0 + 0.02, zB - rb, white, { body: true });
+    for (const sd of [-1, 1]) this.sidePaint(box, sd, hw, (g, F, R) => {
+      g.fillStyle = F.sh(red); R(-hl, zb - 0.2, bx1, zb - 0.13);
+      R(-hl + 0.1, zB - 0.1, bx1 - 0.04, zB - 0.06);
+      const cx = (-hl + bx1) / 2 - 0.15, cz = zb + 0.32;
+      if (live) { g.fillStyle = F.sh('#f8f8f4'); R(cx - 0.17, cz - 0.17, cx + 0.17, cz + 0.17); g.fillStyle = F.sh(red); R(cx - 0.05, cz - 0.15, cx + 0.05, cz + 0.15); R(cx - 0.15, cz - 0.05, cx + 0.15, cz + 0.05); }
+      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.1;
+      g.strokeRect((bx1 - 0.55) * 100, (z0 + 0.06) * 100, 0.45 * 100, (zb - z0 - 0.08) * 100); g.strokeRect((-hl + 0.08) * 100, (z0 + 0.06) * 100, 0.5 * 100, (zb - z0 - 0.08) * 100);
+      this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 53 + sd, -hl + 0.1, bx1 - 0.1, z0 + 0.05, zb);
+      this.wells(g, F, M, sd, z0);
+      if (live) { F.frame(g, [-hl / 2 + bx1 / 2 + 0.25, sd * hw, zB - 0.22], [sd, 0, 0], [0, 0, -1], 0.01); g.fillStyle = F.sh(red); g.font = 'bold 9px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('AMBULANCE', 0, 0); }
+    });
+    const rear = this.face(box, 'B');
+    if (rear) {
+      rear.win = [-1, 1].map(sd => ({ id: 'rearWindow', st: S.trunk ? 4 : S.burnt ? 4 : S.glass.rearWindow, p: [[-hl, sd * 0.05, zb + 0.1], [-hl, sd * 0.3, zb + 0.1], [-hl, sd * 0.3, zB - 0.25], [-hl, sd * 0.05, zB - 0.25]] }));
+      rear.fx = [(g, F) => {
+        F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
+        const R = (a, b, c, d) => g.fillRect(a * 100, b * 100, (c - a) * 100, (d - b) * 100);
+        if (S.trunk) { g.fillStyle = F.sh('#202022'); R(-hw + 0.08, z0 + 0.08, hw - 0.08, zB - 0.12); return; }
+        g.fillStyle = F.sh(red); R(-hw + 0.04, zb - 0.2, hw - 0.04, zb - 0.13);
+        g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, (z0 + 0.06) * 100); g.lineTo(0, (zB - 0.12) * 100); g.stroke();
+        for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail, 1.08); R(sd < 0 ? -hw + 0.06 : hw - 0.13, z0 + 0.12, sd < 0 ? -hw + 0.13 : hw - 0.06, z0 + 0.36); g.fillStyle = F.sh(live ? '#e02020' : '#3a1a16'); R(sd < 0 ? -hw + 0.06 : hw - 0.13, zB - 0.11, sd < 0 ? -hw + 0.14 : hw - 0.05, zB - 0.04); }
+        if (live) { g.fillStyle = F.sh(red); R(-0.05, zb + 0.2, 0.05, zb + 0.44); R(-0.12, zb + 0.27, 0.12, zb + 0.37); }
+      }];
+    }
+    const cap = this.roofCap(bol, zB - rb, rb, white), top = this.face(cap, 'T');
+    if (top) top.fx = [(g, F, fc) => { if (S.snow) this.snowCap(g, F, fc, 0.06); }];
+    M.parts.push(box, cap);
+    if (S.trunk === 1) this.barnDoors(M, z0 + 0.08, zB - 0.12, white);
+    if (live) {
+      this.lightbar(M, fb + 0.12, fb + 0.24, hw - 0.12, zr, ['#c81c1c', '#dadede', '#c81c1c'], ['r', 'w']);
+      for (const sd of [-1, 1]) { M.lt.push({ k: 'b', f: bx1 - 0.02, s: sd * (hw - 0.06), z: zB - 0.06, c: 'r', ph: sd < 0 ? 2 : 6 }, { k: 'b', f: -hl - 0.01, s: sd * (hw - 0.09), z: zB - 0.075, c: 'r', ph: sd < 0 ? 0 : 4 }); }
+    }
+    this.fx(box, 'F', (g, F) => { F.frame(g, [bx1, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { g.fillStyle = F.sh(live ? '#e02020' : '#3a1a16'); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.14) * 100, (zB - 0.11) * 100, 8, 7); } });
+    M.parts.push(this.box(-hl - 0.12, -hl, -hw + 0.08, hw - 0.08, z0 + 0.02, z0 + 0.08, CA_COL.black));
+    for (const f of [fC + 0.01, -hl + 0.74]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.215, { rim: 'steel', dual: f < 0 });
+    for (const sd of [-1, 1]) { this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.095), z0 + 0.3, sd < 0 ? 2 : 3); this.lamp(M, 'r', -hl - 0.004, sd * (hw - 0.095), z0 + 0.16, sd < 0 ? 2 : 3); }
+  },
+  b_firetruck(M, S, T) {
+    const hl = M.hl, hw = M.hw, live = !S.burnt, red = S.burnt ? CA_COL.burnt : S.col;
+    const z0 = 0.28, zc = 1.46, rb = 0.035, zt = zc - rb, fc0 = 0.66, zbd = 1.15, zf = 0.9;
+    const sp = Object.assign({}, CA_CARS.base, { chF: 0.05, lamps: 'rect', grille: 'chrome', trim: 'chrome', bump: 'chrome' });
+    Object.assign(M, { sp, z0, zb: zf, zr: zc, fC: hl, fR: fc0, chR: 0.04, f0: -hl, f1: hl, noseZ: zf, tailZ: zbd, gw: hw, gwT: hw, paint: red, seat2: '#2a2a2e', noRear: true, doorF: [], noHood: true, noTrunk: true });
+    // cab-forward crew cab: hollow, big windshield, white roof
+    const cab = M.cab = this.xbody([[fc0, z0], [hl, z0], [hl, zf], [hl - 0.09, zt], [fc0, zt]], -hw, hw, red, { body: true });
+    cab.hollow = true; cab.inner = []; cab.inCol = S.burnt ? '#1a1612' : null;
+    const cap = this.roofCap(this.rect(fc0, hl - 0.09, -hw, hw), zt, rb, live ? '#f2f2ee' : CA_COL.burnt, 0.7);
+    M.parts.push(cab, cap);
+    const gs = (id, di) => S.burnt ? 4 : (di !== undefined && S.doors[di]) ? 4 : S.glass[id];
+    const ws = cab.faces.find(fc => fc.n[0] > 0.5 && fc.n[2] > 0.1);
+    if (ws) { (ws.win = []); for (const [a, b] of [[0.03, 0.49], [0.51, 0.97]]) { const q = (u, v) => this.uv(ws, v, u); ws.win.push({ id: 'windshield', st: gs('windshield'), p: [q(a, 0.06), q(b, 0.06), q(b, 0.92), q(a, 0.92)] }); } }
+    for (const sd of [-1, 1]) {
+      const fc = this.sideFace(cab, sd);
+      this.sideWin(fc, sd < 0 ? 'winFL' : 'winFR', hl - 0.5, hl - 0.12, zf + 0.04, zt - 0.05, gs(sd < 0 ? 'winFL' : 'winFR', sd < 0 ? 0 : 1));
+      this.sideWin(fc, sd < 0 ? 'winRL' : 'winRR', fc0 + 0.08, fc0 + 0.42, zf + 0.04, zt - 0.05, gs(sd < 0 ? 'winRL' : 'winRR', sd < 0 ? 2 : 3));
+      this.sidePaint(cab, sd, hw, (g, F, R) => {
+        if (live) { g.fillStyle = F.sh('#f2f2ee'); R(fc0, zf - 0.17, hl, zf - 0.1); }
+        g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1.1;
+        g.strokeRect((hl - 0.54) * 100, (z0 + 0.12) * 100, 0.48 * 100, (zt - z0 - 0.15) * 100); g.strokeRect((fc0 + 0.04) * 100, (z0 + 0.12) * 100, 0.44 * 100, (zt - z0 - 0.15) * 100);
+        this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 59 + sd, fc0 + 0.1, hl - 0.1, z0 + 0.05, zf);
+        this.wells(g, F, M, sd, z0);
+      });
+    }
+    const fr = cab.faces.find(fc => fc.n[0] > 0.95);
+    if (fr) fr.fx = [(g, F) => this.frontArt(g, F, Object.assign({}, M, { hw: hw + 0.04, noseZ: zf, z0 }))];
+    const top = this.face(cap, 'T');
+    if (top) top.fx = [(g, F, fc) => { if (S.snow) this.snowCap(g, F, fc, 0.08); }];
+    this.seats(cab, hl - 0.38, fc0 + 0.3, zf - 0.05, hw - 0.1, '#2a2a2e', S.burnt);
+    M.seat = [hl - 0.4, -(hw - 0.1) * 0.5, zf + 0.07];
+    // pump body with roll-up compartment doors, hose bed on top
+    const body = this.prism(this.rect(-hl, fc0 - 0.04, -hw, hw, 0, 0.05), z0 + 0.04, zbd, red, { body: true });
+    for (const sd of [-1, 1]) this.sidePaint(body, sd, hw, (g, F, R) => {
+      for (const [a, b] of [[-hl + 0.08, -hl + 0.62], [-hl + 1.5, -hl + 2.05], [-hl + 2.1, fc0 - 0.1]]) {
+        g.fillStyle = F.sh(live ? '#c8ccd0' : '#3a3430'); R(a, z0 + 0.36, b, zbd - 0.06);
+        g.fillStyle = 'rgba(0,0,0,0.25)'; for (let z = z0 + 0.4; z < zbd - 0.08; z += 0.05) R(a, z, b, z + 0.012);
+      }
+      if (live) { g.fillStyle = F.sh('#f2f2ee'); R(-hl, z0 + 0.26, fc0, z0 + 0.32); }
+      this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 61 + sd, -hl + 0.1, fc0 - 0.1, z0 + 0.05, zbd - 0.1);
+      this.wells(g, F, M, sd, z0);
+      g.fillStyle = F.sh(CA_COL.black, 0.85); R(-hl, z0 + 0.04, fc0, z0 + 0.08);
+    });
+    const bt = this.face(body, 'T');
+    if (bt) bt.fx = [(g, F, fc) => {
+      F.frame(g, [0, 0, zbd], [1, 0, 0], [0, 1, 0], 0.01);
+      g.fillStyle = F.sh('#202022'); g.fillRect((-hl + 0.1) * 100, -(hw - 0.08) * 100, 1.4 * 100, (hw - 0.08) * 200);
+      g.fillStyle = F.sh(live ? '#a89870' : '#2a2420'); for (let s = -hw + 0.12; s < hw - 0.1; s += 0.09) g.fillRect((-hl + 0.12) * 100, s * 100, 1.36 * 100, 4);
+      if (S.snow) this.snowCap(g, F, fc, 0.06);
+    }];
+    const rf = this.face(body, 'B');
+    if (rf) rf.fx = [(g, F) => {
+      F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
+      for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail, 1.08); g.fillRect(sd < 0 ? (-hw + 0.08) * 100 : (hw - 0.16) * 100, (z0 + 0.18) * 100, 8, 16); }
+      g.fillStyle = F.sh(live ? '#c8ccd0' : '#3a3430'); g.fillRect(-35, (z0 + 0.3) * 100, 70, (zbd - z0 - 0.38) * 100);
+      g.fillStyle = 'rgba(0,0,0,0.25)'; for (let z = z0 + 0.32; z < zbd - 0.1; z += 0.05) g.fillRect(-35, z * 100, 70, 1.2);
+    }];
+    M.parts.push(body);
+    if (live) {
+      // ladder on top, resting on posts, running over the cab roof
+      for (const sd of [-1, 1]) M.parts.push(this.box(-hl + 0.22, -hl + 0.28, sd * 0.3 - 0.03, sd * 0.3 + 0.03, zbd, zc + 0.06, CA_COL.chrome, { mat: 'chrome' }));
+      const lad = this.box(-hl + 0.08, hl - 0.32, -0.34, 0.34, zc + 0.06, zc + 0.11, CA_COL.chrome, { mat: 'chrome' });
+      const lt = this.face(lad, 'T');
+      lt.mat = 'none';
+      lt.fx = [(g, F) => {
+        const P = (f, s) => F.P(f, s, zc + 0.11);
+        g.strokeStyle = Col.shade('#c8ccd0', F.b); g.lineWidth = 2.2; g.beginPath();
+        for (const s of [-0.31, 0.31]) { const a = P(-hl + 0.08, s), b = P(hl - 0.32, s); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+        g.stroke(); g.lineWidth = 1.2; g.beginPath();
+        for (let f = -hl + 0.14; f < hl - 0.34; f += 0.1) { const a = P(f, -0.31), b = P(f, 0.31); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+        g.stroke();
+      }];
+      for (const fc of lad.faces) if (fc.t === 'F' || fc.t === 'B') fc.mat = 'none';
+      M.parts.push(lad);
+      this.lightbar(M, hl - 0.3, hl - 0.18, hw - 0.1, zc, ['#c81c1c', '#dadede', '#c81c1c'], ['r', 'w']);
+    }
+    M.parts.push(...this.bumper(1, hl, hw, 0, z0 + 0.02, z0 + 0.2, live ? 'chrome' : 'black', red));
+    M.parts.push(this.box(-hl - 0.14, -hl, -hw + 0.06, hw - 0.06, z0 + 0.02, z0 + 0.1, live ? CA_COL.chrome : CA_COL.black, { mat: live ? 'chrome' : 'paint' }));
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(hl - 0.2, hl - 0.12, sd > 0 ? hw : -hw - 0.1, sd > 0 ? hw + 0.1 : -hw, zf + 0.05, zf + 0.25, CA_COL.black));
+    for (const f of [hl - 0.57, -hl + 0.98]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.26, { rim: 'steel', rimCol: '#c8ccd0', w: 0.18, dual: f < 0 });
+    for (const sd of [-1, 1]) {
+      this.lamp(M, 'h', hl + 0.004, sd * (hw - 0.06 - 0.11), zf - 0.072, sd < 0 ? 0 : 1);
+      this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.12), z0 + 0.26, sd < 0 ? 2 : 3);
+    }
+    this.lamp(M, 'd', hl - 0.5, 0, zc - 0.02);
+  },
+  b_army(M, S, T) {
+    const hl = M.hl, hw = M.hw, live = !S.burnt, od = S.burnt ? CA_COL.burnt : S.col;
+    const z0 = 0.38, zb = 0.86, zr = 1.26, fb = 0.32, fC = 0.88;
+    this.truckFront(M, S, { z0, zb, zr, fb, fC, paint: od, bv: 0.02, rb: 0.02, sp: { r: 0.28, nose: 0.02, chF: 0.05, rakeF: 0.04, rakeR: 0.0, tum: 0.03, doors: 2, lamps: 'round', grille: 'army', bump: 'black', trim: 'black', gin: 0.08 } });
+    M.f0 = -hl; M.star = live;
+    const bf = fb - 0.06, zbd = zb + 0.06;
+    const bed = this.box(-hl, bf, -hw, hw, z0 + 0.06, zbd, od, { body: true });
+    for (const sd of [-1, 1]) this.sidePaint(bed, sd, hw, (g, F, R) => {
+      g.fillStyle = 'rgba(0,0,0,0.22)'; for (let z = z0 + 0.14; z < zbd; z += 0.09) R(-hl, z, bf, z + 0.012);
+      for (let f = -hl + 0.3; f < bf; f += 0.45) R(f, z0 + 0.06, f + 0.03, zbd);
+      if (live) { F.frame(g, [-hl + 0.4, sd * hw, zbd - 0.1], [sd, 0, 0], [0, 0, -1], 0.01); g.fillStyle = F.sh('#e8e8e0'); g.font = 'bold 6px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('U.S. 4C-27', 0, 0); F.frame(g, [0, sd * hw, 0], [1, 0, 0], [0, 0, 1], 0.01); }
+      this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 67 + sd, -hl + 0.1, bf - 0.1, z0 + 0.1, zbd);
+      this.wells(g, F, M, sd, z0 + 0.06, CA_COL.black);
+    });
+    M.parts.push(bed);
+    // canvas cover: arched profile swept along the bed
+    const zc = zr + 0.24, arch = [[-hw + 0.02, zbd], [hw - 0.02, zbd], [hw - 0.02, zc - 0.24], [hw * 0.72, zc - 0.07], [0, zc], [-hw * 0.72, zc - 0.07], [-hw + 0.02, zc - 0.24]];
+    const cv = this.solid(arch.map(q => [-hl + 0.02, q[0], q[1]]), arch.map(q => [bf - 0.02, q[0], q[1]]), live ? '#6c6a48' : '#2c2622');
+    for (const fc of cv.faces) {
+      if (Math.abs(fc.n[0]) > 0.9) { fc.fx = [(g, F, f) => { const p = f.p.map(q => F.P(q[0], q[1], q[2])); g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < p.length; i++) { g.moveTo(p[i][0], p[i][1]); g.lineTo((p[0][0] + p[3][0] + p[4][0]) / 3, (p[0][1] + p[3][1] + p[4][1]) / 3); } g.stroke(); }]; continue; }
+      fc.fx = [(g, F, f) => {
+        const [a, b, c, d] = f.p, L3 = (p, q, t) => F.P(p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t);
+        g.strokeStyle = 'rgba(0,0,0,0.28)'; g.lineWidth = 1.4; g.beginPath();
+        for (let t = 0.12; t < 1; t += 0.19) { const p = L3(a, d, t), q = L3(b, c, t); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); }
+        g.stroke();
+        if (S.snow && f.n[2] > 0.3) this.snowCap(g, F, f, 0.08);
+      }];
+    }
+    M.parts.push(cv);
+    const rb = this.face(bed, 'B');
+    if (rb) rb.fx = [(g, F) => { F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01); for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail); g.fillRect(sd < 0 ? (-hw + 0.06) * 100 : (hw - 0.12) * 100, (z0 + 0.12) * 100, 6, 5); } }];
+    M.parts.push(this.box(-hl - 0.06, -hl, -hw + 0.04, hw - 0.04, z0 - 0.04, z0 + 0.06, CA_COL.black));
+    for (const f of [1.06, -0.46, -1.0]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.28, { rim: 'mil', w: 0.2 });
+    if (live) for (const sd of [-1, 1]) this.mudflap(M, -1.34, sd, hw - 0.01, z0 + 0.06);
+    for (const sd of [-1, 1]) this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.09), z0 + 0.145, sd < 0 ? 2 : 3);
+  },
+  b_bus(M, S, T) {
+    const hl = M.hl, hw = M.hw, live = !S.burnt, yel = S.burnt ? CA_COL.burnt : S.col, blk = live ? '#18181a' : '#2a2420';
+    const z0 = 0.3, zh = 0.86, zr = 1.56, rb = 0.035, zt = zr - rb, fC = hl - 0.6;
+    const sp = Object.assign({}, CA_CARS.base, { nose: 0.12, chF: 0.06, lamps: 'round', grille: 'black', bump: 'black', trim: 'black' });
+    Object.assign(M, { sp, z0, zb: zh, zr, fC, fR: -hl, chR: 0.05, f0: -hl, f1: hl, noseZ: zh - sp.nose, tailZ: zh, gw: hw, gwT: hw, paint: yel, zTrim: z0 + 0.3, seat2: '#3c5a3a', doorF: [], noTrunk: true, bv: 0.03 });
+    const hood = M.body = this.lowerBody({ f0: fC, f1: hl, hw: hw - 0.04, z0, zb: zh, fC, fR: fC, noseZ: M.noseZ, tailZ: zh, chF: sp.chF, chR: 0, col: yel, bv: M.bv, bvE: 0.5 });
+    this.pfx(hood, [1, 0, 0], (g, F) => this.frontArt(g, F, Object.assign({}, M, { hw: hw - 0.04 })));
+    for (const sd of [-1, 1]) this.sidePaint(hood, sd, hw - 0.04, (g, F, R) => { this.wells(g, F, M, sd, z0); g.fillStyle = F.sh(blk); R(fC, z0 + 0.12, hl, z0 + 0.15); });
+    for (const fc of hood.faces) if (fc.id === 'hood') fc.fx = [(g, F, f) => { if (S.snow) this.snowCap(g, F, f, 0.1); }];
+    M.parts.push(hood);
+    // bus box: the front and rear roof curves are profile chamfers, the side roof edges a rounded cap
+    const body = M.cab = this.xbody([[-hl, z0], [fC, z0], [fC, zh], [fC - 0.06, zr - 0.1], [fC - 0.11, zt], [-hl + 0.07, zt], [-hl, zr - 0.1]], -hw, hw, yel, { body: true });
+    body.hollow = true; body.inner = []; body.inCol = S.burnt ? '#1a1612' : null;
+    const cap = this.roofCap(this.rect(-hl + 0.07, fC - 0.11, -hw, hw), zt, rb, yel, 0.4);
+    M.parts.push(body, cap);
+    const ws = body.faces.find(fc => fc.n[0] > 0.5 && fc.n[2] > 0.02 && fc.n[2] < 0.5);
+    const gs = (id) => S.burnt ? 4 : S.glass[id];
+    if (ws) { ws.win = []; for (const [a, b] of [[0.04, 0.49], [0.51, 0.96]]) { const q = (u, v) => this.uv(ws, v, u); ws.win.push({ id: 'windshield', st: gs('windshield'), p: [q(a, 0.08), q(b, 0.08), q(b, 0.9), q(a, 0.9)] }); } }
+    const zw0 = zh + 0.02, zw1 = zr - 0.17, rows = [];
+    for (let f = fC - 0.58; f > -hl + 0.2; f -= 0.42) rows.push(f);
+    for (const sd of [-1, 1]) {
+      const fc = this.sideFace(body, sd);
+      for (const f of rows) this.sideWin(fc, sd < 0 ? 'winRL' : 'winRR', f - 0.34, f, zw0, zw1, gs(sd < 0 ? 'winRL' : 'winRR'));
+      if (sd < 0) this.sideWin(fc, 'winFL', fC - 0.44, fC - 0.1, zw0, zw1, S.burnt ? 4 : S.doors[0] ? 4 : S.glass.winFL);
+      else for (const [a, b] of [[fC - 0.44, fC - 0.28], [fC - 0.26, fC - 0.1]]) this.sideWin(fc, 'winFR', a, b, z0 + 0.12, zw1, S.burnt ? 4 : S.doors[1] ? 4 : S.glass.winFR);
+      this.sidePaint(body, sd, hw, (g, F, R) => {
+        g.fillStyle = F.sh(blk);
+        for (const z of [z0 + 0.13, z0 + 0.35, zh - 0.05]) R(-hl, z, fC, z + 0.03);
+        R(-hl, zw0 - 0.015, fC - 0.08, zw0);
+        for (const f of rows) R(f - 0.36, zw0, f - 0.34, zw1 + 0.02);
+        if (live && sd < 0) {
+          const cx = (fC - 0.62) * 100, cz = (zh - 0.02) * 100, r = 8;
+          g.fillStyle = F.sh('#f0f0f0'); g.beginPath(); for (let i = 0; i < 8; i++) g.lineTo(cx + Math.cos(i * Math.PI / 4 + Math.PI / 8) * (r + 1.2), cz + Math.sin(i * Math.PI / 4 + Math.PI / 8) * (r + 1.2)); g.fill();
+          g.fillStyle = F.sh('#c01818'); g.beginPath(); for (let i = 0; i < 8; i++) g.lineTo(cx + Math.cos(i * Math.PI / 4 + Math.PI / 8) * r, cz + Math.sin(i * Math.PI / 4 + Math.PI / 8) * r); g.fill();
+        }
+        if (sd > 0) { g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 1.3; g.strokeRect((fC - 0.46) * 100, (z0 + 0.04) * 100, 0.38 * 100, (zw1 - z0 + 0.02) * 100); }
+        this.dmgArt(g, F, M, this.sideLvl(M, sd < 0 ? 'left' : 'right'), S.seed * 71 + sd, -hl + 0.2, fC - 0.2, z0 + 0.05, zh);
+        this.wells(g, F, M, sd, z0);
+        if (live) { F.frame(g, [-0.2, sd * hw, zh - 0.18], [sd, 0, 0], [0, 0, -1], 0.01); g.fillStyle = F.sh(blk); g.font = 'bold 7px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('HOLLOW CREEK SCHOOLS', 0, 0); }
+      });
+    }
+    const rf = body.faces.find(fc => fc.n[0] < -0.95);
+    if (rf) {
+      rf.win = [{ id: 'rearWindow', st: S.trunk ? 4 : gs('rearWindow'), p: [[-hl, -0.24, zw0], [-hl, 0.24, zw0], [-hl, 0.24, zw1], [-hl, -0.24, zw1]] }];
+      for (const sd of [-1, 1]) rf.win.push({ id: 'q', st: S.burnt ? 4 : 0, p: [[-hl, sd * 0.32, zw0], [-hl, sd * (hw - 0.07), zw0], [-hl, sd * (hw - 0.07), zw1], [-hl, sd * 0.32, zw1]] });
+      rf.fx = [(g, F) => {
+        F.frame(g, [-hl, 0, 0], [0, 1, 0], [0, 0, 1], 0.01);
+        const R = (a, b, c, d) => g.fillRect(a * 100, b * 100, (c - a) * 100, (d - b) * 100);
+        g.fillStyle = F.sh(blk); for (const z of [z0 + 0.13, z0 + 0.35]) R(-hw, z, hw, z + 0.03);
+        g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1.3; g.strokeRect(-27, (z0 + 0.05) * 100, 54, (zw1 - z0 + 0.03) * 100);
+        for (const sd of [-1, 1]) { const br = S.burnt || S.lights[sd < 0 ? 2 : 3] === 1; g.fillStyle = F.sh(br ? '#3a1a16' : CA_COL.tail, 1.08); g.beginPath(); g.arc(sd * (hw - 0.12) * 100, (z0 + 0.25) * 100, 4.5, 0, 7); g.fill(); g.fillStyle = F.sh(live ? CA_COL.amber : '#3a2a20'); g.beginPath(); g.arc(sd * (hw - 0.12) * 100, (z0 + 0.43) * 100, 4, 0, 7); g.fill(); }
+        if (live) { F.frame(g, [-hl, 0, zw1 + 0.08], [0, 1, 0], [0, 0, -1], 0.01); g.fillStyle = F.sh(blk); g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SCHOOL BUS', 0, 0); }
+      }];
+    }
+    const top = this.face(cap, 'T');
+    if (top) top.fx = [(g, F, fc) => {
+      F.frame(g, [0, 0, zr], [1, 0, 0], [0, 1, 0], 0.01);
+      for (const f of [0.75, -0.9]) { g.fillStyle = F.sh(live ? '#d8d0b0' : '#3a3430'); g.fillRect((f - 0.16) * 100, -20, 32, 40); g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.2; g.strokeRect((f - 0.16) * 100, -20, 32, 40); }
+      if (S.snow) this.snowCap(g, F, fc, 0.05);
+    }];
+    // roof sign with warning lamps at the front
+    if (live) {
+      const sg = this.box(fC - 0.22, fC - 0.16, -hw + 0.08, hw - 0.08, zr, zr + 0.1, yel);
+      const fs = this.face(sg, 'F');
+      fs.fx = [(g, F) => {
+        F.frame(g, [fC - 0.16, 0, zr + 0.05], [0, -1, 0], [0, 0, -1], 0.01);
+        g.fillStyle = F.sh(blk); g.font = 'bold 7px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SCHOOL BUS', 0, 0);
+        for (const sd of [-1, 1]) { g.fillStyle = F.sh('#c01818'); g.beginPath(); g.arc(sd * (hw - 0.14) * 100, 0, 3.6, 0, 7); g.fill(); g.fillStyle = F.sh(CA_COL.amber); g.beginPath(); g.arc(sd * (hw - 0.24) * 100, 0, 3.2, 0, 7); g.fill(); }
+      }];
+      M.parts.push(sg);
+    }
+    // seats in rows behind the windows
+    const sw = hw - 0.1;
+    for (const f of rows) for (const sd of [-1, 1]) body.inner.push(this.box(f - 0.25, f - 0.19, sd < 0 ? -sw : 0.1, sd < 0 ? -0.1 : sw, zh - 0.08, zh + 0.12, S.burnt ? '#2a2420' : '#3c5a3a'));
+    body.inner.push(this.box(fC - 0.4, fC - 0.34, -sw, -0.12, zh - 0.08, zh + 0.16, S.burnt ? '#2a2420' : '#2a2a2e'));
+    M.seat = [fC - 0.34, -sw * 0.55, zh + 0.07];
+    const fbp = this.bumper(1, hl, hw - 0.04, sp.chF, z0 - 0.04, z0 + 0.12, 'black', yel, { body: hood }), rbp = this.bumper(-1, -hl, hw, 0, z0 - 0.04, z0 + 0.1, 'black', yel);
+    M.parts.push(...fbp, ...rbp);
+    for (const sd of [-1, 1]) if (S.doors[sd < 0 ? 0 : 1] !== 1) M.parts.push(this.box(fC - 0.06, fC + 0.02, sd > 0 ? hw : -hw - 0.12, sd > 0 ? hw + 0.12 : -hw, zh + 0.1, zh + 0.3, CA_COL.black));
+    for (const f of [hl - 0.42, -hl + 1.55]) for (const sd of [-1, 1]) this.wheel(M, f, sd, 0.25, { rim: 'steel', rimCol: '#2a2a2c', w: 0.18, dual: f < 0 });
+    if (live) for (const sd of [-1, 1]) this.mudflap(M, -hl + 1.22, sd, hw - 0.01, z0);
+    const wf = hw - 0.04 - sp.chF;
+    for (const sd of [-1, 1]) {
+      this.lamp(M, 'h', hl + 0.004, sd * (wf - 0.11), M.noseZ - M.bv - 0.083, sd < 0 ? 0 : 1);
+      this.lamp(M, 't', -hl - 0.004, sd * (hw - 0.12), z0 + 0.25, sd < 0 ? 2 : 3);
+    }
+    this.lamp(M, 'd', 0, 0, zr - 0.03);
+  },
+});
+// ---------------------------------------------------------------------------
+// Static burnt-out wreck object: a detailed shell from the same models (1x object sprite).
+// o.kind may name a CAR_TYPES type; otherwise the facing picks a sedan (N) or a wagon (E).
+// ---------------------------------------------------------------------------
+OBJ.car_wreck.spr = { w: 150, h: 140, ax: 75, ay: 84 };
+ObjArt.k_car_wreck = function () { return Season.snow > 0.3 ? 'S' : ''; };
+ObjArt.d_car_wreck = function (o) {
+  const type = o.kind && CAR_TYPES[o.kind] ? o.kind : o.dir === 'N' ? 'sedan' : 'wagon';
+  const along = o.dir === 'N' || o.dir === 'S';
+  const mk = type + '|#3a3430|3|3232|222222|' + (along ? '0000' : '0200') + '|' + (along ? 1 : 0) + '|0|2222|1111|B' + (Season.snow > 0.3 ? 'S' : '') + '|' + (along ? 1 : 2);
+  const c = this.P(0.5, 0.5, 0);
+  try {
+    const M = CarArt.build(mk);
+    const F = CarArt.proj(along ? -Math.PI / 2 + 0.12 : 0.1, c[0], c[1], 0.88, M.tilt);
+    CarArt.paint(this.g, F, M, along ? 0 : 1);
+  } catch (e) { console.warn('CarArt: wreck failed', e); }
+  this.g.setTransform(1, 0, 0, 1, 0, 0);
+};
