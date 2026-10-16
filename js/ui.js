@@ -950,6 +950,17 @@ const MapView = {
     g.putImageData(img, 0, 0);
     this.base = c; this.baseT = performance.now();
   },
+  // the map labels sorted into ranks (0 towns, 1 places and roads, 2 buildings), worked out again when they change
+  labelTiers() {
+    const L = Wd.labels;
+    if (this.tiers && this.tiersN === L.length && this.tiersW === Wd) return this.tiers;
+    const towns = new Set(['Hollow Creek', 'Millbrook', 'Fairfield', 'Riverton', 'Kingsbury']);
+    const bnames = new Set(); for (const b of Wd.buildings) if (b.name) bnames.add(b.name);
+    const T = [[], [], []];
+    for (const l of L) T[towns.has(l.text) ? 0 : bnames.has(l.text) || /^(Barracks|Cell Block|Hangar)/.test(l.text) ? 2 : 1].push(l);
+    this.tiers = T; this.tiersN = L.length; this.tiersW = Wd;
+    return T;
+  },
   draw() {
     const P = UI.panels.map;
     if (!P || !P.open) return;
@@ -966,13 +977,24 @@ const MapView = {
     g.drawImage(this.base, 0, 0);
     // labels
     g.restore();
-    g.font = 'bold 11px Verdana'; g.textAlign = 'center';
-    for (const l of Wd.labels) {
-      const known = this.revealed || Wd.seen[Math.floor(l.y) * Wd.w + Math.floor(l.x)];
-      if (!known) continue;
-      const sx = (l.x - this.cx) * this.zoom + W / 2, sy = (l.y - this.cy) * this.zoom + H / 2;
-      g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillText(l.text, sx + 1, sy + 1);
-      g.fillStyle = '#f0e8c8'; g.fillText(l.text, sx, sy);
+    // labels by rank: towns always, places and roads from a middling zoom, single buildings close in; one that
+    // would overlap a label already drawn is left out
+    const T = this.labelTiers(), z = this.zoom, drawn = [];
+    g.textAlign = 'center';
+    for (const tier of [0, 1, 2]) {
+      if (tier === 1 && z < 1.6 || tier === 2 && z < 3.2) break;
+      g.font = tier === 0 ? 'bold 13px Verdana' : tier === 1 ? 'bold 11px Verdana' : '10px Verdana';
+      for (const l of T[tier]) {
+        const known = this.revealed || Wd.seen[Math.floor(l.y) * Wd.w + Math.floor(l.x)];
+        if (!known) continue;
+        const sx = (l.x - this.cx) * z + W / 2, sy = (l.y - this.cy) * z + H / 2;
+        if (sx < -80 || sx > W + 80 || sy < -20 || sy > H + 20) continue;
+        const hw = g.measureText(l.text).width / 2 + 3, hh = tier === 0 ? 9 : 7;
+        if (drawn.some(q => Math.abs(q[0] - sx) < q[2] + hw && Math.abs(q[1] - sy) < q[3] + hh)) continue;
+        drawn.push([sx, sy, hw, hh]);
+        g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillText(l.text, sx + 1, sy + 1);
+        g.fillStyle = tier === 0 ? '#fff0c0' : tier === 1 ? '#f0e8c8' : '#d8d0b8'; g.fillText(l.text, sx, sy);
+      }
     }
     // player
     const p = G.player;

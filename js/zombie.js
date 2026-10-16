@@ -37,6 +37,7 @@ const Zombie = {
     const mk = (id) => { const it = Items.make(id); if (it) { it.worn = ITEMS[id].slot; it.cond = R.f(0.3, 1); if (R.chance(0.6)) it.bloody = true; out.push(it); } };
     if (kind === 'military') { mk('MilitaryJacket'); mk('CargoPants'); mk('Boots'); if (R.chance(0.3)) mk('HardHat'); mk('Belt'); return out; }
     if (kind === 'police') { mk('PoliceShirt'); mk('PolicePants'); mk('Boots'); if (R.chance(0.4)) mk('PoliceCap'); if (R.chance(0.2)) mk('BulletVest'); mk('Belt'); if (R.chance(0.5)) mk('Holster'); return out; }
+    if (kind === 'prisoner') { mk('TShirt'); mk('Trousers'); if (R.chance(0.8)) mk('Sneakers'); for (const it of out) if (it.id !== 'Sneakers') it.col = R.pick(['#d8661c', '#e07020', '#c85a18']); return out; }
     if (kind === 'medic') { mk('Scrubs'); mk('ScrubPants'); mk('Sneakers'); if (R.chance(0.5)) mk('LabCoat'); return out; }
     // people dressed for the weather when they turned
     const cold = Season.tree === 'b' || Season.snow > 0.2 || Season.tree === 's', warm = Season.tree === 'g';

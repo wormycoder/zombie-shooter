@@ -757,10 +757,12 @@ const MapGen = {
     // f = side where street is
     const r = this.rng;
     opts = opts || {};
-    const yard = r.int(2, 3);
+    const yard = opts.front || r.int(2, 3);
+    // (maxW across the lot's street front, maxD back from it: a wide or deep lot keeps a house-sized house)
+    const mW = opts.maxW || 99, mD = opts.maxD || 99;
     let hw, hh;
-    if (f === 'N' || f === 'S') { hw = U.clamp(r.int(7, lw - 2), 6, lw - 2); hh = U.clamp(r.int(6, lh - yard - 2), 5, lh - yard - 1); }
-    else { hh = U.clamp(r.int(7, lh - 2), 6, lh - 2); hw = U.clamp(r.int(6, lw - yard - 2), 5, lw - yard - 1); }
+    if (f === 'N' || f === 'S') { hw = U.clamp(r.int(7, Math.min(lw - 2, mW)), 6, lw - 2); hh = U.clamp(r.int(6, Math.min(lh - yard - 2, mD)), 5, lh - yard - 1); }
+    else { hh = U.clamp(r.int(7, Math.min(lh - 2, mW)), 6, lh - 2); hw = U.clamp(r.int(6, Math.min(lw - yard - 2, mD)), 5, lw - yard - 1); }
     let hx, hy;
     if (f === 'N') { hx = lx + r.int(1, Math.max(1, lw - hw - 1)); hy = ly + yard; }
     else if (f === 'S') { hx = lx + r.int(1, Math.max(1, lw - hw - 1)); hy = ly + lh - yard - hh; }
@@ -1003,9 +1005,9 @@ const MapGen = {
     b.keyId = b.id;
     return b;
   },
-  police(x0, y0, w, h, f) {
+  police(x0, y0, w, h, f, name) {
     const r = this.rng;
-    const b = this.newBuilding('police', x0, y0, x0 + w - 1, y0 + h - 1, { wallType: WT.BRICK, roof: 'flat', roofCol: '#5a5a60', name: 'Police Station', alarm: this.alarmP() > 0, front: f });
+    const b = this.newBuilding('police', x0, y0, x0 + w - 1, y0 + h - 1, { wallType: WT.BRICK, roof: 'flat', roofCol: '#5a5a60', name: name || 'Police Station', alarm: this.alarmP() > 0, front: f });
     const M = this.mapper(x0, y0, w, h, f);
     const fd = Math.floor(M.D / 2);
     const lobby = this.addRoom(b, 'police', ...M.rect(0, 0, 7, fd - 1), FL.LINO, 3);
@@ -1031,7 +1033,7 @@ const MapGen = {
     for (let k = 0; k < 6; k++) this.place(office, 'desk');
     for (let k = 0; k < 7; k++) this.place(lockers, 'locker');
     for (const c of cells) { this.place(c, 'bed', { two: 'along', extra: { col: '#707070' } }); this.place(c, 'toilet'); }
-    this.w.labels.push({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, text: 'Police Station' });
+    this.w.labels.push({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2, text: name || 'Police Station' });
     b.keyId = b.id;
     return b;
   },
@@ -1058,17 +1060,20 @@ const MapGen = {
       for (let s = 0; s < 2; s++) plan.push(si < shops.length && r.chance(0.85) ? [shops[si++], 12] : ['house', 12]);
       rowPlan.set(commercialRows[k].join(), plan);
     }
+    const tcx = (RP[0] + RP[5] + 3) / 2, tcy = (RP[0] + RP[5] + 3) / 2, tR = (RP[5] + 3 - RP[0]) / 2;
     for (let bi = 0; bi < 5; bi++) for (let bj = 0; bj < 5; bj++) {
       const x0 = RP[bi] + 5, x1 = RP[bi + 1] - 2, y0 = RP[bj] + 5, y1 = RP[bj + 1] - 2;
       this.mark(x0, y0, x1, y1, 1);
+      const sp = this.spreadAt((x0 + x1) / 2, (y0 + y1) / 2, tcx, tcy, tR);
       if (bi === 1 && bj === 3) { this.park(x0, y0, x1, y1); continue; }
       if (bi === 3 && bj === 4) { this.school(x0, y0, x1, y1); continue; }
       if (bi === 4 && bj === 4) { this.industrial(x0, y0, x1, y1); continue; }
-      if (bi === 0 && bj === 3) { this.church(x0, y0, x1, y0 + 11); this.houseRow(x0, y0 + 12, x1, y1, 'S'); continue; }
+      if (bi === 0 && bj === 3) { this.church(x0, y0, x1, y0 + 11); this.houseRow(x0, y0 + 12, x1, y1, 'S', sp); continue; }
       // north row
       const nk = [bi, bj, 'N'].join(), sk = [bi, bj, 'S'].join();
-      if (rowPlan.has(nk)) this.commercialRow(x0, y0, x1, y0 + 11, 'N', rowPlan.get(nk), names); else this.houseRow(x0, y0, x1, y0 + 11, 'N');
-      if (rowPlan.has(sk)) this.commercialRow(x0, y0 + 12, x1, y1, 'S', rowPlan.get(sk), names); else this.houseRow(x0, y0 + 12, x1, y1, 'S');
+      if (!rowPlan.has(nk) && !rowPlan.has(sk)) { this.houseBlock(x0, y0, x1, y1, sp); continue; }
+      if (rowPlan.has(nk)) this.commercialRow(x0, y0, x1, y0 + 11, 'N', rowPlan.get(nk), names); else this.houseRow(x0, y0, x1, y0 + 11, 'N', sp);
+      if (rowPlan.has(sk)) this.commercialRow(x0, y0 + 12, x1, y1, 'S', rowPlan.get(sk), names); else this.houseRow(x0, y0 + 12, x1, y1, 'S', sp);
       // back fence between rows
       const ft = r.weighted([[WT.WOODFENCE, 5], [WT.CHAIN, 2], [WT.PICKET, 1], [0, 2]]);
       if (ft) this.fenceLine(x0, y0 + 12, x1 - x0 + 1, 0, ft, 0.06);
@@ -1092,14 +1097,18 @@ const MapGen = {
     plans.set('1,0,N', [['clinic', 12], ['diner', 12]]);
     plans.set('2,1,N', [[r.pick(['hardware', 'pharmacy']), 12], [r.pick(['bar', 'laundromat', 'office']), 12]]);
     plans.set('1,2,S', [['house', 12], [r.pick(['pharmacy', 'bar', 'office']), 12]]);
+    const mcx = (RX[0] + RX[RX.length - 1] + 3) / 2, mcy = (RY[0] + RY[RY.length - 1] + 3) / 2, mR = (RX[RX.length - 1] + 3 - RX[0]) / 2;
     for (let bi = 0; bi < RX.length - 1; bi++) for (let bj = 0; bj < RY.length - 1; bj++) {
       const x0 = RX[bi] + 5, x1 = RX[bi + 1] - 2, y0 = RY[bj] + 5, y1 = RY[bj + 1] - 2;
       this.mark(x0, y0, x1, y1, 1);
+      // (a small town: its edge starts close in)
+      const sp = Math.min(1, 0.25 + this.spreadAt((x0 + x1) / 2, (y0 + y1) / 2, mcx, mcy, mR));
       if (bi === 1 && bj === 1) { this.park(x0, y0, x1, y1, 'Millbrook Green'); continue; }
-      if (bi === 0 && bj === 1) { this.church(x0, y0, x1, y0 + 11, 'Grace Baptist Church'); this.houseRow(x0, y0 + 12, x1, y1, 'S'); continue; }
+      if (bi === 0 && bj === 1) { this.church(x0, y0, x1, y0 + 11, 'Grace Baptist Church'); this.houseRow(x0, y0 + 12, x1, y1, 'S', sp); continue; }
       const nk = bi + ',' + bj + ',N', sk = bi + ',' + bj + ',S';
-      if (plans.has(nk)) this.commercialRow(x0, y0, x1, y0 + 11, 'N', plans.get(nk), names); else this.houseRow(x0, y0, x1, y0 + 11, 'N');
-      if (plans.has(sk)) this.commercialRow(x0, y0 + 12, x1, y1, 'S', plans.get(sk), names); else this.houseRow(x0, y0 + 12, x1, y1, 'S');
+      if (!plans.has(nk) && !plans.has(sk)) { this.houseBlock(x0, y0, x1, y1, sp); continue; }
+      if (plans.has(nk)) this.commercialRow(x0, y0, x1, y0 + 11, 'N', plans.get(nk), names); else this.houseRow(x0, y0, x1, y0 + 11, 'N', sp);
+      if (plans.has(sk)) this.commercialRow(x0, y0 + 12, x1, y1, 'S', plans.get(sk), names); else this.houseRow(x0, y0 + 12, x1, y1, 'S', sp);
       const ft = r.weighted([[WT.WOODFENCE, 5], [WT.CHAIN, 2], [WT.PICKET, 1], [0, 2]]);
       if (ft) this.fenceLine(x0, y0 + 12, x1 - x0 + 1, 0, ft, 0.06);
     }
@@ -1130,23 +1139,91 @@ const MapGen = {
     b.keyId = b.id;
     return b;
   },
-  houseRow(x0, y0, x1, y1, f) {
+  // a row of house lots along a street (f: the side the street is on). sp: how spread out, 0 a town's tight middle
+  // .. 1 its edge: wider lots (a house of the usual size with side yards), now and then a lot left empty; a deep row
+  // (one row filling a block) keeps its houses near the street with long back yards
+  houseRow(x0, y0, x1, y1, f, sp) {
     const r = this.rng;
-    const width = x1 - x0 + 1;
-    const plan = r.chance(0.6) ? [12, 12] : [8, 8, 8];
+    sp = sp || 0;
+    const width = x1 - x0 + 1, lh = y1 - y0 + 1, deep = lh > 14;
+    const mn = Math.round(8 + 5 * sp), mx = Math.round(12 + 10 * sp);
+    const n = Math.max(1, Math.min(Math.floor(width / mn), Math.round(width / r.f(mn, mx))));
+    const lots = [];
+    for (let i = 0, left = width; i < n; i++) { const lw = i === n - 1 ? left : Math.round(left / (n - i) + r.f(-1.5, 1.5)); lots.push(lw); left -= lw; }
     let x = x0;
-    for (let i = 0; i < plan.length; i++) {
-      const lw = i === plan.length - 1 ? x1 - x + 1 : plan[i];
-      this.residentialLot(x, y0, lw, y1 - y0 + 1, f);
+    for (let i = 0; i < lots.length; i++) {
+      const lw = lots[i];
+      if (lots.length > 1 && r.chance(0.04 + 0.18 * sp)) this.vacantLot(x, y0, lw, lh, f, sp);
+      else this.residentialLot(x, y0, lw, lh, f, { maxW: 11, maxD: deep ? 10 : 0, front: deep ? r.int(3, 5) : 0 });
       // side fence between lots (back part)
-      if (i > 0 && r.chance(0.5)) {
+      if (i > 0 && r.chance(0.5 - 0.15 * sp)) {
         const t = r.chance(0.6) ? WT.WOODFENCE : WT.PICKET;
-        if (f === 'N') this.fenceLine(x, y0 + 5, y1 - y0 - 4, 1, t, 0.05);
-        else this.fenceLine(x, y0, y1 - y0 - 4, 1, t, 0.05);
+        if (f === 'N') this.fenceLine(x, y0 + 5, lh - 5, 1, t, 0.05);
+        else this.fenceLine(x, y0, lh - 5, 1, t, 0.05);
       }
       x += lw;
     }
-    void width;
+  },
+  // a lot nobody built on: lawn, overgrown, a garden, a stand of trees or a gravel lot
+  vacantLot(lx, ly, lw, lh, f, sp) {
+    const r = this.rng, W = this.W, x1 = lx + lw - 1, y1 = ly + lh - 1;
+    this.mark(lx, ly, x1, y1, 1);
+    const kind = r.weighted([['lawn', 3], ['overgrown', 3 + 2 * sp], ['garden', 1.5], ['woods', 1 + 2 * sp], ['gravel', 1]]);
+    const spots = [];
+    for (let y = ly + 1; y < y1; y++) for (let x = lx + 1; x < x1; x++) if (this.free(x, y)) spots.push([x, y]);
+    r.shuffle(spots);
+    const tree = (x, y, sz) => this.put(x, y, 'tree', 'S', this.tree(x, y, sz || r.f(0.85, 1.2), 0, r.pick(['oak', 'maple', 'birch', 'pine', 'oak'])));
+    const bush = (x, y) => this.put(x, y, 'bush', 'S', { v: this.shrubV(x, y, r.int(0, 3)) });
+    let n = 0;
+    if (kind === 'lawn') { for (const [x, y] of spots) { if (n >= 2) break; if (r.chance(0.3)) { tree(x, y); n++; } } }
+    else if (kind === 'overgrown' || kind === 'woods') {
+      const wd = kind === 'woods';
+      for (let y = ly; y <= y1; y++) for (let x = lx; x <= x1; x++) if (this.free(x, y) && this.w.floor[y * W + x] === FL.GRASS) this.sf(x, y, FL.GRASS2, r.int(0, 3));
+      for (const [x, y] of spots) {
+        const c = r.next();
+        if (c < (wd ? 0.16 : 0.05)) tree(x, y, wd ? r.f(0.9, 1.35) : r.f(0.7, 1));
+        else if (c < (wd ? 0.24 : 0.16)) bush(x, y);
+        else if (!wd && c < 0.2) this.put(x, y, 'yd_weeds', 'S', { v: r.int(0, 5) });
+      }
+      if (!wd && r.chance(0.35) && spots.length) { const [x, y] = spots[0]; if (this.free(x, y)) this.put(x, y, r.pick(['yd_tires', 'yd_junk', 'yd_couch']), r.pick(['S', 'E']), { v: r.int(0, 5) }); }
+    } else if (kind === 'garden') {
+      // a neighbourhood garden: rows of vegetables, a shed in the corner
+      const crop = r.pick(Object.keys(CROPS)), crop2 = r.pick(Object.keys(CROPS));
+      for (let y = ly + 2; y <= y1 - 2; y++) for (let x = lx + 2; x <= x1 - 2; x++) {
+        if (!this.free(x, y)) continue;
+        if ((f === 'N' || f === 'S' ? x - lx : y - ly) % 3 === 1) { this.sf(x, y, FL.DIRT, 1); continue; }
+        this.sf(x, y, FL.FURROW, 0);
+        if (r.chance(0.7)) this.w.obj[y * W + x] = { t: 'crop', dir: 'S', crop: (x + y) & 1 ? crop : crop2, stage: r.int(2, 4), water: 0.4, grow: r.f(0, 1), dead: r.chance(0.15) };
+      }
+      const cx = f === 'W' ? x1 - 1 : lx + 1, cy = f === 'N' ? y1 - 1 : ly + 1;
+      if (this.free(cx, cy)) this.put(cx, cy, 'yd_shed', f, { v: r.int(0, 3) });
+    } else {
+      for (let y = ly + 1; y < y1; y++) for (let x = lx + 1; x < x1; x++) if (this.free(x, y)) this.sf(x, y, FL.GRAVEL, r.int(0, 3));
+      if (r.chance(0.5) && spots.length) { const [x, y] = spots[0]; if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['S', 'E']), {}); }
+      if (spots.length > 2 && this.free(spots[1][0], spots[1][1])) this.put(spots[1][0], spots[1][1], 'yd_tires', 'S', { v: r.int(0, 5) });
+    }
+    if (r.chance(0.25)) {
+      const mx = f === 'N' || f === 'S' ? lx + (lw >> 1) : f === 'W' ? lx : x1, my = f === 'N' ? ly : f === 'S' ? y1 : ly + (lh >> 1);
+      if (this.free(mx, my)) this.put(mx, my, 'yd_forsale', f, {});
+    }
+  },
+  // how spread out a town block is: 0 at the middle, 1 at the edge (distance from the middle, cx cy, over radius R)
+  spreadAt(x, y, cx, cy, R) { return U.clamp((Math.hypot(x - cx, y - cy) - R * 0.25) / (R * 0.75), 0, 1); },
+  // a residential block of a town: back to back rows of lots facing the streets either side, or one deep row
+  houseBlock(x0, y0, x1, y1, sp) {
+    const r = this.rng;
+    if (y1 - y0 >= 21 && r.chance(0.35 * sp)) {
+      // one deep row facing one of the streets, long back yards to the other
+      const f = r.chance(0.5) ? 'N' : 'S';
+      this.houseRow(x0, y0, x1, y1, f, sp);
+      if (r.chance(0.6)) this.fenceLine(x0, f === 'N' ? y1 + 1 : y0, x1 - x0 + 1, 0, r.weighted([[WT.WOODFENCE, 4], [WT.CHAIN, 2], [WT.PICKET, 1]]), 0.08);
+      return;
+    }
+    const m = (y0 + y1 + 1) >> 1;
+    this.houseRow(x0, y0, x1, m - 1, 'N', sp);
+    this.houseRow(x0, m, x1, y1, 'S', sp);
+    const ft = r.weighted([[WT.WOODFENCE, 5], [WT.CHAIN, 2], [WT.PICKET, 1], [0, 2 + 2 * sp]]);
+    if (ft) this.fenceLine(x0, m, x1 - x0 + 1, 0, ft, 0.06);
   },
   commercialRow(x0, y0, x1, y1, f, plan, names) {
     let x = x0;
@@ -1158,7 +1235,7 @@ const MapGen = {
         const sy = f === 'N' ? y0 + 1 : y1 - sh;
         // concrete apron
         if (f === 'N') this.fill(x, y0, x + w - 1, y0, FL.CONCRETE, 0); else this.fill(x, y1, x + w - 1, y1, FL.CONCRETE, 0);
-        if (type === 'police') this.police(x + 1, sy, sw, sh, f);
+        if (type === 'police') this.police(x + 1, sy, sw, sh, f, names && names.police);
         else this.store(type, x + 1, sy, sw, sh, f, names[type]);
         // trash & lamps around
         const bx = x, by = f === 'N' ? y0 + 11 : y0;
@@ -1190,9 +1267,9 @@ const MapGen = {
     this.put(cx + 2, cy - 1, 'trash', 'S');
     this.w.labels.push({ x: cx, y: cy, text: label || 'Town Park' });
   },
-  school(x0, y0, x1, y1) {
+  school(x0, y0, x1, y1, name) {
     const r = this.rng;
-    const b = this.newBuilding('school', x0 + 1, y0 + 2, x1 - 1, y0 + 15, { wallType: WT.BRICK, roof: 'flat', roofCol: '#606060', name: 'Hollow Creek Elementary', alarm: this.alarmP() > 0, front: 'N' });
+    const b = this.newBuilding('school', x0 + 1, y0 + 2, x1 - 1, y0 + 15, { wallType: WT.BRICK, roof: 'flat', roofCol: '#606060', name: name || 'Hollow Creek Elementary', alarm: this.alarmP() > 0, front: 'N' });
     const bw = x1 - x0 - 1;
     const hallY0 = y0 + 8, hallY1 = y0 + 9;
     const hall = this.addRoom(b, 'school', x0 + 1, hallY0, x1 - 1, hallY1, FL.LINO, 4);
@@ -1223,13 +1300,13 @@ const MapGen = {
     this.fenceLine(x0, y0 + 17, bw + 2, 0, WT.CHAIN, 0.1);
     for (let k = 0; k < 5; k++) { const x = r.int(x0, x1), y = r.int(y0 + 18, y1); if (this.free(x, y)) this.put(x, y, 'tree', 'S', this.tree(x, y, 1.1, 0, 'oak')); }
     this.fill(x0, y0, x1, y0 + 1, FL.CONCRETE, 0);
-    this.w.labels.push({ x: (x0 + x1) / 2, y: y0 + 8, text: 'Elementary School' });
+    this.w.labels.push({ x: (x0 + x1) / 2, y: y0 + 8, text: name || 'Elementary School' });
   },
-  industrial(x0, y0, x1, y1) {
+  industrial(x0, y0, x1, y1, names) {
     const r = this.rng;
     this.fill(x0, y0, x1, y1, FL.CONCRETE, 3);
-    this.store('warehouse', x0 + 1, y0 + 2, 10, 20, 'W', 'Kessler Warehouse');
-    this.store('warehouse', x0 + 13, y0 + 2, 10, 20, 'E', 'Kessler Storage');
+    this.store('warehouse', x0 + 1, y0 + 2, 10, 20, 'W', names ? names[0] : 'Kessler Warehouse');
+    this.store('warehouse', x0 + 13, y0 + 2, 10, 20, 'E', names ? names[1] : 'Kessler Storage');
     this.fenceLine(x0, y0, x1 - x0 + 1, 0, WT.CHAIN, 0.08);
     for (let k = 0; k < 6; k++) { const x = r.int(x0, x1), y = r.int(y0, y1); if (this.free(x, y)) this.put(x, y, 'crate', 'S', {}); }
   },
@@ -1411,12 +1488,14 @@ const MapGen = {
       if (T.sx0 === undefined) { T.sx0 = xs[0]; T.sx1 = xs[xs.length - 1] + 3; T.sy0 = ys[0]; T.sy1 = ys[ys.length - 1] + 3; }
       P.towns.push(T); P.boxes.push({ name, kind, x0: T.x0 - 2, y0: T.y0 - 2, x1: T.x1 + 2, y1: T.y1 + 2 });
     };
-    town('Fairfield', 'village', [ex - 60, ex - 30, ex, ex + 30, ex + 60], [75, 105, 135]);
-    town('Riverton', 'town', [ex - 90, ex - 60, ex - 30, ex, ex + 30].concat(big ? [] : [ex + 60]), [sy - 60, sy - 30, sy, sy + 30]);
+    // the towns' streets are a block of g apart: bigger blocks than the county's, room for deep lots and yards
+    const g = P.g = D >= 360 ? 40 : 34;
+    town('Fairfield', 'village', [ex - 2 * g, ex - g, ex, ex + g], [105 - g, 105, 105 + g]);
+    town('Riverton', 'town', big ? [ex - 4 * g, ex - 3 * g, ex - 2 * g, ex - g, ex] : [ex - 2 * g, ex - g, ex, ex + g, ex + 2 * g], big ? [sy - 2 * g, sy - g, sy, sy + g] : [sy - g, sy, sy + g, sy + 2 * g]);
     if (big) {
-      const xs = [ix - 120, ix - 90, ix - 60, ix - 30], ys = [sy + 30, sy + 60, sy + 90, sy + 120];
+      const xs = [ix - 3 * g, ix - 2 * g, ix - g], ys = [sy + g, sy + 2 * g, sy + 3 * g, sy + 4 * g].filter(y => y + 15 < S);
       // the county seat: its streets run up to County Rd 22 and across to the interstate
-      town('Kingsbury', 'county seat', xs, ys, { sx0: xs[0], sx1: ix, sy0: sy, sy1: ys[3] + 3, x1: ix - 1, y0: sy });
+      town('Kingsbury', 'county seat', xs, ys, { sx0: xs[0], sx1: ix, sy0: sy, sy1: ys[ys.length - 1] + 3, x1: ix - 1, y0: sy });
     }
     const site = (kind, name, x0, y0, x1, y1, o) => { const q = Object.assign({ kind, name, x0, y0, x1, y1 }, o || {}); P.sites.push(q); P.boxes.push(q); return q; };
     const rr = Math.round(16 + D * 0.02), rx = ex + Math.round(D * 0.3);
@@ -1425,7 +1504,7 @@ const MapGen = {
     site('quarry', 'Gray Rock Quarry', 410, 290, 410 + Math.round(D * 0.15), 340);
     site('trailers', 'Shady Pines Trailer Park', ex + 70, 112, ex + 100, 140);
     site('farm', 'Hartley Farm', 8, 412, 124, sy - 10, { yard: [96, 414], road: 'E' });
-    site('farm', 'Bluegrass Farms', 240, sy + 10, Math.min(440, ex - 100), Math.min(S - 12, sy + 110), { yard: [276, sy + 12], road: 'N' });
+    site('farm', 'Bluegrass Farms', 240, sy + 10, Math.min(440, ex - 100, P.towns[1].x0 - 10), Math.min(S - 12, sy + 110), { yard: [276, sy + 12], road: 'N' });
     if (big) {
       site('truckstop', 'Interstate Truck Stop', ix - 44, 112, ix - 8, 140);
       const b = site('base', 'Fort Hale', ex + 50, 290, ix - 14, 375);
@@ -1508,23 +1587,8 @@ const MapGen = {
       for (let y = y0; y <= y1; y++) { World.setWall(x0, y, 1, WT.CHAIN); World.setWall(x1 + 1, y, 1, WT.CHAIN); }
     };
     const label = (q, text, dy) => this.w.labels.push({ x: Math.round((q.x0 + q.x1) / 2), y: Math.round((q.y0 + q.y1) / 2) + (dy || 0), text: text || q.name });
-    // towns: on every block a slab per lot; blocks next to the main crossing are one long shopfront slab, one is a park
-    for (const T of P.towns) {
-      // (blocks also between the grid and a long road its streets run on to)
-      const xs = T.xs.concat(T.sx1 > T.xs[T.xs.length - 1] + 3 ? [T.sx1] : []).sort((a, b) => a - b), ys = T.ys.concat(T.sy0 < T.ys[0] ? [T.sy0] : []).sort((a, b) => a - b);
-      const mx = (T.x0 + T.x1) / 2, my = (T.y0 + T.y1) / 2;
-      const blocks = [];
-      for (let a = 0; a < xs.length - 1; a++) for (let b = 0; b < ys.length - 1; b++) blocks.push({ x0: xs[a] + 6, y0: ys[b] + 6, x1: xs[a + 1] - 3, y1: ys[b + 1] - 3 });
-      blocks.sort((p, q) => Math.hypot((p.x0 + p.x1) / 2 - mx, (p.y0 + p.y1) / 2 - my) - Math.hypot((q.x0 + q.x1) / 2 - mx, (q.y0 + q.y1) / 2 - my));
-      const shops = T.kind === 'village' ? 2 : 4, park = blocks.length > 5 ? blocks.length - 2 : -1;
-      blocks.forEach((B, k) => {
-        if (k === park) { pad(B.x0 + 2, B.y0 + 2, B.x1 - 2, B.y1 - 2, FL.GRASS2); this.w.labels.push({ x: Math.round((B.x0 + B.x1) / 2), y: Math.round((B.y0 + B.y1) / 2), text: T.name + ' Park' }); return; }
-        if (k < shops) { pad(B.x0, B.y0, B.x1, B.y0 + 9, FL.CONCRETE); pad(B.x0, B.y1 - 9, B.x1, B.y1, FL.CONCRETE); pad(B.x0 + 1, B.y0 + 10, B.x1 - 1, B.y1 - 10, FL.PARKING); return; }
-        const hw = (B.x1 - B.x0 + 1) >> 1, hh = (B.y1 - B.y0 + 1) >> 1;
-        for (const [lx, ly] of [[B.x0, B.y0], [B.x0 + hw, B.y0], [B.x0, B.y0 + hh], [B.x0 + hw, B.y0 + hh]]) pad(lx + 2, ly + 2, lx + hw - 3, ly + hh - 4, FL.CONCRETE);
-      });
-      this.mark(T.x0 - 2, T.y0 - 2, T.x1 + 2, T.y1 + 2, 1);
-    }
+    // towns: built (bigTowns)
+    this.bigTowns();
     for (const q of P.sites) {
       const { x0, y0, x1, y1 } = q, cx = (x0 + x1) >> 1, cy = (y0 + y1) >> 1;
       if (q.kind === 'reservoir') {
@@ -1553,28 +1617,307 @@ const MapGen = {
       } else if (q.kind === 'base' || q.kind === 'prison') {
         const gx = (P.spurs.find(sp => sp.h === (q.kind === 'prison')) || {}).p;
         pad(x0, y0, x1, y1, FL.GRAVEL);
-        if (q.kind === 'base') {
-          fence(x0, y0, x1, y1, gx - 1, gx + 4);
-          // barracks rows, motor pool, helipad, parade ground
-          for (let x = x0 + 4; x + 13 <= cx - 4; x += 18) for (const y of [y0 + 6, y0 + 20, y0 + 34]) pad(x, y, x + 13, y + 7, FL.CONCRETE);
-          pad(cx + 4, y0 + 6, x1 - 4, y0 + 30, FL.PARKING); pad(cx + 6, y1 - 22, cx + 16, y1 - 12, FL.CONCRETE); pad(x0 + 4, y1 - 26, cx - 6, y1 - 6, FL.DIRT);
-        } else {
-          // two fences, cell blocks round a yard, guard towers at the corners; the gate faces County Rd 14
-          for (let y = y0; y <= y1; y++) if (y < gx - 1 || y > gx + 4) { World.setWall(x1 + 1, y, 1, WT.CHAIN); World.setWall(x1 - 2, y, 1, WT.CHAIN); }
-          for (let x = x0; x <= x1; x++) { World.setWall(x, y0, 0, WT.CHAIN); World.setWall(x, y1 + 1, 0, WT.CHAIN); World.setWall(x, y0 + 3, 0, WT.CHAIN); World.setWall(x, y1 - 2, 0, WT.CHAIN); }
-          for (let y = y0; y <= y1; y++) { World.setWall(x0, y, 1, WT.CHAIN); World.setWall(x0 + 3, y, 1, WT.CHAIN); }
-          pad(x0 + 8, y0 + 8, x1 - 8, y0 + 20, FL.CONCRETE); pad(x0 + 8, y1 - 20, x1 - 8, y1 - 8, FL.CONCRETE); pad(x0 + 8, y0 + 24, x0 + 22, y1 - 24, FL.CONCRETE);
-          pad(x0 + 28, y0 + 26, x1 - 12, y1 - 26, FL.DIRT);
-          for (const [tx, ty] of [[x0 + 4, y0 + 4], [x1 - 6, y0 + 4], [x0 + 4, y1 - 6], [x1 - 6, y1 - 6]]) pad(tx, ty, tx + 2, ty + 2, FL.CONCRETE);
-        }
+        if (q.kind === 'base') this.fortHale(q, gx, pad, fence);
+        else this.prisonSite(q, gx, pad);
         label(q, null, q.kind === 'base' ? -2 : 0);
       } else if (q.kind === 'airfield') {
         for (let y = y0 + 4; y <= y0 + 9; y++) for (let x = x0; x <= x1; x++) { this.sf(x, y, FL.ASPHALT, r.int(0, 3)); if (y === y0 + 6 && (x >> 2) & 1) this.w.deco[y * W + x] = 1; }
-        pad(x0 + 30, y0 + 11, x0 + 60, y1, FL.CONCRETE); pad(x0 + 64, y0 + 14, x0 + 78, y1 - 2, FL.CONCRETE); pad(x0 + 82, y0 + 14, x0 + 96, y1 - 2, FL.CONCRETE);
+        pad(x0 + 30, y0 + 11, x0 + 60, y1, FL.CONCRETE); pad(x0 + 64, y0 + 11, x0 + 100, y1, FL.CONCRETE);
+        this.airfieldSite(q);
         label(q, null, -8);
       }
       this.mark(x0 - 1, y0 - 1, x1 + 1, y1 + 1, 1);
     }
+  },
+  // ---- institutional buildings: a corridor along the middle, rooms either side (rw wide), doors at both ends.
+  // o: name, rw, room (room type), brick, extCol, roofCol, floor, locked, furnish(room, side), cellLock (chance)
+  hall(type, x0, y0, x1, y1, o) {
+    const r = this.rng;
+    const b = this.newBuilding(type, x0, y0, x1, y1, { wallType: o.brick ? WT.BRICK : WT.EXT, extCol: o.extCol, roof: 'flat', roofCol: o.roofCol || '#5a5a5a', name: o.name || null, front: 'S', alarm: !!o.alarm });
+    const rt = o.room || type, cy = (y0 + y1) >> 1, rw = o.rw || 6;
+    const hall = this.addRoom(b, rt, x0, cy, x1, cy + 1, FL.LINO, 3);
+    const rooms = [], n = Math.max(1, Math.floor((x1 - x0 + 1) / rw));
+    for (let k = 0; k < n; k++) {
+      const rx0 = x0 + k * rw, rx1 = k === n - 1 ? x1 : rx0 + rw - 1;
+      if (cy - 1 >= y0 + 1) { const rm = this.addRoom(b, rt, rx0, y0, rx1, cy - 1, o.floor || FL.LINO, 2); rm.side = 'N'; rooms.push(rm); }
+      if (cy + 3 <= y1) { const rm = this.addRoom(b, rt, rx0, cy + 2, rx1, y1, o.floor || FL.LINO, 2); rm.side = 'S'; rooms.push(rm); }
+    }
+    this.buildWalls(b);
+    for (const rm of rooms) { const c = this.doorBetween(rm, hall); if (c && o.cellLock && r.chance(o.cellLock)) { const f = World.feat(c.ex, c.ey, c.ed); if (f) f.locked = true; } }
+    this.exteriorDoor(hall, 'W', { style: o.door || 'glass', locked: !!o.locked, b: b.id, ext: true });
+    this.exteriorDoor(hall, 'E', { style: o.door || 'glass', locked: true, b: b.id, ext: true });
+    for (const rm of rooms) { if (o.windows !== false) this.windows(rm, { p: o.winP || 0.5, win: { b: b.id, curtains: false } }); if (o.furnish) o.furnish(rm, rm.side); }
+    if (o.name) this.w.labels.push({ x: (x0 + x1) / 2, y: (y0 + y1) / 2, text: o.name });
+    return b;
+  },
+  // a plain public building of one big room (a mess hall, offices): brick, ordinary windows, double doors at the
+  // front (d). kind: 'mess' (tables, a kitchen counter) or 'office' (desks, shelves)
+  inst(type, x0, y0, x1, y1, d, o) {
+    const r = this.rng;
+    const b = this.newBuilding(type, x0, y0, x1, y1, { wallType: WT.BRICK, extCol: o.extCol, roof: 'flat', roofCol: o.roofCol || '#5a5a5a', name: o.name || null, front: d, alarm: !!o.alarm });
+    const rm = this.addRoom(b, o.room || type, x0, y0, x1, y1, o.kind === 'mess' ? FL.TILE : FL.LINO, 2);
+    this.buildWalls(b);
+    const fe = this.borderEdges(rm, (x, y) => World.room(x, y) < 0).filter(c => c.dir === d && !c.corner), m = fe.length >> 1;
+    for (const c of [fe[m - 1], fe[m]]) if (c) this.setDoor(c, { style: 'glass', locked: !!o.locked, b: b.id, ext: true });
+    this.exteriorDoor(rm, OPP[d], { b: b.id, ext: true, style: 'metal', locked: true });
+    this.windows(rm, { p: 0.55, win: { b: b.id, curtains: false } });
+    if (o.kind === 'mess') {
+      this.counterRun(rm, 6, true);
+      for (let k = 0; k < Math.floor((x1 - x0) * (y1 - y0) / 14); k++) this.placeCenter(rm, 'table', true);
+    } else {
+      for (let k = 0; k < Math.floor((x1 - x0) * (y1 - y0) / 16); k++) this.placeCenter(rm, 'desk', false);
+      this.place(rm, 'shelf'); this.place(rm, 'shelf'); this.place(rm, 'bookshelf');
+    }
+    if (o.name) this.w.labels.push({ x: (x0 + x1) / 2, y: (y0 + y1) / 2, text: o.name });
+    return b;
+  },
+  // a hangar or a big shed: one open room, rolling doors across its front
+  shed(type, x0, y0, x1, y1, d, o) {
+    const r = this.rng;
+    const b = this.newBuilding(type, x0, y0, x1, y1, { wallType: WT.EXT, extCol: o.extCol || '#8a9098', roofCol: o.roofCol || '#6a6e72', roof: 'flat', name: o.name || null, front: d });
+    const rm = this.addRoom(b, o.room || type, x0, y0, x1, y1, FL.CONCRETE, 0);
+    this.buildWalls(b);
+    const be = this.borderEdges(rm, (x, y) => World.room(x, y) < 0).filter(c => c.dir === d && !c.corner), m = be.length >> 1, hw = Math.min(m - 1, o.doorW || 3);
+    for (let k = m - hw; k < m + hw; k++) if (be[k]) this.setDoor(be[k], { style: 'garage', col: o.doorCol || '#8a8e90', b: b.id });
+    this.exteriorDoor(rm, OPP[d], { b: b.id, ext: true, style: 'metal' });
+    if (o.name) this.w.labels.push({ x: (x0 + x1) / 2, y: (y0 + y1) / 2, text: o.name });
+    return { b, rm };
+  },
+  // Fort Hale: barracks on the west, the motor pool, HQ, armory and mess hall on the east, a parade ground and a
+  // helipad; a road in from the gate down the middle; the dead in uniform
+  fortHale(q, gx, pad, fence) {
+    const r = this.rng, { x0, y0, x1, y1 } = q, W = this.W;
+    fence(x0, y0, x1, y1, gx - 1, gx + 4);
+    const rx = gx === undefined ? ((x0 + x1) >> 1) - 2 : gx, wE = rx - 4, eS = rx + 6;
+    for (let y = y0; y <= y1 - 2; y++) for (let x = rx; x <= rx + 3; x++) { this.sf(x, y, FL.ASPHALT, r.int(0, 3)); this.roadCnt[y * W + x] = Math.max(1, this.roadCnt[y * W + x]); }
+    // the gate: a booth, barriers, floodlights, sandbags
+    this.put(rx - 2, y0 + 1, 'st_booth', 'E'); this.put(rx + 5, y0 + 1, 'st_floodlight', 'S'); this.put(rx - 2, y0 + 3, 'st_floodlight', 'S');
+    for (const x of [rx + 5, rx + 6]) this.put(x, y0 + 3, 'hay', 'S', { sandbag: true, v: r.int(0, 5) });
+    this.put(rx + 4, y0 + 1, 'st_jersey', 'S', { v: 0 });
+    // barracks: two columns of three
+    const bw = 16, bh = 9, names = 'ABCDEF';
+    let k = 0;
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 3; j++) {
+      const bx = x0 + 4 + i * (bw + 5), by = y0 + 6 + j * (bh + 5);
+      if (bx + bw > wE) continue;
+      pad(bx - 1, by - 1, bx + bw, by + bh, FL.CONCRETE);
+      this.hall('barracks', bx, by, bx + bw - 1, by + bh - 1, { name: 'Barracks ' + names[k++], rw: 4, room: 'military', extCol: '#9a9478', roofCol: '#5a5a48', winP: 0.6, door: 'wood',
+        furnish: (rm) => { this.place(rm, 'bed', { two: 'along', extra: { col: '#5a6a4a' } }); this.place(rm, 'locker'); if (r.chance(0.6)) this.place(rm, 'locker'); } });
+    }
+    // parade ground below the barracks, a flag on it
+    const py0 = y0 + 6 + 3 * (bh + 5), cxp = (x0 + 4 + wE) >> 1;
+    if (y1 - 6 - py0 > 8) {
+      pad(x0 + 4, py0, wE, y1 - 6, FL.DIRT);
+      this.put(cxp, (py0 + y1 - 6) >> 1, 'st_flagpole', 'S');
+      for (let x = x0 + 6; x < wE - 2; x += 5) if (this.free(x, py0)) this.put(x, py0, 'bench', 'S');
+    }
+    // motor pool: a garage, trucks in rows, a fuel pump
+    const mx0 = eS, mx1 = x1 - 4, my0 = y0 + 6, my1 = y0 + 30;
+    pad(mx0, my0, mx1, my1, FL.PARKING);
+    const mp = this.shed('garage', mx1 - 17, my0, mx1 - 1, my0 + 9, 'S', { name: 'Motor Pool', room: 'garage', extCol: '#8a8a70', doorCol: '#5a5e48' });
+    for (let k2 = 0; k2 < 4; k2++) this.place(mp.rm, 'toolcab');
+    for (let k2 = 0; k2 < 3; k2++) this.place(mp.rm, 'crate');
+    this.put(mx0 + 2, my0 + 1, 'pump', 'S');
+    for (let x = mx0 + 2; x + 3 <= mx1 - 19; x += 4) if (r.chance(0.8)) this.w.carSpots.push({ x: x + 1, y: my0 + 6, a: Math.PI / 2, kind: 'army' });
+    for (let x = mx0 + 2; x + 3 <= mx1; x += 5) if (r.chance(0.6)) this.w.carSpots.push({ x: x + 1, y: my1 - 4, a: -Math.PI / 2, kind: r.chance(0.7) ? 'army' : 'pickup' });
+    // HQ, the armory (locked, crates of weapons), the mess hall, the helipad
+    const hy = my1 + 4;
+    if (hy + 10 < y1 - 4) {
+      this.inst('military', mx0, hy, mx0 + 17, hy + 9, 'W', { name: 'Fort Hale HQ', kind: 'office', extCol: '#8a5a48', alarm: true });
+      const ax = mx0 + 21;
+      if (ax + 11 <= x1 - 2) this.hall('military', ax, hy, ax + 11, hy + 7, { name: 'Armory', rw: 4, brick: true, locked: true, windows: false, door: 'metal',
+        furnish: (rm) => { for (let c = 0; c < 2; c++) this.place(rm, 'crate', { extra: { c: { type: 'crate', cap: 40, items: null, loot: 'military' } } }); } });
+    }
+    const my = hy + 14;
+    if (my + 10 < y1 - 2) {
+      this.inst('military', mx0, my, mx0 + 19, my + 9, 'W', { name: 'Mess Hall', kind: 'mess', extCol: '#9a9478' });
+      const hx = mx0 + 24;
+      if (hx + 12 <= x1 - 2) { pad(hx, my, hx + 12, my + 12, FL.CONCRETE); for (const [x, y] of [[hx, my], [hx + 12, my], [hx, my + 12], [hx + 12, my + 12]]) this.put(x, y, 'st_lotlight', 'S'); this.w.labels.push({ x: hx + 6, y: my + 6, text: 'Helipad' }); }
+    }
+    // floodlights along the fence
+    for (let x = x0 + 8; x < x1 - 4; x += 22) if (this.free(x, y1 - 1)) this.put(x, y1 - 1, 'st_floodlight', 'N');
+    this.w.zones.push({ x0, y0, x1, y1, n: Math.round((x1 - x0) * (y1 - y0) * 0.005), outfit: 'military' });
+  },
+  // Rock Creek Correctional: two cell blocks, the mess hall and administration, the exercise yard, a tower at each
+  // corner; prisoners and guards among the dead
+  prisonSite(q, gx, pad) {
+    const r = this.rng, { x0, y0, x1, y1 } = q;
+    // two fences, the gate facing County Rd 14
+    for (let y = y0; y <= y1; y++) if (y < gx - 1 || y > gx + 4) { World.setWall(x1 + 1, y, 1, WT.CHAIN); World.setWall(x1 - 2, y, 1, WT.CHAIN); }
+    for (let x = x0; x <= x1; x++) { World.setWall(x, y0, 0, WT.CHAIN); World.setWall(x, y1 + 1, 0, WT.CHAIN); World.setWall(x, y0 + 3, 0, WT.CHAIN); World.setWall(x, y1 - 2, 0, WT.CHAIN); }
+    for (let y = y0; y <= y1; y++) { World.setWall(x0, y, 1, WT.CHAIN); World.setWall(x0 + 3, y, 1, WT.CHAIN); }
+    const cell = (rm) => { this.place(rm, 'bed', { two: 'along', extra: { col: '#8a8a80' } }); this.place(rm, 'toilet'); };
+    pad(x0 + 7, y0 + 7, x1 - 7, y0 + 20, FL.CONCRETE); pad(x0 + 7, y1 - 20, x1 - 7, y1 - 7, FL.CONCRETE);
+    this.hall('prison', x0 + 8, y0 + 8, x1 - 8, y0 + 19, { name: 'Cell Block A', rw: 3, brick: true, extCol: '#a8a090', roofCol: '#606060', cellLock: 0.5, winP: 0.3, door: 'metal', locked: true, furnish: cell });
+    this.hall('prison', x0 + 8, y1 - 19, x1 - 8, y1 - 8, { name: 'Cell Block B', rw: 3, brick: true, extCol: '#a8a090', roofCol: '#606060', cellLock: 0.5, winP: 0.3, door: 'metal', furnish: cell });
+    // the mess hall and administration along the west side
+    pad(x0 + 7, y0 + 23, x0 + 24, y1 - 23, FL.CONCRETE);
+    const mh = Math.min(12, ((y1 - y0 - 46) >> 1) - 1);
+    if (mh >= 7) {
+      this.inst('prison', x0 + 8, y0 + 24, x0 + 23, y0 + 23 + mh, 'E', { name: 'Mess Hall', kind: 'mess', extCol: '#a8a090' });
+      this.inst('prison', x0 + 8, y0 + 26 + mh, x0 + 23, y0 + 25 + 2 * mh, 'E', { name: 'Administration', kind: 'office', extCol: '#a8a090' });
+    }
+    // the yard: dirt, benches, weights, a hoop's worth of concrete
+    const yx0 = x0 + 28, yx1 = x1 - 12, yy0 = y0 + 26, yy1 = y1 - 26;
+    if (yx1 - yx0 > 8 && yy1 - yy0 > 6) {
+      pad(yx0, yy0, yx1, yy1, FL.DIRT); pad(yx1 - 10, yy0 + 1, yx1 - 1, yy0 + 8, FL.CONCRETE);
+      for (let x = yx0 + 2; x < yx1 - 12; x += 4) if (this.free(x, yy1)) this.put(x, yy1, 'bench', 'N');
+      this.w.labels.push({ x: (yx0 + yx1) >> 1, y: (yy0 + yy1) >> 1, text: 'Exercise Yard' });
+      this.w.zones.push({ x0: yx0, y0: yy0, x1: yx1, y1: yy1, n: 14, outfit: 'prisoner' });
+    }
+    // guard towers at the corners (a guard's locker inside), floodlights
+    for (const [tx, ty] of [[x0 + 4, y0 + 4], [x1 - 6, y0 + 4], [x0 + 4, y1 - 6], [x1 - 6, y1 - 6]]) {
+      const tb = this.newBuilding('tower', tx, ty, tx + 2, ty + 2, { wallType: WT.BRICK, roof: 'flat', roofCol: '#505050', name: 'Guard Tower', front: 'S' });
+      const tr = this.addRoom(tb, 'police', tx, ty, tx + 2, ty + 2, FL.CONCRETE, 0);
+      this.buildWalls(tb); this.exteriorDoor(tr, null, { b: tb.id, ext: true, style: 'metal', locked: r.chance(0.5) }); this.windows(tr, { p: 0.9, win: { b: tb.id, curtains: false } });
+      this.place(tr, 'locker');
+    }
+    for (const [x, y, d] of [[x0 + 5, (y0 + y1) >> 1, 'E'], [x1 - 5, (y0 + y1) >> 1, 'W']]) if (this.free(x, y)) this.put(x, y, 'st_floodlight', d);
+    if (gx !== undefined) { this.put(x1 - 4, gx - 2, 'st_booth', 'E'); this.w.carSpots.push({ x: x1 - 8, y: gx + 1.5, a: Math.PI, kind: 'police' }); }
+    this.w.zones.push({ x0: x0 + 8, y0: y0 + 8, x1: x1 - 8, y1: y1 - 8, n: Math.round((x1 - x0) * (y1 - y0) * 0.004), outfit: 'prisoner' });
+    this.w.zones.push({ x0, y0, x1, y1, n: 6, outfit: 'police' });
+  },
+  // Hawk Field: hangars on the apron, the control tower, a terminal office, fuel
+  airfieldSite(q) {
+    const r = this.rng, { x0, y0, x1, y1 } = q;
+    const h1 = this.shed('hangar', x0 + 65, y0 + 13, x0 + 80, y1 - 1, 'N', { name: 'Hangar 1', room: 'hangar', doorW: 5 });
+    const h2 = this.shed('hangar', x0 + 84, y0 + 13, x0 + 99, y1 - 1, 'N', { name: 'Hangar 2', room: 'hangar', doorW: 5 });
+    for (const h of [h1, h2]) { this.place(h.rm, 'toolcab'); this.place(h.rm, 'toolcab'); this.place(h.rm, 'crate'); this.place(h.rm, 'crate'); this.place(h.rm, 'barrel'); }
+    this.inst('office', x0 + 32, y1 - 9, x0 + 45, y1 - 2, 'N', { name: 'Hawk Field Terminal', kind: 'office', extCol: '#c8c0b0' });
+    if (x0 + 112 < x1) {
+      const tb = this.newBuilding('office', x0 + 106, y0 + 13, x0 + 111, y0 + 18, { wallType: WT.BRICK, roof: 'flat', roofCol: '#505860', name: 'Control Tower', front: 'N' });
+      const tr = this.addRoom(tb, 'office', x0 + 106, y0 + 13, x0 + 111, y0 + 18, FL.LINO, 2);
+      this.buildWalls(tb); this.exteriorDoor(tr, 'S', { b: tb.id, ext: true, style: 'glass' }); this.windows(tr, { p: 0.9, win: { b: tb.id, curtains: false } });
+      this.place(tr, 'desk'); this.place(tr, 'desk'); this.place(tr, 'shelf');
+      this.w.labels.push({ x: x0 + 108, y: y0 + 16, text: 'Control Tower' });
+    }
+    for (const [x, y] of [[x0 + 50, y0 + 13], [x0 + 52, y0 + 13], [x0 + 54, y0 + 13]]) if (this.free(x, y)) this.put(x, y, 'barrel', 'S');
+    this.put(x0 + 56, y0 + 13, 'pump', 'S'); this.put(x0 + 31, y0 + 11, 'st_flagpole', 'S');
+    for (let k = 0; k < 3; k++) if (r.chance(0.7)) this.w.carSpots.push({ x: x0 + 34 + k * 5, y: y0 + 16, a: Math.PI / 2, kind: r.pick(['van', 'pickup', 'sedan']) });
+    this.w.zones.push({ x0, y0, x1, y1, n: 8 });
+  },
+  // ---- the bigger world's towns, built on their street grids: shops round the main crossing (parking behind), the
+  // civic buildings next out, then houses, the lots wider and emptier toward the edge of town
+  TOWN_PLANS: {
+    Fairfield: { com: 1, civic: ['church', 'gas'],
+      shops: ['grocery', 'diner', 'hardware', 'bar', 'pharmacy', 'office'],
+      names: { grocery: 'Fairfield General Store', diner: 'Route 9 Diner', hardware: 'Fairfield Feed & Seed', bar: "Hank's Tavern", pharmacy: 'Fairfield Drugs', office: 'Fairfield Post Office', church: 'Fairfield Methodist Church', gas: 'Fairfield Fuel' } },
+    Riverton: { com: 3, civic: ['school', 'church', 'park', 'gas'],
+      shops: ['grocery', 'pharmacy', 'police', 'restaurant', 'bar', 'clinic', 'clothing', 'hardware', 'firestation', 'bookstore', 'laundromat', 'office', 'diner', 'gunstore'],
+      names: { grocery: 'River Valley Foods', pharmacy: 'Riverton Pharmacy', restaurant: 'Riverside Grill', bar: 'The Muddy Bank', clothing: 'Main Street Apparel', hardware: 'Riverton Hardware', bookstore: 'Chapter One Books', laundromat: 'Spin Cycle', office: 'Riverton Savings', diner: "Mel's Diner", gunstore: 'River Arms', school: 'Riverton Elementary', clinic: 'Riverton Medical Clinic', church: "St. Luke's Church", gas: 'Riverton Gas', police: 'Riverton Police', firestation: 'Riverton Fire Dept.' } },
+    Kingsbury: { com: 3, civic: ['courthouse', 'school', 'church', 'motel', 'park', 'industrial'],
+      shops: ['grocery', 'police', 'pharmacy', 'restaurant', 'clinic', 'bar', 'clothing', 'firestation', 'hardware', 'gunstore', 'bookstore', 'office', 'diner', 'laundromat', 'office', 'restaurant', 'bar'],
+      names: { grocery: 'Kingsbury Supermarket', pharmacy: 'County Drug Co.', restaurant: 'The Kingsbury Grill', bar: 'The Crown', clothing: 'Kingsbury Outfitters', hardware: 'Ace of Tools', gunstore: 'Kingsbury Gun Shop', bookstore: 'County Books', office: 'Kingsbury Realty', diner: 'Courthouse Diner', laundromat: 'Kingsbury Coin Laundry', school: 'Kingsbury High School', clinic: 'Kingsbury General Clinic', church: 'First Presbyterian Church', motel: 'Royal Inn Motel', gas: 'Interstate Gas', police: 'Kingsbury Sheriff', firestation: 'Kingsbury Fire Station', courthouse: 'Beacon County Courthouse', industrial: ['Kingsbury Freight', 'County Storage'] } },
+  },
+  bigTowns() {
+    const P = this.big, r = this.rng, W = this.W, nSpawn = this.w.spawnHouses.length;
+    for (const T of P.towns) {
+      const plan = this.TOWN_PLANS[T.name] || this.TOWN_PLANS.Riverton, names = plan.names, shops = plan.shops.slice();
+      // (blocks also between the grid and a long road its streets run on to)
+      const xs = T.xs.concat(T.sx1 > T.xs[T.xs.length - 1] + 3 ? [T.sx1] : []).sort((a, b) => a - b), ys = T.ys.concat(T.sy0 < T.ys[0] ? [T.sy0] : []).sort((a, b) => a - b);
+      // the middle of town: the crossing of its long roads (nearest grid crossing to the middle)
+      const mx = xs.reduce((a, b) => Math.abs(b - (T.x0 + T.x1) / 2) < Math.abs(a - (T.x0 + T.x1) / 2) ? b : a) + 2, my = ys.reduce((a, b) => Math.abs(b - (T.y0 + T.y1) / 2) < Math.abs(a - (T.y0 + T.y1) / 2) ? b : a) + 2;
+      const R = Math.max(T.x1 - T.x0, T.y1 - T.y0) / 2;
+      const blocks = [];
+      for (let a = 0; a < xs.length - 1; a++) for (let b = 0; b < ys.length - 1; b++) {
+        const B = { x0: xs[a] + 5, y0: ys[b] + 5, x1: xs[a + 1] - 2, y1: ys[b + 1] - 2 };
+        if (B.x1 - B.x0 >= 16 && B.y1 - B.y0 >= 16) blocks.push(B);
+      }
+      blocks.sort((p, q) => Math.hypot((p.x0 + p.x1) / 2 - mx, (p.y0 + p.y1) / 2 - my) - Math.hypot((q.x0 + q.x1) / 2 - mx, (q.y0 + q.y1) / 2 - my));
+      const civic = plan.civic.slice();
+      blocks.forEach((B, k) => {
+        this.clearObj(B.x0, B.y0, B.x1, B.y1);
+        this.mark(B.x0, B.y0, B.x1, B.y1, 1);
+        const sp = this.spreadAt((B.x0 + B.x1) / 2, (B.y0 + B.y1) / 2, mx, my, R);
+        if (k < plan.com) { this.shopBlock(B, shops, names); return; }
+        // civic buildings next out; the park and the industry a little further
+        let c = civic.length ? civic[0] : null;
+        if ((c === 'park' || c === 'industrial') && k < plan.com + 2 && civic.length > 1) c = civic[1];
+        if (c && k < plan.com + plan.civic.length + 2) { civic.splice(civic.indexOf(c), 1); this.civicBlock(c, B, names, sp, T); return; }
+        this.houseBlock(B.x0, B.y0, B.x1, B.y1, Math.max(0.2, sp));
+      });
+      // street lights along the grid
+      for (const y of ys) for (let t = xs[0]; t <= xs[xs.length - 1] + 3; t += 9) for (const [x, yy] of [[t, y - 1], [t + 4, y + 4]]) this.lamp(x, yy);
+      for (const x of xs) for (let t = ys[0]; t <= ys[ys.length - 1] + 3; t += 9) for (const [xx, y] of [[x - 1, t + 2], [x + 4, t + 6]]) this.lamp(xx, y);
+      this.mark(T.x0 - 2, T.y0 - 2, T.x1 + 2, T.y1 + 2, 1);
+      // the townsfolk, in the streets and yards (the shops and houses have their own inside)
+      this.w.zones.push({ x0: T.x0, y0: T.y0, x1: T.x1, y1: T.y1, n: Math.round((T.x1 - T.x0) * (T.y1 - T.y0) * 0.004) });
+    }
+    // the new towns' houses are not where a game starts (the county's are)
+    this.w.spawnHouses.length = nSpawn;
+  },
+  // a block of shops: a row facing each street, a car park between them
+  shopBlock(B, shops, names) {
+    const r = this.rng, w = B.x1 - B.x0 + 1, deep = B.y1 - B.y0 + 1;
+    const row = () => {
+      const n = Math.max(1, Math.floor(w / 11)), out = [];
+      for (let i = 0, left = w; i < n; i++) { const lw = i === n - 1 ? left : Math.floor(left / (n - i)); out.push([shops.length ? shops.shift() : 'house', lw]); left -= lw; }
+      // a grocery or a police station takes two plots
+      for (let i = 0; i < out.length - 1; i++) if (out[i][0] === 'grocery' || out[i][0] === 'police') { out[i][1] += out[i + 1][1]; if (out[i + 1][0] !== 'house') shops.unshift(out[i + 1][0]); out.splice(i + 1, 1); }
+      return out;
+    };
+    this.commercialRow(B.x0, B.y0, B.x1, B.y0 + 11, 'N', row(), names);
+    if (deep >= 26) {
+      this.commercialRow(B.x0, B.y1 - 11, B.x1, B.y1, 'S', row(), names);
+      this.fill(B.x0, B.y0 + 12, B.x1, B.y1 - 12, FL.PARKING, 0);
+      for (let x = B.x0 + 2; x + 2 <= B.x1; x += 3) if (r.chance(0.3)) this.w.carSpots.push({ x: x + 0.5, y: (B.y0 + B.y1) / 2 + 0.5, a: r.chance(0.5) ? Math.PI / 2 : -Math.PI / 2 });
+      for (const x of [B.x0, B.x1]) if (this.free(x, (B.y0 + B.y1) >> 1)) this.put(x, (B.y0 + B.y1) >> 1, 'lamppost', 'S');
+    } else this.houseRow(B.x0, B.y0 + 12, B.x1, B.y1, 'S', 0.2);
+  },
+  // a block for one of the town's public buildings (sp: how spread out the houses that share it are)
+  civicBlock(c, B, names, sp, T) {
+    const r = this.rng, { x0, y0, x1, y1 } = B, w = x1 - x0 + 1, half = (y0 + y1 + 1) >> 1;
+    const rest = (yy0) => { if (y1 - yy0 >= 9) this.houseRow(x0, yy0, x1, y1, 'S', Math.max(0.3, sp)); };
+    if (c === 'park') { this.park(x0, y0, x1, y1, T.name + ' Park'); return; }
+    if (c === 'school') { this.school(x0, y0, x1, y1, names.school); return; }
+    if (c === 'industrial') { this.industrial(x0, y0, Math.min(x1, x0 + 23), y1, names.industrial); if (x1 - x0 > 30) this.houseRow(x0 + 24, y0, x1, y1, 'E', 0.6); return; }
+    if (c === 'church') { this.church(x0, y0, Math.min(x1, x0 + 26), y0 + 18, names.church); this.w.labels.pop(); this.w.labels.push({ x: x0 + 6, y: y0 + 6, text: names.church }); rest(y0 + 20); return; }
+    if (c === 'gas') {
+      // the pumps toward the street, the shop behind
+      this.fill(x0, y0, Math.min(x1, x0 + 22), y0 + 13, FL.CONCRETE, 1);
+      this.store('gasstation', x0 + 5, y0 + 6, 12, 7, 'N', names.gas);
+      for (const x of [x0 + 5, x0 + 9, x0 + 13, x0 + 17]) if (x <= x1) this.put(x, y0 + 2, 'pump', 'S');
+      this.put(x0 + 1, y0 + 1, 'lamppost', 'S'); this.put(x0 + 20, y0 + 12, 'trash', 'S');
+      if (r.chance(0.6)) this.w.carSpots.push({ x: x0 + 7.5, y: y0 + 3.6, a: 0 });
+      if (x1 - x0 > 30) this.houseRow(x0 + 23, y0, x1, y0 + 13, 'N', 0.5);
+      rest(y0 + 14); return;
+    }
+    if (c === 'motel') {
+      const n = Math.max(3, Math.min(8, Math.floor((w - 4) / 4)));
+      this.fill(x0, y0, x1, y0 + 3, FL.ASPHALT, 0);
+      const mb = this.newBuilding('motel', x0 + 1, y0 + 4, x0 + n * 4 + 2, y0 + 9, { wallType: WT.EXT, extCol: r.pick(['#d8c8a0', '#c8d0d8', '#e0c0a0']), roofCol: '#7a4a3a', name: names.motel, front: 'N' });
+      const units = [];
+      for (let k = 0; k < n; k++) units.push(this.addRoom(mb, 'motel', x0 + 1 + k * 4, y0 + 4, x0 + 4 + k * 4, y0 + 9, FL.CARPET, 6));
+      const office = this.addRoom(mb, 'motel', x0 + 1 + n * 4, y0 + 4, x0 + n * 4 + 2, y0 + 9, FL.LINO, 2);
+      this.buildWalls(mb);
+      for (const rm of units) {
+        this.exteriorDoor(rm, 'N', { locked: r.chance(0.6), b: mb.id, ext: true });
+        this.windows(rm, { p: 0.6, win: { b: mb.id } });
+        this.place(rm, 'bed', { two: 'perp', extra: { col: '#a05050' } }); this.place(rm, 'nightstand'); this.place(rm, 'tv'); this.place(rm, 'toilet');
+      }
+      this.exteriorDoor(office, 'N', { locked: false, b: mb.id, style: 'glass', ext: true });
+      this.place(office, 'register'); this.place(office, 'desk');
+      for (let k = 0; k < n; k++) if (r.chance(0.5)) this.w.carSpots.push({ x: x0 + 3 + k * 4, y: y0 + 1.5, a: Math.PI / 2 });
+      this.w.labels.push({ x: x0 + n * 2, y: y0 + 7, text: names.motel });
+      rest(y0 + 12); return;
+    }
+    // a public building fronting the north street, its lot behind
+    const bw = Math.min(w - 2, c === 'courthouse' ? 26 : c === 'police' ? 22 : 20), bh = c === 'courthouse' ? 14 : c === 'police' ? 12 : 10;
+    const bx = x0 + ((w - bw) >> 1), by = y0 + (c === 'courthouse' ? 4 : 1);
+    if (c === 'police') { const b = this.police(bx, by, bw, bh, 'N'); if (b) { b.name = names.police; const l = this.w.labels[this.w.labels.length - 1]; if (l && l.text === 'Police Station') l.text = names.police; } }
+    else this.store(c === 'courthouse' ? 'office' : c, bx, by, bw, bh, 'N', names[c]);
+    if (c === 'courthouse') {
+      // the lawn out front: a flag, benches, old trees
+      if (this.free(bx + (bw >> 1), y0 + 1)) this.put(bx + (bw >> 1), y0 + 1, 'yd_flagpole', 'S', {});
+      for (const x of [x0 + 2, x1 - 2]) { if (this.free(x, y0 + 2)) this.put(x, y0 + 2, 'tree', 'S', this.tree(x, y0 + 2, 1.3, 0, 'oak')); }
+      for (const x of [bx + 3, bx + bw - 4]) if (this.free(x, y0 + 2)) this.put(x, y0 + 2, 'bench', 'S');
+    }
+    // parking behind (fire engines and squad cars where they belong)
+    const py0 = by + bh + 1, py1 = Math.min(y1, py0 + 7);
+    this.fill(x0 + 1, py0, x1 - 1, py1, FL.PARKING, 0);
+    const kind = c === 'police' ? 'police' : c === 'firestation' ? 'firetruck' : c === 'clinic' ? 'ambulance' : null;
+    for (let k = 0; k < 3; k++) if (r.chance(kind ? 0.8 : 0.4)) this.w.carSpots.push(kind ? { x: x0 + 4 + k * 5, y: py0 + 3.5, a: Math.PI / 2, kind } : { x: x0 + 4 + k * 5, y: py0 + 3.5, a: Math.PI / 2 });
+    rest(py1 + 2);
   },
   // The countryside of a bigger world, built: the farmyards, Shady Pines, the truck stop, the quarry office, the ranger
   // station, a gas station and a church where Main St meets County Rd 22, and homesteads (houses, now and then a
@@ -1809,7 +2152,7 @@ const MapGen = {
     this.w.zones.push({ x0: 2, y0: 145, x1: 44, y1: 232, n: 18 });
     // indoor zombies per building
     for (const b of this.w.buildings) {
-      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2 }[b.type];
+      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2, barracks: 4, prison: 6, tower: 0.5, hangar: 1, garage: 2 }[b.type];
       if (b.zIndoor === undefined) b.zIndoor = n === undefined ? 2 : n;
     }
   },

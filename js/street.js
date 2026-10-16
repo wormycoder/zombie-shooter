@@ -5,7 +5,11 @@
 // All new object types are prefixed st_. Deco codes: 5-10 stop bars, 11-49 street detail.
 // ---------------------------------------------------------------------------
 const STREET_NAMES = ['Oak St', 'Maple St', 'Route 9', 'Church St', 'Willow St', 'Depot St', 'Birch Ave', 'Cedar Ave', 'Elm Ave', 'Main St', 'Hickory Ave', 'Quarry Rd',
-  'Front St', 'Market St', 'Creek Rd', 'Orchard St', 'Ash Ave', 'Millbrook Rd', 'Poplar Ave', 'Spruce Ave'];
+  'Front St', 'Market St', 'Creek Rd', 'Orchard St', 'Ash Ave', 'Millbrook Rd', 'Poplar Ave', 'Spruce Ave',
+  // the bigger worlds' towns (Fairfield, Riverton, Kingsbury), handed out in order
+  'County Rd 14', 'County Rd 22', 'Pine St', 'Lake St', 'River St', 'Mill St', 'High St', 'Park Ave', 'Bridge St', 'Water St', 'Center St',
+  'School St', 'Union St', 'Garden St', 'Hill St', 'Walnut St', 'Chestnut St', 'Court St', 'King St', 'Queen St', 'Washington St',
+  'Lincoln Ave', 'Jefferson St', 'Franklin St', 'Grant Ave', 'Locust St', 'Sycamore St', 'Dogwood Ave', 'Magnolia Ave', 'Aspen Ave'];
 // edges: 0 N, 1 W, 2 S, 3 E (same order as the grass fringes)
 const ST_EX = [0, -1, 0, 1], ST_EY = [-1, 0, 1, 0];
 const ST_DV = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] };
@@ -1414,8 +1418,17 @@ Object.assign(MapGen, {
     RP.forEach((x, i) => R.push({ h: false, p: x, s: x === 135 ? 0 : a, e: x === 135 ? this.H - 1 : b, nm: 6 + i }));
     RY2.forEach((y, i) => R.push({ h: true, p: y, s: y === 315 ? 135 : a2x, e: b2x, nm: 12 + i }));
     RX2.forEach((x, i) => R.push({ h: false, p: x, s: x === 300 ? 105 : a2y, e: b2y, nm: 16 + i }));
-    this.stR = R;
     this.stBoxes = [[a - 1, a - 1, b + 1, b + 1], [a2x - 1, a2y - 1, b2x + 1, b2y + 1]];
+    // the bigger worlds' town grids (a street on Route 9 is Route 9's; on the county roads, named for them)
+    if (this.big) {
+      let nm = 22;
+      for (const T of this.big.towns) {
+        for (const y of T.ys.concat(T.sy0 < T.ys[0] ? [T.sy0] : [])) if (y !== 105) R.push({ h: true, p: y, s: T.sx0, e: T.sx1, nm: y === this.big.sy ? 21 : Math.min(STREET_NAMES.length - 1, nm++) });
+        for (const x of T.xs) R.push({ h: false, p: x, s: T.sy0, e: T.sy1, nm: x === this.big.ex ? 20 : Math.min(STREET_NAMES.length - 1, nm++) });
+        this.stBoxes.push([T.x0 - 1, T.y0 - 1, T.x1 + 1, T.y1 + 1]);
+      }
+    }
+    this.stR = R;
     this.stNo = new Uint8Array(this.W * this.H); // tiles solid props must avoid (around car spots)
     for (const sp of this.w.carSpots) {
       this.stCarMark(sp);

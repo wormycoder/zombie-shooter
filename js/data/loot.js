@@ -104,6 +104,11 @@ const LOOT = {
   'church.shelf': { n: [0, 2], empty: 0.5, items: [['Novel', 2], ['Newspaper', 1], ['Matches', 1], ['WaterBottle', 1]] },
   'firestation.locker': { n: [1, 3], empty: 0.15, items: [['FireJacket', 3], ['FirePants', 3], ['FireHelmet', 2], ['Axe', 3], ['Boots', 2], ['Flashlight', 2], ['Bandage', 2], ['Crowbar', 1], ['FireExtinguisher', 3]] },
   'motel.dresser': { n: [0, 3], empty: 0.3, items: [['@clothes', 4], ['@books', 2], ['Cigarettes', 1], ['Pistol', 0.3], ['DuffelBag', 1], ['Whiskey', 1]] },
+  'military.locker': { n: [1, 4], empty: 0.1, items: [['MilitaryJacket', 3], ['CargoPants', 3], ['Boots', 2], ['Belt', 2], ['MilitaryBag', 1], ['@canned', 3], ['WaterBottle', 2], ['Bandage', 2], ['SterileBandage', 1], ['Cigarettes', 2], ['Lighter', 1], ['Flashlight', 1], ['Box556', 0.8], ['Box9mm', 0.8], ['Pistol', 0.4]] },
+  'military.desk': { n: [0, 3], empty: 0.3, items: [['Map', 2], ['Flashlight', 1], ['Battery', 1], ['Radio', 1], ['@snack', 2], ['Box9mm', 0.5], ['Pistol', 0.3]] },
+  'prison.desk': { n: [0, 2], empty: 0.4, items: [['Newspaper', 2], ['Cigarettes', 2], ['Magazine', 1], ['Nightstick', 0.5]] },
+  'hangar.toolcab': { n: [2, 5], empty: 0.1, items: [['@tools', 10], ['@cartools', 4], ['@carparts', 4], ['GasCan', 3], ['DuctTape', 2], ['Flashlight', 1]] },
+  'hangar.crate': { n: [1, 4], empty: 0.2, items: [['@carparts', 4], ['@tools', 3], ['GasCan', 2], ['Plank', 1], ['@junk', 2]] },
   'military.crate': { n: [2, 5], empty: 0.05, items: [['AssaultRifle', 2], ['Box556', 5], ['Pistol', 2], ['Box9mm', 3], ['MilitaryBag', 2], ['MilitaryJacket', 2], ['Holster', 1], ['Belt', 1], ['BulletVest', 2], ['CargoPants', 2], ['Boots', 2], ['@canned', 3], ['SterileBandage', 2], ['Antibiotics', 1], ['TireHD', 0.6], ['EngineParts', 1]] },
 };
 
