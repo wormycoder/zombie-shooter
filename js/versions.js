@@ -13,6 +13,17 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.012.000.106', date: '2026-10-16', title: 'The bigger county laid out',
+    notes: [
+      'The new land of the Large, Huge and Massive worlds (Settings > Experimental) is now laid out for building: every place has its spot, its roads and its name, ready to be filled in.',
+      'Three towns as street grids with sidewalks and a concrete slab on every lot where a building will stand, shop blocks and a park: Fairfield where Route 9 meets County Rd 14, Riverton on the river, and Kingsbury, the county seat by the interstate (Huge and Massive).',
+      'The Salt River runs in from the east and down to the south edge, bridged by every road it meets; Wildwood Reservoir has a campground on its shore.',
+      'Gray Rock Quarry, Shady Pines Trailer Park, Hartley Farm and Bluegrass Farms (furrowed fields round a farmyard), homestead lots along the county roads, and on the bigger maps a truck stop at the interstate, Fort Hale army base, Rock Creek Correctional prison and Hawk Field airfield, all fenced and reached by their own roads.',
+      'The normal map is unchanged.',
+    ],
+    commits: ['8d396ac'], shots: ['v012000_1', 'v012000_2', 'v012000_3'],
+  },
+  {
     v: '000.011.000.104', date: '2026-10-16', title: 'Bigger worlds (experimental) and better culling',
     notes: [
       'A new Experimental tab in Settings with a World size option for new games: Normal (400 x 400), Large (2.5x), Huge (4x) or Massive (5x). Games already started keep their size.',
