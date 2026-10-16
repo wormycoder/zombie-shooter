@@ -13,6 +13,17 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.013.000.108', date: '2026-10-16', title: 'The countryside built',
+    notes: [
+      'The outskirts of the bigger worlds (Settings > Experimental) are built: homesteads line the county roads, Route 9 and Main Street beyond the old county - a house on its own lot, now and then a trailer, each with a gravel drive, a mailbox and often a car or pickup.',
+      'Hartley Farm and Bluegrass Farms have a farmhouse and a big barn full of hay and tools on a gravel farmyard; Shady Pines Trailer Park has six trailers along a gravel lane off Route 9.',
+      'The interstate truck stop has a gas station with pumps and the Big Rig Diner; the quarry has an office; the Wildwood campground has a ranger station, fire rings, benches and an outhouse.',
+      'Where Main Street meets County Rd 22 there is now a gas station and Bethel Baptist Church with its graveyard.',
+      'Every home gets a lived-in yard like the ones in the county, and the buildings are furnished, lootable and have a few zombies inside. The towns, Fort Hale, the prison and the airfield are still slabs for now.',
+    ],
+    commits: ['0d3c5fa'], shots: ['v013000_1', 'v013000_2', 'v013000_3', 'v013000_4'],
+  },
+  {
     v: '000.012.000.106', date: '2026-10-16', title: 'The bigger county laid out',
     notes: [
       'The new land of the Large, Huge and Massive worlds (Settings > Experimental) is now laid out for building: every place has its spot, its roads and its name, ready to be filled in.',
