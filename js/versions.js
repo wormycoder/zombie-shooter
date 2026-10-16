@@ -13,6 +13,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.015.000.113', date: '2026-10-16', title: 'The towns built and spread out',
+    notes: [
+      'Towns are less packed: the blocks thin out from the middle of town to its edge, with wider lots and side yards, single rows of houses with long back yards, and lots left empty (a lawn, an overgrown lot, a stand of trees, a neighbourhood vegetable garden with a shed, a gravel lot with a wreck). The shops in the middle stay close together.',
+      'The bigger worlds (Settings > Experimental): Fairfield, Riverton and Kingsbury are built on a roomier street grid: shops round the main crossing with car parks behind, the police station, clinic and fire station on the main street, schools, churches, parks and gas stations, and in Kingsbury the county courthouse, a motel and a freight yard; houses on spread-out lots, stop signs, street signs, poles, hydrants and townsfolk among the dead.',
+      'Fort Hale is built: six barracks of bunks and lockers, the HQ, a locked armory of weapon crates, the mess hall, a motor pool of army trucks, a parade ground and a helipad, behind a guarded gate; the dead wear uniforms.',
+      'Rock Creek Correctional is built: two cell blocks behind locked doors, the mess hall and administration, an exercise yard and four guard towers inside a double fence; the dead here are prisoners in orange and their guards.',
+      'Hawk Field has two hangars full of tools and parts, a terminal and a control tower.',
+      'The world map ranks its labels: zoomed out only the towns are named, then places and roads, and close in the buildings; labels that would overlap are left out.',
+    ],
+    commits: ['6cd3839'], shots: ['v015000_1', 'v015000_2', 'v015000_3', 'v015000_4', 'v015000_5'],
+  },
+  {
     v: '000.014.000.111', date: '2026-10-16', title: 'Gore and a lot more animation',
     notes: [
       'Gore overhaul, with two new options (Settings > Display): Gore (Off, Low, Normal, Extreme) and Dismemberment (Off, On).',
