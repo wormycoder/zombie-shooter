@@ -13,6 +13,21 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.014.000.111', date: '2026-10-16', title: 'Gore and a lot more animation',
+    notes: [
+      'Gore overhaul, with two new options (Settings > Display): Gore (Off, Low, Normal, Extreme) and Dismemberment (Off, On).',
+      'Each kind of blow bleeds its own way: blunt hits splatter, blades spurt and leave streaks, stabs drip, gunshots spray out the far side, stomps burst on the ground. The blood flies as drops that land and stain.',
+      'Pools spread under the bodies and dry over the hours into dark stains; splashes and trails darken and fade over the days.',
+      'Wounds show on the bodies where they were hit. Stomps, heavy blows and close shotgun blasts can crush a head; axes and blades can take off a head, an arm, a forearm, a leg or a shin, left lying on the ground. A zombie that loses a leg crawls after you; one missing a limb leaves a blood trail. Weapons get bloody, and so do the clothes of whoever swings them.',
+      'Animation overhaul: eating brings the food to the mouth and chews; drinking tips a bottle, can or carton back; pills are shaken into the palm and swallowed; cigarettes are smoked with the smoke breathed out; books are held open and read; bandaging winds round the part that is hurt (kneeling for the legs); reloading takes a pistol\'s magazine out and racks the slide, or feeds a shotgun or rifle a round at a time.',
+      'More work animations: chopping trees with a full axe swing (wood chips fly in time with the chops), digging with a shovel (a foot on the blade, the dirt tossed aside), fishing with a cast and a line, sawing, hammering nails, sledgehammer swings, pouring fuel or watering, foraging and gardening on one knee, searching high shelves and low crates, lifting bodies and furniture, dressing (a top over the head, stepping into trousers, a hat set on).',
+      'Fixed: the generic work animation no longer stands with clasped hands, hammering is no longer done at the hip, climbing over fences and through windows is a proper vault, sheet ropes are climbed hand over hand, and zombies pounding on doors raise their fists high and hammer down.',
+      'Standing still for a while, your survivor looks around, stretches, checks their watch, scratches their head, rolls their neck or rubs their hands. They flinch when hurt and struggle when grabbed.',
+      'The dead now feed: here and there a body lies in the street with zombies kneeling over it, tearing and biting, noticing far less while they eat. Idle zombies find bodies nearby, and if you die, the ones around you fall on your body.',
+    ],
+    commits: ['c57e06f', 'ce426e0'], shots: ['v014000_1', 'v014000_2', 'v014000_3', 'v014000_4'],
+  },
+  {
     v: '000.013.000.108', date: '2026-10-16', title: 'The countryside built',
     notes: [
       'The outskirts of the bigger worlds (Settings > Experimental) are built: homesteads line the county roads, Route 9 and Main Street beyond the old county - a house on its own lot, now and then a trailer, each with a gravel drive, a mailbox and often a car or pickup.',
