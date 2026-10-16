@@ -44,10 +44,12 @@ const MapGen = {
     this.town2();
     this.outskirts();
     this.outskirts2();
+    // a bigger world's new land: slabs where towns and sites will stand, the countryside round them built
+    if (S > 400) { this.bigSites(); this.bigOutskirts(); }
     // detail passes (street furniture, yards) - defined in street.js / yard.js
     if (this.streetPass) this.streetPass();
     if (this.yardPass) this.yardPass();
-    if (S > 400) { this.bigSites(); this.bigTracks(); }
+    if (S > 400) this.bigTracks();
     this.forest();
     this.finalize();
     // keep saves compact
@@ -1422,8 +1424,8 @@ const MapGen = {
     site('reservoir', 'Wildwood Reservoir', rx - Math.round(rr * 1.6), 190 - rr - 6, rx + Math.round(rr * 1.6), 190 + rr + 16);
     site('quarry', 'Gray Rock Quarry', 410, 290, 410 + Math.round(D * 0.15), 340);
     site('trailers', 'Shady Pines Trailer Park', ex + 70, 112, ex + 100, 140);
-    site('farm', 'Hartley Farm', 8, 412, 124, sy - 10, { yard: [96, 414] });
-    site('farm', 'Bluegrass Farms', 240, sy + 10, Math.min(440, ex - 100), Math.min(S - 12, sy + 110), { yard: [276, sy + 12] });
+    site('farm', 'Hartley Farm', 8, 412, 124, sy - 10, { yard: [96, 414], road: 'E' });
+    site('farm', 'Bluegrass Farms', 240, sy + 10, Math.min(440, ex - 100), Math.min(S - 12, sy + 110), { yard: [276, sy + 12], road: 'N' });
     if (big) {
       site('truckstop', 'Interstate Truck Stop', ix - 44, 112, ix - 8, 140);
       const b = site('base', 'Fort Hale', ex + 50, 290, ix - 14, 375);
@@ -1495,7 +1497,8 @@ const MapGen = {
       { x: Math.round((400 + ex) / 2) - 10, y: 107, text: 'Route 9' }, { x: Math.round((ex + S) / 2), y: 48, text: 'Wildwood State Forest' },
       { x: Math.round(S * 0.12), y: Math.round((sy + S) / 2) + 20, text: 'Bear Run Woods' });
   },
-  // the planned sites, laid out after the county is built (slabs, fields, fences); no buildings yet
+  // the planned sites, laid out after the county is built: town slabs, fields, fences, the quarry pit, the campground
+  // clearing (bigOutskirts builds the countryside's buildings on top)
   bigSites() {
     const P = this.big, r = this.rng, W = this.W, F = this.w.floor, S = this.GW;
     const hard = (x, y) => { const f = F[y * W + x]; return f === FL.ASPHALT || f === FL.SIDEWALK || f === FL.WATER || f === FL.DEEPWATER || f === FL.SAND; };
@@ -1533,21 +1536,11 @@ const MapGen = {
       } else if (q.kind === 'quarry') {
         pad(x0, y0, x1, y1, FL.GRAVEL);
         pad(x0 + 6, y0 + 6, x1 - 6, y1 - 6, FL.DIRT); pad(x0 + 12, y0 + 12, x1 - 12, y1 - 12, FL.SAND);
-        pad(x1 - 8, y0 + 1, x1 - 2, y0 + 5, FL.CONCRETE);
-        this.dirtPath([[P.ex - 1, cy], [x1 + 1, cy]], 3);
-        label(q);
-      } else if (q.kind === 'trailers') {
-        pad(x0, y0, x1, y1, FL.GRASS2);
-        for (let y = y0 + 1; y + 8 <= y1; y += 9) { pad(x0, y + 3, x1, y + 4, FL.GRAVEL); for (let x = x0 + 1; x + 2 <= x1; x += 5) { pad(x, y - 1, x + 2, y + 2, FL.CONCRETE); pad(x, y + 5, x + 2, y + 8, FL.CONCRETE); } }
-        label(q);
-      } else if (q.kind === 'truckstop') {
-        pad(x0, y0, x1, y1, FL.PARKING);
-        pad(x0 + 2, y1 - 9, x0 + 14, y1 - 2, FL.CONCRETE); pad(x0 + 20, y0 + 6, x1 - 4, y0 + 13, FL.CONCRETE);
+        this.dirtPath([[P.ex - 1, cy], [x1 - 10, cy]], 3);
         label(q);
       } else if (q.kind === 'farm') {
-        // farmyard: house and barn slabs on a gravel yard; fields round it with dirt tracks between
+        // fields round the farmyard (bigOutskirts), dirt tracks between them
         const [fx, fy] = q.yard;
-        pad(fx, fy, fx + 26, fy + 18, FL.GRAVEL); pad(fx + 2, fy + 2, fx + 9, fy + 8, FL.CONCRETE); pad(fx + 13, fy + 3, fx + 24, fy + 14, FL.CONCRETE);
         for (let by = y0; by + 14 <= y1; by += 32) for (let bx = x0; bx + 14 <= x1; bx += 40) {
           const fx1 = Math.min(bx + 35, x1), fy1 = Math.min(by + 27, y1);
           if (fx1 >= fx - 2 && bx <= fx + 28 && fy1 >= fy - 2 && by <= fy + 20) continue;
@@ -1557,7 +1550,6 @@ const MapGen = {
             this.sf(x, y, (x - bx) % 3 === 2 ? FL.DIRT : FL.FURROW, (x - bx) % 3 === 2 ? 1 : 0);
           }
         }
-        this.w.labels.push({ x: fx + 13, y: fy - 2, text: q.name });
       } else if (q.kind === 'base' || q.kind === 'prison') {
         const gx = (P.spurs.find(sp => sp.h === (q.kind === 'prison')) || {}).p;
         pad(x0, y0, x1, y1, FL.GRAVEL);
@@ -1583,26 +1575,161 @@ const MapGen = {
       }
       this.mark(x0 - 1, y0 - 1, x1 + 1, y1 + 1, 1);
     }
-    // homesteads along the long roads outside the towns: a cleared lot, a house slab, a dirt drive
+  },
+  // The countryside of a bigger world, built: the farmyards, Shady Pines, the truck stop, the quarry office, the ranger
+  // station, a gas station and a church where Main St meets County Rd 22, and homesteads (houses, now and then a
+  // trailer) along the long roads, each fronting its road with a gravel drive. The yard pass dresses them afterwards;
+  // the towns, the base, the prison and the airfield are still slabs.
+  bigOutskirts() {
+    const P = this.big, r = this.rng, W = this.W, F = this.w.floor, S = this.GW;
+    const hard = (x, y) => { const f = F[y * W + x]; return f === FL.ASPHALT || f === FL.SIDEWALK || f === FL.WATER || f === FL.DEEPWATER || f === FL.SAND; };
+    const site = (k) => P.sites.find(q => q.kind === k);
+    // a gravel drive (wd wide) from x, y toward d, up to the first asphalt
+    const drive = (x, y, d, wd) => {
+      const [dx, dy] = DIRV[d];
+      for (let k = 0; k < 16; k++) {
+        const a = x + dx * k, b = y + dy * k;
+        if (!World.inb(a, b) || F[b * W + a] === FL.ASPHALT || World.room(a, b) >= 0) break;
+        for (let j = 0; j < (wd || 2); j++) {
+          const xx = a + (dy ? j : 0), yy = b + (dx ? j : 0);
+          if (World.inb(xx, yy) && World.room(xx, yy) < 0 && F[yy * W + xx] !== FL.ASPHALT) { this.sf(xx, yy, FL.GRAVEL, r.int(0, 3)); this.w.obj[yy * W + xx] = null; }
+        }
+      }
+    };
+    const car = (x, y, a, kind) => this.w.carSpots.push(kind ? { x, y, a, kind } : { x, y, a });
+    const label = (x, y, text) => this.w.labels.push({ x: Math.round(x), y: Math.round(y), text });
+    const barn = (x0, y0, x1, y1, d) => {
+      const b = this.newBuilding('barn', x0, y0, x1, y1, { wallType: WT.EXT, extCol: r.pick(['#8a2a20', '#7a3a2a', '#8a8478']), roofCol: '#5a4a40', front: d });
+      const rm = this.addRoom(b, 'barn', x0, y0, x1, y1, FL.DIRT, 0);
+      this.buildWalls(b);
+      const be = this.borderEdges(rm, (x, y) => World.room(x, y) < 0).filter(c => c.dir === d && !c.corner), m = be.length >> 1;
+      for (let k = m - 1; k <= m; k++) if (be[k]) this.setDoor(be[k], { style: 'garage', col: '#7a2a20', b: b.id });
+      this.exteriorDoor(rm, OPP[d], { b: b.id, ext: true });
+      for (let k = 0; k < 7; k++) this.place(rm, 'hay');
+      for (let k = 0; k < 3; k++) this.place(rm, 'crate');
+      this.place(rm, 'toolcab'); this.place(rm, 'toolcab');
+      return b;
+    };
+    // --- farmyards: farmhouse toward the road, barn behind, hay and a pickup on the gravel
+    for (const q of P.sites.filter(q => q.kind === 'farm')) {
+      const [fx, fy] = q.yard;
+      this.fill(fx, fy, fx + 26, fy + 18, FL.GRAVEL, 1); this.clearObj(fx, fy, fx + 26, fy + 18);
+      let h, bn;
+      if (q.road === 'E') { h = this.house(fx + 16, fy + 1, 10, 8, 'E', { noGarage: true, type: 'farmhouse' }); bn = barn(fx + 1, fy + 6, fx + 12, fy + 17, 'E'); drive(fx + 27, fy + 4, 'E', 3); }
+      else { h = this.house(fx + 1, fy + 1, 10, 8, 'N', { noGarage: true, type: 'farmhouse' }); bn = barn(fx + 14, fy + 6, fx + 25, fy + 17, 'W'); drive(fx + 4, fy - 1, 'N', 3); }
+      h.name = q.name; bn.name = q.name + ' Barn';
+      for (let k = 0; k < 5; k++) { const x = fx + r.int(1, 25), y = fy + r.int(1, 17); if (this.free(x, y) && !this.reservedOutside(x, y)) this.put(x, y, 'hay', 'S'); }
+      car(q.road === 'E' ? fx + 14.5 : fx + 6, q.road === 'E' ? fy + 13 : fy + 13.5, q.road === 'E' ? 0 : Math.PI / 2, 'pickup');
+      label(fx + 13, fy - 2, q.name);
+    }
+    // --- Shady Pines: two rows of trailers either side of a gravel lane off Route 9
+    const tp = site('trailers');
+    if (tp) {
+      const { x0, y1 } = tp, y0 = tp.y0, lx = x0 + 13;
+      for (let y = 109; y <= y1; y++) for (let x = lx; x <= lx + 2; x++) this.sf(x, y, FL.GRAVEL, r.int(0, 3));
+      for (const ty of [y0 + 2, y0 + 11, y0 + 20]) {
+        if (ty + 7 > y1) continue;
+        this.trailer(x0 + 8, ty, 'E'); this.trailer(lx + 5, ty, 'W');
+        this.fill(x0 + 3, ty + 1, x0 + 6, ty + 6, FL.GRAVEL, 2); this.fill(lx + 10, ty + 1, lx + 13, ty + 6, FL.GRAVEL, 2);
+        if (r.chance(0.6)) car(x0 + 5, ty + 3.5, Math.PI / 2, r.pick(['pickup', 'sedan', 'wagon']));
+        if (r.chance(0.6)) car(lx + 12, ty + 3.5, -Math.PI / 2, r.pick(['pickup', 'sedan', 'hatchback']));
+      }
+      label((tp.x0 + tp.x1) / 2, y0 - 1, tp.name);
+    }
+    // --- truck stop: fuel and a diner on one big lot by the interstate, trucks parked at the back
+    const ts = site('truckstop');
+    if (ts) {
+      const { x0, y0, x1, y1 } = ts;
+      this.fill(x0, 109, x1, y1, FL.PARKING, 0); this.clearObj(x0, 109, x1, y1);
+      this.store('gasstation', x0 + 2, y0 + 9, 12, 7, 'N', 'Interstate Fuel');
+      for (const x of [x0 + 3, x0 + 7, x0 + 11]) this.put(x, y0 + 4, 'pump', 'S');
+      this.store('diner', x0 + 18, y0 + 7, 15, 9, 'N', 'Big Rig Diner');
+      for (const [x, y] of [[x0 + 1, y0 + 2], [x0 + 16, y0 + 2], [x1 - 1, y0 + 2], [x0 + 16, y1 - 2]]) this.put(x, y, 'lamppost', 'S');
+      this.put(x0 + 15, y0 + 10, 'trash', 'S');
+      for (let k = 0; k < 4; k++) if (r.chance(0.75)) car(x0 + 20.5 + k * 4, y1 - 3.5, Math.PI / 2, r.pick(['van', 'van', 'pickup', 'suv']));
+      car(x0 + 7, y0 + 6.5, 0, 'sedan');
+    }
+    // --- quarry office by the haul road
+    const qy = site('quarry');
+    if (qy) {
+      const cy = (qy.y0 + qy.y1) >> 1;
+      this.store('office', qy.x1 - 12, cy - 9, 10, 6, 'S', 'Quarry Office');
+      car(qy.x1 - 15, cy + 1.5, 0, 'pickup'); car(qy.x1 - 24, cy - 5, Math.PI / 2, 'van');
+    }
+    // --- campground: a ranger station by the road in, fire rings and benches round the clearing
+    const rs = site('reservoir');
+    if (rs) {
+      const cx = (rs.x0 + rs.x1) >> 1, gy = P.res.cy + P.res.r + 9;
+      const rb = this.cabin(cx - 20, gy + 3, 7, 6, 'N');
+      rb.name = 'Ranger Station';
+      for (const [x, y] of [[cx - 6, gy - 1], [cx + 5, gy - 2], [cx - 1, gy + 3], [cx + 7, gy + 2]]) {
+        if (!this.free(x, y)) continue;
+        this.put(x, y, 'campfire', 'S', { lit: false, fuel: 0 });
+        if (this.free(x + 1, y + 1)) this.put(x + 1, y + 1, 'bench', 'W');
+      }
+      if (this.free(cx - 13, gy + 5)) this.put(cx - 13, gy + 5, 'yd_outhouse', 'N');
+      car(cx - 11, gy + 1, 0, 'pickup');
+      label(cx - 17, gy + 11, 'Ranger Station');
+    }
+    // --- where Main St meets County Rd 22: a gas station on one corner, a country church with its graveyard on another
+    {
+      const gx0 = 142, gy1 = P.sy - 4;
+      this.fill(gx0, gy1 - 13, gx0 + 24, gy1, FL.CONCRETE, 1); this.clearObj(gx0, gy1 - 13, gx0 + 24, gy1 + 3);
+      this.fill(gx0 + 2, gy1 + 1, gx0 + 22, P.sy - 1, FL.CONCRETE, 1);
+      this.store('gasstation', gx0 + 6, gy1 - 13, 12, 7, 'S', 'Crossroads Gas');
+      for (const x of [gx0 + 7, gx0 + 11, gx0 + 15, gx0 + 19]) this.put(x, gy1 - 3, 'pump', 'S');
+      this.put(gx0 + 2, gy1 - 1, 'lamppost', 'S'); this.put(gx0 + 23, gy1 - 12, 'trash', 'S');
+      if (r.chance(0.7)) car(gx0 + 9.5, gy1 - 2.4, 0, null);
+      P.boxes.push({ kind: 'gas', x0: gx0, y0: gy1 - 13, x1: gx0 + 24, y1: gy1 });
+      const cx0 = 112, cy0 = P.sy + 7;
+      this.clearObj(cx0, cy0, cx0 + 22, cy0 + 20);
+      this.church(cx0, cy0, cx0 + 22, cy0 + 20, 'Bethel Baptist Church');
+      drive(cx0 + 5, cy0, 'N', 2);
+      this.mark(cx0 - 1, cy0 - 1, cx0 + 23, cy0 + 21, 1);
+      P.boxes.push({ kind: 'church', x0: cx0, y0: cy0, x1: cx0 + 22, y1: cy0 + 20 });
+    }
+    // --- homesteads along the long roads outside the towns
     const free = (x0, y0, x1, y1) => {
       if (x0 < 2 || y0 < 2 || x1 >= S - 2 || y1 >= S - 2 || (x0 < 406 && y0 < 406)) return false;
       if (P.boxes.some(q => x1 >= q.x0 - 6 && x0 <= q.x1 + 6 && y1 >= q.y0 - 6 && y0 <= q.y1 + 6)) return false;
-      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hard(x, y) || F[y * W + x] === FL.DIRT) return false;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hard(x, y) || F[y * W + x] === FL.DIRT || this.w.room[y * W + x] >= 0) return false;
       return true;
     };
-    const roadsH = [[P.sy, 0, S - 1], [105, 404, S - 1]], roadsV = [[P.ex, 0, S - 1], [135, 404, S - 1]];
-    for (const [h, list] of [[true, roadsH], [false, roadsV]]) for (const [p, a, b] of list) for (let t = a + 20; t < b - 20; t += r.int(36, 60)) {
-      if (!r.chance(0.65)) continue;
-      const side = r.chance(0.5) ? -1 : 1;
-      const lx0 = h ? t : (side < 0 ? p - 16 : p + 7), ly0 = h ? (side < 0 ? p - 15 : p + 7) : t;
-      const lx1 = lx0 + (h ? 11 : 9), ly1 = ly0 + (h ? 8 : 11);
-      if (!free(lx0, ly0, lx1, ly1)) continue;
-      pad(lx0, ly0, lx1, ly1, FL.GRASS2); pad(lx0 + 2, ly0 + 2, lx0 + 8, ly0 + 7, FL.CONCRETE);
-      if (h) this.dirtPath(side < 0 ? [[lx0 + 9, ly1], [lx0 + 9, p - 1]] : [[lx0 + 9, p + 4], [lx0 + 9, ly0]], 2);
-      else this.dirtPath(side < 0 ? [[lx1, ly0 + 9], [p - 1, ly0 + 9]] : [[p + 4, ly0 + 9], [lx0, ly0 + 9]], 2);
-      this.mark(lx0 - 1, ly0 - 1, lx1 + 1, ly1 + 1, 1);
-      P.boxes.push({ kind: 'lot', x0: lx0, y0: ly0, x1: lx1, y1: ly1 });
+    const roads = [[true, P.sy, 0, S - 1], [true, 105, 404, S - 1], [false, P.ex, 0, S - 1], [false, 135, 404, S - 1]];
+    let homes = 0;
+    for (const [h, p, a, b] of roads) for (let t = a + 20; t < b - 36; t += r.int(30, 52)) {
+      if (!r.chance(0.72)) continue;
+      const side = r.chance(0.5) ? -1 : 1, LW = 16, LD = 15;
+      const lx = h ? t : (side < 0 ? p - 2 - LD : p + 6), ly = h ? (side < 0 ? p - 2 - LD : p + 6) : t;
+      const lw = h ? LW : LD, lh = h ? LD : LW;
+      if (!free(lx, ly, lx + lw - 1, ly + lh - 1)) continue;
+      // the house fronts the road (f: the side the road is on)
+      const f = h ? (side < 0 ? 'S' : 'N') : (side < 0 ? 'E' : 'W');
+      this.clearObj(lx, ly, lx + lw - 1, ly + lh - 1);
+      let bd, door = null;
+      if (r.chance(0.2)) {
+        const horiz = f === 'N' || f === 'S';
+        const hx = horiz ? lx + 4 : (f === 'E' ? lx + lw - 8 : lx + 4), hy = horiz ? (f === 'S' ? ly + lh - 8 : ly + 4) : ly + 4;
+        bd = this.trailer(hx, hy, f);
+        bd.lot = { x0: lx, y0: ly, x1: lx + lw - 1, y1: ly + lh - 1 };
+        this.mark(lx, ly, lx + lw - 1, ly + lh - 1, 1);
+      } else {
+        bd = this.residentialLot(lx, ly, lw, lh, f, { fenceChance: 0.12 });
+        if (this.w.spawnHouses[this.w.spawnHouses.length - 1] === bd.id) this.w.spawnHouses.pop();
+        door = (bd.garage && bd.garage.door) || bd.frontDoor;
+      }
+      // gravel drive from the lot's front edge to the road, in line with the garage (or the door)
+      const along = door ? (f === 'N' || f === 'S' ? door.nx : door.ny) : (f === 'N' || f === 'S' ? lx + 2 : ly + 2);
+      const sx = f === 'N' || f === 'S' ? along : (f === 'E' ? lx + lw : lx - 1), sy = f === 'N' || f === 'S' ? (f === 'S' ? ly + lh : ly - 1) : along;
+      drive(sx, sy, f, 2);
+      if (!(bd.garage && bd.garage.door) && r.chance(0.45)) {
+        const [dx, dy] = DIRV[f];
+        car(sx + 1 - dx * 1.5 + (dy ? 0 : 0), sy + 1 - dy * 1.5, Math.atan2(dy, dx), r.pick(['pickup', 'pickup', 'sedan', 'wagon', 'suv']));
+      }
+      P.boxes.push({ kind: 'lot', x0: lx, y0: ly, x1: lx + lw - 1, y1: ly + lh - 1 });
+      homes++;
     }
+    P.homes = homes;
   },
   // dirt logging tracks into the new land's woods: off a long road, straight in, maybe a bend, ending in a turning loop
   bigTracks() {
