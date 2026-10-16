@@ -138,8 +138,8 @@ const Humanoid = {
         d: Math.max(hh[2], b[2]) + 0.01, fn: () => {
           if (W.stock) seg(ctx, a, hh, sh(W.stock), 3.6);
           else if (W.grip) seg(ctx, a, hh, sh(W.grip), 2.6);
-          else seg(ctx, a, hh, sh(W.col), W.w0);
-          taper(ctx, hh, b, sh(W.col), W.w0, W.w1);
+          else seg(ctx, a, hh, sh(pose.propCol || W.col), W.w0);
+          taper(ctx, hh, b, sh(pose.propCol || W.col), W.w0, W.w1);
           if (W.head) this.weaponHead(ctx, W.head, hR, wd, tip, pr, sh);
           if (pose.flash) { ctx.fillStyle = 'rgba(255,220,120,0.9)'; ctx.beginPath(); ctx.arc(b[0], b[1], 5 + Math.random() * 3, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(255,255,220,1)'; ctx.beginPath(); ctx.arc(b[0], b[1], 2.5, 0, 7); ctx.fill(); }
         }
@@ -159,6 +159,9 @@ const Humanoid = {
     for (const e of els) e.fn();
     if (alpha !== undefined && alpha < 1) ctx.globalAlpha = 1;
   },
+  // the action animations (actanim.js) as the nearest of the painter's arm states
+  ALIAS: { drink: 'eat', pills: 'eat', smoke: 'eat', chop: 'hammer', smash: 'hammer', dig: 'hammer', saw: 'hammer', loot: 'work', craft: 'work', read: 'work',
+    bandage: 'work', reload: 'work', pour: 'work', fish: 'work', forage: 'work', garden: 'work', pickup: 'work', dress: 'work' },
   armPose(pose, shL, shR, chest, ph, amp, t) {
     const arms = [];
     const mk = (side, S, Hd, bendOut) => {
@@ -171,7 +174,7 @@ const Humanoid = {
     };
     // the 3D animator's finer arm states, as the nearest of these
     const m0 = pose.arms || 'idle';
-    const mode = m0 === 'fire' ? 'aim' : m0 === 'ready' ? 'swing' : m0 === 'thump' ? 'zombie' : m0;
+    const mode = m0 === 'fire' ? 'aim' : m0 === 'ready' ? 'swing' : m0 === 'thump' ? 'zombie' : this.ALIAS[m0] || m0;
     if (mode === 'zombie') {
       for (const side of [-1, 1]) {
         const S = side < 0 ? shL : shR;

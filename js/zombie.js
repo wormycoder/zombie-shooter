@@ -51,7 +51,7 @@ const Zombie = {
     return out;
   },
   computeLook(z) {
-    const L = { skin: z.skin, hair: z.hairCol, hairStyle: z.hair, zombie: true, blood: z.blood, female: z.female };
+    const L = { skin: z.skin, hair: z.hairCol, hairStyle: z.hair, zombie: !z.victim, blood: z.blood, female: z.female };
     const get = (s) => z.wear.find(it => it.worn === s);
     const shirt = get('shirt'), jacket = get('jacket'), pants = get('pants'), shoes = get('shoes'), hat = get('hat'), back = get('back'), vest = get('vest');
     const dirty = (c) => Col.mix(c, '#3a2a20', 0.3);
@@ -66,6 +66,52 @@ const Zombie = {
     L.vest = vest ? vest.col : null;
     L.gore = z.gore;
     return L;
+  },
+  // ------------------------------------------------------------------ feeding
+  // a body that was never one of them: torn open where it fell, a while ago (minutes)
+  victim(x, y, ago) {
+    const z = this.create(x, y);
+    z.victim = true; z.skin = R.pick(SKIN_TONES); z.blood = 1;
+    z.dead = true; z.st = 'dead'; z.hp = 0; z.lie = 1; z.lieDir = R.chance(0.75) ? 1 : -1;
+    z.diedAt = G.time - (ago === undefined ? R.f(30, 900) : ago); z.fallAt = undefined;
+    z.loot = z.wear.concat(Loot.zombiePockets());
+    for (const it of z.loot) { if (it.worn && ITEMS[it.id].cat === 'Clothing') delete it.worn; }
+    const g = Gore.st(z);
+    for (let k = R.int(2, 5); k > 0; k--) g.w.push([R.chance(0.6) ? 'chest' : 'belly', Math.round(R.f(0.2, 0.9) * 100) / 100, Math.round(R.f(-1.2, 1.2) * 100) / 100, Math.round(R.f(0.03, 0.06) * 1000) / 1000, 0]);
+    if (Settings.v.dismember && R.chance(0.35)) g.m |= R.pick([GM.FARM_L, GM.FARM_R, GM.ARM_L, GM.SHIN_L, GM.SHIN_R]);
+    g.n++;
+    z.look = this.computeLook(z);
+    return z;
+  },
+  // kneel by the body at (bx, by) and eat (for t seconds; 1e9: until something better comes along)
+  feedOn(z, bx, by, t) {
+    z.st = 'feed'; z.fx = bx; z.fy = by; z.feedT = t === undefined ? R.f(25, 70) : t; z.feeding = false; z.path = null;
+  },
+  feedUpdate(z, dt, dPlayer) {
+    const dx = z.fx - z.x, dy = z.fy - z.y, d = Math.sqrt(dx * dx + dy * dy);
+    z.feedT -= dt;
+    if (z.feedT <= 0) { z.st = 'idle'; z.feeding = false; z.idleT = R.f(15, 45); return; }
+    if (d > 0.9) {
+      z.feeding = false; z.tx = z.fx; z.ty = z.fy;
+      this.moveToward(z, dt, z.speed * 0.8, dPlayer);
+      if (z.st !== 'feed') z.feeding = false;
+      return;
+    }
+    if (d < 0.45) { World.move(z, -dx / (d || 1) * dt * 0.6, -dy / (d || 1) * dt * 0.6, z.r); }
+    z.feeding = true;
+    z.amp = Math.max(0, z.amp - dt * 3);
+    z.a = U.normAng(z.a + U.clamp(U.angDiff(z.a, Math.atan2(dy, dx)), -dt * 3, dt * 3));
+    // wet tearing: a little blood thrown up now and then (close by only)
+    if (dPlayer < 22 && Gore.lv() > 0 && R.chance(dt * 0.5)) Gore.burst(z.fx, z.fy, 0.25, 3, z.a + Math.PI, 0.9, 0.3, 1.1, 0.6, 1.6);
+    if (dPlayer < 14 && R.chance(dt * 0.12)) Sfx.play('zhit', z.x, z.y);
+  },
+  // an idle zombie looks for a body to eat nearby: the player's, or a victim's
+  findMeal(z) {
+    const p = G.player;
+    if (p.dead && !p.inCar && World.lvDist(z.x, z.y, p.x, p.y) < 12) { this.feedOn(z, p.x, p.y, 1e9); return true; }
+    if (!R.chance(0.5)) return false;
+    for (const c of this.near(z.x, z.y, 8)) if (c.dead && c.victim && this.rot(c) < 0.6 && World.lineClear(z.x, z.y, c.x, c.y, 'move')) { this.feedOn(z, c.x, c.y); return true; }
+    return false;
   },
   // ------------------------------------------------------------------ spawning
   spawnAll(avoidX, avoidY) {
@@ -233,6 +279,8 @@ const Zombie = {
     if (Player.hasTrait('conspicuous')) r *= 1.3;
     if (G.weather.fog > 0) r *= 1 - G.weather.fog * 0.5;
     if (G.weather.rain > 0.5) r *= 0.85;
+    // busy eating, they notice little
+    if (z.st === 'feed' && z.feeding) r *= 0.45;
     return r;
   },
   update(z, dt, px, py, d) {
@@ -240,7 +288,8 @@ const Zombie = {
     z.ph += 0; // keep
     if (z.cd > 0) z.cd -= dt;
     // visual fade
-    const vis = !p.dead && World.isVis(Math.floor(z.x), Math.floor(z.y)) && (Render.lightAt(z.x, z.y) > 0.13 || d < 2.6 || Render.shadeAt(z.x, z.y) > 0.2);
+    // (after death the camera stays on the body: those close by are seen gathering and feeding)
+    const vis = p.dead ? d < 9 : World.isVis(Math.floor(z.x), Math.floor(z.y)) && (Render.lightAt(z.x, z.y) > 0.13 || d < 2.6 || Render.shadeAt(z.x, z.y) > 0.2);
     z.va = U.clamp(z.va + (vis ? dt * 5 : -dt * 3), 0, 1);
     // fake-dead: lies still until the player is close
     if (z.fake) {
@@ -290,6 +339,7 @@ const Zombie = {
       return;
     }
     if (z.st === 'thump') { this.thumpUpdate(z, dt); return; }
+    if (z.st === 'feed') { this.feedUpdate(z, dt, d); return; }
     // movement
     let speed = 0;
     if (z.st === 'chase') {
@@ -304,6 +354,7 @@ const Zombie = {
       z.amp = Math.max(0, z.amp - dt * 2);
       if (z.idleT <= 0) {
         z.idleT = R.f(4, 14);
+        if (this.findMeal(z)) return;
         if (R.chance(0.45)) {
           const tx = z.x + R.f(-5, 5), ty = z.y + R.f(-5, 5);
           if (World.inb(tx | 0, ty | 0) && World.pathClear(z.x, z.y, tx, ty, z.r)) { z.st = 'wander'; z.tx = tx; z.ty = ty; }
@@ -315,7 +366,11 @@ const Zombie = {
     this.moveToward(z, dt, speed, d);
   },
   perceive(z, p, px, py, d) {
-    if (p.dead || Debug.invisible) { if (z.st === 'chase' || z.st === 'attack') { z.st = 'investigate'; } z.canSee = false; return; }
+    if (p.dead || Debug.invisible) {
+      if (p.dead && (z.st === 'chase' || z.st === 'attack' || z.st === 'investigate') && !p.inCar && d < 9) this.feedOn(z, p.x, p.y, 1e9);
+      else if (z.st === 'chase' || z.st === 'attack') { z.st = 'investigate'; }
+      z.canSee = false; return;
+    }
     const target = p.inCar || p;
     let see = false;
     const sr = p.inCar ? 22 : this.sightRange(z, p);
@@ -556,6 +611,7 @@ const Zombie = {
     }
     if (z.st === 'attack') { pose.mode = 'attack'; pose.prog = 0.82 * U.clamp(1 - Math.max(0, z.atkT) / (z.atk0 || 0.7), 0, 1); pose.reach = 1; pose.lean = 0.3; }
     else if (z.biteT > 0 && !z.crawl && z.st !== 'down') { pose.mode = 'attack'; pose.prog = 1 - z.biteT / 0.4 * 0.18; }
+    if (z.st === 'feed' && z.feeding) { pose.mode = 'feed'; pose.crouch = 0.75; pose.amp = 0; }
     if (z.st === 'thump') { pose.arms = 'thump'; pose.reach = 1; pose.lean = 0.3; pose.prog = U.clamp(1 - z.thumpT / (z.thump0 || 1), 0, 1); }
     if (z.stag > 0) { pose.mode = 'stagger'; pose.prog = U.clamp(1 - z.stag / (z.stag0 || 0.6), 0, 1); pose.stagA = z.stagA || Math.PI; }
     if (z.st === 'climb') { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = U.clamp(z.climbT / z.climbDur, 0, 1); pose.crouch = Math.sin(pose.prog * Math.PI) * 0.5; }

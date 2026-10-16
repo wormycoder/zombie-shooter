@@ -190,6 +190,24 @@ const Game = {
       z.st = 'down'; z.lie = 1; z.downT = 1e9; z.fake = true; z.lieDir = 1; z.blood = 1; z.look.blood = 1;
       G.zombies.push(z);
     }
+    // the dead feeding: a fresh body in the street with one to three of them kneeling over it
+    const feasts = Math.round(10 * Math.sqrt((w.gw || 400) / 400));
+    for (let k = 0; k < feasts; k++) {
+      const t = townTile(); if (!t || World.room(t[0], t[1]) >= 0) continue;
+      const v = Zombie.victim(t[0] + 0.5, t[1] + 0.5, R.f(20, 600));
+      G.zombies.push(v);
+      const d = Gore.dec('pool', v.x, v.y, R.f(0, 6.28), R.f(1.1, 1.5));
+      if (d) d.b = Math.round(v.diedAt);
+      const n = R.int(1, 3), a0 = R.f(0, Math.PI * 2);
+      for (let j = 0; j < n; j++) {
+        const a = a0 + j * (Math.PI * 2 / n) + R.f(-0.4, 0.4), x = v.x + Math.cos(a) * 0.8, y = v.y + Math.sin(a) * 0.8;
+        if (World.tileSolid(Math.floor(x), Math.floor(y))) continue;
+        const z = Zombie.create(x, y);
+        z.a = a + Math.PI; z.blood = 1; z.look.blood = 1;
+        Zombie.feedOn(z, v.x, v.y, 1e9); z.feeding = true;
+        G.zombies.push(z);
+      }
+    }
     // street debris
     const junk = ['Newspaper', 'EmptyBottle', 'Crisps', 'PlasticBag', 'Magazine', 'RippedSheets', 'Pop', 'Bandage', 'Battery', 'Bullets9mm'];
     for (let k = 0; k < 70; k++) { const t = townTile(); if (t && World.room(t[0], t[1]) < 0) World.dropItem(t[0] + 0.5, t[1] + 0.5, Items.make(R.pick(junk), { loot: true })); }

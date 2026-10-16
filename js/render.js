@@ -1186,6 +1186,7 @@ const Fx = {
   text(x, y, txt, col, dur) { this.floats.push({ x, y, z: 2.0, txt, col: col || '#fff', t: dur || 1.5, max: dur || 1.5 }); },
   update(dt) {
     if (typeof Gore !== 'undefined') Gore.update(dt);
+    if (typeof ActFx !== 'undefined' && G.player) ActFx.update(dt);
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const p = this.parts[i];
       p.life -= dt;

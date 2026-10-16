@@ -467,6 +467,11 @@ const Char3D = {
     const lk = P.look || 0;
     S.lk = fresh || !(dt > 0) ? lk : S.lk + (lk - S.lk) * Math.min(1, dt * 7);
     if (mode !== S.mode) { S.mode = mode; S.mt = 0; } else S.mt += dt;
+    // how long the character has stood idle (fidgets)
+    // (the head following the cursor around counts as doing something)
+    const lk0 = P.look || 0, stirred = Math.abs(lk0 - (S.stLk || 0)) > 0.05;
+    if (stirred) S.stLk = lk0;
+    S.still = mode === 'loco' && (!P.arms || P.arms === 'idle' || P.arms === 'hold') && S.amp < 0.05 && !stirred ? (S.still || 0) + dt : 0;
     // ---- locomotion trackers
     const gw = S.gw;
     if (fresh || P.walk !== undefined && S.preview) {
@@ -528,6 +533,7 @@ const Char3D = {
     if (to === 'stagger') return 0.08;
     if (to === 'fall' || to === 'dead') return lyingFrom ? 0.5 : 0.15;
     if (to === 'getup') return 0.3;
+    if (to === 'feed' || from === 'feed') return 0.6;
     if (to === 'crawl') return lyingFrom ? 0.4 : 0.25;
     if (from === 'attack' || from === 'stagger' || from === 'getup') return 0.35;
     if (from === 'sit' || from === 'kneel' || to === 'sit' || to === 'kneel') return 0.4;
@@ -549,11 +555,17 @@ const Char3D = {
   // the whole target pose for this frame
   base(T, S, D, ang, P, mode) {
     T.fill(0);
+    S.wroll = 0; S.line = 0;
     const zomb = D.zomb;
     if (mode === 'fall' || mode === 'dead' || mode === 'lie' || mode === 'sleep') this.lying(T, S, D, P, mode);
     else if (mode === 'getup') this.getup(T, S, D, P);
     else if (mode === 'crawl') this.crawl(T, S, D, P);
-    else if (mode === 'sit' || mode === 'kneel') this.seated(T, S, D, P, mode);
+    else if (mode === 'sit' || mode === 'kneel') {
+      this.seated(T, S, D, P, mode);
+      // kneeling or sitting at a task: its own arms
+      const a = P.arms, A = a && a !== 'work' && this.ACTS[a];
+      if (A) A.call(this, T, S, D, P, P.weapon ? WEAPON_MODELS[P.weapon] || WEAPON_MODELS.generic : null);
+    } else if (mode === 'feed') this.feed(T, S, D, P);
     else {
       this.loco(T, S, D, P);
       if (mode === 'climb') this.climb(T, S, D, P);
@@ -569,6 +581,7 @@ const Char3D = {
       T[C3.HW] += U.clamp(S.lk - T[C3.PW] - T[C3.SW], -0.95, 0.95) * k;
       if (P.lookP) T[C3.HP] += P.lookP;
     }
+    if (!zomb && (P.hurt || P.grab) && mode !== 'dead' && mode !== 'sleep') this.flinch(T, S, D, P);
   },
   // ---- body-frame helpers for authoring
   // pelvis frame for the channels in T (body frame at the origin)
@@ -791,27 +804,16 @@ const Char3D = {
     else if (arms === 'aim' || arms === 'fire') this.aim(T, S, D, P, long);
     else if (arms === 'shove') this.shove(T, S, D, P);
     else if (arms === 'stomp') this.stomp(T, S, D, P);
-    else if (arms === 'work' || arms === 'loot' || arms === 'craft') {
-      const o = Math.sin(t * 7) * 0.04;
-      this.arm(T, 1, 0.34 + o, -0.1, -0.36, 0.6); this.arm(T, -1, 0.34 - o, -0.1, -0.34, 0.6);
-      T[C3.HP] += 0.45; T[C3.SP] += 0.12; this.wdir(T, 0.6, 0, -0.8);
-    } else if (arms === 'eat') {
-      const k = 0.5 + 0.5 * Math.sin(t * 3);
-      this.arm(T, 1, 0.2 + k * 0.05, -0.15, -0.25 + k * 0.27, 1); this.arm(T, -1, 0.26, -0.08, -0.3, 0.8);
-      T[C3.HP] += 0.12 - k * 0.1; this.wdir(T, 0.3, -0.3, 0.9);
-    } else if (arms === 'hammer') {
-      const k = Math.abs(Math.sin(t * 6));
-      this.arm(T, 1, 0.34, -0.08, -0.32 + k * 0.18, 0.6); this.wdir(T, 0.75, -0.1, 0.65 - k * 1.3);
-      this.arm(T, -1, 0.4, -0.04, -0.4, 0.6); T[C3.HP] += 0.4; T[C3.SP] += 0.1;
-    } else if (arms === 'drive') { this.arm(T, 1, 0.4, -0.08, -0.28, 0.5); this.arm(T, -1, 0.4, -0.08, -0.28, 0.5); }
+    else if (arms === 'drive') { this.arm(T, 1, 0.4, -0.08, -0.28, 0.5); this.arm(T, -1, 0.4, -0.08, -0.28, 0.5); }
     else if (arms === 'squat') {
       const k = 0.5 + 0.5 * Math.sin(t * 4);
       T[C3.PZ] -= k * 0.42; T[C3.PX] -= k * 0.1; T[C3.PP] += k * 0.3; T[C3.SP] += k * 0.2;
       this.arm(T, 1, 0.48, -0.1, -0.08, 1); this.arm(T, -1, 0.48, -0.1, -0.08, 1);
       this.stance(T, D, 0, 0, 0.13);
-    }
+    } else if (this.ACTS[arms]) this.ACTS[arms].call(this, T, S, D, P, W);
     // a flashlight in the off hand points ahead
     if (P.offhand && (arms === 'idle' || arms === 'hold' || arms === 'work') && !T[C3.GR]) this.arm(T, -1, 0.32, -0.12, -0.24, 0.6);
+    if ((arms === 'idle' || arms === 'hold') && !D.zomb) this.fidget(T, S, D, P);
     if (arms === 'climb') this.climb(T, S, D, P);
   },
   // holding a weapon (also the start and end of every swing); sw is the arm swing while walking
@@ -1067,25 +1069,6 @@ const Char3D = {
     this.foot(T, Pf, -1, -0.07, -0.11, D.ankH, 0, 0.15);
     this.foot(T, Pf, 1, sd * o[0], 0.07, Math.max(D.ankH, o[1]), o[2], 0.05);
   },
-  // ---- climbing over a fence or through a window (prog 0..1)
-  climb(T, S, D, P) {
-    const p = U.clamp(P.prog === undefined ? (S.mt / 1.2) % 1 : P.prog, 0, 1), k = Math.sin(p * Math.PI);
-    T[C3.PZ] += k * 0.3; T[C3.SP] += k * 0.45; T[C3.PX] += -0.05 * k; T[C3.HP] += 0.2 * k;
-    this.arm(T, 1, 0.42, -0.04, -0.28 + k * 0.1, 0.8); this.arm(T, -1, 0.42, -0.04, -0.28 + k * 0.1, 0.8);
-    const Pf = this.pelvisOf(T, this.T1);
-    this.foot(T, Pf, 1, 0.25 * k + 0.05, 0.1, D.ankH + k * 0.45, -0.2 * k);
-    this.foot(T, Pf, -1, -0.05 - 0.15 * k, -0.1, D.ankH + k * 0.15, -0.5 * k);
-    T[C3.GR] = 0;
-  },
-  // ---- zombie banging on a door or window with its fists
-  thump(T, S, D, P) {
-    const t = S.t * 5;
-    for (const side of [-1, 1]) {
-      const k = Math.max(0, Math.sin(t + (side > 0 ? 0 : Math.PI)));
-      this.arm(T, side, 0.32 + k * 0.18, -0.02, 0.0 + k * 0.12 - (1 - k) * 0.1, 1);
-    }
-    T[C3.SP] += 0.12; T[C3.HP] -= 0.1;
-  },
   // ---- sitting on the ground and kneeling
   seated(T, S, D, P, mode) {
     const t = S.t;
@@ -1096,8 +1079,9 @@ const Char3D = {
       this.arm(T, -1, 0.34, -0.06, -0.3, 0.8); this.arm(T, 1, 0.34, -0.06, -0.3, 0.8);
     } else {
       T[C3.PX] = -0.06; T[C3.PZ] = 0.47; T[C3.PP] = 0.12; T[C3.SP] = 0.32; T[C3.HP] = 0.45;
-      const Pf = this.pelvisOf(T, this.T1);
-      this.foot(T, Pf, -1, 0.3, -0.12, D.ankH, 0, 0.1); this.foot(T, Pf, 1, -0.4, 0.13, 0.1, -1.1, 0.15);
+      // the forward foot (kneeSide: the right one forward, the left knee down)
+      const Pf = this.pelvisOf(T, this.T1), ks = P.kneeSide > 0 ? 1 : -1;
+      this.foot(T, Pf, ks, 0.3, ks * 0.12, D.ankH, 0, 0.1); this.foot(T, Pf, -ks, -0.4, -ks * 0.13, 0.1, -1.1, 0.15);
       const o = Math.sin(t * 6) * 0.04;
       this.arm(T, 1, 0.42 + o, -0.08, -0.5, 0.6); this.arm(T, -1, 0.4 - o, -0.06, -0.48, 0.6);
     }
@@ -1619,7 +1603,7 @@ const Char3D = {
         this.weapon('flashlight', hc, od, Cf, false, Pose.light, Pl);
       }
     }
-    if (Wm && handR) this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl);
+    if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = S.line && det > 0; this.propCol = Pose.propCol; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; }
     // ---- gear on the hotbar: a long weapon slung across the back, tools on the belt, a pistol in the holster
     if (look.att && det > 0) for (const [slot, model] of look.att) {
       const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
@@ -1767,7 +1751,7 @@ const Char3D = {
         wd = c3dir(c3WD, Cf, T[C3.WD] / wl, T[C3.WD + 1] / wl, T[C3.WD + 2] / wl);
       } else if (Pose.offhand && !T[C3.GR]) this.weapon('flashlight', hc, c3dir(c3c, Cf, 0.95, -0.05, -0.12), Cf, false, Pose.light, Pl);
     }
-    if (Wm && handR) this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl);
+    if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = false; this.propCol = Pose.propCol; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; }
     if (look.att) for (const [slot, model] of look.att) {
       const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
       if (slot === 'back') {
@@ -1849,7 +1833,13 @@ const Char3D = {
     let sx = -wd[1], sy = wd[0], sz = 0, sl = Math.sqrt(sx * sx + sy * sy);
     if (sl < 1e-3) { sx = Rf[6]; sy = Rf[7]; sz = Rf[8]; sl = 1; }
     sx /= sl; sy /= sl; sz /= sl;
-    const ux = wd[1] * sz - wd[2] * sy, uy = wd[2] * sx - wd[0] * sz, uz = wd[0] * sy - wd[1] * sx;
+    let ux = wd[1] * sz - wd[2] * sy, uy = wd[2] * sx - wd[0] * sz, uz = wd[0] * sy - wd[1] * sx;
+    // a prop turned about its length (a book tipped toward the reader)
+    const rl = W.prop ? this.wroll : 0;
+    if (rl) {
+      const c = Math.cos(rl), s = Math.sin(rl), ax = sx * c + ux * s, ay = sy * c + uy * s, az = sz * c + uz * s;
+      ux = ux * c - sx * s; uy = uy * c - sy * s; uz = uz * c - sz * s; sx = ax; sy = ay; sz = az;
+    }
     const blade = key === 'knife' || key === 'machete' || key === 'katana';
     // a piece from k0 to k1 along the weapon, half width w (sideways) and h (up), offset a up
     const piece = (m, k0, k1, w, h, col, a, t1) => {
@@ -1857,6 +1847,7 @@ const Char3D = {
       c3emit(m, hand[0] + wd[0] * k + ux * ox, hand[1] + wd[1] * k + uy * ox, hand[2] + wd[2] * k + uz * ox, ux * h, uy * h, uz * h, sx * w, sy * w, sz * w, wd[0] * l, wd[1] * l, wd[2] * l, col, 1, t1 || 1);
     };
     const k0 = W.w0 * 0.0075, k1 = W.w1 * 0.0075, col = this.rgb(W.col), L = W.len, steel = this.rgb('#9aa2aa');
+    if (W.prop) { this.prop(key, W, piece, hand, wd, this.propCol, Rf); return; }
     if (W.gun) {
       if (key === 'pistol') { piece(BOX, -0.04, L, 0.016, 0.022, col, 0.02); piece(BOX, -0.035, 0.03, 0.014, 0.04, this.sc(col, 0.8), -0.03); }
       else {

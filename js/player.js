@@ -802,15 +802,26 @@ const Player = {
     } else if (p.aiming && pd && pd.gun) pose.arms = 'aim';
     else if (p.aiming) { pose.arms = 'ready'; pose.style = this.swingStyle(pd, null); pose.swingT = 0.2; }
     else if (p.action && p.action.anim) {
-      const an = p.action.anim;
+      const a = p.action, an = a.anim;
       pose.arms = an;
-      if (an === 'loot' || an === 'craft') pose.arms = 'work';
+      // how far through the action, for one-off moves (actanim.js), and what the hands hold for it
+      pose.k = a.dur > 0 ? U.clamp(a.t / a.dur, 0, 1) : 0; pose.at = a.t || 0;
+      if (a.prop !== undefined) { pose.weapon = a.prop; pose.two = a.prop === 'shovel' || a.prop === 'sledge'; pose.offhand = null; pose.propCol = a.propCol; }
+      if (a.part) pose.part = a.part;
+      if (a.lvl !== undefined && a.lvl !== null) pose.lvl = a.lvl;
+      if (a.sub) pose.sub = a.sub;
       if (an === 'kneel') { pose.arms = 'work'; pose.crouch = 0.7; pose.mode = 'kneel'; }
+      if (a.kneel) { pose.crouch = 0.7; pose.mode = 'kneel'; if (a.kneelSide) pose.kneeSide = a.kneelSide; }
       if (an === 'sit') { pose.crouch = 0.8; pose.mode = 'sit'; }
       if (an === 'shove') { pose.swingT = 0.42; }
       if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
     }
-    if (p.climb) { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = p.climb.t; pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4; }
+    if (p.climb) {
+      pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = p.climb.rope === 'down' ? (p.climb.t * 5) % 1 : p.climb.t; pose.rope = !!p.climb.rope;
+      pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4;
+    }
+    // a flinch when hurt, struggling when grabbed
+    if (!p.dead && !p.asleep) { if (p.hurtFlash > 0) pose.hurt = Math.min(1, p.hurtFlash); if (p.grabbed > 0) pose.grab = p.grabbed; }
     for (const pt of LEG_PARTS) {
       const b = p.body[pt], w = b.w;
       const lv = w.fracture ? (b.splint ? 0.6 : 1) : (w.deep || w.bite) ? 0.5 : w.cut ? 0.3 : 0;

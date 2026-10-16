@@ -177,7 +177,7 @@ const Interact = {
     if (t.corpse) {
       add('Loot corpse', () => this.goDo(t.corpse.x, t.corpse.y, () => UI.openLoot(), 1.4));
       const cz = t.corpse;
-      if (!p.inv.some(i => i.id === 'Corpse')) add('Pick up corpse', () => this.goDo(cz.x, cz.y, () => Actions.queue(Actions.mk('Lifting the body', 2.5, () => Interact.liftCorpse(cz), { anim: 'work' })), 1.3));
+      if (!p.inv.some(i => i.id === 'Corpse')) add('Pick up corpse', () => this.goDo(cz.x, cz.y, () => Actions.queue(Actions.mk('Lifting the body', 2.5, () => Interact.liftCorpse(cz), { anim: 'pickup', begin: () => Actions.face(cz.x - 0.5, cz.y - 0.5) })), 1.3));
     }
     if (t.obj) this.objOptions(t.obj, tx, ty, add);
     if (!t.edge && !t.car) this.groundOptions(tx, ty, add, t);
@@ -216,7 +216,7 @@ const Interact = {
       if (upOut && !f.rope && !f.barricade) add('Tie sheet rope (rope + nail)', () => go(() => {
         const rope = Player.findId('SheetRope');
         if (!rope || Player.count('Nails') < 1) return;
-        Actions.queue(Actions.mk('Tying sheet rope', 3, () => { if (!Player.findId('SheetRope') || Player.count('Nails') < 1) return; Player.removeItem(Player.findId('SheetRope')); Player.removeItem(Player.findId('Nails')); f.rope = true; Sfx.play('cloth'); UI.refresh(); }, { anim: 'work' }));
+        Actions.queue(Actions.mk('Tying sheet rope', 3, () => { if (!Player.findId('SheetRope') || Player.count('Nails') < 1) return; Player.removeItem(Player.findId('SheetRope')); Player.removeItem(Player.findId('Nails')); f.rope = true; Sfx.play('cloth'); UI.refresh(); }, { anim: 'craft' }));
       }), { disabled: !(Player.findId('SheetRope') && Player.count('Nails') >= 1) });
       if (upOut && f.rope) add('Untie sheet rope', () => go(() => Actions.queue(Actions.mk('Untying sheet rope', 2, () => { if (!f.rope) return; f.rope = false; Player.addItem(Items.make('SheetRope')); Sfx.play('cloth'); UI.refresh(); }, { anim: 'work' }))));
       if (!f.smashed && !f.barricade) add('Smash window', () => go(() => this.smashWindow(e)));
@@ -259,7 +259,7 @@ const Interact = {
       } else Player.xp('Nimble', 1);
     }, {
       anim: 'climb',
-      begin: () => { p.climb = { t: 0 }; },
+      begin: () => { p.climb = { t: 0, rope: rope ? 'down' : false }; },
       tick: () => { const k = a.t / dur; p.climb.t = k; p.x = U.lerp(sx, tx, Math.min(1, k * 1.4)); p.y = U.lerp(sy, ty, Math.min(1, k * 1.4)); },
       onCancel: () => { p.climb = null; p.x = sx; p.y = sy; },
     });
@@ -351,7 +351,7 @@ const Interact = {
       Player.xp('Strength', 2); Player.xp('Nimble', 1);
     }, {
       anim: 'climb',
-      begin: () => { p.climb = { t: 0 }; },
+      begin: () => { p.climb = { t: 0, rope: true }; },
       tick: () => { p.climb.t = (a2.t / dur * 4) % 1; p.x = U.lerp(sx, mx, Math.min(1, a2.t / dur * 2) * 0.7); p.y = U.lerp(sy, my, Math.min(1, a2.t / dur * 2) * 0.7); },
       onCancel: () => { p.climb = null; p.x = sx; p.y = sy; },
     });
@@ -412,7 +412,7 @@ const Interact = {
     const wood = ['bed', 'table', 'chair', 'wardrobe', 'dresser', 'nightstand', 'bookshelf', 'crate', 'woodcrate', 'desk', 'counter', 'pew', 'bench', 'sofa', 'armchair', 'toolcab'];
     if (wood.includes(o.t)) add('Disassemble', () => go(() => Actions.queue(Actions.disassemble(x, y))), { disabled: !(Player.findTag('hammer') || Player.findTag('saw') || Player.findTag('screwdriver')) });
     if (o.t === 'trap') this.trapOptions(o, x, y, add, go);
-    if (MOVEABLE[o.t] && !o.fixed) add('Pick up ' + def.n.toLowerCase() + ' (' + MOVEABLE[o.t] + ' kg)', () => go(() => Actions.queue(Actions.mk('Picking up ' + def.n.toLowerCase(), 2.5, () => { if (World.obj(x, y) === o) Build.pickUp(o, x, y); }, { anim: 'work', begin: () => Actions.face(x, y) }))));
+    if (MOVEABLE[o.t] && !o.fixed) add('Pick up ' + def.n.toLowerCase() + ' (' + MOVEABLE[o.t] + ' kg)', () => go(() => Actions.queue(Actions.mk('Picking up ' + def.n.toLowerCase(), 2.5, () => { if (World.obj(x, y) === o) Build.pickUp(o, x, y); }, { anim: 'pickup', begin: () => Actions.face(x, y) }))));
     if (o.sx !== undefined) {
       const st = Wd.stairs.find(q => q.x === o.sx && q.y === o.sy);
       if (st) {

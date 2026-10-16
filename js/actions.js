@@ -37,6 +37,30 @@ const Actions = {
     }
   },
   mk(name, dur, done, o) { return Object.assign({ name, dur, done, anim: 'work' }, o || {}); },
+  // what the hands hold for an item's animation (actanim.js props), and the colour it is drawn in
+  propOf(it) {
+    const d = ITEMS[it.id], ic = d.ic || [], k = ic[0];
+    if (d.drink || d.fluid) return { prop: k === 'soda' || k === 'jar' ? 'can' : k === 'carton' ? 'carton' : 'bottle', propCol: d.fluid ? '#a8c8e0' : ic[1] };
+    if (d.open || k === 'can' || k === 'tin') return { prop: 'can', propCol: ic[1] };
+    return { prop: 'food', propCol: ic[1] };
+  },
+  // container height for searching it: 0 the floor or low, 1 waist, 2 a high shelf
+  lootLvl(c) {
+    if (!c || c.kind === 'inv' || c.kind === 'bag') return null;
+    if (c.kind === 'floor' || c.kind === 'corpse') return 0;
+    if (c.kind === 'obj') { const t = c.obj && c.obj.t || ''; return /shelf|wardrobe|locker|fridge|cabinet|bookcase|bookshelf|vending/.test(t) ? 2 : /crate|box|trash|bin|chest|barrel|dumpster|toolbox|cooler|nightstand|oven|stove|washer|dryer/.test(t) ? 0 : 1; }
+    return 1;
+  },
+  // first aid on a part: kneeling for the legs and feet
+  medAnim(part, prop) {
+    const leg = typeof LEG_PARTS !== 'undefined' && LEG_PARTS.includes(part);
+    return { anim: 'bandage', part, prop: prop || null, kneel: leg, kneelSide: leg ? (part.endsWith('R') ? 1 : -1) : 0 };
+  },
+  // clothing slot to the dressing animation
+  dressPart(it) {
+    const sl = ITEMS[it.id].slot;
+    return sl === 'pants' ? 'low' : sl === 'shoes' ? 'feet' : sl === 'hat' || sl === 'eyes' ? 'head' : sl === 'gloves' || sl === 'wrist' || sl === 'waist' || sl === 'holster' ? 'hands' : 'top';
+  },
   dexMult() { return Player.hasTrait('dextrous') ? 0.5 : Player.hasTrait('allthumbs') ? 1.6 : 1; },
 
   // ------------------------------------------------------------------ inventory transfers
@@ -50,7 +74,7 @@ const Actions = {
       Cont.add(to, it);
       Sfx.play('pickup');
       UI.refresh();
-    }, { anim: 'loot', check: () => Cont.inReach(from) && Cont.inReach(to) });
+    }, { anim: 'loot', lvl: this.lootLvl(from) ?? this.lootLvl(to) ?? 1, check: () => Cont.inReach(from) && Cont.inReach(to) });
   },
   // ensure item is in player main inventory first, then run action
   withItem(it, actFn) {
@@ -91,7 +115,7 @@ const Actions = {
       if (d.open) it.opened = true;
       Sfx.play(d.drink ? 'drink' : 'eat');
       UI.refresh();
-    }, { anim: 'eat' });
+    }, Object.assign({ anim: d.drink ? 'drink' : 'eat' }, this.propOf(it)));
   },
   drink(it) {
     const p = G.player;
@@ -106,7 +130,7 @@ const Actions = {
       if (it.fl <= 0.001) { it.fl = 0; it.taint = false; }
       Sfx.play('drink');
       UI.refresh();
-    }, { anim: 'eat' });
+    }, Object.assign({ anim: 'drink' }, this.propOf(it)));
   },
   drinkSource(src) {
     const p = G.player;
@@ -116,7 +140,7 @@ const Actions = {
       p.st.thirst = Math.max(0, p.st.thirst - avail);
       if (Water.tainted(src) && R.chance(0.5)) { p.st.foodSick = Math.min(1, p.st.foodSick + 0.3 * (Player.hasTrait('irongut') ? 0.5 : 1)); Player.say('That water tasted foul...', '#cc9'); }
       Sfx.play('drink');
-    }, { anim: 'eat', check: () => Water.near(src) });
+    }, { anim: 'drink', prop: null, check: () => Water.near(src) });
   },
   fill(it, src) {
     const d = ITEMS[it.id];
@@ -165,7 +189,7 @@ const Actions = {
       Sfx.play('fire', tx + 0.5, ty + 0.5);
       Player.say('Burn it all.', '#f99');
       UI.refresh();
-    }, { anim: 'work', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.2, begin: () => Actions.face(tx, ty) });
+    }, { anim: 'pour', prop: 'gascan', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.2, begin: () => Actions.face(tx, ty) });
   },
   face(tx, ty) { const p = G.player; p.angle = Math.atan2(ty + 0.5 - p.y, tx + 0.5 - p.x); },
   pour(it) {
@@ -184,7 +208,7 @@ const Actions = {
       it.uses--;
       if (it.uses <= 0) Player.removeItem(it);
       Sfx.play('pills'); UI.refresh();
-    }, { anim: 'eat' });
+    }, { anim: 'pills', prop: 'pills', propCol: (d.ic || [])[2] });
   },
   smoke(it) {
     if (!Player.findTag('lighter')) { Player.say('I need a lighter.', '#ccc'); return null; }
@@ -195,7 +219,7 @@ const Actions = {
       it.uses--; if (it.uses <= 0) Player.removeItem(it);
       const l = Player.findTag('lighter'); if (l) { l.uses--; if (l.uses <= 0) Player.removeItem(l); }
       UI.refresh();
-    }, { anim: 'eat' });
+    }, { anim: 'smoke', prop: 'cig' });
   },
   read(it) {
     const d = ITEMS[it.id];
@@ -218,7 +242,7 @@ const Actions = {
       }
       if (d.unhappy) p.st.unhappy = Math.max(0, p.st.unhappy + d.unhappy);
       UI.refresh();
-    }, { anim: 'eat', fun: 22, check: () => Render.lightAt(p.x, p.y) >= 0.2 && !!Player.find(x => x === it) });
+    }, { anim: 'read', prop: 'book', propCol: (d.ic || [])[1], fun: 22, check: () => Render.lightAt(p.x, p.y) >= 0.2 && !!Player.find(x => x === it) });
     a.t0 = (it.readP || 0) * total;
     a.begin = () => { a.t = a.t0; Sfx.play('page'); };
     a.tick = () => { it.readP = a.t / total; };
@@ -238,10 +262,10 @@ const Actions = {
       Player.removeItem(it);
       Player.xp('FirstAid', 5);
       Sfx.play('bandage'); UI.refresh();
-    }, { anim: 'work' });
+    }, this.medAnim(part, 'bandage'));
   },
   removeBandage(part) {
-    return this.mk('Removing bandage', 1.5, () => { G.player.body[part].bandage = null; Sfx.play('bandage'); UI.refresh(); });
+    return this.mk('Removing bandage', 1.5, () => { G.player.body[part].bandage = null; Sfx.play('bandage'); UI.refresh(); }, this.medAnim(part));
   },
   disinfect(part, it) {
     return this.mk('Disinfecting', 2.5, () => {
@@ -251,7 +275,7 @@ const Actions = {
       if (it.uses !== undefined) { it.uses--; if (it.uses <= 0) Player.removeItem(it); } else Player.removeItem(it);
       Player.xp('FirstAid', 3);
       Sfx.play('pills'); UI.refresh();
-    }, { anim: 'work' });
+    }, this.medAnim(part, 'bottle'));
   },
   stitch(part, it) {
     return this.mk('Stitching wound', 7 * (1 - Player.skill('FirstAid') * 0.05), () => {
@@ -261,7 +285,7 @@ const Actions = {
       Player.xp('FirstAid', 8);
       if (Player.skill('FirstAid') < 3) G.player.st.pain = Math.min(100, G.player.st.pain + 25);
       Sfx.play('bandage'); UI.refresh();
-    }, { anim: 'work' });
+    }, this.medAnim(part));
   },
   splint(part, it) {
     return this.mk('Applying splint', 6 * (1 - Player.skill('FirstAid') * 0.05), () => {
@@ -272,7 +296,7 @@ const Actions = {
       Player.xp('FirstAid', 10);
       G.player.st.pain = Math.min(100, G.player.st.pain + 15);
       Sfx.play('bandage'); UI.refresh();
-    }, { anim: 'work' });
+    }, this.medAnim(part, 'bandage'));
   },
   removeGlass(part) {
     const tw = Player.findTag('tweezers');
@@ -282,15 +306,15 @@ const Actions = {
       if (!tw && R.chance(0.4)) { Player.say('Ouch!', '#f99'); b.w.cut = Math.max(b.w.cut || 0, 10); }
       Player.xp('FirstAid', 5);
       UI.refresh();
-    }, { anim: 'work' });
+    }, this.medAnim(part));
   },
 
   // ------------------------------------------------------------------ gear
   wear(it) {
-    return this.mk('Putting on ' + Items.name(it), ITEMS[it.id].bag ? 0.8 : 1.6, () => { if (Player.find(x => x === it)) { Player.wear(it); UI.refresh(); } }, { anim: 'work' });
+    return this.mk('Putting on ' + Items.name(it), ITEMS[it.id].bag ? 0.8 : 1.6, () => { if (Player.find(x => x === it)) { Player.wear(it); UI.refresh(); } }, { anim: 'dress', part: this.dressPart(it) });
   },
   unwear(it) {
-    return this.mk('Taking off ' + Items.name(it), 1.2, () => { Player.unwear(it); UI.refresh(); }, { anim: 'work' });
+    return this.mk('Taking off ' + Items.name(it), 1.2, () => { Player.unwear(it); UI.refresh(); }, { anim: 'dress', part: this.dressPart(it) });
   },
   equip(it, slot) {
     return this.mk('Equipping', 0.5, () => { if (Player.find(x => x === it)) { Player.equip(it, slot); UI.refresh(); } }, { walkOk: true });
@@ -316,7 +340,7 @@ const Actions = {
         for (const r2 of avail) { Player.removeItem(r2); it.ammo++; }
         Player.xp('Reloading', 3);
         Sfx.play('reload'); UI.refresh();
-      }, { anim: 'work', walkOk: true }));
+      }, { anim: 'reload', walkOk: true }));
     } else {
       const one = this.mk('Reloading', g.reload * (1 - rl * 0.06) + 0.25, () => {
         const r2 = Player.find(x => x.id === g.ammo);
@@ -324,15 +348,15 @@ const Actions = {
         Player.removeItem(r2); it.ammo++;
         Player.xp('Reloading', 1);
         Sfx.play('shellin');
-        if (it.ammo < g.cap && Player.find(x => x.id === g.ammo)) p.queue.unshift(this.mk('Reloading', one.dur, one.done, { anim: 'work', walkOk: true }));
+        if (it.ammo < g.cap && Player.find(x => x.id === g.ammo)) p.queue.unshift(this.mk('Reloading', one.dur, one.done, { anim: 'reload', walkOk: true }));
         UI.refresh();
-      }, { anim: 'work', walkOk: true });
+      }, { anim: 'reload', walkOk: true });
       this.queue(one);
     }
   },
   unload(it) {
     const g = ITEMS[it.id].gun;
-    return this.mk('Unloading', 1.5, () => { for (let k = 0; k < it.ammo; k++) Player.addItem(Items.make(g.ammo)); it.ammo = 0; UI.refresh(); }, { anim: 'work' });
+    return this.mk('Unloading', 1.5, () => { for (let k = 0; k < it.ammo; k++) Player.addItem(Items.make(g.ammo)); it.ammo = 0; UI.refresh(); }, { anim: 'reload' });
   },
   openBox(it) {
     const d = ITEMS[it.id];
@@ -352,7 +376,7 @@ const Actions = {
       Player.removeItem(it);
       for (let k = 0; k < n; k++) Player.addItem(Items.make('RippedSheets'));
       Sfx.play('rip'); UI.refresh();
-    }, { anim: 'work' });
+    }, { anim: 'craft' });
   },
   repair(it, tool) {
     const d = ITEMS[it.id], td = ITEMS[tool.id];
@@ -362,7 +386,7 @@ const Actions = {
       tool.uses--; if (tool.uses <= 0) Player.removeItem(tool);
       Player.xp('Maintenance', 4);
       UI.refresh();
-    }, { anim: 'work' });
+    }, { anim: 'craft' });
   },
   battery(it) {
     const bat = Player.findId('Battery');
@@ -393,7 +417,7 @@ const Actions = {
       Player.xp('Carpentry', 3);
       UI.refresh();
     }, {
-      anim: 'hammer', check: () => Interact.nearEdge(e, 1.6),
+      anim: 'hammer', prop: 'hammer', check: () => Interact.nearEdge(e, 1.6),
       tick: (dt) => { noiseT -= dt; if (noiseT <= 0) { noiseT = 1.1; Noise.emit(G.player.x, G.player.y, 14, 'hammer'); Sfx.play('hammer'); } },
     });
   },
@@ -408,7 +432,7 @@ const Actions = {
       if (R.chance(0.5)) Player.addItem(Items.make('Nails'));
       Noise.emit(G.player.x, G.player.y, 9, 'hammer');
       Sfx.play('wood'); UI.refresh();
-    }, { anim: 'hammer', check: () => Interact.nearEdge(e, 1.6) });
+    }, { anim: 'hammer', prop: 'hammer', check: () => Interact.nearEdge(e, 1.6) });
   },
   addSheet(e) {
     const f = World.feat(...e);
@@ -440,7 +464,7 @@ const Actions = {
       Sfx.play('treefall');
       Noise.emit(x, y, 18, 'chop');
     }, {
-      anim: 'hammer', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 1.8 && !!World.obj(x, y),
+      anim: 'chop', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 1.8 && !!World.obj(x, y),
       tick: (dt) => { nt -= dt; G.player.st.endurance = Math.max(0, G.player.st.endurance - dt * 0.006); if (nt <= 0) { nt = 1.2; Sfx.play('chop'); Noise.emit(x, y, 13, 'chop'); } },
       begin: () => { G.player.angle = Math.atan2(y + 0.5 - G.player.y, x + 0.5 - G.player.x); Player.equip(axe, 'primary'); },
     });
@@ -466,7 +490,7 @@ const Actions = {
       Player.say('Found: ' + found.join(', '), '#8f8');
       Player.xp('Foraging', 4);
       UI.refresh();
-    }, { anim: 'kneel', fun: 8, check: () => U.dist(p.x, p.y, x + 0.5, y + 0.5) < 2.5 });
+    }, { anim: 'forage', kneel: true, fun: 8, check: () => U.dist(p.x, p.y, x + 0.5, y + 0.5) < 2.5 });
   },
   pickBerries(x, y) {
     const o = World.obj(x, y);
@@ -475,7 +499,7 @@ const Actions = {
       o.berries = false; o.berryDay = Game.day();
       for (let k = 0; k < R.int(2, 5); k++) Player.addItem(Items.make('Berries'));
       Player.xp('Foraging', 3); UI.refresh();
-    }, { anim: 'work' });
+    }, { anim: 'loot', lvl: 1, begin: () => Actions.face(x, y) });
   },
   fish(x, y) {
     const rod = Player.findTag('fishing');
@@ -490,7 +514,7 @@ const Actions = {
         Player.say('Caught a fish!', '#8f8'); Player.xp('Fishing', 8); Sfx.play('splash');
       } else { Player.say('Nothing is biting.', '#ccc'); Player.xp('Fishing', 1); }
       UI.refresh();
-    }, { anim: 'work', fun: 12, begin: () => { G.player.angle = Math.atan2(y + 0.5 - G.player.y, x + 0.5 - G.player.x); } });
+    }, { anim: 'fish', prop: 'rod', fun: 12, begin: () => { G.player.angle = Math.atan2(y + 0.5 - G.player.y, x + 0.5 - G.player.x); } });
   },
   dig(x, y) {
     const tool = Player.findTag('dig');
@@ -500,7 +524,7 @@ const Actions = {
       Wd.floor[y * Wd.w + x] = FL.FURROW;
       World.setObj(x, y, { t: 'crop', dir: 'S', crop: null, stage: undefined, water: 0.3, grow: 0 });
       Player.xp('Farming', 2); Sfx.play('dig');
-    }, { anim: 'kneel', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 });
+    }, Object.assign(tool.id === 'Shovel' ? { anim: 'dig', prop: 'shovel' } : { anim: 'garden', kneel: true }, { check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2, begin: () => Actions.face(x, y) }));
   },
   plant(x, y, seeds) {
     return this.mk('Planting', 3, () => {
@@ -509,7 +533,7 @@ const Actions = {
       o.crop = ITEMS[seeds.id].seeds; o.stage = 0; o.grow = 0; o.seed = true; o.dead = false;
       seeds.uses--; if (seeds.uses <= 0) Player.removeItem(seeds);
       Player.xp('Farming', 3); UI.refresh();
-    }, { anim: 'kneel' });
+    }, { anim: 'garden', kneel: true, begin: () => Actions.face(x, y) });
   },
   water(x, y, can) {
     return this.mk('Watering', 2.5, () => {
@@ -517,7 +541,7 @@ const Actions = {
       const amt = Math.min(can.fl, 0.5);
       can.fl -= amt; o.water = Math.min(1, (o.water || 0) + amt * 1.6);
       Player.xp('Farming', 1); Sfx.play('fill'); UI.refresh();
-    }, { anim: 'work' });
+    }, { anim: 'pour', prop: 'wcan', begin: () => Actions.face(x, y) });
   },
   harvest(x, y) {
     return this.mk('Harvesting', 4, () => {
@@ -529,7 +553,7 @@ const Actions = {
       o.crop = null; o.stage = undefined; o.grow = 0; o.seed = false;
       Player.say('Harvested ' + n + ' ' + cd.n, '#8f8');
       Player.xp('Farming', 6); UI.refresh();
-    }, { anim: 'kneel' });
+    }, { anim: 'garden', sub: 'pull', kneel: true, begin: () => Actions.face(x, y) });
   },
   disassemble(x, y) {
     const o = World.obj(x, y);
@@ -548,7 +572,7 @@ const Actions = {
       if (o.t === 'bed' && R.chance(0.7)) World.dropItem(x + 0.5, y + 0.5, Items.make('Sheet'));
       Player.xp('Carpentry', 3);
       Noise.emit(x, y, 12, 'hammer'); Sfx.play('wood'); UI.refresh();
-    }, { anim: 'hammer', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 });
+    }, Object.assign(Player.findTag('hammer') ? { anim: 'hammer', prop: 'hammer', lvl: 0 } : Player.findTag('saw') ? { anim: 'saw', prop: 'saw' } : { anim: 'work' }, { check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2, begin: () => Actions.face(x, y) }));
   },
   demolishEdge(e) {
     const [x, y, d] = e;
@@ -572,7 +596,7 @@ const Actions = {
       const it = Player.primary(); if (it && R.chance(0.5)) it.cond--;
       G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.15);
     }, {
-      anim: 'hammer', check: () => Interact.nearEdge(e, 1.8) && Interact.hasSledge(),
+      anim: 'smash', prop: 'sledge', check: () => Interact.nearEdge(e, 1.8) && Interact.hasSledge(),
       tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.4; const [mx, my] = Interact.edgeMid(e); Sfx.play('thump', mx, my); Noise.emit(mx, my, 16, 'crash'); } },
     });
   },
@@ -603,7 +627,7 @@ const Actions = {
       G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.08);
       UI.refresh();
     }, {
-      anim: 'hammer', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 && Interact.hasSledge(),
+      anim: 'smash', prop: 'sledge', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 && Interact.hasSledge(),
       tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.3; Sfx.play('thump', x + 0.5, y + 0.5); } },
     });
   },
@@ -625,7 +649,7 @@ const Actions = {
   },
   addFuel(o, it) {
     const fv = { Plank: 60, Log: 120, TreeBranch: 40, Twigs: 15, Newspaper: 8, Magazine: 8, Novel: 15, RippedSheets: 6, Sheet: 15, ComicBook: 8 }[it.id] || 10;
-    return this.mk('Adding fuel', 1.5, () => { Player.removeItem(it); o.fuel = (o.fuel || 0) + fv; UI.refresh(); Sfx.play('wood'); }, { anim: 'work' });
+    return this.mk('Adding fuel', 1.5, () => { Player.removeItem(it); o.fuel = (o.fuel || 0) + fv; UI.refresh(); Sfx.play('wood'); }, { anim: 'loot', lvl: 0 });
   },
   lightFire(o) {
     const l = Player.findTag('lighter');
@@ -646,7 +670,7 @@ const Actions = {
       car.gas = Math.min(1, car.gas + amt / 2.5);
       can.fl -= amt;
       Player.xp('Mechanics', 1); Sfx.play('fill'); UI.refresh();
-    }, { anim: 'work', check: () => U.dist(G.player.x, G.player.y, car.x, car.y) < 3 });
+    }, { anim: 'pour', prop: 'gascan', check: () => U.dist(G.player.x, G.player.y, car.x, car.y) < 3, begin: () => { const p = G.player; p.angle = Math.atan2(car.y - p.y, car.x - p.x); } });
   },
   siphon(car, can) {
     return this.mk('Siphoning gas', 5, () => {
@@ -663,7 +687,7 @@ const Actions = {
     }, { anim: 'work' });
   },
   genFuel(o, can) {
-    return this.mk('Refueling generator', 4, () => { const amt = Math.min(can.fl, 1 - (o.fuel || 0)); o.fuel = (o.fuel || 0) + amt; can.fl -= amt; UI.refresh(); }, { anim: 'work' });
+    return this.mk('Refueling generator', 4, () => { const amt = Math.min(can.fl, 1 - (o.fuel || 0)); o.fuel = (o.fuel || 0) + amt; can.fl -= amt; UI.refresh(); }, { anim: 'pour', prop: 'gascan' });
   },
   build(rec, tx, ty, d) {
     const carp = Player.skill('Carpentry');
@@ -676,7 +700,7 @@ const Actions = {
       if (rec.xp) for (const sk in rec.xp) Player.xp(sk, rec.xp[sk]);
       UI.refresh();
     }, {
-      anim: 'hammer', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.4,
+      anim: 'hammer', prop: 'hammer', lvl: 0, check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.4,
       tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.1; Noise.emit(G.player.x, G.player.y, 13, 'hammer'); Sfx.play('hammer'); } },
       begin: () => { G.player.angle = Math.atan2(ty + 0.5 - G.player.y, tx + 0.5 - G.player.x); },
     });
