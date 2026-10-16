@@ -794,8 +794,9 @@ Object.assign(ObjArt, {
   k_tstump: () => (Season.snow > 0.3 ? 'S' : ''),
   d_tstump(o) { this.stumpArt((o.v || 0) % 3, false); },
   // fallen log along u (dir E/W) or v (dir N/S); the end facing the camera is sawn or broken
-  k_tlog: () => (Season.snow > 0.3 ? 'S' : '') + (Season.tree === 'y' || Season.tree === 'a' ? 'm' : ''),
+  k_tlog: (o) => (Season.snow > 0.3 ? 'S' : '') + (Season.tree === 'y' || Season.tree === 'a' ? 'm' : '') + (o.n > 1 ? o.n : ''),
   d_tlog(o) {
+    if (o.n > 1) return this.fallen(o);
     const g = this.g, alongU = o.dir === 'E' || o.dir === 'W', v = (o.v || 0) % 3, rng = new RNG(v * 13 + 7 + (alongU ? 1 : 0));
     const r = 0.16 + v * 0.03, snow = Season.snow > 0.3;
     const A = alongU ? this.P(-0.12, 0.5, r) : this.P(0.5, -0.12, r), B = alongU ? this.P(1.06, 0.5, r) : this.P(0.5, 1.06, r);
@@ -823,6 +824,127 @@ Object.assign(ObjArt, {
     else poly(g, E.map((p, k) => [B[0] + (p[0] - B[0]) * (k % 2 ? 0.55 : 0.8), B[1] + (p[1] - B[1]) * (k % 2 ? 0.55 : 0.8)]), '#4a3c30');
     // mushrooms in autumn
     if (!snow && (Season.tree === 'y' || Season.tree === 'a')) for (let k = 0; k < 3; k++) { const t = rng.f(0.2, 0.7), p = [A[0] + ax * t - nx * hw * 0.2, A[1] + ay * t - ny * hw * 0.2]; g.fillStyle = '#e8dcc0'; g.fillRect(p[0], p[1] - 2, 1, 3); g.fillStyle = '#b8783a'; g.beginPath(); g.ellipse(p[0] + 0.5, p[1] - 2, 3, 1.6, 0, Math.PI, 0); g.fill(); }
+  },
+  // a whole windthrown tree over n tiles along u (dir E) or v (dir S), one object per tile, each painting its
+  // own stretch so the painter's order stays right: part 0 (back) holds the root plate torn up out of its
+  // pit, the trunk tapers toward the front and ends in the broken, bare crown lying over the last part.
+  // v % 3: 0 oak-like, 1 pine, 2 birch
+  fallen(o) {
+    const g = this.g, alongU = o.dir === 'E' || o.dir === 'W', n = o.n, k = o.part || 0, v = (o.v || 0) % 3;
+    const st = Season.tree, snow = Season.snow > 0.3, birch = v === 2;
+    // S along the whole tree from its back end, t across (+ = +v or +u), z up -> sprite px of this part
+    const W = (S, t, z) => alongU ? this.P(S - k, 0.5 + t, z) : this.P(0.5 + t, S - k, z);
+    const S0 = 0.34, S1 = n - 0.15, rA = [0.25, 0.22, 0.17][v], rB = 0.06;
+    const rad = (S) => U.lerp(rA, rB, U.clamp((S - S0) / (S1 - S0), 0, 1));
+    const lift = (S) => { const q = Math.max(0, 1 - (S - S0) / 1.5); return q * q * 0.32; };   // butt held up by the plate
+    const zc = (S) => rad(S) + lift(S);
+    const bark = ['#5c4a3a', '#6a4a38', '#dcd8cc'][v], rng = new RNG(v * 31 + n * 7 + (alongU ? 3 : 0) + k * 101);
+    // screen axis and the screen normal pointing up
+    const a0 = W(0, 0, 0), a1 = W(1, 0, 0), al = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]), dx = (a1[0] - a0[0]) / al, dy = (a1[1] - a0[1]) / al;
+    let nx = -dy, ny = dx; if (ny > 0) { nx = -nx; ny = -ny; }
+    const Sa = Math.max(S0, k), Sb = Math.min(S1, k + 1);
+    // ground shadow under this stretch, then the pit behind the root plate
+    if (Sb > Sa) {
+      const p0 = W(Sa, 0.14, 0), p1 = W(Sb, 0.14, 0);
+      g.lineCap = Sb >= S1 || Sa <= S0 ? 'round' : 'butt'; g.strokeStyle = 'rgba(8,12,6,0.24)'; g.lineWidth = rad((Sa + Sb) / 2) * 52 + 4;
+      g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke(); g.lineCap = 'butt';
+    }
+    if (k === 0) {
+      const pit = [], rim = [];
+      for (let j = 0; j < 16; j++) { const a = j / 16 * 6.283, jr = 1 + Math.sin(j * 2.7 + v) * 0.08; pit.push(W(S0 - 0.12 + Math.cos(a) * 0.26 * jr, Math.sin(a) * 0.5 * jr, 0)); rim.push(W(S0 - 0.12 + Math.cos(a) * 0.36 * jr, Math.sin(a) * 0.62 * jr, 0)); }
+      poly(g, rim, snow ? Trees.tone(TREE_SNOW, 0.82) : Trees.tone('#6a5038', 0.85));
+      poly(g, pit, snow ? Trees.tone('#8a8e96', 0.8) : Trees.tone('#3a2c20', 0.8));
+    }
+    // a tapered stretch of trunk from S = s0 to s1: dark body, lit top bands, darker underside
+    const trunk = (s0, s1) => {
+      const m = Math.max(2, Math.ceil((s1 - s0) * 5)), L = [], R = [];
+      const ring = (f) => { L.length = 0; R.length = 0; for (let j = 0; j <= m; j++) { const S = U.lerp(s0, s1, j / m), c = W(S, 0, zc(S)), h = rad(S) * 40.5; L.push([c[0] + nx * h * f[0], c[1] + ny * h * f[0]]); R.push([c[0] + nx * h * f[1], c[1] + ny * h * f[1]]); } return L.concat(R.reverse()); };
+      poly(g, ring([-1, 1]), Trees.tone(bark, birch ? 0.7 : 0.62));
+      poly(g, ring([0.22, 1]), Trees.tone(bark, birch ? 0.95 : 0.92));
+      poly(g, ring([0.58, 0.94]), Trees.tone(bark, birch ? 1.05 : 1.08));
+      poly(g, ring([-1, -0.5]), Trees.tone(bark, birch ? 0.55 : 0.48));
+      if (snow) { poly(g, ring([0.4, 1.02]), Trees.tone(TREE_SNOW, 0.95)); poly(g, ring([0.7, 0.98]), TREE_SNOW); }
+      // bark: furrows along the trunk, birch lenticels across it, moss on the shaded side
+      const len = s1 - s0, cnt = Math.round(len * (birch ? 9 : 7));
+      g.lineWidth = 1;
+      for (let j = 0; j < cnt; j++) {
+        const S = rng.f(s0, s1), f = rng.f(-0.85, snow ? 0.3 : 0.85), c = W(S, 0, zc(S)), h = rad(S) * 40.5;
+        const px = c[0] + nx * h * f, py = c[1] + ny * h * f;
+        if (birch) { g.fillStyle = 'rgba(34,30,28,0.8)'; g.save(); g.translate(px, py); g.rotate(Math.atan2(ny, nx)); g.fillRect(-h * 0.25, -0.6, h * rng.f(0.25, 0.6), 1.3); g.restore(); }
+        else { const l = rng.f(0.12, 0.3), c2 = W(Math.min(s1, S + l), 0, zc(Math.min(s1, S + l))), h2 = rad(S + l) * 40.5; g.strokeStyle = Trees.tone(bark, f > 0.2 ? 0.7 : 0.45); g.beginPath(); g.moveTo(px, py); g.lineTo(c2[0] + nx * h2 * f, c2[1] + ny * h2 * f); g.stroke(); }
+      }
+      if (!snow && !birch) for (let j = 0; j < Math.round(len * 6); j++) { const S = rng.f(s0, s1), c = W(S, 0, zc(S)), h = rad(S) * 40.5, f = rng.f(-0.2, 0.75); g.fillStyle = rng.chance(0.5) ? 'rgba(74,100,46,0.55)' : 'rgba(96,120,56,0.45)'; g.beginPath(); g.ellipse(c[0] + nx * h * f, c[1] + ny * h * f, rng.f(1.5, 3.5), rng.f(0.8, 1.5), Math.atan2(dy, dx), 0, 6.283); g.fill(); }
+    };
+    // root plate: the torn-up root ball standing on edge at S0. The camera sees the face that was the ground
+    // surface (earth, grass and litter, the trunk coming out of it), torn soil and roots round the rim
+    const plate = () => {
+      const R = rA * 2.6 + 0.08, zr = R * 0.86, pr = new RNG(v * 13 + 5), at = (a, r, ds) => W(S0 + (ds || 0), Math.cos(a) * r, Math.max(0, zr + Math.sin(a) * r * 0.95));
+      const rim = [], face = [];
+      for (let j = 0; j < 30; j++) { const a = j / 30 * 6.283, jr = R * (1 + Math.sin(j * 3.1 + v * 2) * 0.09 + Math.sin(j * 7.3) * 0.07); rim.push(at(a, jr, -0.06)); face.push(at(a, jr * (0.8 + Math.sin(j * 5.1 + v) * 0.05), 0.01)); }
+      poly(g, rim, Trees.tone('#3e3024', 0.75));
+      // roots torn out round the rim, the top ones hanging down
+      g.lineCap = 'round';
+      for (let j = 0; j < 22; j++) {
+        const a = j / 22 * 6.283 + pr.f(-0.15, 0.15), r0 = R * pr.f(0.78, 0.92), r1 = R * pr.f(1.05, 1.4), up = Math.sin(a) > 0.3;
+        const b0 = at(a, r0, -0.03), b1 = at(a + pr.f(-0.25, 0.25), U.lerp(r0, r1, 0.55), -0.04), b2 = up ? [b1[0] + pr.f(-3, 3), b1[1] + pr.f(4, 10)] : at(a + pr.f(-0.35, 0.35), r1, pr.f(-0.12, 0.02));
+        g.strokeStyle = Trees.tone(pr.chance(0.3) ? '#8a7460' : '#6a5444', 0.7 + Math.sin(a) * 0.25);
+        g.lineWidth = pr.f(1.6, 3); g.beginPath(); g.moveTo(b0[0], b0[1]); g.lineTo(b1[0], b1[1]); g.stroke();
+        g.lineWidth = pr.f(0.8, 1.4); g.beginPath(); g.moveTo(b1[0], b1[1]); g.lineTo(b2[0], b2[1]); g.stroke();
+      }
+      g.lineCap = 'butt';
+      // the face: earth with grass and litter, lighter toward the top
+      poly(g, face, Trees.tone(snow ? '#6a6458' : '#4e4630', 0.78));
+      for (let j = 0; j < 40; j++) {
+        const a = pr.f(0, 6.283), d = R * 0.78 * Math.sqrt(pr.next()), q = at(a, d, 0.02), hi = Math.sin(a) * d / R;
+        g.fillStyle = Trees.tone(pr.chance(0.4) ? '#4a5a2c' : pr.chance(0.5) ? '#5e4c34' : '#6a5a3c', 0.72 + hi * 0.3);
+        g.fillRect(q[0] - 1, q[1] - 1, pr.f(1.5, 3.5), pr.f(1, 2.2));
+      }
+      // clods breaking off the rim
+      for (let j = 0; j < 9; j++) { const a = pr.f(0, 6.283), q = at(a, R * pr.f(0.82, 0.98), 0.02); g.fillStyle = Trees.tone('#54422e', 0.75 + Math.sin(a) * 0.3); g.beginPath(); g.ellipse(q[0], q[1], pr.f(2, 4), pr.f(1.5, 2.8), 0, 0, 6.283); g.fill(); }
+      // sunlit upper edge, grass tufts hanging over it, snow lying on it
+      const top = []; for (let j = 0; j <= 12; j++) { const a = Math.PI * (0.12 + j / 12 * 0.76); top.push(at(a, R * 0.84, 0.02)); }
+      g.strokeStyle = snow ? TREE_SNOW : Trees.tone('#7a6a48', 0.95); g.lineWidth = snow ? 3.5 : 1.6; g.beginPath(); top.forEach((q, j) => j ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.stroke();
+      if (!snow && st !== 'b') { g.strokeStyle = Trees.tone(st === 's' || st === 'a' ? '#8a7a44' : '#5a7a34', 0.9); g.lineWidth = 1; g.beginPath(); for (let j = 1; j < 12; j++) { const q = top[j]; for (let m = 0; m < 2; m++) { g.moveTo(q[0] + m * 2 - 1, q[1]); g.lineTo(q[0] + m * 3 - 1 + pr.f(-2, 2), q[1] + pr.f(3, 7)); } } g.stroke(); }
+    };
+    // the crown: bare broken limbs lying on the ground and propped up off it, over the last part
+    const crown = () => {
+      const cr = new RNG(v * 17 + n * 3 + (alongU ? 1 : 0)), tw = birch ? '#5a4a48' : bark;
+      const limbs = [];
+      for (let j = 0; j < 10; j++) {
+        const S = S1 - cr.f(0.05, 1.05), side = j % 2 ? 1 : -1, b = [S + cr.f(0.25, 0.85), side * cr.f(0.25, 0.9), cr.f(0.04, 0.55)];
+        limbs.push([S, b, cr.f(1.4, 3.2)]);
+      }
+      limbs.push([S1 - 0.05, [S1 + 0.45, cr.f(-0.2, 0.2), 0.12], 2]);
+      // back to front: the far side (-t) first
+      limbs.sort((p, q) => p[1][1] - q[1][1]);
+      g.lineCap = 'round';
+      for (const [S, b, w] of limbs) {
+        const a = W(S, 0, zc(S)), e = W(b[0], b[1], b[2]);
+        g.strokeStyle = Trees.tone(tw, 0.72); g.lineWidth = w; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(e[0], e[1]); g.stroke();
+        g.strokeStyle = Trees.tone(tw, 0.95); g.lineWidth = Math.max(0.8, w * 0.4); g.beginPath(); g.moveTo(a[0] - 0.5, a[1] - w * 0.25); g.lineTo(e[0] - 0.5, e[1] - w * 0.2); g.stroke();
+        // twigs off the limb
+        g.strokeStyle = Trees.tone(tw, 0.8); g.lineWidth = 0.8; g.beginPath();
+        for (let q = 0; q < 7; q++) {
+          const t = cr.f(0.3, 1), p = [U.lerp(a[0], e[0], t), U.lerp(a[1], e[1], t)], l = cr.f(5, 14), an = Math.atan2(e[1] - a[1], e[0] - a[0]) + cr.f(-1.1, 1.1) - (q % 2 ? 0.4 : 0);
+          const m = [p[0] + Math.cos(an) * l, p[1] + Math.sin(an) * l];
+          g.moveTo(p[0], p[1]); g.lineTo(m[0], m[1]);
+          const a2 = an + cr.f(-0.9, 0.9), l2 = l * cr.f(0.35, 0.6); g.moveTo(U.lerp(p[0], m[0], 0.6), U.lerp(p[1], m[1], 0.6)); g.lineTo(U.lerp(p[0], m[0], 0.6) + Math.cos(a2) * l2, U.lerp(p[1], m[1], 0.6) + Math.sin(a2) * l2);
+        }
+        g.stroke();
+        if (snow) { g.strokeStyle = TREE_SNOW; g.lineWidth = Math.max(1, w * 0.5); g.beginPath(); g.moveTo(a[0], a[1] - w * 0.4); g.lineTo(e[0], e[1] - w * 0.4); g.stroke(); }
+      }
+      g.lineCap = 'butt';
+      // dry leaves still clinging to the twigs outside winter
+      if (!snow && st !== 'b') for (let j = 0; j < 22; j++) { const q = W(S1 - cr.f(0, 0.6) + cr.f(0, 0.9), cr.f(-0.8, 0.8), cr.f(0.05, 0.4)); g.fillStyle = Trees.tone(cr.chance(0.5) ? '#7a5a34' : '#8a6a3c', cr.f(0.7, 1.05)); g.fillRect(q[0], q[1], 2, 1.5); }
+    };
+    if (k === 0) plate();
+    // stub of a snapped branch on the middle of the trunk
+    const stubS = S0 + (S1 - S0) * 0.45;
+    if (Sb > Sa) trunk(Math.max(S0, Sa - 0.03), Math.min(S1, Sb + 0.03));
+    if (stubS >= k && stubS < k + 1) { const a = W(stubS, 0, zc(stubS) + rad(stubS) * 0.6), e = W(stubS + 0.16, -0.16, zc(stubS) + rad(stubS) + 0.2); g.lineCap = 'round'; g.strokeStyle = Trees.tone(bark, 0.7); g.lineWidth = 3.5; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(e[0], e[1]); g.stroke(); g.strokeStyle = Trees.tone(bark, 1.0); g.lineWidth = 1.5; g.beginPath(); g.moveTo(a[0] - 1, a[1]); g.lineTo(e[0] - 1, e[1]); g.stroke(); g.lineCap = 'butt'; }
+    if (k === n - 1) crown();
+    // autumn: a few mushrooms along the shaded flank
+    if (!snow && (st === 'y' || st === 'a') && Sb > Sa) for (let j = 0; j < 2; j++) { const S = rng.f(Sa, Sb), c = W(S, 0, zc(S)), h = rad(S) * 40.5, p = [c[0] - nx * h * 0.3, c[1] - ny * h * 0.3]; g.fillStyle = '#e8dcc0'; g.fillRect(p[0], p[1] - 2, 1, 3); g.fillStyle = '#b8783a'; g.beginPath(); g.ellipse(p[0] + 0.5, p[1] - 2, 3, 1.6, 0, Math.PI, 0); g.fill(); }
   },
 });
 
@@ -895,12 +1017,32 @@ Object.assign(MapGen, {
   },
   // garden shrub variant: kind v (0 round, 1 low, 2 evergreen, 3 lilac) in one of three shapes
   shrubV(x, y, v) { return v + 5 * (Trees.hash(x, y, 23) % 3); },
-  // fallen logs and old stumps on the forest floor, or null
+  // fallen logs, whole windthrown trees and old stumps on the forest floor, or null (for the tile x, y)
   deadwood(x, y, dens) {
     const r = this.treeRnd(x, y, 31);
     if (r > dens * 0.022) return null;
-    if (r < dens * 0.012) return { t: 'tlog', dir: this.treeRnd(x, y, 32) < 0.5 ? 'E' : 'S', v: Trees.hash(x, y, 33) % 3 };
+    if (r < dens * 0.012) {
+      const alongU = this.treeRnd(x, y, 32) < 0.5, dir = alongU ? 'E' : 'S', v = Trees.hash(x, y, 33) % 3;
+      // a fallen tree lies back over tiles this pass has already left empty (x, y is its front end), so the
+      // pass's random sequence is untouched
+      const n = this.treeRnd(x, y, 35) < 0.55 ? 3 + Trees.hash(x, y, 36) % 2 : 1;
+      if (n > 1 && this.lieFree(x, y, alongU, n)) {
+        for (let k = 1; k < n; k++) this.w.obj[alongU ? y * this.W + x - k : (y - k) * this.W + x] = { t: 'tlog', dir, v, n, part: n - 1 - k };
+        return { t: 'tlog', dir, v, n, part: n - 1 };
+      }
+      return { t: 'tlog', dir, v };
+    }
     return { t: 'tstump', dir: 'S', v: Trees.hash(x, y, 34) % 3 };
+  },
+  // the n - 1 tiles behind x, y (toward -u or -v) are open ground with nothing on them
+  lieFree(x, y, alongU, n) {
+    for (let k = 1; k < n; k++) {
+      const xx = alongU ? x - k : x, yy = alongU ? y : y - k;
+      if (xx < 0 || yy < 0) return false;
+      const j = yy * this.W + xx, f = this.w.floor[j];
+      if (this.used[j] || this.w.obj[j] || this.w.room[j] >= 0 || (f !== FL.GRASS && f !== FL.GRASS2 && f !== FL.FOREST)) return false;
+    }
+    return true;
   },
   // staggered rows of fruit trees on free grass (apples, now and then a row of cherries)
   orchard(x0, y0, x1, y1, step) {
