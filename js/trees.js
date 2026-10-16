@@ -597,6 +597,9 @@ const Trees = {
     const s = Render.shadeAt(x, y);
     const by = Y + HTH, sc = rec.sc || 1;
     const dx = X - rec.ax * sc, dy = Y - rec.ay * sc, dw = rec.c.width * sc, dh = rec.c.height * sc;
+    // wholly off screen (rows run on below the screen for the tallest crowns): nothing to draw
+    const V = Render.scr;
+    if (dx > V.R + 8 || dy > V.B || dx + dw < V.L - 8 || dy + dh < V.T) return;
     let fh = 0, fc = 0;
     const hx = Render.PX, hy = Render.PY - 34, R = this.HOLE;
     if (!o.stump) {

@@ -77,7 +77,7 @@ const Game = {
     G.time = 0; G.weather = { rain: 0, snow: 0, temp: 20 };
     Season.update();
     // a world pre-generated while the player was on the character screen saves the wait
-    const w = cfg.world || MapGen.generate(G.seed);
+    const w = cfg.world || MapGen.generate(G.seed, cfg.size || Settings.v.worldSize);
     delete cfg.world;
     World.use(w);
     G.conts = new Set();
@@ -377,8 +377,15 @@ const Game = {
     const cd = Math.max(Math.abs(Math.floor(vxOf(x) / CHUNK) - Math.floor(vxOf(q.x) / CHUNK)), Math.abs(Math.floor(y / CHUNK) - Math.floor(q.y / CHUNK)));
     return cd >= 12 ? 2 : cd >= 6 ? 1 : 0;
   },
+  tickScan(n) {
+    const O = Wd.obj, L = this.scanL, end = Math.min(O.length, this.scanAt + n);
+    for (let i = this.scanAt; i < end; i++) { const o = O[i]; if (o && (TICK_OBJ[o.t] || (o.t === 'bush' && o.berryDay !== undefined))) L.push(i); }
+    this.scanAt = end;
+    if (end >= O.length) { this.tickList = L; this.scanAt = -1; }
+  },
   worldTick(gm) {
     const p = G.player;
+    if (this.scanAt >= 0 && this.tickWorld === Wd) this.tickScan(131072);
     const powered = !G.events.powerOff;
     Fx.capDecals();
     // containers: spoilage & cooking
@@ -406,12 +413,11 @@ const Game = {
       const sg0 = this.slowAcc; this.slowAcc = 0;
       const rain = G.weather.rain;
       this.stick = (this.stick || 0) + 1;
-      // ticking objects (fires, crops, barrels, traps, regrowing bushes) are indexed every 20 game minutes
-      if (!this.tickList || this.tickWorld !== Wd || this.stick % 4 === 0) {
-        const L = [];
-        for (let i = 0; i < Wd.obj.length; i++) { const o = Wd.obj[i]; if (o && (TICK_OBJ[o.t] || (o.t === 'bush' && o.berryDay !== undefined))) L.push(i); }
-        this.tickList = L; this.tickWorld = Wd;
-      }
+      // ticking objects (fires, crops, barrels, traps, regrowing bushes) are indexed every 20 game minutes: at once for
+      // a new world, else in slices over the next game minutes (tickScan; a big world has 1.6M tiles) while the last
+      // index stays in use
+      if (!this.tickList || this.tickWorld !== Wd) { this.scanAt = 0; this.scanL = []; this.tickScan(Infinity); this.tickWorld = Wd; }
+      else if (this.stick % 4 === 0 && !(this.scanAt >= 0)) { this.scanAt = 0; this.scanL = []; }
       for (const i of this.tickList) {
         const o = Wd.obj[i];
         if (!o) continue;
@@ -630,8 +636,15 @@ const Save = {
   },
   serialize() {
     const w = Wd, p = G.player;
-    const objs = [];
-    for (let i = 0; i < w.obj.length; i++) if (w.obj[i]) objs.push([i, w.obj[i]]);
+    // plain trees (most of the objects, and a big world has 100k+ of them) go as 4 numbers each: tile, species (index
+    // into treeK, saved alongside), size x 100, variant; anything else about a tree (a stump, a burn) keeps it an object
+    const objs = [], trees = [], TI = this.treeI || (this.treeI = new Map(Object.keys(TREE_SP).map((k, j) => [k, j])));
+    for (let i = 0; i < w.obj.length; i++) {
+      const o = w.obj[i];
+      if (!o) continue;
+      if (o.t === 'tree' && this.plainTree(o, TI)) trees.push(i, TI.get(o.kind), Math.round(o.sz * 100), o.v);
+      else objs.push([i, o]);
+    }
     const u8 = (a) => this.b64(a);
     const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null });
     const rd = (v) => Math.round(v * 100) / 100, SK = this.ZSKIP;
@@ -648,20 +661,48 @@ const Save = {
       uid: _uid, zid: _zid, cid: _carId, kills: p.kills,
       world: {
         w: w.w, h: w.h, gw: w.gw, stairs: w.stairs, floor: u8(w.floor), fvar: u8(w.fvar), deco: u8(w.deco), wallN: u8(w.wallN), wallW: u8(w.wallW), room: u8(w.room), seen: u8(w.seen),
-        objs, items: [...w.items.entries()], feat: [...w.feat.entries()], edgeHp: [...w.edgeHp.entries()],
+        objs, trees, treeK: [...TI.keys()], items: [...w.items.entries()], feat: [...w.feat.entries()], edgeHp: [...w.edgeHp.entries()],
         fire: w.fire ? [...w.fire.entries()] : [], charred: w.charred ? [...w.charred] : [],
         buildings: w.buildings, rooms: w.rooms, decals: w.decals.slice(-200), forage: [...w.forage.entries()], labels: w.labels, zones: w.zones,
       },
       player: pl, zombies: zs, cars: G.cars,
     };
   },
+  plainTree(o, TI) {
+    let n = 0;
+    for (const k in o) { if (k !== 't' && k !== 'dir' && k !== 'kind' && k !== 'sz' && k !== 'v') return false; n++; }
+    return n === 5 && o.dir === 'S' && TI.has(o.kind) && typeof o.sz === 'number' && typeof o.v === 'number';
+  },
+  // the save as pieces of one JSON text: the world's big arrays (base64, reused while unchanged; 15 MB in an 800 x 800
+  // world) go in as pieces of their own, so the autosave never builds and copies one huge string in a single frame
+  BIG: ['floor', 'fvar', 'deco', 'wallN', 'wallW', 'room', 'seen'],
+  // blobs: the arrays as cached Blobs (quoted base64, made again only when an array changed: turning 15 MB of text into
+  // the bytes a Blob holds is most of what is left of the autosave's freeze)
+  parts(blobs) {
+    const s = this.serialize(), sw = s.world, big = {};
+    for (const k of this.BIG) { big[k] = sw[k]; sw[k] = '\u0001' + k; }
+    const json = JSON.stringify(s), out = [];
+    let at = 0;
+    for (const k of this.BIG) {
+      const tag = '"\\u0001' + k + '"', i = json.indexOf(tag, at);
+      out.push(json.slice(at, i));
+      const e = blobs && this.b64c.get(Wd[k]);
+      if (e && e.s === big[k]) { if (e.bs !== e.s) { e.blob = new Blob(['"', e.s, '"']); e.bs = e.s; } out.push(e.blob); }
+      else out.push('"', big[k], '"');
+      at = i + tag.length;
+    }
+    out.push(json.slice(at));
+    return out;
+  },
   async save(auto) {
     if (!G.player || G.player.dead) return false;
     try {
-      const json = JSON.stringify(this.serialize());
-      let data = 'J' + json;
-      if (window.CompressionStream) {
-        const cs = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+      const t0 = performance.now(), zip = !!window.CompressionStream, parts = this.parts(zip);
+      this.syncMs = performance.now() - t0;
+      let data;
+      if (!zip) data = 'J' + parts.join('');
+      else {
+        const cs = new Blob(parts).stream().pipeThrough(new CompressionStream('gzip'));
         const buf = new Uint8Array(await new Response(cs).arrayBuffer());
         data = 'Z' + Bin.toB64(buf);
       }
@@ -691,6 +732,7 @@ const Save = {
     const into = (arr, b64) => { const b = Bin.fromB64(b64); new Uint8Array(arr.buffer).set(b); };
     into(w.floor, sw.floor); into(w.fvar, sw.fvar); into(w.deco, sw.deco); into(w.wallN, sw.wallN); into(w.wallW, sw.wallW); into(w.room, sw.room); into(w.seen, sw.seen);
     for (const [i, o] of sw.objs) w.obj[i] = o;
+    if (sw.trees) { const T = sw.trees, K = sw.treeK; for (let j = 0; j < T.length; j += 4) w.obj[T[j]] = { t: 'tree', dir: 'S', kind: K[T[j + 1]], sz: T[j + 2] / 100, v: T[j + 3] }; }
     w.items = new Map(sw.items); w.feat = new Map(sw.feat); w.edgeHp = new Map(sw.edgeHp);
     w.buildings = sw.buildings; w.rooms = sw.rooms; w.decals = sw.decals; w.forage = new Map(sw.forage); w.labels = sw.labels; w.zones = sw.zones;
     w.powerGens = [];

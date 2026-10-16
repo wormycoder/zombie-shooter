@@ -177,19 +177,35 @@ const Street = {
     }
     this.mask = m; this.maskW = Wd;
   },
+  // curbs are baked into the cached 8x8 ground chunks (Render.drawGround -> curbChunk); this hook only draws them for
+  // the debug path that draws the ground tile by tile
   curbHook(ctx, minX, minY, maxX, maxY) {
+    if (!Wd || !Render.noChunks) return;
+    this.curbPaint(ctx, minX, minY, maxX, maxY, 0, 0);
+  },
+  // a chunk's curbs: its own tiles and the faces of the tiles just north / west of it that hang over its edge, clipped
+  // to the chunk's diamond so every curb pixel is painted once (ox, oy: the chunk canvas origin in iso px)
+  curbChunk(g, x0, y0, CH, ox, oy) {
     if (!Wd) return;
+    const tx = (x0 - y0) * HTW - ox, ty = (x0 + y0) * HTH - oy;
+    g.save();
+    g.beginPath(); g.moveTo(tx, ty - 1); g.lineTo(tx + CH * HTW + 2, ty + CH * HTH); g.lineTo(tx, ty + CH * TH + 1); g.lineTo(tx - CH * HTW - 2, ty + CH * HTH); g.closePath();
+    g.clip();
+    this.curbPaint(g, x0 - 1, y0 - 1, x0 + CH, y0 + CH, ox, oy);
+    g.restore();
+  },
+  curbPaint(ctx, minX, minY, maxX, maxY, ox, oy) {
     if (this.maskW !== Wd) this.buildMask();
     const m = this.mask, GW = Wd.gw || Wd.w, hc = 4.2;
-    const faceS = new Path2D(), faceE = new Path2D(), lit = new Path2D(), dark = new Path2D();
-    let n = 0;
+    minX = Math.max(0, minX); minY = Math.max(0, minY); maxX = Math.min(GW - 1, maxX); maxY = Math.min(Wd.h - 1, maxY);
+    let faceS = null, faceE, lit, dark;
     for (let y = minY; y <= maxY; y++) {
       const row = y * GW;
       for (let x = minX; x <= maxX; x++) {
         const b = m[row + x];
         if (!b) continue;
-        n++;
-        const X = (x - y) * HTW, Y = (x + y) * HTH;
+        if (!faceS) { faceS = new Path2D(); faceE = new Path2D(); lit = new Path2D(); dark = new Path2D(); }
+        const X = (x - y) * HTW - ox, Y = (x + y) * HTH - oy;
         if (b & 1) { // S edge: from left corner (x, y+1) to bottom corner (x+1, y+1)
           const ax = X - HTW, ay = Y + HTH, bx = X, by = Y + TH;
           faceS.moveTo(ax, ay); faceS.lineTo(bx, by); faceS.lineTo(bx, by + hc); faceS.lineTo(ax, ay + hc); faceS.closePath();
@@ -204,7 +220,7 @@ const Street = {
         if (b & 8) { lit.moveTo(X + 1.6, Y + 0.8); lit.lineTo(X - HTW + 1.6, Y + HTH + 0.8); dark.moveTo(X, Y); dark.lineTo(X - HTW, Y + HTH); }
       }
     }
-    if (!n) return;
+    if (!faceS) return;
     ctx.fillStyle = '#7c7a74'; ctx.fill(faceS);
     ctx.fillStyle = '#66645f'; ctx.fill(faceE);
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(206,204,196,0.75)'; ctx.stroke(lit);

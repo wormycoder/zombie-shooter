@@ -916,7 +916,7 @@ const MapView = {
     if (!P.body.querySelector('canvas')) {
       P.body.innerHTML = `<div class="mapw"><canvas class="mapc"></canvas><div class="mapl sml">Drag to pan · wheel to zoom · explored areas only${this.revealed ? '' : ' (find a map to reveal more)'}</div></div>`;
       const cv = P.body.querySelector('canvas');
-      cv.addEventListener('wheel', (e) => { e.preventDefault(); this.zoom = U.clamp(this.zoom * (e.deltaY > 0 ? 0.85 : 1.18), 1.2, 10); this.draw(); }, { passive: false });
+      cv.addEventListener('wheel', (e) => { e.preventDefault(); this.zoom = U.clamp(this.zoom * (e.deltaY > 0 ? 0.85 : 1.18), Math.min(1.2, 560 / (Wd.gw || Wd.w)), 10); this.draw(); }, { passive: false });
       cv.addEventListener('mousedown', (e) => {
         this.dragging = true; const sx = e.clientX, sy = e.clientY, ox = this.cx, oy = this.cy;
         const mv = (ev) => { if (!this.dragging) return; this.cx = ox - (ev.clientX - sx) / this.zoom; this.cy = oy - (ev.clientY - sy) / this.zoom; this.draw(); };

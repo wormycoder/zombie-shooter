@@ -19,7 +19,11 @@ const MapGen = {
   // second town: Millbrook, to the south-east
   RX2: [270, 300, 330, 360], RY2: [255, 285, 315, 345],
 
-  generate(seed) {
+  // size: ground tiles per side (Settings > Experimental > World size). The county keeps its place in the north-west
+  // corner of a bigger map; the land around it is only blocked out so far (bigRoads, bigTracks, the forest pass)
+  generate(seed, size) {
+    const S = this.GW = this.H = Math.max(400, Math.round(size || 400));
+    this.W = 2 * S;
     const W = this.W, H = this.H;
     this.rng = new RNG(seed);
     const w = this.w = World.create(W, H, this.GW);
@@ -42,6 +46,7 @@ const MapGen = {
     // detail passes (street furniture, yards) - defined in street.js / yard.js
     if (this.streetPass) this.streetPass();
     if (this.yardPass) this.yardPass();
+    if (S > 400) this.bigTracks();
     this.forest();
     this.finalize();
     // keep saves compact
@@ -115,6 +120,7 @@ const MapGen = {
     // Millbrook grid; one street runs west to Main Street, one north to the highway
     for (const y of RY2) rects.push({ h: true, p: y, s: (y === 315 ? 135 : a2x), e: b2x, side: true });
     for (const x of RX2) rects.push({ h: false, p: x, s: (x === 300 ? 105 : a2y), e: b2y, side: true });
+    if (this.GW > 400) this.bigRoads(rects);
     const inTown = (x, y) => (x >= a - 1 && x <= b + 1 && y >= a - 1 && y <= b + 1) || (x >= a2x - 1 && x <= b2x + 1 && y >= a2y - 1 && y <= b2y + 1);
     // pass 1: sidewalks
     for (const R_ of rects) {
@@ -1383,6 +1389,71 @@ const MapGen = {
       if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430', kind: ['sedan', 'wagon', 'pickup', 'van', 'hatchback', 'suv'][(x * 7 + y * 13) % 6] });
     }
   },
+  // ---------------------------------------------------------------- bigger worlds (blocked out: roads and forest)
+  // Long straight roads through the new land, paved by roads() with the county's own (rects): Route 9 and Main St
+  // already run on to the map edge; County Road 14 crosses the east woods north to south, County Road 22 the south
+  // west to east, and from 800 tiles a divided interstate (two carriageways, a grass median) runs down the far east.
+  // New roads stay out of the old 400 x 400 county, where houses are placed by hand after the roads.
+  bigRoads(rects) {
+    const S = this.GW, D = S - 400;
+    const ex = 400 + Math.round(D * 0.4), sy = 400 + Math.round(D * 0.45), ix = S >= 760 ? S - 64 : 0;
+    this.big = { ex, sy, ix };
+    rects.push({ h: false, p: ex, s: 0, e: S - 1 });
+    rects.push({ h: true, p: sy, s: 0, e: S - 1 });
+    if (ix) {
+      rects.push({ h: false, p: ix, s: 0, e: S - 1 }, { h: false, p: ix + 6, s: 0, e: S - 1 });
+      // side roads: east to the interstate across the north-east, and south off County Road 22
+      rects.push({ h: true, p: 262, s: ex, e: ix }, { h: false, p: 268, s: sy, e: S - 1 });
+      this.w.labels.push({ x: ix + 5, y: Math.round(S * 0.62), text: 'Interstate 71' });
+    }
+    // grass verges: the woods keep two tiles back from the new roads (and Route 9 / Main St beyond the county)
+    for (const R_ of rects) {
+      if (R_.p < 400 && R_.e < 400) continue;
+      for (let t = R_.s; t <= R_.e; t++) for (const off of [-2, -1, 4, 5]) {
+        const x = R_.h ? t : R_.p + off, y = R_.h ? R_.p + off : t;
+        if (x >= 0 && y >= 0 && x < S && y < S && (x >= 404 || y >= 404)) this.mark(x, y, x, y, 1);
+      }
+    }
+    this.w.labels.push({ x: ex + 2, y: Math.round(D * 0.5) + 150, text: 'County Rd 14' }, { x: Math.round(S * 0.3), y: sy + 2, text: 'County Rd 22' },
+      { x: Math.round((400 + ex) / 2), y: 107, text: 'Route 9' }, { x: Math.round((ex + S) / 2), y: Math.round(sy / 2), text: 'Wildwood State Forest' },
+      { x: Math.round(S * 0.18), y: Math.round((sy + S) / 2), text: 'Bear Run Woods' });
+  },
+  // dirt logging tracks into the new land's woods: off a long road, straight in, maybe a bend, ending in a turning loop
+  bigTracks() {
+    const r = this.rng, S = this.GW, W = this.W, n = Math.round((S - 400) / 22);
+    const F = this.w.floor, tarmac = (x, y) => F[y * W + x] === FL.ASPHALT;
+    const old = (x, y) => x < 404 && y < 404;
+    const rd = [[false, this.big.ex], [true, this.big.sy], [true, 105], [false, 135]];
+    if (this.big.ix) rd.push([false, this.big.ix + 6]);
+    for (let k = 0, tries = 0; k < n && tries < n * 20; tries++) {
+      const [h, p] = r.pick(rd), t = r.int(20, S - 21), side = r.chance(0.5) ? -1 : 1;
+      // start beside the road on its chosen side, heading away from it
+      let x = h ? t : (side < 0 ? p - 1 : p + 4), y = h ? (side < 0 ? p - 1 : p + 4) : t;
+      if (old(x, y) || !World.inb(x, y)) continue;
+      const dx = h ? 0 : side, dy = h ? side : 0, len = r.int(18, 55);
+      const pts = [[x, y]];
+      const ok = (x0, y0, x1, y1) => {
+        for (let q = 0, L = Math.abs(x1 - x0) + Math.abs(y1 - y0); q <= L; q++) {
+          const cx = x0 + Math.sign(x1 - x0) * q, cy = y0 + Math.sign(y1 - y0) * q;
+          if (cx < 2 || cy < 2 || cx >= S - 3 || cy >= S - 3 || old(cx, cy) || (q > 1 && (tarmac(cx, cy) || tarmac(cx + 1, cy + 1)))) return false;
+        }
+        return true;
+      };
+      let x1 = x + dx * len, y1 = y + dy * len;
+      if (!ok(x, y, x1, y1)) continue;
+      pts.push([x1, y1]);
+      if (r.chance(0.6)) {
+        const s2 = r.chance(0.5) ? -1 : 1, l2 = r.int(10, 35), x2 = x1 + (h ? s2 * l2 : 0), y2 = y1 + (h ? 0 : s2 * l2);
+        if (ok(x1, y1, x2, y2)) { pts.push([x2, y2]); x1 = x2; y1 = y2; }
+      }
+      this.dirtPath(pts, 2);
+      // a clearing at the end where the trucks turned and loaded
+      for (let yy = y1 - 2; yy <= y1 + 3; yy++) for (let xx = x1 - 2; xx <= x1 + 3; xx++) if (World.inb(xx, yy) && !old(xx, yy) && !tarmac(xx, yy) && (Math.abs(xx - x1 - 0.5) + Math.abs(yy - y1 - 0.5) < 4.5)) {
+        this.sf(xx, yy, r.chance(0.7) ? FL.DIRT : FL.GRASS2, r.int(0, 3)); this.mark(xx, yy, xx, yy, 1);
+      }
+      k++;
+    }
+  },
   forest() {
     const r = this.rng, W = this.W, H = this.H;
     const a = this.RP[0] - 4, b = this.RP[5] + 8;
@@ -1411,7 +1482,13 @@ const MapGen = {
     this.w.zones.push({ x0: RP[0], y0: RP[0], x1: RP[5] + 3, y1: RP[5] + 3, n: 300 });
     this.w.zones.push({ x0: RP[0], y0: 100, x1: RP[5] + 3, y1: 140, n: 90 });
     this.w.zones.push({ x0: 200, y0: 90, x1: 232, y1: 125, n: 22 });
-    this.w.zones.push({ x0: 0, y0: 0, x1: this.GW - 1, y1: this.H - 1, n: 170 });
+    this.w.zones.push({ x0: 0, y0: 0, x1: Math.min(this.GW, 400) - 1, y1: Math.min(this.H, 400) - 1, n: 170 });
+    // the blocked-out land of a bigger world: a thin scatter (half the county's density; nobody lived out there)
+    if (this.GW > 400) {
+      const S = this.GW, k = 0.00055;
+      this.w.zones.push({ x0: 400, y0: 0, x1: S - 1, y1: 399, n: Math.round((S - 400) * 400 * k) });
+      this.w.zones.push({ x0: 0, y0: 400, x1: S - 1, y1: S - 1, n: Math.round(S * (S - 400) * k) });
+    }
     this.w.zones.push({ x0: this.RX2[0], y0: this.RY2[0], x1: this.RX2[3] + 3, y1: this.RY2[3] + 3, n: 150 });
     this.w.zones.push({ x0: 196, y0: 296, x1: 252, y1: 330, n: 16 });
     this.w.zones.push({ x0: 380, y0: 96, x1: 399, y1: 116, n: 10, outfit: 'military' });

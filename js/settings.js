@@ -2,7 +2,7 @@
 // ---------------------------------------------------------------------------
 // Player settings: graphics & performance, saved in this browser
 // ---------------------------------------------------------------------------
-// tab: 'opt' (Optimization) or 'display' (Settings screen); grp: section heading on the Optimization tab
+// tab: 'opt' (Optimization), 'display' or 'exp' (Experimental) on the Settings screen; grp: section heading
 const SETTINGS_OPTS = {
   res: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Render resolution', opts: [['Auto', 'auto'], ['50%', 0.5], ['67%', 0.67], ['75%', 0.75], ['100%', 1]], tip: 'Pixels drawn per frame. Lower is much faster, especially on high-DPI screens. Auto caps high-DPI screens at 1.5x.' },
   dynRes: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Dynamic resolution', opts: [['Off', 0], ['On', 1]], tip: 'While the frame rate stays below its target (the frame rate limit, or 60), the render resolution steps down (to half at most) and comes back up when there is headroom again. Helps when the graphics card is the bottleneck (big or high-DPI screens).' },
@@ -25,6 +25,8 @@ const SETTINGS_OPTS = {
   zLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy zombie updates', opts: [['Off', 0], ['On', 1]], tip: 'Zombies in distant chunks (8x8 tiles) think less often: 3-5 chunks away every other step, 6-11 a coarse update every 2 s, 12+ paused. Chasing and visible zombies always run at full rate.' },
   zAdapt: { tab: 'opt', grp: 'Simulation', n: 'Adaptive zombie physics', opts: [['Off', 0], ['On', 1]], tip: 'With more than 120 zombies close by, crowd zombies update at half rate to keep the frame rate up.' },
   chunkLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks (8x8 tiles) 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
+  // read when a new game's world is made (saves keep the size they were made with); not part of the presets
+  worldSize: { tab: 'exp', grp: 'World', n: 'World size (new games)', opts: [['Normal (400 x 400)', 400], ['Large, 2.5x (640 x 640)', 640], ['Huge, 4x (800 x 800)', 800], ['Massive, 5x (896 x 896)', 896]], tip: 'Experimental. A bigger county for new games: Hollow Creek and Millbrook stay as they are in the north-west, and the new land around them is only blocked out so far - highways, county roads, logging tracks and forest, no buildings yet. Bigger worlds take longer to make and give bigger save files. Games already started keep their size.' },
 };
 // Auto (the default) is High plus the automatic helpers: dynamic resolution, adaptive character detail and car detail
 // by zoom - full quality whenever the machine keeps up
@@ -37,7 +39,7 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: Object.assign({ fpsShow: 0 }, SETTINGS_PRESETS.Auto),
+  v: Object.assign({ fpsShow: 0, worldSize: 400 }, SETTINGS_PRESETS.Auto),
   listeners: [],
   load() {
     try {

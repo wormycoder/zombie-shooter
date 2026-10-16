@@ -61,6 +61,14 @@ const Render = {
   },
   // visual height of an entity's feet (upstairs or part way up a staircase)
   entZ(e) { return e.x >= LV.W0 ? WALL_H : World.stairZ(e); },
+  // can a character at world (x, y) show on screen this frame (iso px, generous margins for raised arms, weapons,
+  // lying bodies and shadows)? Char3D.prepare and the draw passes both use it: whatever is drawn was posed, and
+  // nobody off screen is posed, rendered into the 3D atlas or painted (the tile box of the view is twice the screen)
+  charVis(x, y) {
+    const up = x >= LV.W0, vx = up ? x - LV.W0 : x, S = this.scr;
+    const X = (vx - y) * HTW, Y = (vx + y) * HTH - (up ? WALL_H * ZU : 0);
+    return X > S.L - 80 && X < S.R + 80 && Y > S.T - 48 && Y < S.B + 150;
+  },
   epos(e, zo) {
     const up = e.x >= LV.W0, x = up ? e.x - LV.W0 : e.x;
     const z = (up ? WALL_H : World.stairZ(e)) + (zo || 0);
@@ -164,16 +172,21 @@ const Render = {
         continue;
       }
       if (d.x < minX || d.x > maxX + 1 || d.y < minY || d.y > maxY + 1) continue;
+      const dX = (d.x - d.y) * HTW, dY = (d.x + d.y) * HTH;
+      if (dX < L - 70 || dX > Rr + 70 || dY < T - 40 || dY > B + 40) continue;
       this.drawDecal(ctx, d, 0);
     }
     ctx.globalAlpha = 1;
     // ground-level overlays from other modules (tyre marks etc.), drawn under entities
     for (const fn of FLOOR_HOOKS) fn(ctx, minX, minY, maxX, maxY);
     // floor items (forEach: no entry arrays)
-    this.itemArgs[0] = ctx; this.itemArgs[1] = minX; this.itemArgs[2] = minY; this.itemArgs[3] = maxX; this.itemArgs[4] = maxY;
+    const IA = this.itemArgs;
+    IA[0] = ctx; IA[1] = minX; IA[2] = minY; IA[3] = maxX; IA[4] = maxY; IA[5] = L; IA[6] = Rr; IA[7] = T; IA[8] = B;
     w.items.forEach(this.itemFn || (this.itemFn = (arr, i) => {
       const A = this.itemArgs, W1 = Wd.w, x = i % W1, y = (i / W1) | 0;
       if (x < A[1] || x > A[3] || y < A[2] || y > A[4]) return;
+      const X = (x - y) * HTW, Y = (x + y) * HTH;
+      if (X < A[5] - 60 || X > A[6] + 60 || Y < A[7] - 50 || Y > A[8] + 50) return;
       this.drawItems(A[0], x, y, arr, 0);
     }));
     // corpses & downed bodies (flat things)
@@ -184,7 +197,7 @@ const Render = {
         if (openB) { const k = Math.floor(zb.y) * W_ + Math.floor(zb.x); let a = flat1.get(k); if (!a) { a = []; flat1.set(k, a); } a.push(zb); }
         continue;
       }
-      if (zb.x < minX - 2 || zb.x > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
+      if (zb.x < minX - 2 || zb.x > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2 || !this.charVis(zb.x, zb.y)) continue;
       Zombie.draw(ctx, zb, true);
     }
     if (G.corpse && p && p.dead && p.x < W0) Player.draw(ctx);
@@ -198,11 +211,13 @@ const Render = {
     for (const zb of G.zombies) {
       if (zb.dead && (zb.lie || 0) >= 0.99) continue;
       const ex = zb.x >= W0 ? zb.x - W0 : zb.x;
-      if (ex < minX - 2 || ex > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2) continue;
+      if (ex < minX - 2 || ex > maxX + 2 || zb.y < minY - 2 || zb.y > maxY + 2 || !this.charVis(zb.x, zb.y)) continue;
       this.bkAdd(zb, 1);
     }
     for (const c of G.cars) {
       if (c.x < minX - 3 || c.x > maxX + 3 || c.y < minY - 3 || c.y > maxY + 3) continue;
+      const cX = (c.x - c.y) * HTW, cY = (c.x + c.y) * HTH;
+      if (cX < L - 200 || cX > Rr + 200 || cY < T - 120 || cY > B + 200) continue;
       this.bkAdd(c, 2);
     }
     const BH = this.bkH, BH1 = this.bkH1, BN = this.bkN, BE = this.bkE, BK = this.bkK, BVW = this.bvw;
@@ -277,8 +292,10 @@ const Render = {
           }
           continue;
         }
-        if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-        if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+        if (Y < B + 100) {
+          if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+          if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+        }
         const o = OB[i];
         if (o) this.drawObj(o, x, y, X, Y, pl, t, x);
         if (FM) { const fe = FM.get(i); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i * 0.37); }
@@ -344,7 +361,7 @@ const Render = {
     else Vehicles.draw(ctx, e);
   },
   // per-tile entity lists over the view (ground bkH, upstairs bkH1): heads, next links, entity, kind, depth
-  bkH: null, bkH1: null, bkN: new Int32Array(256), bkD: new Float64Array(256), bkE: [], bkK: new Uint8Array(256), bkC: 0, bvw: 0, bx0: 0, by0: 0, bvh: 0, itemArgs: [null, 0, 0, 0, 0],
+  bkH: null, bkH1: null, bkN: new Int32Array(256), bkD: new Float64Array(256), bkE: [], bkK: new Uint8Array(256), bkC: 0, bvw: 0, bx0: 0, by0: 0, bvh: 0, itemArgs: [null, 0, 0, 0, 0, 0, 0, 0, 0],
   bkReset(x0, y0, vw, vh) {
     const n = vw * vh;
     if (!this.bkH || this.bkH.length < n) { this.bkH = new Int32Array(n + (n >> 2)); this.bkH1 = new Int32Array(n + (n >> 2)); }
@@ -428,6 +445,7 @@ const Render = {
     // chunks are built while this frame has spent under ~5 ms on it (at least 6): drawing a missing chunk tile by tile
     // costs as much as building it, and the next frame would have to do it again
     let budget = 6, nvis = 0;
+    const env = ((snowA * 100) | 0) * 4096 + (gs ? gs.charCodeAt(0) : 0) * 8 + detail;
     const cx0 = Math.floor(minX / CH), cy0 = Math.floor(minY / CH), cx1 = Math.floor(maxX / CH), cy1 = Math.floor(maxY / CH);
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const x0 = cx * CH, y0 = cy * CH;
@@ -435,8 +453,10 @@ const Render = {
       const ox = (x0 - y0 - CH) * HTW - 1, oy = (x0 + y0) * HTH - 1;
       if (ox + 2 * CH * HTW + 2 < L - 40 || ox > Rr + 40 || oy + 2 * CH * HTH + 2 < T - 40 || oy > B + 10) continue;
       const key = cy * 4096 + cx;
-      const sig = this.chunkSig(x0, y0, gs, snowA, detail), wet = this.sigWet;
-      let ch = this.chunks.get(key);
+      let ch = this.chunks.get(key), sig, wet;
+      // a built chunk re-checks its tiles every 8th frame (staggered); snow, season or detail changes show at once
+      if (ch && ch.env === env && ((tick + cx + cy) & 7)) { sig = ch.sig; wet = ch.wet; }
+      else { sig = this.chunkSig(x0, y0, gs, snowA, detail); wet = this.sigWet; }
       nvis++;
       if (!ch || ch.sig !== sig) {
         if (budget > 0 || performance.now() - t0 < 5) {
@@ -445,10 +465,12 @@ const Render = {
           const g = ch.c.getContext('2d');
           g.clearRect(0, 0, ch.c.width, ch.c.height);
           for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(g, x, y, (x - y) * HTW - ox, (x + y) * HTH - oy, t, gs, snowA, detail, false);
-          ch.sig = sig; ch.wet = wet;
+          if (typeof Street !== 'undefined') Street.curbChunk(g, x0, y0, CH, ox, oy);
+          ch.sig = sig; ch.wet = wet; ch.env = env;
         } else {
           // over this frame's build budget: draw the tiles directly
           for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(ctx, x, y, (x - y) * HTW, (x + y) * HTH, t, gs, snowA, detail, true);
+          if (typeof Street !== 'undefined') Street.curbChunk(ctx, x0, y0, CH, 0, 0);
           continue;
         }
       }
@@ -920,6 +942,12 @@ const Render = {
     let m = this.omemo.get(o);
     if (!m || !((this.fno + x + y) & 7) || (Math.abs(vx - this.npx) < 4 && Math.abs(y - this.npy) < 4)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
     const rec = m.rec;
+    // per-type animated overlay: ObjArt.a_<type>(ctx, o, X, Y, t, shade, x, y)
+    let an = this.anims[o.t];
+    if (an === undefined) an = this.anims[o.t] = ObjArt['a_' + o.t] || null;
+    // a sprite wholly off screen is skipped (rows run on below the screen for tall crowns), unless its type paints an
+    // overlay that reaches beyond it (pole wires, signal heads over the junction, canopies)
+    if (!an) { const S = this.scr, sx = X - rec.ax, sy = Y - rec.ay; if (sx > S.R || sy > S.B || sx + rec.c.width < S.L || sy + rec.c.height < S.T) return; }
     let alpha = 1;
     if (p && def.h > 1.1 && o.t !== 'stairs' && o.t !== 'landing') {
       const by = Y + HTH;
@@ -943,9 +971,6 @@ const Render = {
       gr.addColorStop(0, 'rgba(255,240,190,0.9)'); gr.addColorStop(1, 'rgba(255,240,190,0)');
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(h[0], h[1], 16, 0, 7); ctx.fill();
     }
-    // per-type animated overlay: ObjArt.a_<type>(ctx, o, X, Y, t, shade, x, y)
-    let an = this.anims[o.t];
-    if (an === undefined) an = this.anims[o.t] = ObjArt['a_' + o.t] || null;
     if (an) an.call(ObjArt, ctx, o, X, Y, t, s, x, y);
     if (o.t === 'generator' && o.on && o.fuel > 0) { const c = isoP(X, Y, 0.3, 0.3, 0.9); ctx.fillStyle = 'rgba(120,120,120,0.4)'; ctx.beginPath(); ctx.arc(c[0] + Math.sin(t * 9) * 2, c[1] - (t * 20 % 12), 3, 0, 7); ctx.fill(); }
   },

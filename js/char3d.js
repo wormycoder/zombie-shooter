@@ -206,7 +206,7 @@ const Char3D = {
       let nc = 0, nd = 0;
       for (const z of G.zombies) {
         const vx = vxOf(z.x);
-        if (vx < minX - 3 || vx > maxX + 3 || z.y < minY - 3 || z.y > maxY + 3) continue;
+        if (vx < minX - 3 || vx > maxX + 3 || z.y < minY - 3 || z.y > maxY + 3 || !Render.charVis(z.x, z.y)) continue;
         const d = Zombie.drawInfo(z);
         if (!d) continue;
         const dx = vx - ox, dy = z.y - oy, r = Math.sqrt(dx * dx + dy * dy);

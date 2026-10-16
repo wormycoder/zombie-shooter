@@ -112,7 +112,7 @@ const Menu = {
   cfg: null,
   // build the game world in the background while the player designs a character
   pregen(sb) {
-    const key = JSON.stringify(sb);
+    const size = Settings.v.worldSize, key = JSON.stringify(sb) + size;
     if (this.pre && this.pre.key === key) return;
     this.pre = null;
     setTimeout(() => {
@@ -120,7 +120,7 @@ const Menu = {
       const keep = Wd, sb0 = G.sb;
       G.sb = sb;
       const seed = (Math.random() * 1e9) | 0;
-      const w = MapGen.generate(seed);
+      const w = MapGen.generate(seed, size);
       G.sb = sb0;
       World.use(keep);
       this.pre = { key, seed, w };
@@ -230,7 +230,7 @@ const Menu = {
     if (!cfg.name.trim()) cfg.name = 'Survivor';
     cfg.sb = sandboxValues(this.sbSel || {});
     this.cfg = null;
-    if (this.pre && this.pre.key === JSON.stringify(cfg.sb)) { cfg.world = this.pre.w; cfg.seed = this.pre.seed; }
+    if (this.pre && this.pre.key === JSON.stringify(cfg.sb) + Settings.v.worldSize) { cfg.world = this.pre.w; cfg.seed = this.pre.seed; }
     this.pre = null;
     $('#menu').innerHTML = '<div class="modal loading"><div class="ltext">Generating Hollow Creek...</div></div>';
     setTimeout(() => {
@@ -251,7 +251,7 @@ const Menu = {
     setTimeout(end, 6500);
   },
   // ------------------------------------------------------------------ options & controls
-  // Settings screen: Display / Performance / Audio / Controls tabs
+  // Settings screen: Optimization / Display / Audio / Controls / Experimental tabs
   setTab: 'opt',
   options(inGame) {
     const m = $('#menu');
@@ -269,7 +269,7 @@ const Menu = {
       return `<div class="opt" data-tip="${tip}"><span>${o.n}${na ? ' <span style="color:#c08060;font-size:11px">(unavailable: no GPU)</span>' : ''}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     };
     const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('') + '</div>';
-    const tabs = [['opt', 'Optimization'], ['display', 'Display'], ['audio', 'Audio'], ['controls', 'Controls']]
+    const tabs = [['opt', 'Optimization'], ['display', 'Display'], ['audio', 'Audio'], ['controls', 'Controls'], ['exp', 'Experimental']]
       .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab || (k === 'opt' && tab === 'report') ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
     let body = '';
     if (tab === 'report') body = `<div class="sml" style="margin:2px 0 6px">Performance report: copy it and send it along with a description of what was slow.</div>
@@ -279,6 +279,7 @@ const Menu = {
       + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:#d8d0b8">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
       + `<div style="max-height:360px;overflow-y:auto;padding-right:6px">${rows('opt')}</div><div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
     else if (tab === 'display') body = presets + rows('display') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
+    else if (tab === 'exp') body = `<div class="sml" style="margin:2px 0 4px;color:#d8b070">Work in progress: these may change, be slow or break saves made with them.</div>` + rows('exp') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
     else if (tab === 'audio') body = `<div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
       <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>`;
