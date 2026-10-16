@@ -232,6 +232,14 @@ const Render = {
     const pp = live ? this.epos(p) : [0, 0];
     const PX = pp[0], PY = pp[1];
     this.PX = PX; this.PY = PY;
+    // buildings shut under an opaque roof this frame: their furniture and inner walls cannot be seen, so are not drawn
+    if (!this.roomB || this.roomBW !== w || this.roomB.length !== w.rooms.length) {
+      this.roomB = new Int32Array(w.rooms.length); this.roomBW = w;
+      for (let r = 0; r < w.rooms.length; r++) this.roomB[r] = w.rooms[r].b;
+    }
+    if (!this.coverB || this.coverB.length < w.buildings.length) this.coverB = new Uint32Array(w.buildings.length + 64);
+    const CV = this.coverB, RB = this.roomB, cst = this.cvStamp = (this.cvStamp + 1) >>> 0 || 1;
+    if (!this.coverOff) for (const rl of roofs.values()) for (const b of rl) if (!b.roofGone && !this.roofSeeThrough(b, p)) CV[b.id] = cst;
     // stairwell opening of the floor the player stands on: ground floor stuff is only seen through it
     let openPath = null, see = null;
     if (openB) {
@@ -258,6 +266,18 @@ const Render = {
       if (a.length < 24) a.push([i % W_ >= W0 ? i % W_ - W0 : i % W_, (i / W_) | 0, e, i]);
     }
     const dMin = minX + minY, dMax = maxX + maxY, WN = w.wallN, WW = w.wallW, OB = w.obj;
+    // furniture in rooms never seen is not drawn (dark floors only, not black silhouettes of what is inside)
+    const RMa = w.room, SNa = w.seen, VGa = World.visGen, vgen = World.gen, hideUnseen = live && !p.dead;
+    // (a tile under a shut roof: its room's building covered this frame, and not just inside the walls that face the
+    // camera, where windows and shop fronts look in; an inner wall: both sides such tiles)
+    const BL = w.buildings;
+    // (shop windows are tall glass: tall shelves show through them from several tiles back)
+    const shut = (i, x, y) => {
+      const r = RMa[i]; if (r < 0) return false;
+      const bid = RB[r]; if (CV[bid] !== cst) return false;
+      const b = BL[bid], m = HOMELIKE[b.type] ? 1 : 4;
+      return x < b.x1 - m && y < b.y1 - m;
+    };
     // the columns of a diagonal that can be on screen (X = (2x - d) * HTW within L - 110 .. Rr + 110), a tile of slack
     const xl = (L - 110) / HTW, xr = (Rr + 110) / HTW;
     for (let d = dMin; d <= dMax; d++) {
@@ -292,12 +312,13 @@ const Render = {
           }
           continue;
         }
+        const sh = shut(i, x, y);
         if (Y < B + 100) {
-          if (WN[i]) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-          if (WW[i]) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+          if (WN[i] && !(sh && shut(i - W_, x, y - 1))) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+          if (WW[i] && !(sh && shut(i - 1, x - 1, y))) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
         }
         const o = OB[i];
-        if (o) this.drawObj(o, x, y, X, Y, pl, t, x);
+        if (o && !sh && (!hideUnseen || RMa[i] < 0 || SNa[i] || VGa[i] === vgen)) this.drawObj(o, x, y, X, Y, pl, t, x);
         if (FM) { const fe = FM.get(i); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i * 0.37); }
         for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
       }
@@ -325,7 +346,7 @@ const Render = {
             if (bid >= 0 && bid !== hiddenId && ((openB && bid === openB.id) || this._ext)) this.drawWall(x + W0, y, 1, X, Y, pb, pl, 1);
           }
           if (!openB || x < openB.x0 || x > openB.x1 || y < openB.y0 || y > openB.y1) continue;
-          if (o) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
+          if (o && (!hideUnseen || RMa[i1] < 0 || SNa[i1] || VGa[i1] === vgen)) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
           if (FM) { const fe = FM.get(i1); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i1 * 0.37); }
           for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
         }
@@ -978,6 +999,18 @@ const Render = {
   // ------------------------------------------------------------------ roofs
   // Roofs are pre-rendered per building (Facade.roof: shingles, gables, chimneys, snow...) and darkened
   // through their outline path. Over the per-frame build budget a roof falls back to plain polygons.
+  // a roof turns see-through while it hides the player (behind or under it)
+  roofSeeThrough(b, p) {
+    if (!p || p.dead) return false;
+    const H = WALL_H * (b.floors || 1), qx = this.PX, qy = this.PY - 26;
+    const P = (x, y, z) => [(x - y) * HTW, (x + y) * HTH - z * ZU];
+    // (quick reject: well outside the roof's screen box)
+    const xl = (b.x0 - b.y1 - 1) * HTW, xr = (b.x1 + 1 - b.y0) * HTW, yt = (b.x0 + b.y0) * HTH - (H + 1.2) * ZU, yb = (b.x1 + b.y1 + 2) * HTH;
+    if (qx < xl || qx > xr || qy < yt || qy > yb) return false;
+    const quad = [P(b.x0, b.y0, H), P(b.x1 + 1, b.y0, H), P(b.x1 + 1, b.y1 + 1, H), P(b.x0, b.y1 + 1, H)];
+    const quad2 = [P(b.x0, b.y0, 0), P(b.x1 + 1, b.y0, 0), P(b.x1 + 1, b.y0, H + 1.2), P(b.x0, b.y0, H + 1.2)];
+    return pointInPoly([qx, qy], quad) || pointInPoly([qx, qy], quad2);
+  },
   drawRoof(b, p) {
     const ctx = this.ctx;
     const H = WALL_H * (b.floors || 1);
@@ -991,13 +1024,7 @@ const Render = {
     smp(b.x1 + 1, b.y1 + 1); smp(b.x0 - 1, b.y1 + 1); smp(b.x1 + 1, b.y0 - 1); smp((b.x0 + b.x1) >> 1, b.y1 + 1); smp(b.x1 + 1, (b.y0 + b.y1) >> 1);
     if (s > 1) s = 1;
     // translucency if player hidden beneath
-    let alpha = 1;
-    if (p && !p.dead) {
-      const q = [this.PX, this.PY - 26];
-      const quad = [P(b.x0, b.y0, H), P(b.x1 + 1, b.y0, H), P(b.x1 + 1, b.y1 + 1, H), P(b.x0, b.y1 + 1, H)];
-      const quad2 = [P(b.x0, b.y0, 0), P(b.x1 + 1, b.y0, 0), P(b.x1 + 1, b.y0, H + 1.2), P(b.x0, b.y0, H + 1.2)];
-      if (pointInPoly(q, quad) || (pointInPoly(q, quad2))) alpha = 0.28;
-    }
+    const alpha = this.roofSeeThrough(b, p) ? 0.28 : 1;
     const rr = Facade.roof(b, Math.round(Season.snow * 4) / 4);
     if (alpha < 1) ctx.globalAlpha = alpha;
     if (rr) {
@@ -1116,6 +1143,8 @@ const Render = {
 };
 const HARD_FLOORS = []; for (const f of [FL.ASPHALT, FL.SIDEWALK, FL.CONCRETE, FL.DIRT, FL.SAND, FL.GRAVEL, FL.PARKING]) HARD_FLOORS[f] = true;
 const FR_DX = [0, -1, 0, 1], FR_DY = [-1, 0, 1, 0];
+// buildings with house windows (small, high glass): only the first rows inside them show through
+const HOMELIKE = { house: 1, farmhouse: 1, cabin: 1, trailer: 1, barracks: 1, prison: 1, motel: 1, tower: 1 };
 function pointInPoly(pt, vs) {
   let inside = false;
   for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {

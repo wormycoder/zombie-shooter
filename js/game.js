@@ -90,6 +90,8 @@ const Game = {
     home.isHome = true;
     home.alarm = false;
     const rooms = home.rooms.map(r => w.rooms[r]);
+    // you know your own house, every room of it
+    for (const rm of rooms) for (let y = rm.y0 - 1; y <= rm.y1 + 1; y++) for (let x = rm.x0 - 1; x <= rm.x1 + 1; x++) if (World.inb(x, y)) w.seen[y * w.w + x] = 1;
     const start = rooms.find(r => r.type === 'bedroom') || rooms[0];
     let sx = (start.x0 + start.x1) / 2 + 0.5, sy = (start.y0 + start.y1) / 2 + 0.5;
     for (let y = start.y0; y <= start.y1; y++) for (let x = start.x0; x <= start.x1; x++) if (!World.tileSolid(x, y) && !w.obj[y * w.w + x]) { sx = x + 0.5; sy = y + 0.5; }
