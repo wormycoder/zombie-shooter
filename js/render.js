@@ -999,17 +999,30 @@ const Render = {
   // ------------------------------------------------------------------ roofs
   // Roofs are pre-rendered per building (Facade.roof: shingles, gables, chimneys, snow...) and darkened
   // through their outline path. Over the per-frame build budget a roof falls back to plain polygons.
-  // a roof turns see-through while it hides the player (behind or under it)
+  // a roof turns see-through while it hides the player (behind or under it): the eave diamond and what rises over the
+  // back walls (west gable when the ridge runs along x, north gable when along y, a flat roof's parapet), tested at the
+  // hips, chest and head; the north wall plane at hip height only (a head point in it is also hit by a player in plain
+  // view just east of the north-east corner)
   roofSeeThrough(b, p) {
     if (!p || p.dead) return false;
-    const H = WALL_H * (b.floors || 1), qx = this.PX, qy = this.PY - 26;
+    const H = WALL_H * (b.floors || 1), S = Facade.style(b), qx = this.PX, PY = this.PY;
     const P = (x, y, z) => [(x - y) * HTW, (x + y) * HTH - z * ZU];
+    const zr = S.flat ? H + 0.6 : Facade.roofH(b, S, H);
     // (quick reject: well outside the roof's screen box)
-    const xl = (b.x0 - b.y1 - 1) * HTW, xr = (b.x1 + 1 - b.y0) * HTW, yt = (b.x0 + b.y0) * HTH - (H + 1.2) * ZU, yb = (b.x1 + b.y1 + 2) * HTH;
-    if (qx < xl || qx > xr || qy < yt || qy > yb) return false;
-    const quad = [P(b.x0, b.y0, H), P(b.x1 + 1, b.y0, H), P(b.x1 + 1, b.y1 + 1, H), P(b.x0, b.y1 + 1, H)];
+    const xl = (b.x0 - b.y1 - 1) * HTW, xr = (b.x1 + 1 - b.y0) * HTW, yt = (b.x0 + b.y0) * HTH - (Math.max(zr, H + 1.2) + 0.2) * ZU, yb = (b.x1 + b.y1 + 2) * HTH;
+    if (qx < xl || qx > xr || PY - 14 < yt || PY - 50 > yb) return false;
     const quad2 = [P(b.x0, b.y0, 0), P(b.x1 + 1, b.y0, 0), P(b.x1 + 1, b.y0, H + 1.2), P(b.x0, b.y0, H + 1.2)];
-    return pointInPoly([qx, qy], quad) || pointInPoly([qx, qy], quad2);
+    if (pointInPoly([qx, PY - 26], quad2)) return true;
+    const quad = [P(b.x0, b.y0, H), P(b.x1 + 1, b.y0, H), P(b.x1 + 1, b.y1 + 1, H), P(b.x0, b.y1 + 1, H)];
+    const ym = (b.y0 + b.y1 + 1) / 2, xm = (b.x0 + b.x1 + 1) / 2;
+    const top = S.flat ? [P(b.x0, b.y0, H), P(b.x0, b.y1 + 1, H), P(b.x0, b.y1 + 1, zr), P(b.x0, b.y0, zr)]
+      : S.alongX ? [P(b.x0, b.y0, H), P(b.x0, b.y1 + 1, H), P(b.x0, ym, zr)]
+      : [P(b.x0, b.y0, H), P(b.x1 + 1, b.y0, H), P(xm, b.y0, zr)];
+    for (let k = 0; k < 3; k++) {
+      const pt = [qx, PY - (k === 0 ? 14 : k === 1 ? 30 : 50)];
+      if (pointInPoly(pt, quad) || pointInPoly(pt, top)) return true;
+    }
+    return false;
   },
   drawRoof(b, p) {
     const ctx = this.ctx;
