@@ -13,6 +13,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.010.000.102', date: '2026-10-16', title: 'Optimization update and new trees',
+    notes: [
+      'A new Optimization tab in Settings: quality presets, a live frame-rate readout, a "Pick for me" button that chooses a preset from how the game actually runs on your machine, every performance setting in one place, and a performance report you can copy and send.',
+      'Bodies lying still (corpses, sleepers) are drawn once and reused instead of being rebuilt as full 3D models every frame — the biggest cost on streets full of the dead.',
+      'Distant characters and crowds switch to simpler models (smooth, coarse, the old box models, then flat figures), with you and anything close always at full detail.',
+      'Faster drawing overall: no more ground-cache thrashing when zoomed out, cheaper shadows and darkened sprites, cached sprite lookups, a lighter autosave without the long freeze, and fast-forward that no longer snowballs.',
+      'New settings: dynamic resolution, character and car detail, LOD distance, max detailed characters, shadows, ambient particles, corpse, decal and sprite cache limits; Auto is the new default.',
+      'Trees remade: oak, maple, elm, birch, apple, cherry, pine, spruce, cedar and dead trees in four ages, with lit layered foliage, blossom, autumn colours, bare winter branches and snow, wind sway, bushes, stumps and fallen logs, orchards on farms — and a see-through window that keeps you visible in dense woods.',
+    ],
+    commits: ['3c1bd95', '5690639'], shots: ['v010000_1', 'v010000_2', 'v010000_3', 'v010000_4'],
+  },
+  {
     v: '000.009.004.065', date: '2026-10-11', title: 'Three-digit version fields',
     notes: [
       'Versions are now written as four three-digit fields (major.minor.patch.build), so minor and patch numbers can grow past 9.',

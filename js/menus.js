@@ -252,23 +252,33 @@ const Menu = {
   },
   // ------------------------------------------------------------------ options & controls
   // Settings screen: Display / Performance / Audio / Controls tabs
-  setTab: 'display',
+  setTab: 'opt',
   options(inGame) {
     const m = $('#menu');
     const v = Sfx.vol, S = Settings.v, pn = Settings.presetName(), tab = this.setTab;
+    clearInterval(this.liveT);
+    let lastGrp = null;
     const rows = (t) => Object.keys(SETTINGS_OPTS).filter(k => SETTINGS_OPTS[k].tab === t).map(k => {
+      const g = SETTINGS_OPTS[k].grp, head = g && g !== lastGrp ? `<div class="sml" style="margin:10px 0 3px;color:#c8a870;letter-spacing:1px;text-transform:uppercase;font-size:10px">${g}</div>` : '';
+      lastGrp = g;
+      return head + row(k);
+    }).join('');
+    const row = (k) => {
       const o = SETTINGS_OPTS[k], na = k === 'chars3d' && !GL3D.ok();
       const tip = (o.tip || '') + (na ? ' Not available in this browser (WebGL missing or running without GPU acceleration), so the 2D figures are used.' : '');
       return `<div class="opt" data-tip="${tip}"><span>${o.n}${na ? ' <span style="color:#c08060;font-size:11px">(unavailable: no GPU)</span>' : ''}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
-    }).join('');
+    };
     const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('') + '</div>';
-    const tabs = [['display', 'Display'], ['perf', 'Performance'], ['audio', 'Audio'], ['controls', 'Controls']]
-      .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab || (k === 'perf' && tab === 'report') ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
+    const tabs = [['opt', 'Optimization'], ['display', 'Display'], ['audio', 'Audio'], ['controls', 'Controls']]
+      .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab || (k === 'opt' && tab === 'report') ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
     let body = '';
     if (tab === 'report') body = `<div class="sml" style="margin:2px 0 6px">Performance report: copy it and send it along with a description of what was slow.</div>
       <textarea id="perfRep" readonly spellcheck="false" style="width:100%;height:300px;box-sizing:border-box;background:rgba(0,0,0,0.35);color:#e0d8c0;border:1px solid rgba(255,255,255,0.12);font:11px/1.45 Consolas,monospace;padding:6px;resize:vertical">${U.esc(Perf.report())}</textarea>
       <div style="margin-top:6px"><span class="btn sm" data-prep="copy">Copy to clipboard</span><span class="btn sm" data-prep="again">Refresh</span><span class="sml" id="perfRepMsg" style="margin-left:8px;color:#9be08a"></span></div>`;
-    else if (tab === 'display' || tab === 'perf') body = presets + rows(tab) + (tab === 'perf' ? `<div style="margin-top:8px"><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></div>` : '') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
+    else if (tab === 'opt') body = presets
+      + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:#d8d0b8">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
+      + `<div style="max-height:360px;overflow-y:auto;padding-right:6px">${rows('opt')}</div><div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
+    else if (tab === 'display') body = presets + rows('display') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
     else if (tab === 'audio') body = `<div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
       <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>`;
@@ -277,6 +287,7 @@ const Menu = {
       <div style="margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px">${tabs}</div>
       <div style="min-height:330px">${body}</div>
       <div class="btn big" data-m="back">Back</div></div></div>`;
+    if (tab === 'opt') this.liveT = setInterval(() => { const el = $('#optLive'); if (!el) { clearInterval(this.liveT); return; } el.textContent = this.liveText(); }, 500);
     m.oninput = (e) => { const k = e.target.dataset.v; if (k) { Sfx.init(); Sfx.setVol(k, +e.target.value); try { localStorage.setItem('hc_vol', JSON.stringify(Sfx.vol)); } catch (er) { /* */ } } };
     m.onchange = (e) => {
       const k = e.target.dataset.set;
@@ -296,11 +307,31 @@ const Menu = {
         try { navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); document.execCommand('copy'); done(); }); } catch (er) { ta.select(); document.execCommand('copy'); done(); }
         return;
       }
+      if (e.target.closest('[data-opick]')) { const msg = this.pickPreset(); this.options(inGame); const el = $('#optMsg'); if (el) el.textContent = msg; return; }
       const gp = e.target.closest('[data-gpre]');
       if (gp) { Settings.usePreset(gp.dataset.gpre); this.options(inGame); return; }
       const b = e.target.closest('[data-m]'); if (!b) return;
       if (inGame) { m.innerHTML = ''; UI.togglePause(); } else this.show();
     };
+  },
+  // live frame statistics on the Optimization tab
+  liveText() {
+    const st = Perf.stats();
+    if (!st || Perf.n < 30) return 'Play for a few seconds to see live numbers here.';
+    return `${Math.round(1000 / st.avg)} FPS · frame ${st.avg.toFixed(1)} ms (worst 1% ${st.p99.toFixed(0)}) · render ${st.r.toFixed(1)} · simulation ${st.s.toFixed(1)} · UI ${st.u.toFixed(1)} ms` + (Settings.v.dynRes ? ` · resolution ${Math.round(Perf.scale * 100)}%` : '');
+  },
+  // preset from the measured median frame rate
+  pickPreset() {
+    const st = Perf.stats();
+    if (!st || Perf.n < 120) return 'Play for a few seconds first (somewhere busy if you can), then press Pick for me again.';
+    const fps = 1000 / st.p50, cur = Settings.presetName();
+    let name = fps < 28 ? 'Low' : fps < 45 ? 'Medium' : 'Auto';
+    // already smooth on a heavier preset: keep it
+    if (fps >= 57 && (cur === 'High' || cur === 'Ultra')) name = cur;
+    // smooth on a light preset: step up one
+    if (fps >= 57 && cur === 'Low') name = 'Medium';
+    Settings.usePreset(name);
+    return `Measured ${Math.round(fps)} FPS (median of the last ${Perf.n} frames) — ${name} preset applied.`;
   },
   controlRows() {
     return [
