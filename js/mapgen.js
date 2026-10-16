@@ -38,6 +38,7 @@ const MapGen = {
     this.nA = makeNoise(seed + 11); this.nB = makeNoise(seed + 23); this.nC = makeNoise(seed + 37);
     this.terrain();
     this.lake(212, 30, 16);
+    if (S > 400) { this.bigPlan(); this.bigWater(); }
     this.roads();
     this.town();
     this.town2();
@@ -46,7 +47,7 @@ const MapGen = {
     // detail passes (street furniture, yards) - defined in street.js / yard.js
     if (this.streetPass) this.streetPass();
     if (this.yardPass) this.yardPass();
-    if (S > 400) this.bigTracks();
+    if (S > 400) { this.bigSites(); this.bigTracks(); }
     this.forest();
     this.finalize();
     // keep saves compact
@@ -93,7 +94,7 @@ const MapGen = {
     for (let y = 0; y < H; y++) World.setWall(GW, y, 1, WT.BOUND);
     this.mark(GW, 0, W - 1, H - 1, 2);
   },
-  lake(cx, cy, rad) {
+  lake(cx, cy, rad, name) {
     const r = this.rng;
     for (let y = cy - rad - 6; y <= cy + rad + 6; y++) for (let x = cx - rad - 8; x <= cx + rad + 8; x++) {
       if (!World.inb(x, y)) continue;
@@ -105,7 +106,7 @@ const MapGen = {
       else if (d < edge + 1.6) this.sf(x, y, FL.SAND, r.int(0, 3));
       if (d < edge + 2) this.mark(x, y, x, y, 1);
     }
-    this.w.labels.push({ x: cx, y: cy, text: 'Hollow Lake' });
+    this.w.labels.push({ x: cx, y: cy, text: name || 'Hollow Lake' });
   },
 
   // ---------------------------------------------------------------- roads
@@ -121,7 +122,9 @@ const MapGen = {
     for (const y of RY2) rects.push({ h: true, p: y, s: (y === 315 ? 135 : a2x), e: b2x, side: true });
     for (const x of RX2) rects.push({ h: false, p: x, s: (x === 300 ? 105 : a2y), e: b2y, side: true });
     if (this.GW > 400) this.bigRoads(rects);
-    const inTown = (x, y) => (x >= a - 1 && x <= b + 1 && y >= a - 1 && y <= b + 1) || (x >= a2x - 1 && x <= b2x + 1 && y >= a2y - 1 && y <= b2y + 1);
+    const BT = this.GW > 400 ? this.big.towns : null;
+    const inTown = (x, y) => (x >= a - 1 && x <= b + 1 && y >= a - 1 && y <= b + 1) || (x >= a2x - 1 && x <= b2x + 1 && y >= a2y - 1 && y <= b2y + 1)
+      || (BT !== null && BT.some(T => x >= T.x0 - 1 && x <= T.x1 + 1 && y >= T.y0 - 1 && y <= T.y1 + 1));
     // pass 1: sidewalks
     for (const R_ of rects) {
       for (let t = R_.s; t <= R_.e; t++) {
@@ -1389,23 +1392,96 @@ const MapGen = {
       if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430', kind: ['sedan', 'wagon', 'pickup', 'van', 'hatchback', 'suv'][(x * 7 + y * 13) % 6] });
     }
   },
-  // ---------------------------------------------------------------- bigger worlds (blocked out: roads and forest)
-  // Long straight roads through the new land, paved by roads() with the county's own (rects): Route 9 and Main St
-  // already run on to the map edge; County Road 14 crosses the east woods north to south, County Road 22 the south
-  // west to east, and from 800 tiles a divided interstate (two carriageways, a grass median) runs down the far east.
-  // New roads stay out of the old 400 x 400 county, where houses are placed by hand after the roads.
+  // ---------------------------------------------------------------- bigger worlds: the block-out
+  // The land around the county is laid out but not built yet. bigPlan() fixes where everything goes, from the long
+  // roads: County Rd 14 (north - south) and 22 (west - east), and from 800 tiles a divided interstate down the far east.
+  // Towns are street grids with a concrete slab on every lot where a building will stand; farms are bare furrowed
+  // fields round a farmyard; the base and the prison are fenced slabs; the river and the reservoir are cut before the
+  // roads (bigWater), so roads cross them as bridges. New things stay out of the old 400 x 400 county, where houses are
+  // placed by hand after the roads. this.big.boxes: everything planned (for the tracks and the plan view).
+  bigPlan() {
+    const S = this.GW, D = S - 400, big = S >= 760;
+    const ex = 400 + Math.round(D * 0.4), sy = 400 + Math.round(D * 0.45), ix = big ? S - 64 : 0;
+    const P = this.big = { ex, sy, ix, towns: [], sites: [], spurs: [], boxes: [] };
+    // towns: street lines (each 4 wide; xs west edges, ys north edges); streets reach from sx0..sx1 / sy0..sy1
+    const town = (name, kind, xs, ys, o) => {
+      const T = Object.assign({ name, kind, xs, ys, x0: xs[0], y0: ys[0], x1: xs[xs.length - 1] + 3, y1: ys[ys.length - 1] + 3 }, o || {});
+      if (T.sx0 === undefined) { T.sx0 = xs[0]; T.sx1 = xs[xs.length - 1] + 3; T.sy0 = ys[0]; T.sy1 = ys[ys.length - 1] + 3; }
+      P.towns.push(T); P.boxes.push({ name, kind, x0: T.x0 - 2, y0: T.y0 - 2, x1: T.x1 + 2, y1: T.y1 + 2 });
+    };
+    town('Fairfield', 'village', [ex - 60, ex - 30, ex, ex + 30, ex + 60], [75, 105, 135]);
+    town('Riverton', 'town', [ex - 90, ex - 60, ex - 30, ex, ex + 30].concat(big ? [] : [ex + 60]), [sy - 60, sy - 30, sy, sy + 30]);
+    if (big) {
+      const xs = [ix - 120, ix - 90, ix - 60, ix - 30], ys = [sy + 30, sy + 60, sy + 90, sy + 120];
+      // the county seat: its streets run up to County Rd 22 and across to the interstate
+      town('Kingsbury', 'county seat', xs, ys, { sx0: xs[0], sx1: ix, sy0: sy, sy1: ys[3] + 3, x1: ix - 1, y0: sy });
+    }
+    const site = (kind, name, x0, y0, x1, y1, o) => { const q = Object.assign({ kind, name, x0, y0, x1, y1 }, o || {}); P.sites.push(q); P.boxes.push(q); return q; };
+    const rr = Math.round(16 + D * 0.02), rx = ex + Math.round(D * 0.3);
+    P.res = { cx: rx, cy: 190, r: rr };
+    site('reservoir', 'Wildwood Reservoir', rx - Math.round(rr * 1.6), 190 - rr - 6, rx + Math.round(rr * 1.6), 190 + rr + 16);
+    site('quarry', 'Gray Rock Quarry', 410, 290, 410 + Math.round(D * 0.15), 340);
+    site('trailers', 'Shady Pines Trailer Park', ex + 70, 112, ex + 100, 140);
+    site('farm', 'Hartley Farm', 8, 412, 124, sy - 10, { yard: [96, 414] });
+    site('farm', 'Bluegrass Farms', 240, sy + 10, Math.min(440, ex - 100), Math.min(S - 12, sy + 110), { yard: [276, sy + 12] });
+    if (big) {
+      site('truckstop', 'Interstate Truck Stop', ix - 44, 112, ix - 8, 140);
+      const b = site('base', 'Fort Hale', ex + 50, 290, ix - 14, 375);
+      P.spurs.push({ h: false, p: Math.round((b.x0 + b.x1) / 2) - 2, s: 266, e: b.y0 + 1 });
+      const pr = site('prison', 'Rock Creek Correctional', ex - 90, S - 120, ex - 10, S - 30);
+      P.spurs.push({ h: true, p: Math.round((pr.y0 + pr.y1) / 2) - 2, s: pr.x1 - 1, e: ex });
+      const af = site('airfield', 'Hawk Field', 290, S - 70, 430, S - 40);
+      P.spurs.push({ h: true, p: S - 52, s: 271, e: af.x0 + 40 });
+    }
+    // the river: in from the east edge, west under County Rd 14 and the interstate, south to the bottom edge
+    P.river = [[S + 6, 400 + 0.1 * D], [ex + 0.25 * D, 400 + 0.14 * D], [ex, 400 + 0.1 * D], [330, 400 + 0.08 * D], [230, 400 + 0.2 * D], [200, 400 + 0.55 * D], [215, S + 6]];
+  },
+  // the Salt River (a meandering band of water and sandy banks) and the reservoir
+  bigWater() {
+    const P = this.big, r = this.rng, S = this.GW, pts = P.river, W = this.W;
+    const paint = (cx, cy, rad, f) => {
+      for (let y = Math.floor(cy - rad); y <= cy + rad; y++) for (let x = Math.floor(cx - rad); x <= cx + rad; x++) {
+        if (x < 0 || y < 0 || x >= S || y >= S || (x < 404 && y < 404)) continue;
+        const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+        if (dx * dx + dy * dy > rad * rad) continue;
+        const i = y * W + x, cur = this.w.floor[i];
+        if (f === FL.SAND && (cur === FL.WATER || cur === FL.DEEPWATER)) continue;
+        if (f === FL.WATER && cur === FL.DEEPWATER) continue;
+        this.sf(x, y, f, r.int(0, 3)); this.mark(x, y, x, y, 1);
+      }
+    };
+    let t = 0;
+    for (let k = 0; k < pts.length - 1; k++) {
+      const [ax, ay] = pts[k], [bx, by] = pts[k + 1], L = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / L, ny = (bx - ax) / L;
+      for (let d = 0; d <= L; d += 0.7, t += 0.7) {
+        const m = (this.nB(t / 40, k * 3.1, 2) - 0.5) * 16, w = 3.4 + this.nC(t / 25, 7.7, 2) * 1.6;
+        const cx = ax + (bx - ax) * d / L + nx * m, cy = ay + (by - ay) * d / L + ny * m;
+        paint(cx, cy, w + 2.2, FL.SAND); paint(cx, cy, w, FL.WATER); paint(cx, cy, w * 0.45, FL.DEEPWATER);
+      }
+    }
+    const [lx, ly] = pts[3];
+    this.w.labels.push({ x: Math.round(lx), y: Math.round(ly) - 6, text: 'Salt River' });
+    this.lake(P.res.cx, P.res.cy, P.res.r, 'Wildwood Reservoir');
+  },
+  // Long straight roads through the new land and the planned towns' grids, paved by roads() with the county's own
+  // (rects): Route 9 and Main St already run on to the map edge
   bigRoads(rects) {
-    const S = this.GW, D = S - 400;
-    const ex = 400 + Math.round(D * 0.4), sy = 400 + Math.round(D * 0.45), ix = S >= 760 ? S - 64 : 0;
-    this.big = { ex, sy, ix };
+    const P = this.big, S = this.GW, { ex, sy, ix } = P;
     rects.push({ h: false, p: ex, s: 0, e: S - 1 });
     rects.push({ h: true, p: sy, s: 0, e: S - 1 });
     if (ix) {
       rects.push({ h: false, p: ix, s: 0, e: S - 1 }, { h: false, p: ix + 6, s: 0, e: S - 1 });
       // side roads: east to the interstate across the north-east, and south off County Road 22
       rects.push({ h: true, p: 262, s: ex, e: ix }, { h: false, p: 268, s: sy, e: S - 1 });
-      this.w.labels.push({ x: ix + 5, y: Math.round(S * 0.62), text: 'Interstate 71' });
+      this.w.labels.push({ x: ix + 5, y: Math.round(S * 0.42), text: 'Interstate 71' });
     }
+    // town streets (a line a long road already paves is left alone: a tile paved twice loses its markings)
+    const has = (h, p, a, b) => rects.some(R => R.h === h && R.p === p && R.s <= a && R.e >= b);
+    for (const T of P.towns) {
+      for (const y of T.ys) if (!has(true, y, T.sx0, T.sx1)) rects.push({ h: true, p: y, s: T.sx0, e: T.sx1 });
+      for (const x of T.xs) if (!has(false, x, T.sy0, T.sy1)) rects.push({ h: false, p: x, s: T.sy0, e: T.sy1 });
+    }
+    for (const q of P.spurs) rects.push(q);
     // grass verges: the woods keep two tiles back from the new roads (and Route 9 / Main St beyond the county)
     for (const R_ of rects) {
       if (R_.p < 400 && R_.e < 400) continue;
@@ -1414,15 +1490,125 @@ const MapGen = {
         if (x >= 0 && y >= 0 && x < S && y < S && (x >= 404 || y >= 404)) this.mark(x, y, x, y, 1);
       }
     }
-    this.w.labels.push({ x: ex + 2, y: Math.round(D * 0.5) + 150, text: 'County Rd 14' }, { x: Math.round(S * 0.3), y: sy + 2, text: 'County Rd 22' },
-      { x: Math.round((400 + ex) / 2), y: 107, text: 'Route 9' }, { x: Math.round((ex + S) / 2), y: Math.round(sy / 2), text: 'Wildwood State Forest' },
-      { x: Math.round(S * 0.18), y: Math.round((sy + S) / 2), text: 'Bear Run Woods' });
+    for (const T of P.towns) this.w.labels.push({ x: Math.round((T.x0 + T.x1) / 2), y: T.y0 - 4, text: T.name });
+    this.w.labels.push({ x: ex + 2, y: Math.round(S * 0.3), text: 'County Rd 14' }, { x: Math.round(S * 0.33), y: sy + 2, text: 'County Rd 22' },
+      { x: Math.round((400 + ex) / 2) - 10, y: 107, text: 'Route 9' }, { x: Math.round((ex + S) / 2), y: 48, text: 'Wildwood State Forest' },
+      { x: Math.round(S * 0.12), y: Math.round((sy + S) / 2) + 20, text: 'Bear Run Woods' });
+  },
+  // the planned sites, laid out after the county is built (slabs, fields, fences); no buildings yet
+  bigSites() {
+    const P = this.big, r = this.rng, W = this.W, F = this.w.floor, S = this.GW;
+    const hard = (x, y) => { const f = F[y * W + x]; return f === FL.ASPHALT || f === FL.SIDEWALK || f === FL.WATER || f === FL.DEEPWATER || f === FL.SAND; };
+    const pad = (x0, y0, x1, y1, f) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (World.inb(x, y) && !hard(x, y)) { this.sf(x, y, f, r.int(0, 3)); this.w.obj[y * W + x] = null; } };
+    const fence = (x0, y0, x1, y1, gx0, gx1) => {
+      for (let x = x0; x <= x1; x++) { if (x < gx0 || x > gx1) World.setWall(x, y0, 0, WT.CHAIN); World.setWall(x, y1 + 1, 0, WT.CHAIN); }
+      for (let y = y0; y <= y1; y++) { World.setWall(x0, y, 1, WT.CHAIN); World.setWall(x1 + 1, y, 1, WT.CHAIN); }
+    };
+    const label = (q, text, dy) => this.w.labels.push({ x: Math.round((q.x0 + q.x1) / 2), y: Math.round((q.y0 + q.y1) / 2) + (dy || 0), text: text || q.name });
+    // towns: on every block a slab per lot; blocks next to the main crossing are one long shopfront slab, one is a park
+    for (const T of P.towns) {
+      // (blocks also between the grid and a long road its streets run on to)
+      const xs = T.xs.concat(T.sx1 > T.xs[T.xs.length - 1] + 3 ? [T.sx1] : []).sort((a, b) => a - b), ys = T.ys.concat(T.sy0 < T.ys[0] ? [T.sy0] : []).sort((a, b) => a - b);
+      const mx = (T.x0 + T.x1) / 2, my = (T.y0 + T.y1) / 2;
+      const blocks = [];
+      for (let a = 0; a < xs.length - 1; a++) for (let b = 0; b < ys.length - 1; b++) blocks.push({ x0: xs[a] + 6, y0: ys[b] + 6, x1: xs[a + 1] - 3, y1: ys[b + 1] - 3 });
+      blocks.sort((p, q) => Math.hypot((p.x0 + p.x1) / 2 - mx, (p.y0 + p.y1) / 2 - my) - Math.hypot((q.x0 + q.x1) / 2 - mx, (q.y0 + q.y1) / 2 - my));
+      const shops = T.kind === 'village' ? 2 : 4, park = blocks.length > 5 ? blocks.length - 2 : -1;
+      blocks.forEach((B, k) => {
+        if (k === park) { pad(B.x0 + 2, B.y0 + 2, B.x1 - 2, B.y1 - 2, FL.GRASS2); this.w.labels.push({ x: Math.round((B.x0 + B.x1) / 2), y: Math.round((B.y0 + B.y1) / 2), text: T.name + ' Park' }); return; }
+        if (k < shops) { pad(B.x0, B.y0, B.x1, B.y0 + 9, FL.CONCRETE); pad(B.x0, B.y1 - 9, B.x1, B.y1, FL.CONCRETE); pad(B.x0 + 1, B.y0 + 10, B.x1 - 1, B.y1 - 10, FL.PARKING); return; }
+        const hw = (B.x1 - B.x0 + 1) >> 1, hh = (B.y1 - B.y0 + 1) >> 1;
+        for (const [lx, ly] of [[B.x0, B.y0], [B.x0 + hw, B.y0], [B.x0, B.y0 + hh], [B.x0 + hw, B.y0 + hh]]) pad(lx + 2, ly + 2, lx + hw - 3, ly + hh - 4, FL.CONCRETE);
+      });
+      this.mark(T.x0 - 2, T.y0 - 2, T.x1 + 2, T.y1 + 2, 1);
+    }
+    for (const q of P.sites) {
+      const { x0, y0, x1, y1 } = q, cx = (x0 + x1) >> 1, cy = (y0 + y1) >> 1;
+      if (q.kind === 'reservoir') {
+        // a campground on the south shore, reached by a dirt road from County Rd 14
+        const gy = P.res.cy + P.res.r + 9;
+        for (let y = gy - 4; y <= gy + 5; y++) for (let x = cx - 10; x <= cx + 10; x++) if (World.inb(x, y) && !World.isWater(x, y) && (x - cx) * (x - cx) / 110 + (y - gy) * (y - gy) / 30 < 1) { this.sf(x, y, FL.DIRT, r.int(0, 3)); this.mark(x, y, x, y, 1); }
+        this.dirtPath([[P.ex + 4, gy], [cx - 10, gy]], 2);
+        this.w.labels.push({ x: cx, y: gy + 7, text: 'Campground' });
+      } else if (q.kind === 'quarry') {
+        pad(x0, y0, x1, y1, FL.GRAVEL);
+        pad(x0 + 6, y0 + 6, x1 - 6, y1 - 6, FL.DIRT); pad(x0 + 12, y0 + 12, x1 - 12, y1 - 12, FL.SAND);
+        pad(x1 - 8, y0 + 1, x1 - 2, y0 + 5, FL.CONCRETE);
+        this.dirtPath([[P.ex - 1, cy], [x1 + 1, cy]], 3);
+        label(q);
+      } else if (q.kind === 'trailers') {
+        pad(x0, y0, x1, y1, FL.GRASS2);
+        for (let y = y0 + 1; y + 8 <= y1; y += 9) { pad(x0, y + 3, x1, y + 4, FL.GRAVEL); for (let x = x0 + 1; x + 2 <= x1; x += 5) { pad(x, y - 1, x + 2, y + 2, FL.CONCRETE); pad(x, y + 5, x + 2, y + 8, FL.CONCRETE); } }
+        label(q);
+      } else if (q.kind === 'truckstop') {
+        pad(x0, y0, x1, y1, FL.PARKING);
+        pad(x0 + 2, y1 - 9, x0 + 14, y1 - 2, FL.CONCRETE); pad(x0 + 20, y0 + 6, x1 - 4, y0 + 13, FL.CONCRETE);
+        label(q);
+      } else if (q.kind === 'farm') {
+        // farmyard: house and barn slabs on a gravel yard; fields round it with dirt tracks between
+        const [fx, fy] = q.yard;
+        pad(fx, fy, fx + 26, fy + 18, FL.GRAVEL); pad(fx + 2, fy + 2, fx + 9, fy + 8, FL.CONCRETE); pad(fx + 13, fy + 3, fx + 24, fy + 14, FL.CONCRETE);
+        for (let by = y0; by + 14 <= y1; by += 32) for (let bx = x0; bx + 14 <= x1; bx += 40) {
+          const fx1 = Math.min(bx + 35, x1), fy1 = Math.min(by + 27, y1);
+          if (fx1 >= fx - 2 && bx <= fx + 28 && fy1 >= fy - 2 && by <= fy + 20) continue;
+          for (let y = by; y <= fy1; y++) for (let x = bx; x <= fx1; x++) {
+            if (!World.inb(x, y) || hard(x, y) || this.roadCnt[y * W + x]) continue;
+            this.w.obj[y * W + x] = null;
+            this.sf(x, y, (x - bx) % 3 === 2 ? FL.DIRT : FL.FURROW, (x - bx) % 3 === 2 ? 1 : 0);
+          }
+        }
+        this.w.labels.push({ x: fx + 13, y: fy - 2, text: q.name });
+      } else if (q.kind === 'base' || q.kind === 'prison') {
+        const gx = (P.spurs.find(sp => sp.h === (q.kind === 'prison')) || {}).p;
+        pad(x0, y0, x1, y1, FL.GRAVEL);
+        if (q.kind === 'base') {
+          fence(x0, y0, x1, y1, gx - 1, gx + 4);
+          // barracks rows, motor pool, helipad, parade ground
+          for (let x = x0 + 4; x + 13 <= cx - 4; x += 18) for (const y of [y0 + 6, y0 + 20, y0 + 34]) pad(x, y, x + 13, y + 7, FL.CONCRETE);
+          pad(cx + 4, y0 + 6, x1 - 4, y0 + 30, FL.PARKING); pad(cx + 6, y1 - 22, cx + 16, y1 - 12, FL.CONCRETE); pad(x0 + 4, y1 - 26, cx - 6, y1 - 6, FL.DIRT);
+        } else {
+          // two fences, cell blocks round a yard, guard towers at the corners; the gate faces County Rd 14
+          for (let y = y0; y <= y1; y++) if (y < gx - 1 || y > gx + 4) { World.setWall(x1 + 1, y, 1, WT.CHAIN); World.setWall(x1 - 2, y, 1, WT.CHAIN); }
+          for (let x = x0; x <= x1; x++) { World.setWall(x, y0, 0, WT.CHAIN); World.setWall(x, y1 + 1, 0, WT.CHAIN); World.setWall(x, y0 + 3, 0, WT.CHAIN); World.setWall(x, y1 - 2, 0, WT.CHAIN); }
+          for (let y = y0; y <= y1; y++) { World.setWall(x0, y, 1, WT.CHAIN); World.setWall(x0 + 3, y, 1, WT.CHAIN); }
+          pad(x0 + 8, y0 + 8, x1 - 8, y0 + 20, FL.CONCRETE); pad(x0 + 8, y1 - 20, x1 - 8, y1 - 8, FL.CONCRETE); pad(x0 + 8, y0 + 24, x0 + 22, y1 - 24, FL.CONCRETE);
+          pad(x0 + 28, y0 + 26, x1 - 12, y1 - 26, FL.DIRT);
+          for (const [tx, ty] of [[x0 + 4, y0 + 4], [x1 - 6, y0 + 4], [x0 + 4, y1 - 6], [x1 - 6, y1 - 6]]) pad(tx, ty, tx + 2, ty + 2, FL.CONCRETE);
+        }
+        label(q, null, q.kind === 'base' ? -2 : 0);
+      } else if (q.kind === 'airfield') {
+        for (let y = y0 + 4; y <= y0 + 9; y++) for (let x = x0; x <= x1; x++) { this.sf(x, y, FL.ASPHALT, r.int(0, 3)); if (y === y0 + 6 && (x >> 2) & 1) this.w.deco[y * W + x] = 1; }
+        pad(x0 + 30, y0 + 11, x0 + 60, y1, FL.CONCRETE); pad(x0 + 64, y0 + 14, x0 + 78, y1 - 2, FL.CONCRETE); pad(x0 + 82, y0 + 14, x0 + 96, y1 - 2, FL.CONCRETE);
+        label(q, null, -8);
+      }
+      this.mark(x0 - 1, y0 - 1, x1 + 1, y1 + 1, 1);
+    }
+    // homesteads along the long roads outside the towns: a cleared lot, a house slab, a dirt drive
+    const free = (x0, y0, x1, y1) => {
+      if (x0 < 2 || y0 < 2 || x1 >= S - 2 || y1 >= S - 2 || (x0 < 406 && y0 < 406)) return false;
+      if (P.boxes.some(q => x1 >= q.x0 - 6 && x0 <= q.x1 + 6 && y1 >= q.y0 - 6 && y0 <= q.y1 + 6)) return false;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hard(x, y) || F[y * W + x] === FL.DIRT) return false;
+      return true;
+    };
+    const roadsH = [[P.sy, 0, S - 1], [105, 404, S - 1]], roadsV = [[P.ex, 0, S - 1], [135, 404, S - 1]];
+    for (const [h, list] of [[true, roadsH], [false, roadsV]]) for (const [p, a, b] of list) for (let t = a + 20; t < b - 20; t += r.int(36, 60)) {
+      if (!r.chance(0.65)) continue;
+      const side = r.chance(0.5) ? -1 : 1;
+      const lx0 = h ? t : (side < 0 ? p - 16 : p + 7), ly0 = h ? (side < 0 ? p - 15 : p + 7) : t;
+      const lx1 = lx0 + (h ? 11 : 9), ly1 = ly0 + (h ? 8 : 11);
+      if (!free(lx0, ly0, lx1, ly1)) continue;
+      pad(lx0, ly0, lx1, ly1, FL.GRASS2); pad(lx0 + 2, ly0 + 2, lx0 + 8, ly0 + 7, FL.CONCRETE);
+      if (h) this.dirtPath(side < 0 ? [[lx0 + 9, ly1], [lx0 + 9, p - 1]] : [[lx0 + 9, p + 4], [lx0 + 9, ly0]], 2);
+      else this.dirtPath(side < 0 ? [[lx1, ly0 + 9], [p - 1, ly0 + 9]] : [[p + 4, ly0 + 9], [lx0, ly0 + 9]], 2);
+      this.mark(lx0 - 1, ly0 - 1, lx1 + 1, ly1 + 1, 1);
+      P.boxes.push({ kind: 'lot', x0: lx0, y0: ly0, x1: lx1, y1: ly1 });
+    }
   },
   // dirt logging tracks into the new land's woods: off a long road, straight in, maybe a bend, ending in a turning loop
   bigTracks() {
     const r = this.rng, S = this.GW, W = this.W, n = Math.round((S - 400) / 22);
     const F = this.w.floor, tarmac = (x, y) => F[y * W + x] === FL.ASPHALT;
-    const old = (x, y) => x < 404 && y < 404;
+    const old = (x, y) => x < 404 && y < 404, B = this.big.boxes;
     const rd = [[false, this.big.ex], [true, this.big.sy], [true, 105], [false, 135]];
     if (this.big.ix) rd.push([false, this.big.ix + 6]);
     for (let k = 0, tries = 0; k < n && tries < n * 20; tries++) {
@@ -1436,6 +1622,7 @@ const MapGen = {
         for (let q = 0, L = Math.abs(x1 - x0) + Math.abs(y1 - y0); q <= L; q++) {
           const cx = x0 + Math.sign(x1 - x0) * q, cy = y0 + Math.sign(y1 - y0) * q;
           if (cx < 2 || cy < 2 || cx >= S - 3 || cy >= S - 3 || old(cx, cy) || (q > 1 && (tarmac(cx, cy) || tarmac(cx + 1, cy + 1)))) return false;
+          if (World.isWater(cx, cy) || World.isWater(cx + 1, cy + 1) || B.some(b => cx >= b.x0 - 3 && cx <= b.x1 + 3 && cy >= b.y0 - 3 && cy <= b.y1 + 3)) return false;
         }
         return true;
       };

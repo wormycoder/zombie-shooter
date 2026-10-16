@@ -934,7 +934,7 @@ const MapView = {
     const cols = {};
     const hex = (h) => Col.rgb(h);
     cols[FL.GRASS] = hex('#5a7a42'); cols[FL.GRASS2] = hex('#6a8848'); cols[FL.FOREST] = hex('#3e5430'); cols[FL.DIRT] = hex('#8a7458'); cols[FL.ASPHALT] = hex('#505052'); cols[FL.SIDEWALK] = hex('#9a9890');
-    cols[FL.CONCRETE] = hex('#8a8884'); cols[FL.SAND] = hex('#c8b48a'); cols[FL.WATER] = hex('#3a6a8a'); cols[FL.DEEPWATER] = hex('#2a4c6c'); cols[FL.FURROW] = hex('#6a5038'); cols[FL.GRAVEL] = hex('#8a8478');
+    cols[FL.CONCRETE] = hex('#8a8884'); cols[FL.SAND] = hex('#c8b48a'); cols[FL.WATER] = hex('#3a6a8a'); cols[FL.DEEPWATER] = hex('#2a4c6c'); cols[FL.FURROW] = hex('#6a5038'); cols[FL.GRAVEL] = hex('#8a8478'); cols[FL.PARKING] = hex('#6a6a6c');
     for (let y = 0; y < w.h; y++) for (let x = 0; x < GW; x++) {
       const i = y * w.w + x, q = (y * GW + x) * 4;
       let c3;
