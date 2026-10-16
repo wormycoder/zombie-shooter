@@ -25,6 +25,8 @@ const SETTINGS_OPTS = {
   zLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy zombie updates', opts: [['Off', 0], ['On', 1]], tip: 'Zombies in distant chunks (8x8 tiles) think less often: 3-5 chunks away every other step, 6-11 a coarse update every 2 s, 12+ paused. Chasing and visible zombies always run at full rate.' },
   zAdapt: { tab: 'opt', grp: 'Simulation', n: 'Adaptive zombie physics', opts: [['Off', 0], ['On', 1]], tip: 'With more than 120 zombies close by, crowd zombies update at half rate to keep the frame rate up.' },
   chunkLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks (8x8 tiles) 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
+  gore: { tab: 'display', grp: 'Gore', n: 'Gore', opts: [['Off', 0], ['Low', 1], ['Normal', 2], ['Extreme', 3]], tip: 'Blood sprays by weapon and lands as splatter, pools spread under the dead and dry over the days, wounded zombies leave trails. Off shows no blood at all; Extreme throws much more of it around.' },
+  dismember: { tab: 'display', grp: 'Gore', n: 'Dismemberment', opts: [['Off', 0], ['On', 1]], tip: 'Heavy blades can take limbs and heads off, stomps and heavy blows crush skulls, shotguns up close blow parts away; a zombie that loses a leg crawls on. Needs Gore to be on.' },
   // read when a new game's world is made (saves keep the size they were made with); not part of the presets
   worldSize: { tab: 'exp', grp: 'World', n: 'World size (new games)', opts: [['Normal (400 x 400)', 400], ['Large, 2.5x (640 x 640)', 640], ['Huge, 4x (800 x 800)', 800], ['Massive, 5x (896 x 896)', 896]], tip: 'Experimental. A bigger county for new games: Hollow Creek and Millbrook stay as they are in the north-west, and the new land around them is only blocked out so far - highways, county roads, logging tracks and forest, no buildings yet. Bigger worlds take longer to make and give bigger save files. Games already started keep their size.' },
 };
@@ -39,7 +41,7 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: Object.assign({ fpsShow: 0, worldSize: 400 }, SETTINGS_PRESETS.Auto),
+  v: Object.assign({ fpsShow: 0, worldSize: 400, gore: 2, dismember: 1 }, SETTINGS_PRESETS.Auto),
   listeners: [],
   load() {
     try {

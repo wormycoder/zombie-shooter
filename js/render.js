@@ -1131,6 +1131,14 @@ function pointInPoly(pt, vs) {
 const Fx = {
   parts: [], tracers: [], floats: [], flashes: [], fires: [],
   blood(x, y, n, dirA) {
+    // blood is gore.js's (Settings > Gore: none at all when it is off)
+    if (typeof Gore !== 'undefined') {
+      const k = Gore.amt();
+      if (!k) return;
+      Gore.burst(x, y, R.f(0.9, 1.3), Math.max(1, Math.round(n * k)), dirA === undefined ? 0 : dirA, dirA === undefined ? Math.PI : 0.8, 0.5, 2.5, 0, 2);
+      if (R.chance(0.6)) Gore.dec('drops', x + R.f(-0.3, 0.3), y + R.f(-0.3, 0.3), R.f(0, 6.28), R.f(0.3, 0.5));
+      return;
+    }
     n = Math.max(1, Math.round(n * Settings.v.particles));
     for (let i = 0; i < n; i++) {
       const a = (dirA !== undefined ? dirA + R.f(-0.8, 0.8) : R.f(0, Math.PI * 2));
@@ -1144,11 +1152,22 @@ const Fx = {
     this.capDecals();
   },
   decal(x, y, s) {
+    if (typeof Gore !== 'undefined') { if (Gore.lv()) Gore.dec('drops', x, y, R.f(0, 6.28), (s || 0.8) * 0.45); return; }
     Wd.decals.push({ x: x - 0.5, y: y - 0.5, v: R.int(0, 7), age: 0, s: s || R.f(0.6, 1.1) });
     this.capDecals();
   },
   // the oldest decals go past the Decal limit setting
-  capDecals() { const D = Wd.decals, m = Settings.v.decals || 450; if (D.length > m) D.splice(0, D.length - m); },
+  // (pools under bodies and severed parts outlast the splatter round them while they are under half the limit)
+  capDecals() {
+    const D = Wd.decals, m = Settings.v.decals || 450;
+    if (D.length <= m) return;
+    let over = D.length - m, big = 0, w = 0;
+    for (const d of D) if (d.t === 'pool' || d.t === 'limb') big++;
+    const keep = big <= m >> 1;
+    for (let i = 0; i < D.length; i++) { const d = D[i]; if (over > 0 && !(keep && (d.t === 'pool' || d.t === 'limb'))) { over--; continue; } D[w++] = d; }
+    D.length = w;
+    if (over > 0) D.splice(0, over);
+  },
   shards(x, y, z, n, col) {
     n = Math.max(1, Math.round(n * Settings.v.particles));
     for (let i = 0; i < n; i++) {
@@ -1166,6 +1185,7 @@ const Fx = {
   flash(x, y, r, p, t) { this.flashes.push({ x, y, r: r || 6, p: p || 0.8, t: t || 0.08, max: t || 0.08 }); },
   text(x, y, txt, col, dur) { this.floats.push({ x, y, z: 2.0, txt, col: col || '#fff', t: dur || 1.5, max: dur || 1.5 }); },
   update(dt) {
+    if (typeof Gore !== 'undefined') Gore.update(dt);
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const p = this.parts[i];
       p.life -= dt;
@@ -1189,6 +1209,7 @@ const Fx = {
     for (const d of Wd ? Wd.decals : []) d.age += dt * G.speed * MIN_PER_SEC / 60;
   },
   draw(ctx) {
+    if (typeof Gore !== 'undefined') Gore.draw(ctx);
     const P = (x, y, z) => Render.P(x, y, z);
     for (const p of this.parts) {
       const s = P(p.x, p.y, p.z);

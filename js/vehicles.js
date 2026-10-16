@@ -731,7 +731,7 @@ const Vehicles = {
           const [f, s] = this.local(c, z.x, z.y);
           if (Math.abs(f) < T.len / 2 + z.r && Math.abs(s) < T.wid / 2 + z.r) {
             if (zsp > 2.5) {
-              Zombie.hit(z, zsp * 0.22, Math.atan2(vf * sa + vr * ca, vf * ca - vr * sa), { knock: true });
+              Zombie.hit(z, zsp * 0.22, Math.atan2(vf * sa + vr * ca, vf * ca - vr * sa), { knock: true, kind: 'car' });
               const zone = f > T.len * 0.25 ? 'front' : f < -T.len * 0.25 ? 'rear' : (s < 0 ? 'left' : 'right');
               this.damageZone(c, zone, zsp * 0.2, ZHIT_PARTS);
               if (zone === 'front') c.dmg.front = Math.min(1, Math.round((c.dmg.front + zsp * 0.0015) * 1000) / 1000);

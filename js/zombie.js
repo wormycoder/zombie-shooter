@@ -64,6 +64,7 @@ const Zombie = {
     L.hat = hat ? { type: ITEMS[hat.id].hatType || 'cap', col: hat.col } : null;
     L.bag = back ? (back.col || '#444') : null;
     L.vest = vest ? vest.col : null;
+    L.gore = z.gore;
     return L;
   },
   // ------------------------------------------------------------------ spawning
@@ -466,15 +467,14 @@ const Zombie = {
     if (z.fake) { z.fake = false; z.downT = R.f(0.8, 1.6); }
     if (z.st === 'down') dmg *= 1.5;
     z.hp -= dmg;
-    const n0 = Fx.parts.length;
-    Fx.blood(o.at ? o.at[0] : z.x, o.at ? o.at[1] : z.y, Math.round(4 + dmg * 6), fromA);
-    // a body on the ground bleeds from where it lies, not from chest height
-    if (z.lie > 0.5) for (let i = n0; i < Fx.parts.length; i++) Fx.parts[i].z *= 0.2;
+    // blood by the kind of blow, wounds, limbs that come off (gore.js; o.kind blunt / blade / chop / stab / gun ...)
     z.blood = Math.min(1, z.blood + 0.2);
     z.look.blood = z.blood;
+    Gore.hit(z, dmg, fromA, o);
+    if (z.dead) return;
     const p = G.player;
     if (z.st !== 'down' && z.st !== 'climb' && z.st !== 'getup') { z.st = 'chase'; z.mem = 10; z.tx = p.x; z.ty = p.y; z.canSee = true; }
-    if (z.hp <= 0) { this.kill(z, fromA, o); return; }
+    if (z.hp <= 0) { o.dmg = dmg; this.kill(z, fromA, o); return; }
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
     // a blow while it is still half way up puts it back down
     if ((o.knock || (z.st === 'getup' && z.lie > 0.35 && o.stag !== 0)) && z.st !== 'down' && z.st !== 'climb') {
@@ -518,8 +518,7 @@ const Zombie = {
     for (const it of z.loot) { if (it.worn && ITEMS[it.id].cat === 'Clothing') delete it.worn; }
     if (z.carKey) z.loot.push(z.carKey);
     if (o && !o.noKill) { G.player.kills++; }
-    Fx.blood(z.x, z.y, 10, fromA);
-    Fx.decal(z.x, z.y, 1.2);
+    Gore.kill(z, fromA, o || {});
     Sfx.play('zdie', z.x, z.y);
   },
   // 0 = fresh .. 1 = badly decomposed (game days since death)

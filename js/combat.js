@@ -111,7 +111,7 @@ const Combat = {
       if (z && !z.dead && (z.st === 'down' || z.crawl || z.lie > 0.3) && hp[2] < 0.9) {
         // the heel comes down on the head (or whatever is under it): strong legs crush skulls
         const dmg = R.f(0.45, 0.85) * (0.75 + str * 0.06) * (hp[3] ? 1.3 : 0.7) * (R.chance(0.12 + str * 0.01) ? 2.5 : 1);
-        Zombie.hit(z, dmg, Math.atan2(hp[1] - p.y, hp[0] - p.x), { stag: 0, at: hp });
+        Zombie.hit(z, dmg, Math.atan2(hp[1] - p.y, hp[0] - p.x), { stag: 0, at: hp, kind: 'stomp', head: !!hp[3] });
         Sfx.play('stomp', z.x, z.y);
         Player.xp('Strength', 0.5);
         if (z.st === 'down') z.downT = Math.max(z.downT, 1.2);
@@ -151,7 +151,9 @@ const Combat = {
         const a = Math.atan2(z.y - p.y, z.x - p.x);
         // a blow driven down into a body on the ground carries the weight of the swing
         if (s.floor) dmg *= 1.2;
-        Zombie.hit(z, dmg, a, { knock, push: s.floor ? 0.2 : 1.0 + str * 0.06, at });
+        const gk = Gore.kindOfWeapon(w, null);
+        Zombie.hit(z, dmg, a, { knock, push: s.floor ? 0.2 : 1.0 + str * 0.06, at, kind: gk, head: at ? !!at[3] : R.chance(0.2) });
+        Gore.splash(p, it, gk, U.dist(p.x, p.y, z.x, z.y));
         if (crit && !z.dead) Fx.text(z.x, z.y, 'Critical!', '#ffcc66', 0.8);
         Sfx.play(w.sk === 'ShortBlade' || w.sk === 'LongBlade' || w.sk === 'Axe' || w.sk === 'Spear' ? 'hitBlade' : 'hitBlunt', z.x, z.y);
         if (w.sk) Player.xp(w.sk, R.f(1.5, 3));
@@ -231,7 +233,7 @@ const Combat = {
         if (bestT > g.range * 0.6) dmg *= 0.7;
         const crit = R.chance(g.crit + Player.skill('Aiming') * 0.015);
         if (crit) dmg *= 3;
-        Zombie.hit(best, dmg, a, { knock: R.chance(g.knock), push: 1.5 });
+        Zombie.hit(best, dmg, a, { knock: R.chance(g.knock), push: 1.5, kind: Gore.kindOfWeapon(null, g), head: crit, at: [hx, hy] });
         if (crit && !best.dead) Fx.text(best.x, best.y, 'Headshot!', '#ffcc66', 0.8);
         Sfx.play('hitFlesh', best.x, best.y);
       } else if (eh) {
