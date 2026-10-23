@@ -416,7 +416,7 @@ const Player = {
     if (Input.hit(' ')) { Combat.startShove(); return; }
     if (prim && ITEMS[prim.id].throwable) { if (Input.takeClick()) Combat.throwItem(prim); return; }
     if (wd && wd.gun) {
-      if (((Input.lmbClick && Input.takeClick()) || (Input.lmb && wd.gun.auto)) && p.fireCd <= 0 && !p.swing) Combat.fire(prim);
+      if (((Input.lmbClick && Input.takeClick()) || (Input.lmb && wd.gun.auto)) && p.fireCd <= 0 && (!p.swing || p.swing.kind === 'fire')) Combat.fire(prim);
     } else if (Input.lmb && !p.swing) {
       Combat.startMelee();
     }
@@ -859,6 +859,98 @@ const Player = {
     if (Char3D.draw(ctx, p, X, Y, d.s, 1)) return;
     Humanoid.draw(ctx, X, Y, d.ang, this.look(), this.pose(), d.s);
   },
+  // ---- aiming a gun. Where the shot goes, worked out once a frame for the ground marks and the reticle: the line of fire
+  // out to the gun's range or the first wall, how far shots stray either side (the aim error's reach, plus a shotgun's
+  // pattern), the zombie the shot would meet and the chance of hitting it (the shot sampled the way Combat.fire makes it)
+  aimF: -1, aimA: null,
+  AIM_SAMPLES: (() => { const r = new RNG(9157), a = []; for (let i = 0; i < 48; i++) a.push(r.next() + r.next() + r.next() - 1.5, r.f(-0.35, 0.35)); return a; })(),
+  aimInfo(g) {
+    const fno = Render.fno;
+    if (this.aimF === fno && this.aimA && this.aimA.g === g) return this.aimA;
+    const p = G.player, [wx, wy] = Render.mouseWorld();
+    const a = Math.atan2(wy - p.y, wx - p.x), dx = Math.cos(a), dy = Math.sin(a);
+    const sp = Combat.spread(g, p.aiming), n = g.pellets || 1, cone = n > 1 ? g.cone || 0 : 0;
+    const half = sp * 0.9 + cone;
+    const z0 = p.x >= LV.W0 ? 0 : World.stairZ(p);
+    const mx = p.x + dx * 0.55, my = p.y + dy * 0.55;
+    const eh = World.firstEdgeHit(mx, my, mx + dx * g.range, my + dy * g.range);
+    const L = eh ? eh.t * g.range : g.range;
+    // the target: of the zombies in the cone, the one nearest the line (a tie: the nearer)
+    let tgt = null, best = 1e9;
+    const up = mx >= LV.W0;
+    for (const z of Zombie.near(mx, my, L + 1)) {
+      // (only those you can see: the ring would give away the ones in the dark)
+      if (z.dead || (z.x >= LV.W0) !== up || z.va < 0.3) continue;
+      const ox = z.x - mx, oy = z.y - my, t = ox * dx + oy * dy;
+      if (t < 0.2 || t > L) continue;
+      const rr = z.lie > 0.5 ? 0.45 : z.r + 0.06, off = Math.max(0, Math.abs(ox * dy - oy * dx) - rr), ang = off / t;
+      if (ang > half) continue;
+      const sc = ang + t * 0.002;
+      if (sc < best) { best = sc; tgt = z; }
+    }
+    // its chance: the shot's own spread sampled (fixed samples: the number does not flicker)
+    let chance = 0;
+    if (tgt) {
+      const S = this.AIM_SAMPLES, ox = tgt.x - mx, oy = tgt.y - my, rr = tgt.lie > 0.5 ? 0.45 : tgt.r + 0.06;
+      let hit = 0;
+      for (let i = 0; i < S.length; i += 2) {
+        const aimA = S[i] * sp * 0.9;
+        for (let k = 0; k < n; k++) {
+          const b = n > 1 ? aimA + (k / (n - 1) - 0.5 + S[(i + k * 2 + 1) % S.length] / (n - 1)) * cone * 2 : aimA;
+          const c = Math.cos(a + b), s = Math.sin(a + b), t = ox * c + oy * s;
+          if (t < 0 || t > L) continue;
+          const px = ox - c * t, py = oy - s * t;
+          if (px * px + py * py <= rr * rr) { hit++; break; }
+        }
+      }
+      chance = hit / (S.length / 2);
+    }
+    this.aimF = fno;
+    return (this.aimA = { g, wx, wy, a, dx, dy, mx, my, L, wall: !!eh, half, z0, tgt, chance });
+  },
+  aimCol(c) { return c >= 0.7 ? '120,220,105' : c >= 0.4 ? '235,205,80' : '230,100,80'; },
+  // under the characters, after the light: the cone of fire on the ground and a ring under the target
+  drawAimGround(ctx) {
+    const p = G.player, wd = this.weaponDef();
+    if (!wd || !wd.gun || p.action || p.dead || p.inCar) return;
+    const A = this.aimInfo(wd.gun), al = p.aiming ? 1 : 0.4, P = (x, y) => Render.P(x, y, A.z0);
+    const L = A.L, h = Math.min(A.half, 0.6);
+    const pt = (t, o) => P(A.mx + Math.cos(A.a + o) * t, A.my + Math.sin(A.a + o) * t);
+    ctx.save();
+    if (p.aiming) {
+      // the cone: filled faintly, its edges, a tick across where the shot stops (a wall: solid)
+      const a0 = pt(0, 0), l1 = pt(L, -h), r1 = pt(L, h);
+      const g = ctx.createLinearGradient(a0[0], a0[1], (l1[0] + r1[0]) / 2, (l1[1] + r1[1]) / 2);
+      g.addColorStop(0, 'rgba(255,250,235,0.16)'); g.addColorStop(1, 'rgba(255,250,235,0.03)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(l1[0], l1[1]);
+      for (let k = 1; k <= 6; k++) { const q = pt(L, -h + 2 * h * k / 6); ctx.lineTo(q[0], q[1]); }
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,250,235,0.32)';
+      ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(l1[0], l1[1]); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(r1[0], r1[1]); ctx.stroke();
+      if (A.wall) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,250,235,0.5)'; ctx.beginPath(); ctx.moveTo(l1[0], l1[1]); ctx.lineTo(r1[0], r1[1]); ctx.stroke(); }
+    }
+    // the line of fire itself
+    const e = pt(L, 0), s0 = pt(0.2, 0);
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.2; ctx.strokeStyle = `rgba(255,236,190,${0.5 * al})`;
+    ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+    ctx.setLineDash([]);
+    // the target's ring (and its chance, while aiming)
+    if (A.tgt) {
+      const z = A.tgt, c = Render.P(z.x, z.y, z.x >= LV.W0 ? 0 : World.stairZ(z)), col = this.aimCol(A.chance), r = (z.lie > 0.5 ? 0.6 : 0.42) * HTW;
+      ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath(); ctx.ellipse(c[0], c[1], r, r * 0.5, 0, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = `rgba(${col},${0.95 * al + 0.05})`;
+      ctx.beginPath(); ctx.ellipse(c[0], c[1], r, r * 0.5, 0, 0, 7); ctx.stroke();
+      if (p.aiming) {
+        ctx.font = 'bold 10px Verdana, sans-serif'; ctx.textAlign = 'left';
+        const tx = c[0] + r + 3, ty = c[1] + 4, txt = Math.round(A.chance * 100) + '%';
+        ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillText(txt, tx + 1, ty + 1);
+        ctx.fillStyle = `rgb(${col})`; ctx.fillText(txt, tx, ty);
+      }
+    }
+    ctx.restore();
+  },
   drawOverlay(ctx) {
     const p = G.player;
     if (p.inCar) return;
@@ -880,17 +972,19 @@ const Player = {
       yy -= 13;
     }
     ctx.globalAlpha = 1;
-    // aim reticle for guns
+    // aim reticle for guns: as wide as the spread where the cursor is, in the colour of the chance to hit the target
     const wd = this.weaponDef();
-    if (wd && wd.gun && !p.action && !p.dead) {
-      const [wx, wy] = Render.mouseWorld();
-      const d = U.dist(p.x, p.y, wx, wy);
-      const sp = Combat.spread(wd.gun, p.aiming);
-      const r = Math.max(4, Math.tan(sp) * d * HTW * 1.1);
-      const [cx, cy] = Render.P(wx, wy, 0);
-      ctx.strokeStyle = p.aiming ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+    const A = wd && wd.gun && !p.action && !p.dead ? this.aimInfo(wd.gun) : null;
+    if (A) {
+      const d = U.dist(p.x, p.y, A.wx, A.wy);
+      const r = Math.max(4, Math.tan(A.half) * d * HTW);
+      const [cx, cy] = Render.P(A.wx, A.wy, A.z0);
+      const col = A.tgt ? this.aimCol(A.chance) : '255,255,255';
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath(); ctx.ellipse(cx, cy, r + 1, r * 0.5 + 1, 0, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1; ctx.strokeStyle = `rgba(${col},${p.aiming ? 0.85 : 0.45})`;
       ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.5, 0, 0, 7); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx - 4, cy); ctx.lineTo(cx + 4, cy); ctx.moveTo(cx, cy - 3); ctx.lineTo(cx, cy + 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx - 2, cy); ctx.moveTo(cx + 2, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 4); ctx.lineTo(cx, cy - 1.5); ctx.moveTo(cx, cy + 1.5); ctx.lineTo(cx, cy + 4); ctx.stroke();
     }
     // aim cone for melee when aiming
     if (p.aiming && !(wd && wd.gun)) {

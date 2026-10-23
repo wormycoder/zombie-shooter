@@ -290,7 +290,8 @@ const Zombie = {
     if (z.cd > 0) z.cd -= dt;
     // visual fade
     // (after death the camera stays on the body: those close by are seen gathering and feeding)
-    const vis = p.dead ? d < 9 : World.isVis(Math.floor(z.x), Math.floor(z.y)) && (Render.lightAt(z.x, z.y) > 0.13 || d < 2.6 || Render.shadeAt(z.x, z.y) > 0.2);
+    // (in the dark a shape is still made out a few tiles off, further under a moon than on a black night)
+    const vis = p.dead ? d < 9 : World.isVis(Math.floor(z.x), Math.floor(z.y)) && (Render.lightAt(z.x, z.y) > 0.13 || d < Math.min(7, 2.6 + G.light.amb * 18) || Render.shadeAt(z.x, z.y) > 0.2);
     z.va = U.clamp(z.va + (vis ? dt * 5 : -dt * 3), 0, 1);
     // fake-dead: lies still until the player is close
     if (z.fake) {

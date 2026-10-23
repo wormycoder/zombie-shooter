@@ -6,19 +6,19 @@
 // (tiles/s), acc launch acceleration, m mass (t), br brake deceleration, grip tyre grip, st max steering angle (rad),
 // rev reverse speed, drv driven wheels (f/r/4), hd heavy-duty parts, horn class, doors, pitch engine note, fuel use.
 const CAR_TYPES = {
-  sedan: { n: 'Sedan', len: 2.3, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 15, acc: 4.5, trunk: 35, cols: ['#8a2a2a', '#2a4a7a', '#d8d8d0', '#3a3a3a', '#5a6a4a', '#a08a5a', '#6a7a8a', '#7a2a5a'], m: 1.4, br: 7.5, grip: 1, st: 0.6, rev: 4.5, drv: 'f', horn: 'car', doors: 4, pitch: 1, fuel: 1 },
-  pickup: { n: 'Pickup Truck', len: 2.5, wid: 1.1, h: 0.82, cab: [-0.05, 0.3], cabH: 0.58, bed: true, maxV: 14, acc: 4.2, trunk: 50, cols: ['#3a5a3a', '#7a3a2a', '#2a3a5a', '#c8c0a8', '#4a4a4a'], m: 1.9, br: 7, grip: 0.95, st: 0.55, rev: 4.5, drv: 'r', horn: 'truck', doors: 2, pitch: 0.85, fuel: 1.25 },
-  van: { n: 'Van', len: 2.5, wid: 1.15, h: 0.85, cab: [-0.48, 0.36], cabH: 0.75, maxV: 12, acc: 3.5, trunk: 70, cols: ['#e0e0d8', '#3a4a6a', '#8a8a7a', '#5a3a2a'], m: 2.1, br: 6.5, grip: 0.9, st: 0.55, rev: 4, drv: 'r', horn: 'truck', doors: 4, pitch: 0.85, fuel: 1.3 },
-  police: { n: 'Police Car', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 16, acc: 5, trunk: 35, cols: ['#f0f0f0'], lightbar: true, m: 1.6, br: 8, grip: 1.05, st: 0.6, rev: 5, drv: 'r', horn: 'car', doors: 4, pitch: 0.95, fuel: 1.15 },
-  firetruck: { n: 'Fire Truck', len: 3.4, wid: 1.25, h: 1.05, cab: [0.18, 0.48], cabH: 0.6, maxV: 10, acc: 2.6, trunk: 60, cols: ['#c02020'], lightbar: true, red: true, m: 9, br: 5.5, grip: 0.85, st: 0.5, rev: 3.5, drv: 'r', hd: true, horn: 'bus', doors: 4, pitch: 0.6, fuel: 2 },
-  hatchback: { n: 'Hatchback', len: 2.0, wid: 1.0, h: 0.7, cab: [-0.42, 0.2], cabH: 0.5, maxV: 14, acc: 4.6, trunk: 25, cols: ['#b03a2a', '#e0d8c8', '#3a5a8a', '#6a8a5a', '#d0a030', '#4a4a50', '#8a8a90'], m: 1.1, br: 7.5, grip: 1, st: 0.65, rev: 4.5, drv: 'f', horn: 'small', doors: 4, pitch: 1.2, fuel: 0.8 },
-  wagon: { n: 'Station Wagon', len: 2.5, wid: 1.05, h: 0.72, cab: [-0.44, 0.22], cabH: 0.52, maxV: 14, acc: 4.0, trunk: 55, cols: ['#7a5a3a', '#4a5a4a', '#c8c0a8', '#5a2a2a', '#3a4a6a'], m: 1.6, br: 7, grip: 0.95, st: 0.58, rev: 4.5, drv: 'r', horn: 'car', doors: 4, pitch: 0.95, fuel: 1.05 },
-  sports: { n: 'Sports Car', len: 2.25, wid: 1.05, h: 0.56, cab: [-0.28, 0.1], cabH: 0.4, maxV: 21, acc: 7.0, trunk: 12, cols: ['#c01818', '#e8e8e8', '#1a1a1a', '#e0b010', '#1a4ab0'], m: 1.3, br: 9, grip: 1.15, st: 0.6, rev: 5, drv: 'r', horn: 'car', doors: 2, pitch: 1.3, fuel: 1.4 },
-  suv: { n: 'SUV', len: 2.45, wid: 1.12, h: 0.86, cab: [-0.46, 0.24], cabH: 0.6, maxV: 14, acc: 4.3, trunk: 55, cols: ['#2a2a2a', '#5a6a5a', '#8a2a2a', '#c8c8c0', '#2a3a5a', '#6a5a4a'], m: 2.0, br: 7, grip: 0.95, st: 0.55, rev: 4.5, drv: '4', horn: 'truck', doors: 4, pitch: 0.85, fuel: 1.3 },
-  taxi: { n: 'Taxi', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 15, acc: 4.5, trunk: 35, cols: ['#e8c020'], m: 1.5, br: 7.5, grip: 1, st: 0.6, rev: 4.5, drv: 'r', horn: 'car', doors: 4, pitch: 1, fuel: 1.05 },
-  ambulance: { n: 'Ambulance', len: 2.9, wid: 1.2, h: 1.0, cab: [0.12, 0.44], cabH: 0.5, maxV: 13, acc: 3.4, trunk: 45, cols: ['#f0f0ec'], lightbar: true, m: 3.2, br: 6.5, grip: 0.9, st: 0.52, rev: 4, drv: 'r', hd: true, horn: 'truck', doors: 4, pitch: 0.75, fuel: 1.6 },
-  bus: { n: 'School Bus', len: 4.6, wid: 1.25, h: 1.15, cab: [-0.48, 0.46], cabH: 0.45, maxV: 9, acc: 2.0, trunk: 30, cols: ['#e8b020'], m: 10, br: 5, grip: 0.85, st: 0.5, rev: 3, drv: 'r', hd: true, horn: 'bus', doors: 4, pitch: 0.55, fuel: 1.8 },
-  army: { n: 'Military Truck', len: 3.1, wid: 1.25, h: 1.0, cab: [0.2, 0.48], cabH: 0.55, maxV: 12, acc: 3.0, trunk: 80, cols: ['#4a5a3a'], m: 6, br: 6, grip: 0.95, st: 0.5, rev: 4, drv: '4', hd: true, horn: 'truck', doors: 2, pitch: 0.65, fuel: 1.7 },
+  sedan: { n: 'Sedan', len: 2.3, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 30, acc: 6.2, trunk: 35, cols: ['#8a2a2a', '#2a4a7a', '#d8d8d0', '#3a3a3a', '#5a6a4a', '#a08a5a', '#6a7a8a', '#7a2a5a'], m: 1.4, br: 7.5, grip: 1, st: 0.6, rev: 4.5, drv: 'f', horn: 'car', doors: 4, pitch: 1, fuel: 1 },
+  pickup: { n: 'Pickup Truck', len: 2.5, wid: 1.1, h: 0.82, cab: [-0.05, 0.3], cabH: 0.58, bed: true, maxV: 28, acc: 5.6, trunk: 50, cols: ['#3a5a3a', '#7a3a2a', '#2a3a5a', '#c8c0a8', '#4a4a4a'], m: 1.9, br: 7, grip: 0.95, st: 0.55, rev: 4.5, drv: 'r', horn: 'truck', doors: 2, pitch: 0.85, fuel: 1.25 },
+  van: { n: 'Van', len: 2.5, wid: 1.15, h: 0.85, cab: [-0.48, 0.36], cabH: 0.75, maxV: 25, acc: 4.8, trunk: 70, cols: ['#e0e0d8', '#3a4a6a', '#8a8a7a', '#5a3a2a'], m: 2.1, br: 6.5, grip: 0.9, st: 0.55, rev: 4, drv: 'r', horn: 'truck', doors: 4, pitch: 0.85, fuel: 1.3 },
+  police: { n: 'Police Car', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 36, acc: 7.2, trunk: 35, cols: ['#f0f0f0'], lightbar: true, m: 1.6, br: 8, grip: 1.05, st: 0.6, rev: 5, drv: 'r', horn: 'car', doors: 4, pitch: 0.95, fuel: 1.15 },
+  firetruck: { n: 'Fire Truck', len: 3.4, wid: 1.25, h: 1.05, cab: [0.18, 0.48], cabH: 0.6, maxV: 22, acc: 3.6, trunk: 60, cols: ['#c02020'], lightbar: true, red: true, m: 9, br: 5.5, grip: 0.85, st: 0.5, rev: 3.5, drv: 'r', hd: true, horn: 'bus', doors: 4, pitch: 0.6, fuel: 2 },
+  hatchback: { n: 'Hatchback', len: 2.0, wid: 1.0, h: 0.7, cab: [-0.42, 0.2], cabH: 0.5, maxV: 28, acc: 6.0, trunk: 25, cols: ['#b03a2a', '#e0d8c8', '#3a5a8a', '#6a8a5a', '#d0a030', '#4a4a50', '#8a8a90'], m: 1.1, br: 7.5, grip: 1, st: 0.65, rev: 4.5, drv: 'f', horn: 'small', doors: 4, pitch: 1.2, fuel: 0.8 },
+  wagon: { n: 'Station Wagon', len: 2.5, wid: 1.05, h: 0.72, cab: [-0.44, 0.22], cabH: 0.52, maxV: 28, acc: 5.4, trunk: 55, cols: ['#7a5a3a', '#4a5a4a', '#c8c0a8', '#5a2a2a', '#3a4a6a'], m: 1.6, br: 7, grip: 0.95, st: 0.58, rev: 4.5, drv: 'r', horn: 'car', doors: 4, pitch: 0.95, fuel: 1.05 },
+  sports: { n: 'Sports Car', len: 2.25, wid: 1.05, h: 0.56, cab: [-0.28, 0.1], cabH: 0.4, maxV: 44, acc: 9.5, trunk: 12, cols: ['#c01818', '#e8e8e8', '#1a1a1a', '#e0b010', '#1a4ab0'], m: 1.3, br: 9, grip: 1.15, st: 0.6, rev: 5, drv: 'r', horn: 'car', doors: 2, pitch: 1.3, fuel: 1.4 },
+  suv: { n: 'SUV', len: 2.45, wid: 1.12, h: 0.86, cab: [-0.46, 0.24], cabH: 0.6, maxV: 29, acc: 5.8, trunk: 55, cols: ['#2a2a2a', '#5a6a5a', '#8a2a2a', '#c8c8c0', '#2a3a5a', '#6a5a4a'], m: 2.0, br: 7, grip: 0.95, st: 0.55, rev: 4.5, drv: '4', horn: 'truck', doors: 4, pitch: 0.85, fuel: 1.3 },
+  taxi: { n: 'Taxi', len: 2.35, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52, maxV: 30, acc: 6.2, trunk: 35, cols: ['#e8c020'], m: 1.5, br: 7.5, grip: 1, st: 0.6, rev: 4.5, drv: 'r', horn: 'car', doors: 4, pitch: 1, fuel: 1.05 },
+  ambulance: { n: 'Ambulance', len: 2.9, wid: 1.2, h: 1.0, cab: [0.12, 0.44], cabH: 0.5, maxV: 28, acc: 4.8, trunk: 45, cols: ['#f0f0ec'], lightbar: true, m: 3.2, br: 6.5, grip: 0.9, st: 0.52, rev: 4, drv: 'r', hd: true, horn: 'truck', doors: 4, pitch: 0.75, fuel: 1.6 },
+  bus: { n: 'School Bus', len: 4.6, wid: 1.25, h: 1.15, cab: [-0.48, 0.46], cabH: 0.45, maxV: 21, acc: 3.0, trunk: 30, cols: ['#e8b020'], m: 10, br: 5, grip: 0.85, st: 0.5, rev: 3, drv: 'r', hd: true, horn: 'bus', doors: 4, pitch: 0.55, fuel: 1.8 },
+  army: { n: 'Military Truck', len: 3.1, wid: 1.25, h: 1.0, cab: [0.2, 0.48], cabH: 0.55, maxV: 24, acc: 4.0, trunk: 80, cols: ['#4a5a3a'], m: 6, br: 6, grip: 0.95, st: 0.5, rev: 4, drv: '4', hd: true, horn: 'truck', doors: 2, pitch: 0.65, fuel: 1.7 },
 };
 // Vehicle parts. grp: mechanics window group; item: part item (heavy-duty vehicles use item + 'HD' unless noHD);
 // tools/sk/t: tools, Mechanics level and seconds to (un)install; bay: needs the hood open; under: needs a jack;
@@ -647,7 +647,7 @@ const Vehicles = {
     const ek = Math.max(0, P.engine) / 100;
     const eq = (c.eq === undefined ? 64 : c.eq) / 100;
     const engK = eng ? (0.3 + 0.7 * Math.pow(ek, 0.7)) * (0.78 + 0.32 * eq) : 0;
-    const vmax = T.maxV * (0.6 + 0.4 * ek) * (1 - flat * 0.12) * (0.9 + 0.15 * eq);
+    const vmax = T.maxV * (0.78 + 0.22 * ek) * (1 - flat * 0.12) * (0.88 + 0.17 * eq);
     const brK = P.brakes < 0 ? 0.12 : 0.25 + 0.75 * Math.max(0, P.brakes) / 100;
     const L = T.len * 0.62, rb = T.len * 0.3;          // wheelbase; centre ahead of the rear axle
     const th = inp ? inp.th : 0, bk = inp ? inp.br : 0, hb = inp ? !!inp.hb : true;
@@ -658,8 +658,12 @@ const Vehicles = {
     const h = dt / steps;
     // gear changes: a short dip in drive while the clutch is in
     if (eng && th > 0 && vf > 0) {
+      // up a gear past its top; back down only well below it, or the power cut while shifting would drop the car
+      // back under the line and it would hunt between two gears forever, stuck at that speed
       const r = vf / T.maxV;
-      let g = 0; while (g < 3 && r > CAR_GEARS[g]) g++;
+      let g = tm.gear || 0;
+      while (g < 3 && r > CAR_GEARS[g]) g++;
+      while (g > 0 && r < CAR_GEARS[g - 1] - 0.08) g--;
       if (g > (tm.gear || 0)) tm.shiftT = T.m > 3 ? 0.32 : c.type === 'sports' ? 0.12 : 0.2;
       tm.gear = g;
     } else if (vf < 1) tm.gear = 0;
@@ -668,7 +672,7 @@ const Vehicles = {
     for (let k = 0; k < steps; k++) {
       const ox = c.x, oy = c.y, oa = c.a;
       // ---- along the car: engine, brakes, rolling resistance, air drag
-      const drag = 0.004 * vf * vf;
+      const drag = 0.0024 * vf * vf;
       let acc = 0, dec = sf.roll * (1 + flat * 0.7) + drag;
       if (eng && th > 0 && vf > -0.4) {
         // engine force tapers toward top speed; it also covers road-and-air losses so top speed is reached on asphalt

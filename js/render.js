@@ -5,7 +5,7 @@
 // extension registries: DECAL_ART[kind] = (ctx, d, X, Y) draws a decal with string kind d.k;
 // FLOOR_HOOKS functions (ctx, minX, minY, maxX, maxY) draw on the ground after decals.
 const DECAL_ART = {};
-const FLOOR_HOOKS = [];
+const FLOOR_HOOKS = [(ctx, a, b, c, d) => Fx.drawFloorCasings(ctx, a, b, c, d)];
 const Render = {
   cam: { x: 120, y: 120, z: 0, zoom: 1.25, tz: 1.25 },
   init(cv) {
@@ -203,6 +203,8 @@ const Render = {
     if (G.corpse && p && p.dead && p.x < W0) Player.draw(ctx);
     // ---------------- light overlay on floors
     this.drawLightOverlay();
+    // the aim (cone of fire, target ring) on the ground, under everyone and clear of the dark
+    if (live && p && !p.dead && !p.inCar) Player.drawAimGround(ctx);
     // ---------------- main pass
     // what stands on each tile of the view: linked lists in typed arrays, in depth order within a tile
     this.bkReset(minX, minY, maxX - minX + 1, maxY - minY + 1);
@@ -220,6 +222,8 @@ const Render = {
       if (cX < L - 200 || cX > Rr + 200 || cY < T - 120 || cY > B + 200) continue;
       this.bkAdd(c, 2);
     }
+    // spent cases in the air (and upstairs, where there is no floor-items pass)
+    for (const c of Fx.casings) if (c.air || c.x >= W0) this.bkAdd(c, 3);
     const BH = this.bkH, BH1 = this.bkH1, BN = this.bkN, BE = this.bkE, BK = this.bkK, BVW = this.bvw;
     // buildings roofs by diagonal
     const roofs = new Map();
@@ -379,6 +383,7 @@ const Render = {
   drawEnt(ctx, k, e) {
     if (k === 0) Player.draw(ctx);
     else if (k === 1) Zombie.draw(ctx, e, false);
+    else if (k === 3) Fx.drawCasing(ctx, e);
     else Vehicles.draw(ctx, e);
   },
   // per-tile entity lists over the view (ground bkH, upstairs bkH1): heads, next links, entity, kind, depth
@@ -467,6 +472,10 @@ const Render = {
     // costs as much as building it, and the next frame would have to do it again
     let budget = 6, nvis = 0;
     const env = ((snowA * 100) | 0) * 4096 + (gs ? gs.charCodeAt(0) : 0) * 8 + detail;
+    // half-resolution chunks (World textures: Half, and always when zoomed far out, where they are drawn that small)
+    const zs = this.cam.zoom * this.dpr;
+    if (this.chunkHR !== 0.5 && zs < 0.68) this.chunkHR = 0.5; else if (this.chunkHR !== 1 && zs > 0.8) this.chunkHR = 1;
+    const hr = Settings.v.worldTex === 0.5 ? 0.5 : this.chunkHR || 1, CW = 2 * CH * HTW + 2, CHh = 2 * CH * HTH + 2;
     const cx0 = Math.floor(minX / CH), cy0 = Math.floor(minY / CH), cx1 = Math.floor(maxX / CH), cy1 = Math.floor(maxY / CH);
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const x0 = cx * CH, y0 = cy * CH;
@@ -479,14 +488,18 @@ const Render = {
       if (ch && ch.env === env && ((tick + cx + cy) & 7)) { sig = ch.sig; wet = ch.wet; }
       else { sig = this.chunkSig(x0, y0, gs, snowA, detail); wet = this.sigWet; }
       nvis++;
-      if (!ch || ch.sig !== sig) {
+      if (!ch || ch.sig !== sig || ch.hr !== hr) {
         if (budget > 0 || performance.now() - t0 < 5) {
           budget--;
-          if (!ch) { ch = { c: this.chunkPool.pop() || mkCanvas(2 * CH * HTW + 2, 2 * CH * HTH + 2), sig: 0, used: 0, wet: 0 }; this.chunks.set(key, ch); }
+          if (ch && ch.hr !== hr) { this.chunkPoolOf(ch.hr).push(ch.c); ch.c = null; }
+          if (!ch) { ch = { c: null, sig: 0, used: 0, wet: 0, hr }; this.chunks.set(key, ch); }
+          if (!ch.c) { ch.c = this.chunkPoolOf(hr).pop() || mkCanvas(Math.ceil(CW * hr), Math.ceil(CHh * hr)); ch.hr = hr; }
           const g = ch.c.getContext('2d');
           g.clearRect(0, 0, ch.c.width, ch.c.height);
+          if (hr !== 1) g.setTransform(hr, 0, 0, hr, 0, 0);
           for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) this.groundTile(g, x, y, (x - y) * HTW - ox, (x + y) * HTH - oy, t, gs, snowA, detail, false);
           if (typeof Street !== 'undefined') Street.curbChunk(g, x0, y0, CH, ox, oy);
+          if (hr !== 1) g.setTransform(1, 0, 0, 1, 0, 0);
           ch.sig = sig; ch.wet = wet; ch.env = env;
         } else {
           // over this frame's build budget: draw the tiles directly
@@ -496,7 +509,7 @@ const Render = {
         }
       }
       ch.used = tick;
-      ctx.drawImage(ch.c, ox, oy);
+      if (ch.hr === 1) ctx.drawImage(ch.c, ox, oy); else ctx.drawImage(ch.c, ox, oy, CW, CHh);
       if (ch.wet) for (let y = y0; y < y0 + CH && y < w.h; y++) for (let x = x0; x < x0 + CH && x < w.gw; x++) {
         const f = w.floor[y * w.w + x];
         if (f === FL.WATER || f === FL.DEEPWATER) this.groundTile(ctx, x, y, (x - y) * HTW, (x + y) * HTH, t, gs, snowA, detail, true);
@@ -508,12 +521,15 @@ const Render = {
     const cap = Math.max(this.chunkCap(), nvis + (nvis >> 2) + 8);
     if (this.chunks.size > cap) {
       const arr = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used), keep = Math.max(nvis, cap - 24);
-      for (let k = 0; k < arr.length - keep; k++) { this.chunks.delete(arr[k][0]); if (this.chunkPool.length < 32) this.chunkPool.push(arr[k][1].c); }
+      for (let k = 0; k < arr.length - keep; k++) { this.chunks.delete(arr[k][0]); const pl = this.chunkPoolOf(arr[k][1].hr); if (pl.length < 32) pl.push(arr[k][1].c); }
     }
   },
   chunkPool: [], chunkVis: 0,
   // chunks kept beyond those on screen (Sprite cache size setting)
   chunkCap() { return 140 * CACHE_K(); },
+  // spare chunk canvases by resolution
+  chunkPoolH: [],
+  chunkPoolOf(hr) { return hr === 1 ? this.chunkPool : this.chunkPoolH; },
   drawDecal(ctx, d, lv) {
     const dx = lv ? d.x - LV.W0 : d.x;
     const X = (dx - d.y) * HTW, Y = (dx + d.y) * HTH - (lv ? WALL_H * ZU : 0);
@@ -1224,11 +1240,62 @@ const Fx = {
     else this.parts.push({ x, y, z, vx: R.f(-0.1, 0.1), vy: R.f(-0.1, 0.1), vz: 0.6, life: 1.6, max: 1.6, col: '#909090', size: R.f(3, 6), smoke: true });
   },
   tracer(x0, y0, z0, x1, y1, z1) { this.tracers.push({ x0, y0, z0, x1, y1, z1, t: 0.07 }); },
+  // spent cases: thrown from the gun's ejection port, tumbling to the floor (z0) where they lie a couple of minutes.
+  // In the air they sort with the characters; on the ground floor they are drawn with the floor items, under everyone.
+  // kinds: colour, head colour, length (tiles), thickness (px)
+  casings: [],
+  CASE: { brass: ['#d8ae46', '#9a7428', 0.05, 1.5], rifle: ['#d0a63e', '#8a6420', 0.075, 1.7], shell: ['#b42222', '#d8b048', 0.09, 2.6] },
+  casing(x, y, z, z0, vx, vy, vz, k) {
+    if (this.casings.length >= 160) this.casings.shift();
+    this.casings.push({ x, y, z, z0, vx, vy, vz, k, a: R.f(0, 6.28), w: R.f(-28, 28), t: 0, air: true, b: 0 });
+  },
+  updateCasings(dt) {
+    const C = this.casings;
+    for (let i = C.length - 1; i >= 0; i--) {
+      const c = C[i];
+      c.t += dt;
+      if (!c.air) { if (c.t > 150) C.splice(i, 1); continue; }
+      c.vz -= 9.8 * dt; c.a += c.w * dt;
+      const nx = c.x + c.vx * dt, ny = c.y + c.vy * dt;
+      // off a wall it bounces back
+      if ((Math.floor(nx) !== Math.floor(c.x) || Math.floor(ny) !== Math.floor(c.y)) && World.firstEdgeHit(c.x, c.y, nx, ny)) { c.vx *= -0.3; c.vy *= -0.3; }
+      else { c.x = nx; c.y = ny; }
+      c.z += c.vz * dt;
+      if (c.z > c.z0) continue;
+      c.z = c.z0;
+      if (c.b < 2 && c.vz < -1.1) {
+        if (!c.b) Sfx.play(c.k === 'shell' ? 'shellDrop' : 'casing', c.x, c.y);
+        c.b++; c.vz *= -0.32; c.vx *= 0.45; c.vy *= 0.45; c.w *= 0.5;
+      } else { c.air = false; c.t = 0; c.vx = c.vy = c.vz = 0; }
+    }
+  },
+  drawCasing(ctx, c) {
+    const K = this.CASE[c.k], s = Render.P(c.x, c.y, c.z), h = K[2] / 2;
+    // the case's axis, tipped up and down as it tumbles in the air
+    const ca = Math.cos(c.a), sa = Math.sin(c.a), up = c.air ? Math.sin(c.a * 0.7) * h : 0;
+    const dx = (ca - sa) * HTW * h, dy = (ca + sa) * HTH * h - up * ZU;
+    ctx.lineCap = 'butt'; ctx.lineWidth = K[3];
+    ctx.strokeStyle = K[0];
+    ctx.beginPath(); ctx.moveTo(s[0] - dx, s[1] - dy); ctx.lineTo(s[0] + dx * 0.4, s[1] + dy * 0.4); ctx.stroke();
+    ctx.strokeStyle = K[1];
+    ctx.beginPath(); ctx.moveTo(s[0] + dx * 0.4, s[1] + dy * 0.4); ctx.lineTo(s[0] + dx, s[1] + dy); ctx.stroke();
+  },
+  // the ground-floor ones that lie still, as a floor hook
+  drawFloorCasings(ctx, x0, y0, x1, y1) {
+    const W0 = LV.W0;
+    for (const c of this.casings) {
+      if (c.air || c.x >= W0 || c.x < x0 || c.x > x1 + 1 || c.y < y0 || c.y > y1 + 1) continue;
+      if (c.t > 145) ctx.globalAlpha = Math.max(0, (150 - c.t) / 5);
+      this.drawCasing(ctx, c);
+      ctx.globalAlpha = 1;
+    }
+  },
   flash(x, y, r, p, t) { this.flashes.push({ x, y, r: r || 6, p: p || 0.8, t: t || 0.08, max: t || 0.08 }); },
   text(x, y, txt, col, dur) { this.floats.push({ x, y, z: 2.0, txt, col: col || '#fff', t: dur || 1.5, max: dur || 1.5 }); },
   update(dt) {
     if (typeof Gore !== 'undefined') Gore.update(dt);
     if (typeof ActFx !== 'undefined' && G.player) ActFx.update(dt);
+    if (this.casings.length) this.updateCasings(dt);
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const p = this.parts[i];
       p.life -= dt;

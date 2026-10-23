@@ -2,6 +2,13 @@
 // ---------------------------------------------------------------------------
 // Combat: melee, shove/stomp, firearms, throwables
 // ---------------------------------------------------------------------------
+// spent cases per round: kind, and a delay for guns that are worked by hand (with the sound of it)
+const EJECT = {
+  Bullets9mm: { k: 'brass' },
+  Bullets556: { k: 'rifle' },
+  Bullets308: { k: 'rifle', t: 0.45, s: 'bolt' },
+  ShotgunShells: { k: 'shell', t: 0.3, s: 'pump' },
+};
 const Combat = {
   projs: [],
   sources: [],
@@ -179,7 +186,8 @@ const Combat = {
   },
   spread(g, aiming) {
     const p = G.player;
-    let s = g.spread * (aiming ? 1 : 1.9) * (1.5 - Player.skill('Aiming') * 0.09);
+    // aim error: about g.spread aimed at Aiming 3; hip fire and a shaky hand widen it, skill tightens it
+    let s = g.spread * (aiming ? 1 : g.two ? 2.2 : 1.6) * (1.2 - Player.skill('Aiming') * 0.07);
     s *= 1 + p.st.panic / 120;
     s *= 1 + p.st.drunk * 1.5;
     if (p.moveMode !== 'idle' && p.anim.amp > 0.3) s *= 1.3;
@@ -193,16 +201,18 @@ const Combat = {
     if (!it.ammo) { Sfx.play('dryfire'); Player.say('Out of ammo! (R to reload)', '#f99'); p.fireCd = 0.4; return; }
     it.ammo--;
     p.fireCd = g.rof;
-    p.swing = { t: 0, dur: 0.22, kind: 'fire', done: true };
+    p.swing = { t: 0, dur: Math.min(0.22, g.rof * 0.95), kind: 'fire', done: true };
     const [wx, wy] = Render.mouseWorld();
     const base = Math.atan2(wy - p.y, wx - p.x);
     p.angle = base;
     const sp = this.spread(g, p.aiming);
     const n = g.pellets || 1;
+    // one aim error for the shot; shot pellets then spread in a fixed cone around it
+    const aimA = base + (R.next() + R.next() + R.next() - 1.5) * sp * 0.9;
     const mx = p.x + Math.cos(base) * 0.55, my = p.y + Math.sin(base) * 0.55;
     let anyHit = false;
     for (let k = 0; k < n; k++) {
-      const a = base + (R.next() + R.next() + R.next() - 1.5) * sp * 0.9;
+      const a = n > 1 ? aimA + (k / (n - 1) - 0.5 + R.f(-0.35, 0.35) / (n - 1)) * g.cone * 2 : aimA;
       const ex = mx + Math.cos(a) * g.range, ey = my + Math.sin(a) * g.range;
       const eh = World.firstEdgeHit(mx, my, ex, ey);
       let tEdge = eh ? eh.t * g.range : g.range;
@@ -244,12 +254,14 @@ const Combat = {
       }
     }
     Player.xp('Aiming', anyHit ? 2.5 : 0.5);
-    p.recoil = (p.recoil || 0) + (g.pellets ? 0.12 : 0.06);
+    p.recoil = Math.min(0.3, (p.recoil || 0) + (g.kick || 0.06) * (1.1 - Player.skill('Aiming') * 0.05));
     Noise.emit(p.x, p.y, g.noise, 'gun');
     Sfx.play(g.model === 'shotgun' ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol');
     Fx.flash(mx, my, 7, 1.0, 0.07);
     p.st.panic = Math.max(0, p.st.panic - 2);
-    Fx.parts.push({ x: p.x, y: p.y, z: 1.2, vx: Math.cos(base + 1.6) * 1.5, vy: Math.sin(base + 1.6) * 1.5, vz: 1.5, life: 0.8, max: 0.8, col: '#d8b040', size: 2, g: true });
+    // the spent case: out at once from a self-loader, when the pump or bolt is worked on the others; a revolver keeps it
+    const ej = EJECT[g.ammo];
+    if (ej) { if (ej.t) this.ejQ.push({ t: ej.t, k: ej.k, s: ej.s }); else this.eject(ej.k); }
     if (R.chance(1 / g.lower)) { it.cond--; if (it.cond <= 0) Player.say('The gun jammed for good!', '#f99'); }
   },
   throwItem(it) {
@@ -265,9 +277,30 @@ const Combat = {
     this.projs.push({ x: p.x, y: p.y, z: 1.4, x0: p.x, y0: p.y, x1: wx, y1: wy, t: 0, T, item: it, kind: d.throwable });
     Sfx.play('swing');
   },
+  ejQ: [],
+  // throw a spent case from the gun's ejection port (where the 3D model last drew it; about chest high in front otherwise)
+  eject(k) {
+    const p = G.player;
+    if (!p || p.inCar) return;
+    const S = typeof Char3D !== 'undefined' && Char3D.st ? Char3D.st.get(p) : null, e = S && S.ej;
+    const up = p.x >= LV.W0, z0 = up ? 0 : World.stairZ(p);
+    let x, y, z, rx, ry;
+    if (e && performance.now() - e[5] < 500) { x = p.x + e[0]; y = p.y + e[1]; z = z0 + e[2]; rx = e[3]; ry = e[4]; }
+    else { const a = p.angle; x = p.x + Math.cos(a) * 0.3; y = p.y + Math.sin(a) * 0.3; z = z0 + 1.2; rx = -Math.sin(a); ry = Math.cos(a); }
+    const fx = Math.cos(p.angle), fy = Math.sin(p.angle);
+    const sv = k === 'shell' ? R.f(1.1, 1.7) : R.f(1.6, 2.4), bv = R.f(0.1, 0.6);
+    Fx.casing(x, y, z, z0, rx * sv - fx * bv, ry * sv - fy * bv, k === 'brass' ? R.f(1.8, 2.8) : R.f(1.0, 1.8), k);
+  },
   update(dt) {
     const p = G.player;
-    if (p) p.recoil = Math.max(0, (p.recoil || 0) - dt * 0.35);
+    for (let i = this.ejQ.length - 1; i >= 0; i--) {
+      const q = this.ejQ[i];
+      q.t -= dt;
+      if (q.t > 0) continue;
+      this.ejQ.splice(i, 1);
+      if (p && !p.dead) { if (q.s) Sfx.play(q.s, p.x, p.y); this.eject(q.k); }
+    }
+    if (p) p.recoil = Math.max(0, (p.recoil || 0) - dt * (0.12 + (p.recoil || 0) * 4));
     for (let i = this.projs.length - 1; i >= 0; i--) {
       const pr = this.projs[i];
       pr.t += dt;

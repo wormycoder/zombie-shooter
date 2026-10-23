@@ -119,6 +119,11 @@ const Sfx = {
       case 'dryfire': this.tn(t, 0.02, 'square', 2200, 1800, 0.2, pan); break;
       case 'reload': for (let k = 0; k < 3; k++) this.tn(t + k * 0.12, 0.03, 'square', 1600 - k * 300, 1200, 0.15, pan); break;
       case 'shellin': this.tn(t, 0.04, 'square', 1200, 900, 0.15, pan); break;
+      // a spent brass case on the floor; a plastic shotgun hull; working a pump and a bolt
+      case 'casing': this.tn(t, 0.05, 'sine', r(4800, 5600), 5000, 0.05 * G_, pan); this.tn(t + r(0.05, 0.08), 0.04, 'sine', r(4200, 5000), 4400, 0.03 * G_, pan); break;
+      case 'shellDrop': this.nz(t, 0.05, 'bandpass', 1500, 1.5, 0.12 * G_, pan); this.tn(t, 0.04, 'sine', 900, 600, 0.06 * G_, pan); break;
+      case 'pump': this.nz(t, 0.06, 'bandpass', 1100, 2, 0.3 * G_, pan); this.nz(t + 0.15, 0.05, 'bandpass', 1700, 2, 0.35 * G_, pan); break;
+      case 'bolt': this.tn(t, 0.03, 'square', 900, 700, 0.12 * G_, pan); this.nz(t + 0.1, 0.06, 'bandpass', 2200, 2, 0.2 * G_, pan); this.tn(t + 0.24, 0.03, 'square', 1100, 900, 0.14 * G_, pan); break;
       case 'glass':
         this.nz(t, 0.5, 'highpass', 3000, 0.7, 0.45 * G_, pan, { verb: true });
         for (let k = 0; k < 9; k++) this.tn(t + r(0, 0.3), r(0.05, 0.2), 'sine', r(2500, 7000), r(2500, 7000), r(0.05, 0.15) * G_, pan);

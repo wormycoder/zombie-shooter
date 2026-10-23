@@ -77,13 +77,17 @@ const Menu = {
     G.player.x = this.cam.x; G.player.y = this.cam.y;
     G.light.amb = 0.38; G.light.flash = 0; G.time = 20.6 * 60;
     Zombie.updateAll(dt);
-    for (const z of G.zombies) z.va = 1;
+    // keep the ones in view shambling about rather than standing about for long spells
+    for (const z of G.zombies) {
+      z.va = 1;
+      if (z.st === 'idle' && !z.dead && z.idleT > 0.5 && Math.abs(z.x - this.cam.x) < 30 && Math.abs(z.y - this.cam.y) < 30 && Math.random() < dt * 0.4) z.idleT = 0;
+    }
     Render.frame(dt);
     Render.ctx.setTransform(Render.dpr, 0, 0, Render.dpr, 0, 0);
     Render.ctx.fillStyle = 'rgba(0,0,0,0.35)'; Render.ctx.fillRect(0, 0, Render.W, Render.H);
   },
   // ------------------------------------------------------------------ sandbox settings
-  sbSel: null,
+  sbSel: null, spawnSel: 'Random',
   sandbox() {
     this.sbSel = this.sbSel || Object.assign({}, SANDBOX_PRESETS.Apocalypse);
     const sel = this.sbSel;
@@ -92,13 +96,25 @@ const Menu = {
       return `<div class="opt"><span>${o.n}</span><select data-sb="${k}">${o.opts.map((op, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     }).join('');
     const presets = Object.keys(SANDBOX_PRESETS).map(n => `<span class="btn sm" data-preset="${n}">${n}</span>`).join('');
+    // the map and where in it to start (the Expanded map's new towns only on that map)
+    const big = Settings.v.worldSize > 400, places = ['Random'].concat(Game.SPAWN_ORDER.filter(n => big || !/Fairfield|Riverton|Kingsbury/.test(n)));
+    if (!places.includes(this.spawnSel)) this.spawnSel = 'Random';
+    const opt = (v, n, on) => `<option value="${v}" ${on ? 'selected' : ''}>${n}</option>`;
+    const mapRows = `<div class="opt"><span>Map</span><select data-map="1">${SETTINGS_OPTS.worldSize.opts.map(o => opt(o[1], o[0], o[1] === Settings.v.worldSize)).join('')}</select></div>
+      <div class="opt"><span>Starting location</span><select data-spawn="1">${places.map(n => opt(n, n, n === this.spawnSel)).join('')}</select></div>`;
     $('#menu').innerHTML = `<div class="modal"><div class="mbox"><h2>World settings</h2>
+      ${mapRows}
+      <div class="sml" style="margin:2px 0 10px;max-width:360px">${big ? 'Expanded is the county with the land round it still being built: new towns, Fort Hale, the prison and the airfield. A work in progress.' : 'Stable is the county as it stands, finished.'}</div>
       <div class="sml" style="margin-bottom:6px">Presets</div><div style="margin-bottom:10px">${presets}</div>
       ${rows}
       <div class="sml" style="margin:8px 0 4px;max-width:360px">Sprinters run as fast as you do. Shorter days make hunger, thirst and fatigue tick faster in real time.</div>
       <div class="cfoot" style="padding:8px 0 0;border:0"><span class="btn" data-m="back">Back</span><span class="btn big" data-m="next">Next</span></div></div></div>`;
     const m = $('#menu');
-    m.onchange = (e) => { const k = e.target.dataset.sb; if (k) sel[k] = +e.target.value; };
+    m.onchange = (e) => {
+      const k = e.target.dataset.sb; if (k) sel[k] = +e.target.value;
+      if (e.target.dataset.map) { Settings.set('worldSize', +e.target.value); this.sandbox(); }
+      if (e.target.dataset.spawn) this.spawnSel = e.target.value;
+    };
     m.oninput = null;
     m.onclick = (e) => {
       const pr = e.target.closest('[data-preset]');
@@ -229,6 +245,7 @@ const Menu = {
     const cfg = JSON.parse(JSON.stringify(this.cfg));
     if (!cfg.name.trim()) cfg.name = 'Survivor';
     cfg.sb = sandboxValues(this.sbSel || {});
+    cfg.spawn = this.spawnSel || 'Random';
     this.cfg = null;
     if (this.pre && this.pre.key === JSON.stringify(cfg.sb) + Settings.v.worldSize) { cfg.world = this.pre.w; cfg.seed = this.pre.seed; }
     this.pre = null;

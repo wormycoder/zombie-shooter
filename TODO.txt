@@ -1,0 +1,155 @@
+HOLLOW CREEK - TODO
+====================================================================
+
+PRIORITIES:
+MAX:       DO IMMEDIATELY
+VERY HIGH: DO AS SOON AS POSSIBLE
+HIGH:      DO WHEN YOU CAN, PRIORITIZE OVER LOWER LEVELS
+MEDIUM:    DO WHEN YOU HAVE A FREE WINDOW - SMALLER STUFF
+LOW:       DO WHEN YOU HAVE NOTHING ELSE TO DO - SMALL STUFF THAT CAN BE PUT ASIDE
+VERY LOW:  STUFF THAT YOU PRETTY MUCH DONT HAVE TO WORRY ABOUT
+FIX:       LOOK INTO THE FIX AS SOON AS POSSIBLE, AND THEN PRIORITIZE THE FIX YOURSELF.
+OPTIONAL:  SUGGESTIONS, NOT NECESSARILY NEEDED IMPLEMENTATIONS - USE THE FIX
+           CATEGORY FOR IF THE OPTIONAL REQUEST WILL BE FULFILLED.
+
+note:   do not update, or create everything in one or two runs - spread the
+        updates out, and do small things once large ones are done.
+note 2: this file can be updated whenever, adding or removing items.
+
+Status words: UNFINISHED / STARTED / DONE (with the build it landed in).
+"->" lines are the triage: what a FIX item was judged to be, and the plan.
+
+--------------------------------------------------------------------
+UPDATES
+--------------------------------------------------------------------
+
+FIX - CARS GO SLOW, LIKE REALLY SLOW. SOME DONT EVEN GO ABOVE 25!
+  -> HIGH. Top speeds were 22-52 mph, and a gear-shift bug kept worn cars
+     hunting between two gears (stuck near 25 mph). DONE (000.016.000.117):
+     sedans ~72 mph, police ~88, sports ~108, trucks and the bus 50-60;
+     shifting fixed; worn engines lose less top speed.
+
+LOW - ALL GUNS (ESPECIALLY THE SHOTTY) ARE VERY INACCURATE, ALMOST TOO
+      INACCURATE. ALSO, THE AR FIRES VERY SLOWLY.
+  -> DONE (000.016.000.117): tighter spread for every gun, hip fire wider
+     for long guns, shotgun pellets in a fixed pattern round your aim, recoil
+     per gun that recovers quickly. The AR was held back by the firing
+     animation (4.5 rounds/s): now ~11 rounds/s.
+
+VERY LOW OR FIX - SHELLS AND CASINGS OF GUNS ARE DRAWN INCORRECTLY IN THE
+      DRAW ORDER, TOO HIGH UP, AND DONT MATCH THE GUN BEING USED.
+  -> LOW. DONE (000.016.000.117): casings fly from the gun's ejection port,
+     tumble, bounce and lie on the floor for a couple of minutes, sorted with
+     the world; brass for pistol/AR, red hulls when the shotgun is pumped,
+     brass when the rifle bolt is worked, none from the revolver.
+
+FIX - ZOMBIES AREN'T ANIMATED ON THE HOMESCREEN.
+  -> MEDIUM. DONE (000.016.000.117): the 3D animation clock was stopped
+     outside play; they also wander more on the title screen.
+
+FIX - THERE SHOULD JUST BE 2 WORLD SIZES, 'STABLE' AND 'EXPANDED'
+      (STABLE BEING THE FULLY UP-TO-DATE MODEL, AND EXPANDED BEING THE WIP
+      VERSION.)
+  -> MEDIUM. DONE (000.016.000.117): Stable (400 x 400) and Expanded, work
+     in progress (896 x 896); chosen on the New Game screen (and in
+     Settings > Experimental). Old Large/Huge settings become Expanded.
+
+FIX - THERE SHOULD BE MORE SPAWNPOINTS, LIKE IN VANILLA PZ.
+  -> MEDIUM. DONE (000.016.000.117): Starting location on the New Game
+     screen: Random, Hollow Creek, Millbrook, Countryside, and on Expanded
+     also Fairfield, Riverton and Kingsbury.
+
+FIX OR HIGH - EITHER REWRITE THE AIMING OR FIX IT, RIGHT NOW IT KINDA
+      SUCKS, AND I CAN'T TELL WHERE I AM AIMING.
+  -> VERY HIGH. DONE, first pass (000.016.000.117): aiming (right mouse)
+     shows the cone of fire on the ground out to the gun's range or the first
+     wall, the zombie the shot would hit ringed green/yellow/red with the
+     chance to hit, and a reticle as wide as the spread. Still to come with
+     the camera work: PZ-style turning (hold right mouse to turn).
+
+VERY HIGH - ADD BETTER ZOMBIE PERFORMANCE, AND GENERAL WORLD PERFORMANCE.
+      OPTIMIZE TEXTURES AT A DISTANCE, AND ADD SETTINGS LIKE ZOMBOID, WHERE
+      YOU CAN CAP TEXTURE SIZES, HAVE THE WORLD TEXTURES RUN AT 1/2 RES, OR
+      HAVE ZOMBIE ANIMATION CAPPED AT A SPECIFIC UPDATE RATE. ALSO AT A
+      DISTANCE, WITH LAZY ZOMBIES, MAKE THE ANIMATION TICKS A LOT LOWER, LAZY
+      ZOMBIES SHOULD BE AT 1/4 TO 1/2 ANIMATION RATE DEPENDING ON DISTANCE
+      TO THE PLAYER.
+  -> STARTED (000.016.000.117). Done: Settings > Optimization: Zombie
+     animation rate (Unlimited/30/20/15/10 per sec), Lazy zombie animation
+     (idle, wandering and feeding zombies at 1/2 rate within 12 tiles, 1/4
+     beyond), Texture size limit (Full/1x/Half: trees, cars, characters),
+     World textures (Full/Half resolution ground; zoomed far out it is always
+     half). In a 150-zombie crowd at 60 fps the 3D work per frame drops to
+     ~40% at 30/sec and ~25% at 15/sec. Next: a frame-time profile of a
+     big horde and of the expanded map, walls and roofs at half res.
+
+FIX - PERFORMANCE ON OLDER DEVICES IS VERY BAD.
+  -> VERY HIGH. STARTED: the Low and Medium presets now use the new
+     settings (Low: zombies at 15/sec, lazy animation, 1x textures,
+     half-res ground). Next: measure on a slow CPU profile.
+
+FIX - LOOK INTO HOW MANY CORES OR THREADS THE GAME IS USING, MAKE SURE IT
+      PRIORITIZES BEING AS EFFICIENT AS POSSIBLE - AND ALSO LOOK INTO GPU
+      USAGE. DO NOTE, THIS GAME SHOULD BY DEFAULT NOT TAKE OVER 1GB OF RAM,
+      ALTHOUGH THERE SHOULD BE A SETTING IN EXPERIMENTAL FOR THAT. DESIGN FOR
+      4-8GB OF SYS MEM (2-3GB FREE), AIM FOR 16GB + OF SYS MEM (8GB+ FREE).
+  -> HIGH. Measure first, then cap caches by a memory budget. UNFINISHED
+
+VERY HIGH - CONTINUE UPDATING THE MAP, AND FINISH ON ALL BUILDINGS. UNFINISHED
+
+HIGH - ZOMBIES AREN'T MUCH OF A THREAT, AND IN SOME INSTANCES, YOU CAN WALK
+      IN THE MIDDLE OF A HORDE AND GET OUT JUST FINE. ZOMBIES FOR WHATEVER
+      REASON, DON'T HAVE A GRAPPLE ANIMATION, AND COMMONLY DON'T INJURE YOU.
+      UNFINISHED
+
+HIGH TO VERY HIGH - BETTER UI - MORE ZOMBOID ESQUE, COULD RE-WRITE WHOLE UI
+      SECTOR IF NEEDED. UNFINISHED
+
+HIGH - ADD MORE 3D MODELS, AND MAKE ACTUAL TEXTURES FOR SAID MODELS,
+      INCLUDING ACTUAL TEXTURES FOR THE PLAYER. UNFINISHED
+
+FIX - THE CHARACTER AND ZOMBIE MODELS LOOK ODD, ALMOST OUT OF STYLE.
+  -> HIGH. Goes with the 3D models / textures item. UNFINISHED
+
+FIX - FIX WHEELS NOT VISUALLY SPINNING.
+  -> HIGH. UNFINISHED
+
+FIX - CARS FEEL WEIRDLY PROPORTIONED
+  -> HIGH. Goes with the wheels item: a vehicle art pass. UNFINISHED
+
+FIX - THE GAME IS LACKING FOLIAGE
+  -> MEDIUM. Bushes, tall grass, weeds in lots and along roads. UNFINISHED
+
+FIX - ADD ANIMATIONS AND ACTIONS FOR THINGS LIKE TALL FENCES, FAILING TO
+      JUMP A TALL FENCE, JUMPING OVER A SHORT FENCE WHILE RUNNING, SITTING ON
+      THE FLOOR, SHOUTING, RACKING DIFFERENT GUNS, RELOADING MAGAZINES, ETC.
+  -> MEDIUM. UNFINISHED
+
+MEDIUM - ADD BETTER GUN CONTROLS, AND MORE GUNS. UNFINISHED
+
+MEDIUM - ADD THE ABILITY TO PLACE 3D (OR 2D IF 3D ITEMS ARE UNAVAILABLE) ON
+      THE FLOOR. UNFINISHED
+
+LOW OR MEDIUM - NEW & BETTER AUDIO, WITH ACTUAL CLIPS (CAN BE SOURCED FROM
+      INTERNET, OR SYNTHESIZED, IT JUST HAS TO SOUND OK.) UNFINISHED
+
+FIX OR LOW - MORE, AND BETTER MUSIC - YOU CAN USE PUBLIC RESOURCES FROM THE
+      INTERNET FOR THIS.
+  -> LOW. UNFINISHED
+
+ALSO FIXED (found along the way)
+  - Zombies in the dark were invisible beyond ~3 tiles even right in front
+    of you; they are now made out a few tiles off (further under a moon).
+    (000.016.000.117)
+  - "I can't get there." on furniture whose clicked end is boxed in (a bed's
+    head between the wall, a wardrobe and its other half): the survivor now
+    goes to the end that can be reached. (000.016.000.117)
+
+--------------------------------------------------------------------
+RUN LOG
+--------------------------------------------------------------------
+Run 1 (000.016.000.117): car speeds, guns, casings, title-screen zombies,
+  two world sizes, spawn points, aiming display, zombie animation rate and
+  texture settings.
+Next run, planned: memory and threads (measure, then a memory budget
+  setting), the zombie threat item (grapple, injuries), then the UI rework.

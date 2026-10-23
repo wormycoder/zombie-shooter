@@ -123,11 +123,11 @@ Wp('Trowel', 'Garden Trowel', 0.4, ['trowel', '#3a8a3a', '#a0a8b0'], { sk: 'Shor
 
 // ----- FIREARMS ----------------------------------------------------------
 const Gn = (id, n, w, ic, gun, o) => idef(id, Object.assign({ n, cat: 'Weapon', w, ic, gun }, o));
-Gn('Pistol', '9mm Pistol', 1.0, ['pistol', '#2a2d30', '#555'], { ammo: 'Bullets9mm', cap: 15, dmg: [0.8, 1.4], range: 14, spread: 0.12, noise: 38, rof: 0.35, reload: 0.5, model: 'pistol', knock: 0.15, crit: 0.2, cond: 20, lower: 60 });
-Gn('Revolver', '.38 Revolver', 1.0, ['revolver', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets38', cap: 6, dmg: [1.0, 1.7], range: 14, spread: 0.11, noise: 40, rof: 0.45, reload: 0.6, model: 'pistol', knock: 0.2, crit: 0.25, cond: 20, lower: 80 });
-Gn('Shotgun', 'Pump Shotgun', 4.0, ['shotgun', '#2a2d30', '#7a5030'], { ammo: 'ShotgunShells', cap: 6, dmg: [0.7, 1.3], pellets: 5, range: 8, spread: 0.32, noise: 55, rof: 0.9, reload: 0.7, model: 'shotgun', knock: 0.6, crit: 0.1, two: true, cond: 20, lower: 60 });
-Gn('HuntingRifle', 'Hunting Rifle', 4.0, ['rifle', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets308', cap: 5, dmg: [2.0, 3.5], range: 26, spread: 0.04, noise: 60, rof: 1.1, reload: 0.8, model: 'rifle', knock: 0.5, crit: 0.4, two: true, cond: 20, lower: 80 });
-Gn('AssaultRifle', 'Assault Rifle', 3.8, ['rifle', '#202224', '#202224'], { ammo: 'Bullets556', cap: 30, dmg: [1.1, 1.8], range: 20, spread: 0.08, noise: 52, rof: 0.15, reload: 0.4, model: 'rifle', knock: 0.25, crit: 0.25, two: true, auto: true, cond: 25, lower: 120 });
+Gn('Pistol', '9mm Pistol', 1.0, ['pistol', '#2a2d30', '#555'], { ammo: 'Bullets9mm', cap: 15, dmg: [0.8, 1.4], range: 15, spread: 0.075, noise: 38, rof: 0.3, kick: 0.05, reload: 0.5, model: 'pistol', knock: 0.15, crit: 0.2, cond: 20, lower: 60 });
+Gn('Revolver', '.38 Revolver', 1.0, ['revolver', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets38', cap: 6, dmg: [1.0, 1.7], range: 15, spread: 0.07, noise: 40, rof: 0.45, kick: 0.07, reload: 0.6, model: 'pistol', knock: 0.2, crit: 0.25, cond: 20, lower: 80 });
+Gn('Shotgun', 'Pump Shotgun', 4.0, ['shotgun', '#2a2d30', '#7a5030'], { ammo: 'ShotgunShells', cap: 6, dmg: [0.6, 1.1], pellets: 6, cone: 0.1, range: 10, spread: 0.1, noise: 55, rof: 0.85, kick: 0.1, reload: 0.7, model: 'shotgun', knock: 0.6, crit: 0.1, two: true, cond: 20, lower: 60 });
+Gn('HuntingRifle', 'Hunting Rifle', 4.0, ['rifle', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets308', cap: 5, dmg: [2.0, 3.5], range: 28, spread: 0.03, noise: 60, rof: 1.1, kick: 0.09, reload: 0.8, model: 'rifle', knock: 0.5, crit: 0.4, two: true, cond: 20, lower: 80 });
+Gn('AssaultRifle', 'Assault Rifle', 3.8, ['rifle', '#202224', '#202224'], { ammo: 'Bullets556', cap: 30, dmg: [1.1, 1.8], range: 22, spread: 0.055, noise: 52, rof: 0.09, kick: 0.035, reload: 0.4, model: 'rifle', knock: 0.25, crit: 0.25, two: true, auto: true, cond: 25, lower: 120 });
 // ammo
 const Am = (id, n, w, ic, o) => idef(id, Object.assign({ n, cat: 'Ammo', w, ic }, o));
 Am('Bullets9mm', '9mm Rounds', 0.02, ['ammo', '#c8a040', '#806020']);

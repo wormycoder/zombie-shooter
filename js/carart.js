@@ -488,7 +488,7 @@ Object.assign(CarArt, {
   },
   // ---------------------------------------------------------------- sprite cache
   // sprite resolution (Car detail): 2x, or 1x while zoomed out (Auto) or always (Low); shadows on or off
-  sc() { const d = Settings.v.carDetail, z = Render.cam.zoom * Render.dpr; return d === 2 || (d === 1 && z > 1.05) ? CA_SC : 1; },
+  sc() { const d = Settings.v.carDetail, z = Render.cam.zoom * Render.dpr; return (Settings.v.texCap || 2) >= 2 && (d === 2 || (d === 1 && z > 1.05)) ? CA_SC : 1; },
   sKey() { return (this.sc() === CA_SC ? '' : '|1') + (Settings.v.shadows === 0 ? '|n' : ''); },
   sprite(c, mk, bk, st) {
     const sk = this.sKey(), key = mk + '|' + bk + st + sk;

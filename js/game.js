@@ -70,6 +70,36 @@ const Game = {
   trackCont(c) { if (c && c.items) G.conts.add(c); },
 
   // ------------------------------------------------------------------ new game
+  // where a game can start: each town's homes (by w.towns), and the farmhouses and homes out of town
+  SPAWN_ORDER: ['Hollow Creek', 'Millbrook', 'Fairfield', 'Riverton', 'Kingsbury', 'Countryside'],
+  spawnRegions(w) {
+    const out = new Map();
+    for (const id of w.spawnHouses) {
+      const b = w.buildings[id];
+      if (!b || b.type !== 'house' && b.type !== 'farmhouse' || b.rooms.length < 3) continue;
+      const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+      const T = (w.towns || []).find(t => cx >= t.x0 && cx <= t.x1 && cy >= t.y0 && cy <= t.y1);
+      const k = T ? T.name : 'Countryside';
+      let a = out.get(k);
+      if (!a) out.set(k, a = []);
+      a.push(b);
+    }
+    return out;
+  },
+  // want: a place's name, 'Random' (any place), or nothing (Hollow Creek, as before there was a choice)
+  spawnHome(w, want) {
+    const reg = this.spawnRegions(w);
+    if (!want) want = 'Hollow Creek';
+    let homes = reg.get(want);
+    if (!homes) homes = reg.get(R.pick([...reg.keys()]));
+    if (!homes) return w.buildings.find(b => b.type === 'house' && b.rooms.length >= 3) || w.buildings.find(b => b.rooms.length);
+    // in Hollow Creek, out in its streets of houses rather than downtown
+    if (want === 'Hollow Creek') {
+      const ring = homes.filter(b => { const d = U.dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 120, 120); return d > 25 && d < 75; });
+      if (ring.length && homes === reg.get('Hollow Creek')) homes = ring;
+    }
+    return R.pick(homes);
+  },
   newGame(cfg) {
     G.sb = cfg.sb || sandboxValues({});
     MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
@@ -82,11 +112,9 @@ const Game = {
     World.use(w);
     G.conts = new Set();
     G.corpse = false; G.chasing = 0;
-    G.alarms = []; Combat.projs = []; Combat.sources = []; Fx.parts = []; Fx.fires = []; Fx.floats = [];
-    // spawn house
-    const homes = w.spawnHouses.map(id => w.buildings[id]).filter(b => b.type === 'house' && b.rooms.length >= 3);
-    const ranked = homes.map(b => ({ b, d: U.dist((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 120, 120) })).filter(o => o.d > 25 && o.d < 75);
-    const home = (ranked.length ? R.pick(ranked).b : R.pick(homes));
+    G.alarms = []; Combat.projs = []; Combat.sources = []; Combat.ejQ = []; Fx.parts = []; Fx.fires = []; Fx.floats = []; Fx.casings = [];
+    // spawn house: a home in the starting location picked on the New Game screen (Random: any of them)
+    const home = this.spawnHome(w, cfg.spawn);
     home.isHome = true;
     home.alarm = false;
     const rooms = home.rooms.map(r => w.rooms[r]);
@@ -781,7 +809,7 @@ const Save = {
     if (!p.att) Hotbar.migrate(p);
     G.player = p;
     G.speed = 1; G.paused = false; G.corpse = false; G.build = null; G.hover = null;
-    Combat.projs = []; Combat.sources = []; Fx.parts = []; Fx.fires = []; Fx.floats = [];
+    Combat.projs = []; Combat.sources = []; Combat.ejQ = []; Fx.parts = []; Fx.fires = []; Fx.floats = []; Fx.casings = [];
     Render.cam.x = vxOf(p.x); Render.cam.y = p.y; Render.cam.z = p.x >= LV.W0 && !p.inCar ? WALL_H : 0;
     Zombie.rebuildGrid();
     Player.fov(1);

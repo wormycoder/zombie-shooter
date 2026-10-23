@@ -52,6 +52,11 @@ const MapGen = {
     if (S > 400) this.bigTracks();
     this.forest();
     this.finalize();
+    // the towns' extents (where a game can start: Game.spawnRegion)
+    const RP = this.RP, RX = this.RX2, RY = this.RY2;
+    w.towns = [{ name: 'Hollow Creek', x0: RP[0] - 4, y0: RP[0] - 4, x1: RP[5] + 8, y1: RP[5] + 8 },
+      { name: 'Millbrook', x0: RX[0] - 4, y0: RY[0] - 4, x1: RX[RX.length - 1] + 8, y1: RY[RY.length - 1] + 8 }];
+    if (S > 400) for (const T of this.big.towns) w.towns.push({ name: T.name, x0: T.x0 - 6, y0: T.y0 - 6, x1: T.x1 + 6, y1: T.y1 + 6 });
     // keep saves compact
     for (const o of w.obj) if (o && o.sz) o.sz = Math.round(o.sz * 100) / 100;
     return w;
@@ -1810,7 +1815,7 @@ const MapGen = {
       names: { grocery: 'Kingsbury Supermarket', pharmacy: 'County Drug Co.', restaurant: 'The Kingsbury Grill', bar: 'The Crown', clothing: 'Kingsbury Outfitters', hardware: 'Ace of Tools', gunstore: 'Kingsbury Gun Shop', bookstore: 'County Books', office: 'Kingsbury Realty', diner: 'Courthouse Diner', laundromat: 'Kingsbury Coin Laundry', school: 'Kingsbury High School', clinic: 'Kingsbury General Clinic', church: 'First Presbyterian Church', motel: 'Royal Inn Motel', gas: 'Interstate Gas', police: 'Kingsbury Sheriff', firestation: 'Kingsbury Fire Station', courthouse: 'Beacon County Courthouse', industrial: ['Kingsbury Freight', 'County Storage'] } },
   },
   bigTowns() {
-    const P = this.big, r = this.rng, W = this.W, nSpawn = this.w.spawnHouses.length;
+    const P = this.big, r = this.rng, W = this.W;
     for (const T of P.towns) {
       const plan = this.TOWN_PLANS[T.name] || this.TOWN_PLANS.Riverton, names = plan.names, shops = plan.shops.slice();
       // (blocks also between the grid and a long road its streets run on to)
@@ -1843,8 +1848,6 @@ const MapGen = {
       // the townsfolk, in the streets and yards (the shops and houses have their own inside)
       this.w.zones.push({ x0: T.x0, y0: T.y0, x1: T.x1, y1: T.y1, n: Math.round((T.x1 - T.x0) * (T.y1 - T.y0) * 0.004) });
     }
-    // the new towns' houses are not where a game starts (the county's are)
-    this.w.spawnHouses.length = nSpawn;
   },
   // a block of shops: a row facing each street, a car park between them
   shopBlock(B, shops, names) {
@@ -2058,7 +2061,6 @@ const MapGen = {
         this.mark(lx, ly, lx + lw - 1, ly + lh - 1, 1);
       } else {
         bd = this.residentialLot(lx, ly, lw, lh, f, { fenceChance: 0.12 });
-        if (this.w.spawnHouses[this.w.spawnHouses.length - 1] === bd.id) this.w.spawnHouses.pop();
         door = (bd.garage && bd.garage.door) || bd.frontDoor;
       }
       // gravel drive from the lot's front edge to the road, in line with the garage (or the door)

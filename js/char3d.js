@@ -187,11 +187,13 @@ const Char3D = {
     this.lastT = now;
     this.lodN.fill(0);
     if (!this.on()) return;
-    if (G.paused || (G.mode !== 'play' && G.mode !== 'dead') || (typeof UI !== 'undefined' && UI.modalPause && UI.modalPause())) dt = 0;
+    if (G.paused || (G.mode !== 'play' && G.mode !== 'dead' && G.mode !== 'menu') || (typeof UI !== 'undefined' && UI.modalPause && UI.modalPause())) dt = 0;
     else dt = Math.min(0.1, dt * (G.speed || 1));
     this.fno++;
     const z0 = Render.cam.zoom * Render.dpr;
-    GL3D.begin(Math.min(3, Math.max(0.5, z0)));
+    // (the texture size limit caps the characters' resolution too)
+    const tc = Settings.v.texCap || 2;
+    GL3D.begin(Math.min(tc >= 2 ? 3 : tc >= 1 ? 1.5 : 0.75, Math.max(0.5, z0)));
     this.lodSetup();
     const p = G.player;
     this.pend.length = 0;
@@ -253,6 +255,16 @@ const Char3D = {
     this.ibud = 40;
     this.zooming = Math.abs(Render.cam.zoom - Render.cam.tz) > Render.cam.tz * 0.01;
   },
+  // seconds between animation steps for a character r tiles away (0: every frame). Zombie animation rate caps them all;
+  // with lazy zombie animation, those idling or wandering step at half the rate (of the cap, or of the frame rate)
+  // within 12 tiles and a quarter beyond. Anything chasing, fighting, hit or falling keeps the full rate.
+  animIv(e, r) {
+    const v = Settings.v, hz = v.zAnimHz || 0;
+    let iv = hz ? 1 / hz : 0;
+    if (v.zAnimLazy && (e.st === 'idle' || e.st === 'wander' || e.st === 'feed') && !(e.stag > 0) && !e.dead)
+      iv = Math.max(iv, 1 / 60) * (r < 12 ? 2 : 4);
+    return iv;
+  },
   // detail level for a moving character r tiles away, with hysteresis
   pickLod(S, r, me) {
     const md = this.mode, R = this.RL;
@@ -285,7 +297,7 @@ const Char3D = {
     if (this.now - S.seen > 400) S.fresh = true;
     S.seen = this.now;
     S.look = look;
-    let light = Math.max(0.05, Math.min(1, shade)), lod;
+    let light = Math.max(0.05, Math.min(1, shade)), lod, iv = 0;
     // a body that has settled does not change: a sprite, re-rendered when its light, size or look changes
     // (one back in view after a while keeps its sprite: a slow frame must not make every body look new)
     const dead = !flash && pose.mode === 'dead' && !(pose.prog < 1);
@@ -298,11 +310,16 @@ const Char3D = {
       S.acc = 0;
     } else {
       lod = this.pickLod(S, r || 0, e === G.player);
-      if (lod === 3) {
-        // far crowds animate every 2nd or 3rd frame; their last sprite is drawn in between
+      // zombies at a capped animation rate (Settings: zombie animation rate, lazy zombie animation): a step every iv s
+      iv = e === G.player || flash ? 0 : this.animIv(e, r || 0);
+      if (lod === 3 || iv > 0) {
+        // far crowds animate every 2nd or 3rd frame, capped ones at their rate; the last sprite is drawn in between
         S.acc = (S.acc || 0) + dt;
-        if ((this.fno + id) % (r > this.RL[2] + 8 ? 3 : 2) && this.impUse(S, e, ang, look, light, true)) { this.lodN[3]++; return; }
+        if (iv > 0 && S.animT === undefined) S.animT = this.now - (id % 8) / 8 * iv * 1000;
+        const wait = iv > 0 ? this.now - S.animT < iv * 1000 - 4 : (this.fno + id) % (r > this.RL[2] + 8 ? 3 : 2);
+        if (wait && this.impUse(S, e, ang, look, light, iv > 0 ? iv * 1000 + 60 : true)) { this.lodN[lod]++; return; }
         dt = S.acc; light = Math.round(light * 40) / 40;
+        S.animT = this.now;
       }
       S.acc = 0;
     }
@@ -313,14 +330,15 @@ const Char3D = {
     if (!cell) return;
     this.map.set(e, cell);
     this.lodN[stat ? 4 : lod]++;
-    if (stat || lod === 3) { cell.S = S; cell.ang = ang; cell.bl = look.blood; cell.lk = look; this.pend.push(cell); }
+    if (stat || lod === 3 || iv > 0) { cell.S = S; cell.ang = ang; cell.bl = look.blood; cell.lk = look; this.pend.push(cell); }
   },
   // draw S's sprite this frame if it is still good (anim: a recent far-crowd frame will do); false: render it again
   impUse(S, e, ang, look, light, anim) {
     const I = S.imp;
     if (!I || I.gen !== C3Imp.gen) return false;
     const rs = GL3D.scale / I.s, near = rs > 0.87 && rs < 1.15;
-    if (anim) { if (!near || this.fno - I.made > 4) return false; }
+    // (anim: true for a far crowd's frame, a few frames old at most; a number: its age limit in ms)
+    if (anim) { if (!near || (anim === true ? this.fno - I.made > 4 : this.now - I.t > anim)) return false; }
     else if (!(near && I.light === light && I.ang === ang && I.bl === look.blood && I.key === S.key && (I.lk === look || e === G.player))) {
       // stale: re-rendered within the frame's budget; the old sprite (scaled) meanwhile and while the zoom is moving
       const ok = rs > 0.6 && rs < 1.7;
@@ -370,7 +388,7 @@ const Char3D = {
       g.clearRect(sl.x, sl.y, sl.w, sl.h);
       g.drawImage(GL3D.c2, c.px, c.py, c.pw, c.ph, sl.x + 1, sl.y + 1, c.pw, c.ph);
       I.pw = c.pw; I.ph = c.ph; I.ax = c.ax; I.ay = c.ay; I.s = s; I.light = c.lt; I.ang = c.ang; I.bl = c.bl; I.lk = c.lk; I.key = S.key; c.lk = null;
-      I.made = I.used = this.fno;
+      I.made = I.used = this.fno; I.t = this.now;
     }
     P.length = 0;
     // sprites not drawn for 4 s give their slots back
@@ -1603,7 +1621,7 @@ const Char3D = {
         this.weapon('flashlight', hc, od, Cf, false, Pose.light, Pl);
       }
     }
-    if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = S.line && det > 0; this.propCol = Pose.propCol; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; }
+    if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = S.line && det > 0; this.propCol = Pose.propCol; this.ejS = S; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; this.ejS = null; }
     // ---- gear on the hotbar: a long weapon slung across the back, tools on the belt, a pistol in the holster
     if (look.att && det > 0) for (const [slot, model] of look.att) {
       const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
@@ -1751,7 +1769,7 @@ const Char3D = {
         wd = c3dir(c3WD, Cf, T[C3.WD] / wl, T[C3.WD + 1] / wl, T[C3.WD + 2] / wl);
       } else if (Pose.offhand && !T[C3.GR]) this.weapon('flashlight', hc, c3dir(c3c, Cf, 0.95, -0.05, -0.12), Cf, false, Pose.light, Pl);
     }
-    if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = false; this.propCol = Pose.propCol; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; }
+    if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = false; this.propCol = Pose.propCol; this.ejS = S; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; this.ejS = null; }
     if (look.att) for (const [slot, model] of look.att) {
       const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
       if (slot === 'back') {
@@ -1849,6 +1867,12 @@ const Char3D = {
     const k0 = W.w0 * 0.0075, k1 = W.w1 * 0.0075, col = this.rgb(W.col), L = W.len, steel = this.rgb('#9aa2aa');
     if (W.prop) { this.prop(key, W, piece, hand, wd, this.propCol, Rf); return; }
     if (W.gun) {
+      // where the gun in hand throws its spent cases (feet-relative), and which way is its right side
+      if (this.ejS) {
+        const e = this.ejS.ej || (this.ejS.ej = new Float64Array(6)), k = key === 'pistol' ? 0.02 : 0.06;
+        e[0] = hand[0] + wd[0] * k + ux * 0.035; e[1] = hand[1] + wd[1] * k + uy * 0.035; e[2] = hand[2] + wd[2] * k + uz * 0.035;
+        e[3] = sx; e[4] = sy; e[5] = this.now;
+      }
       if (key === 'pistol') { piece(BOX, -0.04, L, 0.016, 0.022, col, 0.02); piece(BOX, -0.035, 0.03, 0.014, 0.04, this.sc(col, 0.8), -0.03); }
       else {
         piece(BOX, -0.26, 0.0, 0.022, 0.04, this.rgb(W.stock), -0.02, 0.8);

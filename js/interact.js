@@ -149,12 +149,21 @@ const Interact = {
     reach = reach || 1.5;
     if (U.dist(p.x, p.y, tx, ty) <= reach && (World.lineClear(p.x, p.y, tx, ty, 'move') || U.dist(p.x, p.y, tx, ty) < 1.1)) { fn(); return; }
     // path to tile adjacent
-    let path = World.findPath(p.x, p.y, tx, ty, 'p', 3000);
+    let path = World.findPath(p.x, p.y, tx, ty, 'p', 3000), gx = Math.floor(tx), gy = Math.floor(ty), slack = 0.6;
+    // furniture over two or three tiles: when this end is boxed in (a bed's head between the wall, a wardrobe and its
+    // other half), the rest of it may be within reach
+    const o = World.obj(gx, gy);
+    if (!path && o && o.part !== undefined) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const o2 = World.obj(gx + dx, gy + dy);
+      if (!o2 || o2.t !== o.t || o2.part === undefined || o2.part === o.part) continue;
+      path = World.findPath(p.x, p.y, gx + dx + 0.5, gy + dy + 0.5, 'p', 3000);
+      if (path) { gx += dx; gy += dy; slack = 1.6; break; }
+    }
     if (!path) { Player.say("I can't get there.", '#ccc'); return; }
-    if (World.tileSolid(Math.floor(tx), Math.floor(ty))) path.pop();
+    if (World.tileSolid(gx, gy)) path.pop();
     p.path = path.length ? path : null;
     p.pathStop = reach * 0.8;
-    p.onArrive = () => { if (U.dist(p.x, p.y, tx, ty) <= reach + 0.6) fn(); else Player.say("I can't reach it.", '#ccc'); };
+    p.onArrive = () => { if (U.dist(p.x, p.y, tx, ty) <= reach + slack) fn(); else Player.say("I can't reach it.", '#ccc'); };
     if (!p.path) p.onArrive();
     if (p.action) Actions.cancel();
   },

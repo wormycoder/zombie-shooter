@@ -567,7 +567,8 @@ const Trees = {
     this.mx = Input.overUI ? -1e9 : (Input.mx - Render.ox) / z; this.my = (Input.my - Render.oy) / z;
     // sway is a sheared draw, far dearer than a plain one on a software canvas: only where it shows
     this.swayOn = Settings.v.detail !== 0 && z >= 0.8; this.z = z;
-    this.res = z < 0.72 ? 'h' : z >= 1.55 && z * Render.dpr >= 1.6 && Settings.v.detail !== 0 ? 'x' : '';
+    const tc = Settings.v.texCap || 2;
+    this.res = z < 0.72 || tc < 1 ? 'h' : z >= 1.55 && z * Render.dpr >= 1.6 && Settings.v.detail !== 0 && tc >= 2 ? 'x' : '';
     // sprites left over from other views go before the close-up allowance is judged
     if (this.res === 'x' && this.px > this.HICAP) this.evict();
   },
