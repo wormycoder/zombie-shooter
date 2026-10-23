@@ -13,6 +13,20 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.016.000.117', date: '2026-10-23', title: 'Faster cars, better guns and aim, lighter crowds',
+    notes: [
+      'Cars are much faster: a sedan reaches about 72 mph, a police car 88, a sports car over 100, pickups, vans and SUVs around 60-70, the fire truck, army truck and school bus 50-60. A worn engine loses less top speed than before, and a gear-shift bug is fixed that kept cars hunting between two gears, stuck at 25-50 mph.',
+      'Guns are more accurate: aimed shots go where you point, hip fire is looser (more so with long guns), the shotgun throws its pellets in a pattern round your aim, and recoil builds per gun and settles quickly. The assault rifle fires about 11 rounds a second; the firing animation was holding it to 4.',
+      'Aiming shows where the shot goes: holding right mouse with a gun draws the cone of fire on the ground out to the gun\'s range (cut short by the first wall), rings the zombie the shot would hit in green, yellow or red with the chance to hit it, and sizes the reticle to the spread. Zombies you cannot see are never marked.',
+      'Spent casings fly from the gun\'s ejection port, tumble, bounce with a clink and lie on the floor for a couple of minutes: brass from pistols and the assault rifle, a red shell each time the shotgun is pumped, a case when the rifle bolt is worked, none from the revolver.',
+      'Two maps, picked on the New Game screen: Stable (the finished county) and Expanded (the county with the land round it, a work in progress). Also a starting location: Random, Hollow Creek, Millbrook or the countryside, and on Expanded Fairfield, Riverton or Kingsbury.',
+      'New settings (Optimization): Zombie animation rate (10 to 30 a second, or unlimited), Lazy zombie animation (zombies standing, wandering or feeding animate at half rate nearby and a quarter further off), Texture size limit (Full, 1x, Half) and World textures (half-resolution ground). The Low and Medium presets use them; zoomed far out the ground is always kept at half size.',
+      'Buildings under a closed roof are no longer drawn underneath it (far less work in town), furniture in rooms you have never seen is not drawn, roofs turn see-through when they would hide your head or chest (gables and parapets included), and you know your own house from the start.',
+      'Fixed: the zombies on the title screen stood frozen; in the dark, zombies close by vanished beyond three tiles (they are made out a few tiles off now, further under a moon); furniture with its clicked end boxed in (a bed\'s head between the wall, a wardrobe and its other half) said "I can\'t get there" - the survivor now goes to the end that can be reached.',
+    ],
+    commits: ['0eefaea', 'fc59857', 'a0eeead'], shots: ['v016000_1', 'v016000_2', 'v016000_3', 'v016000_4', 'v016000_5'],
+  },
+  {
     v: '000.015.000.113', date: '2026-10-16', title: 'The towns built and spread out',
     notes: [
       'Towns are less packed: the blocks thin out from the middle of town to its edge, with wider lots and side yards, single rows of houses with long back yards, and lots left empty (a lawn, an overgrown lot, a stand of trees, a neighbourhood vegetable garden with a shed, a gravel lot with a wreck). The shops in the middle stay close together.',
