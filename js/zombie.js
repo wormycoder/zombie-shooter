@@ -223,7 +223,7 @@ const Zombie = {
       let zdt = dt;
       if (lazy) {
         if (cd >= 6 || d > 60) { z.far = (z.far || 0) + dt; if (z.far > (cd >= 6 ? 2 : 1)) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
-        const busy = z.st === 'chase' || z.st === 'attack' || z.va > 0.01;
+        const busy = z.st === 'chase' || z.st === 'attack' || z.st === 'grab' || z.va > 0.01;
         const rate = (!busy && cd >= 3) || (crowd && d < 32 && z.st !== 'attack') ? 2 : 1;
         if (rate > 1) {
           z.acc = (z.acc || 0) + dt;
@@ -233,7 +233,7 @@ const Zombie = {
       } else if (d > 60) { z.far = (z.far || 0) + dt; if (z.far > 1) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
       this.update(z, zdt, px, py, d);
       upd++;
-      if (z.st === 'chase' || z.st === 'attack') chasing++;
+      if (z.st === 'chase' || z.st === 'attack' || z.st === 'grab') chasing++;
     }
     this.nearN = nearN; this.updN = upd;
     G.chasing = chasing;
@@ -332,21 +332,35 @@ const Zombie = {
       z.atkT -= dt;
       z.a = U.normAng(z.a + U.clamp(U.angDiff(z.a, Math.atan2(py - z.y, px - z.x)), -dt * 5, dt * 5));
       z.amp = Math.max(0, z.amp - dt * 3);
+      // it keeps coming through the lunge, faster than a walk: walking away does not get you clear (running does)
+      if (!p.inCar && !z.crawl && d > 0.55) {
+        const st = Math.min(d - 0.55, Math.max(1.9, z.speed * 1.4 + 0.5) * dt), a = Math.atan2(py - z.y, px - z.x);
+        World.move(z, Math.cos(a) * st, Math.sin(a) * st, z.r);
+      }
       if (z.atkT <= 0) {
+        let held = false;
         if (p.inCar) { if (d < 2.2) Vehicles.zombieHit(p.inCar, z); }
-        else if (d < 1.05 && World.lineClear(z.x, z.y, px, py, 'move') && !p.dead) Player.zombieAttack(z);
+        else if (d < 1.15 && World.lineClear(z.x, z.y, px, py, 'move') && !p.dead) held = Player.zombieAttack(z);
+        if (held) { z.st = 'grab'; z.grabT = 0; z.biteIn = R.f(0.9, 1.4); return; }
         z.cd = R.f(0.9, 1.4);
         z.st = 'chase'; z.biteT = 0.4;
       }
       return;
     }
+    if (z.st === 'grab') { this.grabUpdate(z, dt, p, px, py, d); return; }
     if (z.st === 'thump') { this.thumpUpdate(z, dt); return; }
     if (z.st === 'feed') { this.feedUpdate(z, dt, d); return; }
     // movement
     let speed = 0;
     if (z.st === 'chase') {
       speed = z.speed * (d < 2.5 ? 1.25 : 1);
+      // the lunge: the last stretch to its prey at a rush
+      if (z.lungeCd > 0) z.lungeCd -= dt;
+      if (z.lungeT > 0) { z.lungeT -= dt; speed = speed * 2 + 0.4; }
+      else if (d < 2.2 && d > 0.9 && z.canSee && !z.crawl && !p.dead && !p.inCar && !(z.lungeCd > 0)) { z.lungeT = 0.45; z.lungeCd = R.f(2.5, 4); }
       if (!p.dead && z.canSee) { z.tx = px; z.ty = py; }
+      // (up against its prey it stops: bodies do not walk into each other)
+      if (!p.dead && !p.inCar && d < 0.55 && (z.x >= LV.W0) === (px >= LV.W0)) speed = 0;
       const reach = p.inCar ? 1.9 : 0.85;
       if (!p.dead && d < reach && z.cd <= 0 && (z.canSee || d < 1) && (p.inCar || World.lineClear(z.x, z.y, px, py, 'move'))) { z.st = 'attack'; z.atkT = z.atk0 = R.f(0.55, 0.85) * (z.crawl ? 1.4 : 1); Sfx.play('zattack', z.x, z.y); return; }
     } else if (z.st === 'investigate') speed = z.speed * 0.8;
@@ -369,8 +383,8 @@ const Zombie = {
   },
   perceive(z, p, px, py, d) {
     if (p.dead || Debug.invisible) {
-      if (p.dead && (z.st === 'chase' || z.st === 'attack' || z.st === 'investigate') && !p.inCar && d < 9) this.feedOn(z, p.x, p.y, 1e9);
-      else if (z.st === 'chase' || z.st === 'attack') { z.st = 'investigate'; }
+      if (p.dead && (z.st === 'chase' || z.st === 'attack' || z.st === 'grab' || z.st === 'investigate') && !p.inCar && d < 9) this.feedOn(z, p.x, p.y, 1e9);
+      else if (z.st === 'chase' || z.st === 'attack' || z.st === 'grab') { z.st = 'investigate'; }
       z.canSee = false; return;
     }
     const target = p.inCar || p;
@@ -385,7 +399,7 @@ const Zombie = {
     if (p.asleep && d > 2.5 && z.st !== 'chase') see = see && d < 4;
     void target;
     if (see) {
-      const busy = z.st === 'attack' || z.st === 'thump' || z.st === 'climb';
+      const busy = z.st === 'attack' || z.st === 'grab' || z.st === 'thump' || z.st === 'climb';
       if (!busy) {
         if (z.st !== 'chase') { if (d < 20) Sfx.groan(z, d, true); z.path = null; }
         z.st = 'chase';
@@ -559,6 +573,31 @@ const Zombie = {
     z.stagA = U.angDiff(z.a, a);
     z.svx = Math.cos(a) * push; z.svy = Math.sin(a) * push;
     if (z.st === 'attack') { z.st = 'chase'; z.cd = Math.max(z.cd, 0.6); }
+    if (z.st === 'grab') this.release(z, 1.0);
+  },
+  // ---- holding on to the player: pulled along at arm's length, a bite at the neck or arms every second or so, let
+  // go when shoved off, hit hard enough to stagger, shaken loose (moving away; strength and fitness help, a second
+  // or third pair of hands makes it harder) or when the player gets away
+  grabUpdate(z, dt, p, px, py, d) {
+    z.grabT += dt;
+    if (p.dead || p.inCar || d > 1.5 || z.stag > 0 || z.lie > 0.3) { this.release(z, 0.8); return; }
+    const a = Math.atan2(py - z.y, px - z.x);
+    z.a = U.normAng(z.a + U.clamp(U.angDiff(z.a, a), -dt * 8, dt * 8));
+    z.amp = Math.max(0, z.amp - dt * 3);
+    if (d > 0.5) { const st = Math.min(d - 0.5, 4 * dt); World.move(z, Math.cos(a) * st, Math.sin(a) * st, z.r); z.ph += st * 3.6; }
+    if (z.biteT > 0) z.biteT -= dt;
+    if (!(z.biteIn > -9)) z.biteIn = 1;
+    z.biteIn -= dt;
+    if (z.biteIn <= 0) { z.biteIn = R.f(1.3, 2.0); z.biteT = 0.4; Player.grabBite(z); if (p.dead) return; }
+    // pulling away
+    if (p.moveMode && p.moveMode !== 'idle' && p.anim.amp > 0.2 && z.grabT > 0.5) {
+      const n = Math.max(1, p.grabN || 1), k = (0.3 + Player.skill('Strength') * 0.03 + Player.skill('Fitness') * 0.02) / n;
+      if (R.chance(k * dt)) { this.release(z, 1.2); this.stagger(z, a + Math.PI, 0.5, 1.6); Player.say(R.pick(['Got loose!', 'Get off!']), '#ddd'); }
+    }
+  },
+  release(z, cd) {
+    if (z.st !== 'grab') return;
+    z.st = 'chase'; z.cd = Math.max(z.cd || 0, cd || 1); z.lungeCd = Math.max(z.lungeCd || 0, 1.5);
   },
   GETUP: 1.6,
   kill(z, fromA, o) {
@@ -606,12 +645,13 @@ const Zombie = {
     const pose = { walk: z.ph, amp: z.amp, t: Render.tnow + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
       mode: 'loco', gait: z.speed > 2 ? 'run' : 'shamble' };
     const since = (t) => t === undefined ? 1e9 : (G.time - t) / MIN_PER_SEC;
-    if (z.st === 'chase' || z.st === 'attack') {
+    if (z.st === 'chase' || z.st === 'attack' || z.st === 'grab') {
       const p = G.player, d = U.dist(z.x, z.y, p.x, p.y);
       pose.reach = U.clamp(1.6 - d * 0.4, 0, 1);
       if (z.canSee || d < 3) pose.look = U.clamp(U.angDiff(z.a, Math.atan2(p.y - z.y, p.x - z.x)), -1, 1);
     }
     if (z.st === 'attack') { pose.mode = 'attack'; pose.prog = 0.82 * U.clamp(1 - Math.max(0, z.atkT) / (z.atk0 || 0.7), 0, 1); pose.reach = 1; pose.lean = 0.3; }
+    else if (z.st === 'grab') { pose.mode = 'grab'; pose.prog = z.biteT > 0 ? 1 - z.biteT / 0.4 : 0; pose.reach = 1; pose.lean = 0.35; pose.amp = z.amp; }
     else if (z.biteT > 0 && !z.crawl && z.st !== 'down') { pose.mode = 'attack'; pose.prog = 1 - z.biteT / 0.4 * 0.18; }
     if (z.st === 'feed' && z.feeding) { pose.mode = 'feed'; pose.crouch = 0.75; pose.amp = 0; }
     if (z.st === 'thump') { pose.arms = 'thump'; pose.reach = 1; pose.lean = 0.3; pose.prog = U.clamp(1 - z.thumpT / (z.thump0 || 1), 0, 1); }
@@ -670,7 +710,9 @@ const Noise = {
     if (ox < Wd.w && Wd.stairs.length) for (const z of Zombie.near(ox, y, radius * 0.6)) heard.push(z);
     for (const z of heard) {
       if (z.dead || z.st === 'down' || z.st === 'getup' || z.st === 'climb') continue;
-      if (z.st === 'chase' && z.canSee) continue;
+      // one already going for you is not distracted by a noise - least of all your own footsteps (every step used to
+      // turn a zombie mid-lunge to 'investigate': walking through a crowd broke off every attack)
+      if ((z.st === 'chase' && z.canSee) || z.st === 'attack' || z.st === 'grab') continue;
       if (z.st === 'thump' && kind !== 'gun' && kind !== 'alarm') continue;
       const d = World.lvDist(x, y, z.x, z.y);
       // walls and floors muffle

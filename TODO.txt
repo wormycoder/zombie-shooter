@@ -93,17 +93,55 @@ FIX - LOOK INTO HOW MANY CORES OR THREADS THE GAME IS USING, MAKE SURE IT
       USAGE. DO NOTE, THIS GAME SHOULD BY DEFAULT NOT TAKE OVER 1GB OF RAM,
       ALTHOUGH THERE SHOULD BE A SETTING IN EXPERIMENTAL FOR THAT. DESIGN FOR
       4-8GB OF SYS MEM (2-3GB FREE), AIM FOR 16GB + OF SYS MEM (8GB+ FREE).
-  -> HIGH. Measure first, then cap caches by a memory budget. UNFINISHED
+  -> HIGH. DONE (000.017.000.120).
+     Measured (Chromium): the game's tab grew to ~800 MB touring a town, of
+     which ~280 MB were kept pictures (walls and their darkened twins most of
+     it) - the world data is only a few MB. A leak was found: the renderer's
+     per-wall and per-object memos kept every picture evicted from the caches
+     alive, and the caches painted duplicates. Fixed: ~700 MB now.
+     New: Settings > Experimental > Memory budget (512 MB, 1 GB default,
+     2/4/8 GB). Over it, pictures not drawn lately are dropped (repainted
+     when needed) and the caches shrink until it fits. At 1 GB the game's tab
+     and the browser's GPU process stay under ~0.9 GB; at 512 MB the tab
+     stays ~460-550 MB. Shown in the detailed FPS counter (Settings > Display
+     > Frame rate counter: Detailed) and the performance report.
+     Threads/GPU: the game itself runs on one thread (JavaScript); the
+     browser adds its own (compositor, raster, GPU process). Menus, the pause
+     screen and a paused game now draw at 30 fps at most, so the processor
+     and graphics card idle there. Still possible later: making the new
+     world (about 1 s on Expanded) in a background worker.
 
 VERY HIGH - CONTINUE UPDATING THE MAP, AND FINISH ON ALL BUILDINGS. UNFINISHED
 
 HIGH - ZOMBIES AREN'T MUCH OF A THREAT, AND IN SOME INSTANCES, YOU CAN WALK
       IN THE MIDDLE OF A HORDE AND GET OUT JUST FINE. ZOMBIES FOR WHATEVER
       REASON, DON'T HAVE A GRAPPLE ANIMATION, AND COMMONLY DON'T INJURE YOU.
-      UNFINISHED
+  -> DONE, first pass (000.017.000.120). The cause: every footstep is a
+     noise, and a zombie hearing one was switched to "investigate" even in
+     the middle of its lunge - walking through a crowd broke off every
+     attack. Fixed, and now:
+     - zombies lunge the last couple of tiles and keep coming through the
+       wind-up faster than a walk (running still gets you clear);
+     - an attack that lands GRABS you (grapple animation: hands on your
+       shoulders, leaning in, biting): you are held (slow; two of them pin
+       you), bitten or clawed every 1.5 s or so, until you shove it off
+       (Space - works on one behind you too) or pull free (strength and
+       fitness help); three holding you for 2 s drag you down;
+     - test: walking straight through 6 zombies used to leave you untouched;
+       now 8 of 8 walks end wounded (~4 wounds), 1 in 8 dead; running into
+       the middle of them is worse.
 
 HIGH TO VERY HIGH - BETTER UI - MORE ZOMBOID ESQUE, COULD RE-WRITE WHOLE UI
       SECTOR IF NEEDED. UNFINISHED
+
+HIGH (added) - MAKE SURE THE UI SCALES WITH THE RESOLUTION OF THE SCREEN,
+      SOMETIMES STUFF GETS CUT OFF ON LOWER RESOLUTIONS (LIKE ON MY LAPTOP)
+  -> DONE (000.017.000.120): Settings > Display > UI scale (Auto, 75-150%).
+     Auto fits the interface to the window: down to 80% on laptop screens,
+     a little larger on very big screens. Dialogs scroll and windows never
+     run off the screen (checked at 1024x600, 1280x600, 1366x768 and
+     1920x1080: the World settings, Settings and How to play dialogs and the
+     map window were cut off on laptop screens before).
 
 HIGH - ADD MORE 3D MODELS, AND MAKE ACTUAL TEXTURES FOR SAID MODELS,
       INCLUDING ACTUAL TEXTURES FOR THE PLAYER. UNFINISHED
@@ -151,5 +189,7 @@ RUN LOG
 Run 1 (000.016.000.117): car speeds, guns, casings, title-screen zombies,
   two world sizes, spawn points, aiming display, zombie animation rate and
   texture settings.
-Next run, planned: memory and threads (measure, then a memory budget
-  setting), the zombie threat item (grapple, injuries), then the UI rework.
+Run 2 (000.017.000.120): UI scaling (added), memory budget + a memory
+  leak, efficiency on menus, zombies grab and bite (the footstep bug).
+Next run, planned: the UI rework (more Zomboid-like), then continue the map
+  and buildings, then vehicles (wheels, proportions).

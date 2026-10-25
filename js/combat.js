@@ -101,6 +101,14 @@ const Combat = {
       for (const z of Zombie.near(p.x, p.y, 1.3)) {
         if (z.dead || z.st === 'down' || z.lie > 0.3) continue;
         const a = Math.atan2(z.y - p.y, z.x - p.x);
+        // one that has hold of you is shoved off whichever side it is on: front on, more often than not; from behind,
+        // with strength
+        if (z.st === 'grab') {
+          any = true;
+          const front = Math.abs(U.angDiff(p.angle, a)) < 1.4, ch = (front ? 0.6 : 0.35) + str * 0.04;
+          if (R.chance(ch)) { Zombie.release(z, 1.2); if (R.chance(front ? 0.45 : 0.25)) { Zombie.knockDown(z, a, 2.0, R.f(1.4, 2.6)); Sfx.play('zfall', z.x, z.y); } else Zombie.stagger(z, a, 0.65, 2.6); }
+          continue;
+        }
         if (Math.abs(U.angDiff(p.angle, a)) > 1.0 || U.dist(p.x, p.y, z.x, z.y) > 1.15 + z.r) continue;
         if (!World.lineClear(p.x, p.y, z.x, z.y, 'move')) continue;
         any = true;

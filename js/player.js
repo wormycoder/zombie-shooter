@@ -212,6 +212,13 @@ const Player = {
     for (const h of p.halo) h.t -= dt / Math.max(1, G.speed);
     p.halo = p.halo.filter(h => h.t > 0);
     if (p.grabbed > 0) p.grabbed -= dt;
+    // held by the dead: how many have hold (Zombie.grabUpdate), struggling, and three pairs of hands pull you down
+    let gn = 0;
+    if (!p.inCar) for (const z of Zombie.near(p.x, p.y, 1.6)) if (z.st === 'grab' && !z.dead) gn++;
+    p.grabN = gn;
+    if (gn) p.grabbed = Math.max(p.grabbed, 0.3);
+    if (gn >= 3 && !Debug.god) { p.dragT = (p.dragT || 0) + dt; if (p.dragT > 2) { this.die('Dragged down by the dead'); Sfx.play('scream'); return; } }
+    else p.dragT = Math.max(0, (p.dragT || 0) - dt);
     if (p.fireCd > 0) p.fireCd -= dt;
     // camera
     const cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
@@ -255,7 +262,7 @@ const Player = {
     const end = p.st.endurance;
     if (end < 0.1) m *= 0.65; else if (end < 0.25) m *= 0.8; else if (end < 0.5) m *= 0.92;
     if (p.health < 40) m *= 0.85;
-    if (p.grabbed > 0) m *= 0.25;
+    if (p.grabN >= 2) m *= 0.08; else if (p.grabbed > 0) m *= 0.3;
     for (const pt of LEG_PARTS) { const b = p.body[pt]; if (b.w.cut || b.w.bite || b.w.deep) { m *= 0.85; break; } }
     for (const pt of LEG_PARTS) { const b = p.body[pt]; if (b.w.fracture) { m *= b.splint ? 0.72 : 0.5; break; } }
     if (this.hasTrait('obese')) m *= 0.88; else if (this.hasTrait('overweight')) m *= 0.94;
@@ -424,25 +431,42 @@ const Player = {
   },
 
   // ------------------------------------------------------------------ zombie attacks
+  // a zombie's lunge lands: it has hold of you (true; Zombie.grabUpdate takes it from there), maybe clawing or biting
+  // as it grabs. Missed, or the clothes took it: false or a hold with no wound
   zombieAttack(z) {
     const p = G.player;
-    if (p.dead || Debug.god) return;
+    if (p.dead || Debug.god) return false;
     const ang = Math.atan2(z.y - p.y, z.x - p.x);
     const behind = Math.abs(U.angDiff(p.angle, ang)) > 1.7;
-    let chance = 0.62;
+    let chance = 0.72;
     if (!behind) chance -= 0.12;
-    if (p.swing) chance -= 0.08;
-    chance -= this.skill('Nimble') * 0.01;
+    if (p.swing) chance -= 0.1;
+    if (p.moveMode === 'sprint' || p.moveMode === 'run') chance -= 0.15;
+    chance -= this.skill('Nimble') * 0.015;
     if (p.inCar) chance = 0.35;
-    if (!R.chance(chance)) { if (R.chance(0.3)) this.say(R.pick(['Close call!', 'Missed me!']), '#ddd'); return; }
-    // surrounded -> dragged down
-    let around = 0;
-    for (const o of Zombie.near(p.x, p.y, 1.25)) if (!o.dead && !o.down && (o.st === 'attack' || o.st === 'chase')) around++;
-    if (around >= 3 && R.chance(0.18 + (around - 3) * 0.08) && !p.inCar) { this.die('Dragged down by the dead'); Sfx.play('scream'); return; }
+    if (!R.chance(chance)) { if (R.chance(0.3)) this.say(R.pick(['Close call!', 'Missed me!']), '#ddd'); return false; }
+    // (through a car window it only claws: no hold)
+    if (p.inCar) { this.wound(z, 1, false); return false; }
+    if (!(p.grabN > 0)) { this.say(R.pick(["It's got me!", 'Get off me!', 'No!']), '#f99'); if (!this.grabHinted) { this.grabHinted = true; UI.hint('Grabbed! Shove (Space) or pull away to break free', 5); } }
+    this.wound(z, behind ? 0.75 : 0.5, false);
+    return true;
+  },
+  // a bite (or a clawing) while it holds on: from behind or with company it gets its teeth in more often
+  grabBite(z) {
+    const p = G.player;
+    if (p.dead || Debug.god) return;
+    const behind = Math.abs(U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x))) > 1.7;
+    Sfx.play('zattack', z.x, z.y);
+    if (!R.chance((behind ? 0.7 : 0.45) + Math.min(0.2, ((p.grabN || 1) - 1) * 0.08) - this.skill('Nimble') * 0.01)) return;
+    this.wound(z, 1, true);
+  },
+  // the blow itself: where, what (biting more likely while held), what the clothes stop. k: chance it breaks skin
+  wound(z, k, held) {
+    const p = G.player;
     const part = R.weighted(ATTACK_W);
     let type;
     const r = R.next();
-    if (r < 0.17) type = 'bite'; else if (r < 0.45) type = 'cut'; else type = 'scratch';
+    if (r < (held ? 0.32 : 0.15)) type = 'bite'; else if (r < 0.45) type = 'cut'; else type = 'scratch';
     let skin = 1;
     if (this.hasTrait('thickskinned')) skin = 0.75;
     if (this.hasTrait('thinskinned')) skin = 1.3;
@@ -457,12 +481,12 @@ const Player = {
       block = 1 - (1 - block) * (1 - pv);
       if (R.chance(0.15)) { it.cond = Math.max(0, (it.cond === undefined ? 1 : it.cond) - 0.1); it.bloody = true; }
     }
-    p.grabbed = 0.5;
+    p.grabbed = Math.max(p.grabbed, 0.5);
     p.hurtFlash = 1;
-    p.st.panic = Math.min(100, p.st.panic + 25);
+    p.st.panic = Math.min(100, p.st.panic + (held ? 12 : 25));
     Sfx.play('zhit');
-    if (R.chance(block) || !R.chance(Math.min(1, 0.9 * skin))) {
-      this.say(block > 0.2 ? 'My clothes protected me' : 'Grabbed!', '#ddd');
+    if (R.chance(block) || !R.chance(Math.min(1, 0.9 * skin * k))) {
+      if (block > 0.2 && R.chance(0.5)) this.say('My clothes protected me', '#ddd');
       return;
     }
     this.addWound(part, type, z);

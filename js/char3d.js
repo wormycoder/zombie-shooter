@@ -553,7 +553,7 @@ const Char3D = {
     if (to === 'getup') return 0.3;
     if (to === 'feed' || from === 'feed') return 0.6;
     if (to === 'crawl') return lyingFrom ? 0.4 : 0.25;
-    if (from === 'attack' || from === 'stagger' || from === 'getup') return 0.35;
+    if (from === 'attack' || from === 'grab' || from === 'stagger' || from === 'getup') return 0.35;
     if (from === 'sit' || from === 'kneel' || to === 'sit' || to === 'kneel') return 0.4;
     return 0.25;
   },
@@ -588,13 +588,14 @@ const Char3D = {
       this.loco(T, S, D, P);
       if (mode === 'climb') this.climb(T, S, D, P);
       else if (mode === 'attack') this.zAttack(T, S, D, P);
+      else if (mode === 'grab') this.zGrab(T, S, D, P);
       else if (mode === 'stagger') this.stagger(T, S, D, P);
       else if (P.arms === 'thump') { this.zArms(T, S, D, P); this.thump(T, S, D, P); }
       else if (zomb && (!P.arms || P.arms === 'zombie' || P.arms === 'idle')) this.zArms(T, S, D, P);
       else this.upper(T, S, D, P);
     }
     // gaze: the head turns toward what the character looks at, beyond what the chest already turned
-    if (P.look !== undefined && (mode === 'loco' || mode === 'attack' || mode === 'climb' || mode === 'sit' || mode === 'kneel' || mode === 'crawl')) {
+    if (P.look !== undefined && (mode === 'loco' || mode === 'attack' || mode === 'grab' || mode === 'climb' || mode === 'sit' || mode === 'kneel' || mode === 'crawl')) {
       const k = mode === 'crawl' ? 0.5 : 1;
       T[C3.HW] += U.clamp(S.lk - T[C3.PW] - T[C3.SW], -0.95, 0.95) * k;
       if (P.lookP) T[C3.HP] += P.lookP;
@@ -786,6 +787,27 @@ const Char3D = {
       // the back leg pushes off, all but straight
       this.foot(T, Pf, -1, -0.04 - o[8] * 0.2, -0.11, D.ankH, -o[8] * 0.5, 0.15);
       this.foot(T, Pf, 1, o[8], 0.11, D.ankH + lift, lift * 2, 0.2);
+    }
+  },
+  // ---- holding on to its prey: both hands clamped on the shoulders in front, leaning in, the body jerking as the
+  // victim struggles; a bite (prog 0..1) drives the head down and in with the jaw wide, snapping shut at the end
+  zGrab(T, S, D, P) {
+    this.zArms(T, S, D, P, 1);
+    const t = S.t, b = U.clamp(P.prog || 0, 0, 1), bk = Math.sin(Math.PI * b), sh = Math.sin(t * 7.3 + S.id) * 0.5 + Math.sin(t * 11.1) * 0.5;
+    T[C3.PX] += 0.05 + 0.04 * bk; T[C3.PZ] -= 0.02;
+    T[C3.SP] += 0.24 + 0.16 * bk; T[C3.SW] += 0.07 * sh; T[C3.SR] += 0.04 * sh;
+    T[C3.HP] += 0.12 + 0.38 * bk; T[C3.HW] += 0.12 * bk * (S.id & 1 ? 1 : -1);
+    T[C3.JAW] = b < 0.85 ? 0.45 + 0.55 * bk : 0.1;
+    // the hands on the victim's shoulders (a hand's breadth inside its own), elbows bent; pulled about by the struggle
+    for (let side = -1; side <= 1; side += 2) {
+      const i = side < 0 ? C3.LW : C3.RW;
+      T[i] = 0.4 + 0.03 * sh * side; T[i + 1] = side * 0.03; T[i + 2] = 0.02 + 0.03 * Math.sin(t * 9 + side); T[i + 3] = 0.45;
+    }
+    // braced: one foot back, knees bent, unless it is being dragged along
+    if (S.amp < 0.3) {
+      const Pf = this.pelvisOf(T, this.T1);
+      this.foot(T, Pf, -1, -0.16, -0.12, D.ankH, -0.1, 0.15);
+      this.foot(T, Pf, 1, 0.12, 0.11, D.ankH, 0, 0.2);
     }
   },
   // ---- hit reaction: thrown the way it was pushed (stagA: the push direction relative to the facing), the upper
