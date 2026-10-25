@@ -68,6 +68,11 @@ const UI = {
       const it = s.dataset.slot === 'p' ? Player.primary() : Player.secondary();
       if (it) this.itemMenu(e.clientX, e.clientY, it, Cont.inv());
     });
+    $('#equip').addEventListener('mousemove', (e) => {
+      const s = e.target.closest('[data-slot]'), it = s && (s.dataset.slot === 'p' ? Player.primary() : Player.secondary());
+      if (it) this.showTip(e.clientX, e.clientY, this.itemTip(it, ['Right-click for options.'])); else this.hideTip();
+    });
+    $('#equip').addEventListener('mouseleave', () => this.hideTip());
     $('#moodles').addEventListener('mousemove', (e) => {
       const m = e.target.closest('.moodle');
       if (!m) { this.hideTip(); return; }
@@ -95,7 +100,7 @@ const UI = {
       const s = e.target.closest('[data-hs]');
       if (!s) { this.hideTip(); return; }
       const slot = s.dataset.hs, it = Hotbar.item(slot), S = HOTBAR_SLOTS[slot], k = Hotbar.slots().indexOf(slot) + 1;
-      this.showTip(e.clientX, e.clientY, it ? `<b>${U.esc(Items.name(it))}</b><br>${S.n}${it.equipped ? ' · in your hands' : ''}<br><span class="sml">Press ${k} or click to ${it.equipped ? 'put it back' : 'draw it'}. Right-click to detach.</span>` : `<b>${S.n}</b><br><span class="sml">Empty. Drag ${S.what} here from the inventory.</span>`);
+      this.showTip(e.clientX, e.clientY, it ? this.itemTip(it, [S.n + (it.equipped ? ' · in your hands' : ''), `Press ${k} or click to ${it.equipped ? 'put it back' : 'draw it'}. Right-click to detach.`]) : `<b>${S.n}</b><br><span class="sml">Empty. Drag ${S.what} here from the inventory.</span>`);
     });
     hb.addEventListener('mouseleave', () => this.hideTip());
     hb.addEventListener('dragover', (e) => { if (this.drag && e.target.closest('[data-hs]')) e.preventDefault(); });
@@ -199,7 +204,7 @@ const UI = {
       if (d.wpn || d.gun) bar = `<div class="cbar"><i style="width:${Math.max(0, it.cond / (d.wpn || d.gun).cond * 100)}%"></i></div>`;
       if (d.power !== undefined) bar = `<div class="cbar pw"><i style="width:${it.pow * 100}%"></i></div>`;
       const ammo = d.gun ? `<span class="ammo">${it.ammo}/${d.gun.cap}${' · ' + Player.count(d.gun.ammo)}</span>` : (d.light ? `<span class="ammo">${it.on ? 'ON' : 'off'}</span>` : '');
-      return `<div class="eslot" data-slot="${k}" title="${U.esc(Items.name(it))}"><img src="${Icons.url(it)}">${bar}${ammo}<span class="lbl">${label}</span></div>`;
+      return `<div class="eslot" data-slot="${k}"><img src="${Icons.url(it)}">${bar}${ammo}<span class="lbl">${label}</span></div>`;
     };
     const pr = Player.primary(), se = Player.secondary();
     let html = pr && pr === se ? slot(pr, 'p', 'Both').replace('class="eslot"', 'class="eslot both"') : slot(pr, 'p', 'Primary') + slot(se, 's', 'Second');
@@ -483,7 +488,7 @@ const UI = {
           const at = Hotbar.slotOf(it), extra = [];
           if (at) extra.push('On the hotbar: ' + HOTBAR_SLOTS[at].n);
           if (it.fav) extra.push('Favorite');
-          this.showTip(e.clientX, e.clientY, `<b>${U.esc(Items.name(it))}</b><br>${Items.description(it).concat(extra).map(U.esc).join('<br>')}`);
+          this.showTip(e.clientX, e.clientY, this.itemTip(it, extra));
           return;
         }
       }
@@ -680,6 +685,18 @@ const UI = {
     };
   },
   closeContext() { if (!this.ctx) return; this.ctxOpen = false; this.ctx.classList.add('hidden'); G.hover = null; },
+  // an item's tooltip: its name and kind, rows of label and value (a coloured bar for anything that runs down),
+  // then any notes
+  itemTip(it, extra) {
+    const col = (f) => f >= 0.6 ? '#6aa84a' : f >= 0.3 ? '#c8a838' : '#c03a2a';
+    let h = `<div class="itip"><div class="ith">${U.esc(Items.name(it))}</div><div class="itc">${U.esc(ITEMS[it.id].cat || '')}</div>`;
+    for (const r of Items.tipRows(it)) {
+      if (r.t) { h += `<div class="itt">${U.esc(r.t)}</div>`; continue; }
+      h += `<div class="itr"><span>${U.esc(r.k)}</span>` + (r.bar !== undefined ? `<i class="itb"><i style="width:${Math.round(r.bar * 100)}%;background:${col(r.bar)}"></i></i>` : '') + `<b>${U.esc(r.v)}</b></div>`;
+    }
+    for (const t of extra || []) h += `<div class="itt">${U.esc(t)}</div>`;
+    return h + '</div>';
+  },
   showTip(x, y, html) {
     const t = this.tip;
     t.innerHTML = html; t.classList.remove('hidden');

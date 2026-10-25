@@ -367,44 +367,53 @@ const Items = {
     if (it.keyId !== undefined) k += '|k' + it.keyId;
     return k;
   },
-  description(it) {
-    const d = ITEMS[it.id];
-    const lines = [];
-    lines.push('Weight: ' + U.fmt2(this.weight(it)));
-    if (d.carPart && d.size) lines.push('Size: ' + (d.size === 'heavy' ? 'Heavy' : 'Regular') + (it.pc !== undefined && it.id !== 'EngineParts' ? ' · Condition ' + Math.round(it.pc) + '%' : ''));
-    if (d.desc && (d.carPart || d.attach || d.tags.includes('lugwrench') || d.tags.includes('jack'))) lines.push(d.desc);
+  // the item's tooltip rows, as Zomboid shows them: { k, v } a label and its value, with bar (0..1) for anything
+  // that runs down (condition, contents, charge, uses, freshness); { t } a note in plain words
+  tipRows(it) {
+    const d = ITEMS[it.id], R = [];
+    const row = (k, v) => R.push({ k, v: String(v) }), bar = (k, f, v) => R.push({ k, v: String(v), bar: U.clamp(f, 0, 1) });
+    const pct = (f) => Math.round(f * 100) + '%';
+    row('Weight', U.fmt2(this.weight(it)));
     if (d.wpn) {
-      lines.push('Condition: ' + Math.max(0, it.cond) + '/' + d.wpn.cond);
-      lines.push('Damage: ' + d.wpn.dmg[0] + ' - ' + d.wpn.dmg[1]);
-      lines.push('Skill: ' + SKILL_NAMES[d.wpn.sk] + (d.wpn.two ? ' (Two-handed)' : ''));
+      bar('Condition', it.cond / d.wpn.cond, Math.max(0, it.cond) + '/' + d.wpn.cond);
+      row('Damage', d.wpn.dmg[0] + ' - ' + d.wpn.dmg[1]);
+      row('Skill', SKILL_NAMES[d.wpn.sk] + (d.wpn.two ? ', two-handed' : ''));
     }
     if (d.gun) {
-      lines.push('Ammo: ' + (it.ammo || 0) + '/' + d.gun.cap + ' (' + ITEMS[d.gun.ammo].n + ')');
-      lines.push('Condition: ' + Math.max(0, it.cond) + '/' + d.gun.cond);
+      bar('Ammo', (it.ammo || 0) / d.gun.cap, (it.ammo || 0) + '/' + d.gun.cap);
+      row('Takes', ITEMS[d.gun.ammo].n);
+      bar('Condition', it.cond / d.gun.cond, Math.max(0, it.cond) + '/' + d.gun.cond);
+    }
+    if (d.carPart && d.size) {
+      row('Size', d.size === 'heavy' ? 'Heavy' : 'Regular');
+      if (it.pc !== undefined && it.id !== 'EngineParts') bar('Condition', it.pc / 100, Math.round(it.pc) + '%');
     }
     if (d.cat === 'Food' && !d.fluid) {
-      if (d.hunger) lines.push('Hunger: -' + Math.round(this.foodVal(it, 'hunger') * 100));
-      if (d.thirst) lines.push('Thirst: ' + (d.thirst > 0 ? '-' : '+') + Math.round(Math.abs(d.thirst) * 100));
-      if (d.unhappy) lines.push('Unhappiness: ' + (d.unhappy > 0 ? '+' : '') + d.unhappy);
-      if (d.open) lines.push('Requires a can opener');
-      if (d.raw && !it.cooked) lines.push('Should be cooked');
+      if (d.hunger) row('Hunger', '-' + Math.round(this.foodVal(it, 'hunger') * 100));
+      if (d.thirst) row('Thirst', (d.thirst > 0 ? '-' : '+') + Math.round(Math.abs(d.thirst) * 100));
+      if (d.unhappy) row('Unhappiness', (d.unhappy > 0 ? '+' : '') + d.unhappy);
       const fs = this.freshState(it);
-      if (fs === 0) lines.push('Fresh');
+      if (fs >= 0) bar('Freshness', 1 - it.age / 24 / d.rot, ['Fresh', 'Stale', 'Rotten'][fs]);
     }
-    if (d.fluid !== undefined) lines.push('Contains: ' + Math.round(it.fl / d.fluid * 100) + '%' + (it.taint ? ' (tainted)' : ''));
-    if (d.gas !== undefined) lines.push('Gasoline: ' + Math.round(it.fl / d.gas * 100) + '%');
-    if (d.uses) lines.push('Uses left: ' + it.uses);
-    if (d.power !== undefined) lines.push('Battery: ' + Math.round(it.pow * 100) + '%');
+    if (d.fluid !== undefined) bar('Contents', it.fl / d.fluid, pct(it.fl / d.fluid) + (it.taint ? ', tainted' : ''));
+    if (d.gas !== undefined) bar('Gasoline', it.fl / d.gas, pct(it.fl / d.gas));
+    if (d.uses) bar('Uses left', it.uses / d.uses, it.uses);
+    if (d.power !== undefined) bar('Battery', it.pow, pct(it.pow));
     if (d.cat === 'Clothing') {
-      if (d.sc) lines.push('Scratch defense: ' + d.sc + '%');
-      if (d.bi) lines.push('Bite defense: ' + d.bi + '%');
-      if (d.ins) lines.push('Insulation: ' + Math.round(d.ins * 100) + '%');
+      if (d.sc) bar('Scratch defense', d.sc / 100, d.sc + '%');
+      if (d.bi) bar('Bite defense', d.bi / 100, d.bi + '%');
+      if (d.ins) bar('Insulation', d.ins, pct(d.ins));
     }
-    if (d.bag) lines.push('Capacity: ' + d.bag.cap + '  Weight reduction: ' + Math.round(d.bag.red * 100) + '%');
-    if (d.skillBook) lines.push('Skill book: ' + SKILL_NAMES[d.skillBook.sk] + ' (levels ' + (d.skillBook.min + 1) + '-' + (d.skillBook.max + 1) + ')');
-    if (d.boxOf) lines.push('Contains ' + d.boxN + ' ' + ITEMS[d.boxOf].n);
-    if (it.keyId !== undefined) lines.push(it.keyName || 'A key');
-    return lines;
+    if (d.bag) { row('Capacity', d.bag.cap); row('Weight reduction', Math.round(d.bag.red * 100) + '%'); }
+    if (d.skillBook) row('Skill book', SKILL_NAMES[d.skillBook.sk] + ', levels ' + (d.skillBook.min + 1) + '-' + (d.skillBook.max + 1));
+    if (d.boxOf) row('Contains', d.boxN + ' ' + ITEMS[d.boxOf].n);
+    if (d.cat === 'Food' && !d.fluid) {
+      if (d.open) R.push({ t: 'Needs a can opener' });
+      if (d.raw && !it.cooked) R.push({ t: 'Should be cooked' });
+    }
+    if (d.desc && (d.carPart || d.attach || d.tags.includes('lugwrench') || d.tags.includes('jack'))) R.push({ t: d.desc });
+    if (it.keyId !== undefined) R.push({ t: it.keyName || 'A key' });
+    return R;
   },
   foodVal(it, k) {
     const d = ITEMS[it.id];

@@ -168,7 +168,18 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 13px;
 .ci .arr { float: right; color: var(--dim); margin-left: 10px; }
 .ci .sub { display: none; position: absolute; left: 100%; top: -2px; background: rgba(8, 8, 8, 0.94); border: 1px solid rgba(255, 255, 255, 0.25); min-width: 90px; }
 .ci.hassub:hover .sub { display: block; }
-#tooltip { position: fixed; background: rgba(6, 6, 6, 0.94); border: 1px solid rgba(255, 255, 255, 0.25); padding: 6px 9px; border-radius: 3px; z-index: 1001; pointer-events: none !important; max-width: 300px; line-height: 1.45; }
+#tooltip { position: fixed; background: rgba(8, 8, 8, 0.97); border: 1px solid rgba(255, 255, 255, 0.25); padding: 6px 9px; border-radius: 3px; z-index: 1001; pointer-events: none !important; max-width: 300px; line-height: 1.45; }
+/* item tooltips, as in Zomboid: name, kind, label / value rows with bars for what runs down, notes */
+.itip { min-width: 200px; }
+.itip .ith { font-weight: bold; color: #fff; }
+.itip .itc { color: var(--dim); font-size: 11px; margin: 0 0 4px; padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.14); }
+.itip .itr { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.65; }
+.itip .itr span { color: var(--dim); white-space: nowrap; }
+.itip .itr b { font-weight: normal; color: var(--text); margin-left: auto; white-space: nowrap; }
+.itip .itb { flex: 1; min-width: 46px; max-width: 90px; height: 6px; background: rgba(255, 255, 255, 0.12); display: block; margin-left: auto; }
+.itip .itb i { display: block; height: 100%; }
+.itip .itb + b { margin-left: 0; min-width: 34px; text-align: right; }
+.itip .itt { color: var(--dim); font-size: 11px; margin-top: 3px; }
 
 /* ---------------- health */
 .health { display: flex; gap: 10px; padding: 8px; height: 100%; }
