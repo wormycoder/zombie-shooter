@@ -14,6 +14,7 @@ const SETTINGS_OPTS = {
   particles: { tab: 'display', n: 'Particles', opts: [['Low', 0.3], ['Medium', 0.6], ['High', 1]], tip: 'Blood, smoke, sparks and glass.' },
   ambient: { tab: 'display', n: 'Ambient particles', opts: [['Off', 0], ['Reduced', 0.5], ['Full', 1]], tip: 'Exhaust, dust, spray and tyre smoke from vehicles, and flies over rotting bodies.' },
   weather: { tab: 'display', n: 'Rain & snow', opts: [['Off', 0], ['Light', 0.45], ['Full', 1]], tip: 'Falling rain and snow on screen (the weather itself is unchanged).' },
+  uiScale: { tab: 'display', n: 'UI scale', opts: [['Auto', 0], ['75%', 0.75], ['85%', 0.85], ['100%', 1], ['115%', 1.15], ['130%', 1.3], ['150%', 1.5]], tip: 'The size of the whole interface: windows, menus, the HUD and text. Auto fits it to the window: smaller on laptop screens so nothing is cut off, a little larger on very big screens.' },
   fpsShow: { tab: 'display', n: 'Frame rate counter', opts: [['Off', 0], ['FPS', 1], ['Detailed', 2]], tip: 'Detailed adds frame time, simulation time, lighting and zombie counts.' },
   lodDist: { tab: 'opt', grp: 'Characters & vehicles', n: 'LOD distance', opts: [['Near', 0.6], ['Normal', 1], ['Far', 1.6]], tip: 'How far from you characters keep their detailed models before switching to simpler ones (anything within 6 tiles always stays detailed, except on Low character detail).' },
   lodMax: { tab: 'opt', grp: 'Characters & vehicles', n: 'Max detailed characters', opts: [['15', 15], ['25', 25], ['40', 40], ['80', 80], ['Unlimited', 0]], tip: 'In a crowd only this many moving characters (the nearest) get the detailed models; the rest use simpler ones. Bodies lying still are kept as pre-drawn pictures and do not count.' },
@@ -31,6 +32,7 @@ const SETTINGS_OPTS = {
   chunkLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks (8x8 tiles) 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
   gore: { tab: 'display', grp: 'Gore', n: 'Gore', opts: [['Off', 0], ['Low', 1], ['Normal', 2], ['Extreme', 3]], tip: 'Blood sprays by weapon and lands as splatter, pools spread under the dead and dry over the days, wounded zombies leave trails. Off shows no blood at all; Extreme throws much more of it around.' },
   dismember: { tab: 'display', grp: 'Gore', n: 'Dismemberment', opts: [['Off', 0], ['On', 1]], tip: 'Heavy blades can take limbs and heads off, stomps and heavy blows crush skulls, shotguns up close blow parts away; a zombie that loses a leg crawls on. Needs Gore to be on.' },
+  memBudget: { tab: 'exp', grp: 'Memory', n: 'Memory budget', opts: [['512 MB', 512], ['1 GB', 1024], ['2 GB', 2048], ['4 GB', 4096], ['8 GB', 8192]], tip: 'How much memory the game lets itself use (an estimate: the pictures it keeps, its data, the tab). Past it, pictures not drawn lately are dropped and painted again when needed. 1 GB suits computers with 4-8 GB of memory; with 16 GB or more, 2-4 GB repaints less when you move about. 512 MB for very little free memory.' },
   // read when a new game's world is made (saves keep the size they were made with); not part of the presets
   worldSize: { tab: 'exp', grp: 'World', n: 'World size (new games)', opts: [['Stable (400 x 400)', 400], ['Expanded, work in progress (896 x 896)', 896]], tip: 'Stable is the county as it stands, finished: Hollow Creek, Millbrook and the farms round them. Expanded is the same county with the land round it being built - Fairfield, Riverton, Kingsbury, Fort Hale, the prison, the airfield and the interstate - and still a work in progress. Expanded takes longer to make and gives bigger save files. Also on the New Game screen. Games already started keep their map.' },
 };
@@ -45,7 +47,7 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: Object.assign({ fpsShow: 0, worldSize: 400, gore: 2, dismember: 1 }, SETTINGS_PRESETS.Auto),
+  v: Object.assign({ fpsShow: 0, worldSize: 400, gore: 2, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
   listeners: [],
   load() {
     try {
@@ -168,6 +170,7 @@ const Perf = {
       L.push('Decals ' + Wd.decals.length + ' - floor item piles ' + Wd.items.size + ' - fires ' + (Wd.fire ? Wd.fire.size : 0) + ' - particles ' + Fx.parts.length + (typeof Vehicles !== 'undefined' ? '/' + Vehicles.pfx.length : ''));
     }
     if (performance.memory) L.push('JS heap ' + Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB of ' + Math.round(performance.memory.jsHeapSizeLimit / 1048576));
+    if (typeof Mem !== 'undefined') L.push(Mem.text().replace(/^m/, 'M'));
     L.push('Settings: ' + Object.keys(V).map(k => k + '=' + V[k]).join(' '));
     return L.join('\n');
   },

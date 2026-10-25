@@ -7,12 +7,15 @@
   --accent: #c8b860;
   --bad: #e06050;
   --good: #7ac070;
+  /* UI scale (Settings > Display > UI scale; Auto fits the window). Everything in #ui is zoomed by it, so lengths in
+     vw/vh inside it are divided by it to mean the real window */
+  --uis: 1;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; overflow: hidden; background: #000; height: 100%; }
 body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 12px; color: var(--text); user-select: none; -webkit-user-select: none; }
 #game { position: fixed; left: 0; top: 0; display: block; cursor: crosshair; }
-#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui { position: fixed; inset: 0; pointer-events: none; zoom: var(--uis); }
 #ui > * { pointer-events: auto; }
 #hud, #windows { pointer-events: none !important; }
 #hud > *, #windows > * { pointer-events: auto; }
@@ -75,13 +78,15 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 12px;
 .cbar.us i { background: #b0b0b0; }
 
 /* ---------------- log / hint / toast */
-#log { position: absolute; left: 50%; transform: translateX(-50%); bottom: 76px; width: 640px; text-align: center; pointer-events: none !important; font-size: 12px; text-shadow: 0 1px 3px #000, 0 0 6px #000; color: #d0e8ff; }
+#log { position: absolute; left: 50%; transform: translateX(-50%); bottom: 76px; width: 640px; max-width: calc(100vw / var(--uis) - 40px); text-align: center; pointer-events: none !important; font-size: 12px; text-shadow: 0 1px 3px #000, 0 0 6px #000; color: #d0e8ff; }
 #hud.driving #log { bottom: 150px; }
-#hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 7px 14px; border-radius: 4px; opacity: 0; transition: opacity 0.4s; pointer-events: none !important; max-width: 70vw; text-align: center; }
+#hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 7px 14px; border-radius: 4px; opacity: 0; transition: opacity 0.4s; pointer-events: none !important; max-width: calc(70vw / var(--uis)); text-align: center; }
 #toast { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); background: rgba(40, 60, 30, 0.9); border: 1px solid #7a9a5a; padding: 6px 14px; border-radius: 4px; opacity: 0; transition: opacity 0.5s; pointer-events: none !important; }
 
 /* ---------------- panels */
 .panel { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; resize: both; overflow: hidden; min-width: 260px; min-height: 180px; }
+/* (never bigger than the window: on a small screen a window shrinks, its lists scroll) */
+.panel { max-width: calc(100vw / var(--uis) - 8px); max-height: calc(100vh / var(--uis) - 8px); }
 .ph { height: 24px; background: rgba(0, 0, 0, 0.5); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 8px; cursor: move; flex-shrink: 0; }
 .pt { font-weight: bold; color: #e8e0c8; }
 .px { cursor: pointer; color: var(--dim); padding: 0 4px; }
@@ -214,7 +219,8 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 12px;
 #menu { position: fixed; inset: 0; pointer-events: none; z-index: 500; }
 #menu > * { pointer-events: auto; }
 .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); }
-.mbox { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px 26px; min-width: 300px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); }
+.mbox { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px 26px; min-width: 300px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  max-height: calc(100vh / var(--uis) - 16px); max-width: calc(100vw / var(--uis) - 16px); overflow-y: auto; }
 .mbox.wide { width: 640px; }
 .mbox h2 { margin: 0 0 12px; color: #f0e8c8; font-weight: normal; letter-spacing: 2px; }
 .opt { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 8px 0; }
@@ -241,7 +247,7 @@ kbd { display: inline-block; min-width: 92px; padding: 1px 6px; background: rgba
 
 /* character creation */
 .create { background: rgba(0, 0, 0, 0.6); }
-.cbox { width: min(1100px, 96vw); height: min(680px, 94vh); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); }
+.cbox { width: min(1100px, calc(96vw / var(--uis))); height: min(680px, calc(94vh / var(--uis))); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); }
 .chead { padding: 10px 14px; font-size: 16px; color: #f0e8c8; border-bottom: 1px solid var(--line); letter-spacing: 1px; }
 .ccols { flex: 1; display: flex; min-height: 0; }
 .ccol { width: 240px; padding: 10px; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }

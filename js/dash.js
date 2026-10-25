@@ -10,7 +10,7 @@ const Dash = {
   el() {
     if (this.cv) return this.cv;
     const c = this.cv = document.createElement('canvas');
-    const d = Math.min(2, window.devicePixelRatio || 1);
+    const d = Math.min(3, (window.devicePixelRatio || 1) * Math.max(1, UI.scale || 1));
     c.width = this.W * d; c.height = this.H * d;
     c.style.cssText = 'position:fixed;left:50%;bottom:10px;transform:translateX(-50%);width:' + this.W + 'px;height:' + this.H + 'px;z-index:12;pointer-events:none;display:none';
     c.id = 'dash';

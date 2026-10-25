@@ -878,7 +878,7 @@ const Render = {
     if (this.wmemoW !== w || this.wmemo.size > 30000) { this.wmemo.clear(); this.wmemoW = w; }
     const eid = ((y * w.w + x) << 1) | d, fs = f ? (f.open ? 1 : 0) | (f.smashed ? 2 : 0) | (f.glassOut ? 4 : 0) | (f.broken ? 8 : 0) | (f.curtainsClosed ? 16 : 0) | (f.curtains ? 32 : 0) | ((f.barricade || 0) << 6) : -1;
     let m = this.wmemo.get(eid);
-    if (!m || m.f !== f || m.fs !== fs || m.cut !== cut || m.t !== t || !((this.fno + eid) & 7)) {
+    if (!m || m.rec.gone || m.f !== f || m.fs !== fs || m.cut !== cut || m.t !== t || !((this.fno + eid) & 7)) {
       const col = this.wallColor(x, y, d, t);
       // facade descriptor (material, trim, fixtures); a shared scratch record, so read what we need now
       const st = Facade.edge(x, y, d, t, f, col);
@@ -977,7 +977,7 @@ const Render = {
     // the sprite (a key string built from a dozen fields) is looked up again every 8th frame, staggered by tile, and
     // every frame within reach of the player (what they switch on, open or fill shows at once)
     let m = this.omemo.get(o);
-    if (!m || !((this.fno + x + y) & 7) || (Math.abs(vx - this.npx) < 4 && Math.abs(y - this.npy) < 4)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
+    if (!m || m.rec.gone || !((this.fno + x + y) & 7) || (Math.abs(vx - this.npx) < 4 && Math.abs(y - this.npy) < 4)) { const r = Spr.obj(o); if (!m) this.omemo.set(o, m = { rec: r }); else m.rec = r; }
     const rec = m.rec;
     // per-type animated overlay: ObjArt.a_<type>(ctx, o, X, Y, t, shade, x, y)
     let an = this.anims[o.t];

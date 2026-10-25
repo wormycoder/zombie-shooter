@@ -132,7 +132,8 @@ const Debug = {
   worldAt(sx, sy) { Input.mx = sx; Input.my = sy; return Render.mouseWorld(); },
   mapTile(e) {
     const r = e.target.getBoundingClientRect();
-    return [(e.clientX - r.left - r.width / 2) / MapView.zoom + MapView.cx, (e.clientY - r.top - r.height / 2) / MapView.zoom + MapView.cy];
+    const k = MapView.zoom * UI.scale;
+    return [(e.clientX - r.left - r.width / 2) / k + MapView.cx, (e.clientY - r.top - r.height / 2) / k + MapView.cy];
   },
   startPlace(label, fn, map) { this.place = { label, fn, map: !!map }; UI.hint && UI.hint(label + ' — click to place, Shift+click for more, right-click or Esc to stop', 4); },
 
@@ -276,7 +277,7 @@ const Debug = {
     let c = document.getElementById('dbgchip');
     const want = this.on && !this.shown;
     if (!want) { if (c) c.remove(); return; }
-    if (!c) { c = document.createElement('div'); c.id = 'dbgchip'; c.title = 'Debug mode is on — F2 opens the debug window'; c.textContent = 'DEBUG · F2'; c.onclick = () => { this.shown = true; this.save(); this.render(); }; document.body.appendChild(c); }
+    if (!c) { c = document.createElement('div'); c.id = 'dbgchip'; c.title = 'Debug mode is on — F2 opens the debug window'; c.textContent = 'DEBUG · F2'; c.onclick = () => { this.shown = true; this.save(); this.render(); }; ($('#ui') || document.body).appendChild(c); }
   },
   render() {
     let el = document.getElementById('dbgwin');
@@ -298,14 +299,15 @@ const Debug = {
     const el = document.createElement('div');
     el.id = 'dbgwin';
     el.innerHTML = `<div class="dbg-head"><span class="dbg-title">Debug</span><span class="dbg-hint">F2 hide · Ctrl+click world/map: teleport</span><span class="dbg-off" title="Turn debug mode off (clears all cheats)">Off</span><span class="dbg-x" title="Hide (F2)">×</span></div><div class="dbg-tabs"></div><div class="dbg-body"></div>`;
-    document.body.appendChild(el);
-    const P = this.pos;
-    if (P) { el.style.left = U.clamp(P[0], 0, innerWidth - 120) + 'px'; el.style.top = U.clamp(P[1], 0, innerHeight - 60) + 'px'; }
+    // (in #ui: it scales with the interface; positions in its zoomed px, this.pos in screen px)
+    ($('#ui') || document.body).appendChild(el);
+    const P = this.pos, s = UI.scale;
+    if (P) { el.style.left = U.clamp(P[0] / s, 0, UI.vw() - 120) + 'px'; el.style.top = U.clamp(P[1] / s, 0, UI.vh() - 60) + 'px'; }
     // drag by the title bar
     el.querySelector('.dbg-head').addEventListener('mousedown', (e) => {
       if (e.target.closest('.dbg-x, .dbg-off')) return;
-      const r = el.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
-      const mv = (ev) => { el.style.left = U.clamp(ev.clientX - ox, 0, innerWidth - 120) + 'px'; el.style.top = U.clamp(ev.clientY - oy, 0, innerHeight - 40) + 'px'; el.style.right = 'auto'; };
+      const r = el.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top, s = UI.scale;
+      const mv = (ev) => { el.style.left = U.clamp((ev.clientX - ox) / s, 0, UI.vw() - 120) + 'px'; el.style.top = U.clamp((ev.clientY - oy) / s, 0, UI.vh() - 40) + 'px'; el.style.right = 'auto'; };
       const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); const r2 = el.getBoundingClientRect(); this.pos = [r2.left, r2.top]; this.save(); };
       window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
       e.preventDefault();

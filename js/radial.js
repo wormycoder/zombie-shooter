@@ -125,7 +125,8 @@ const Radial = {
       this.el.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
       ($('#ui') || document.body).appendChild(this.el);
     }
-    this.cx = Math.round(window.innerWidth / 2); this.cy = Math.round(window.innerHeight / 2);
+    // (the wheel is drawn in the interface's zoomed px: the window's centre is there at half its size over the scale)
+    this.cx = Math.round(UI.vw() / 2); this.cy = Math.round(UI.vh() / 2);
     this.hover = -1;
     this.open = true;
     this.el.style.display = 'block';
@@ -142,7 +143,7 @@ const Radial = {
     if (!p || p.dead || p.asleep || !!p.inCar !== this.ctxInside || (this.ctxCar && !p.inCar && U.dist(p.x, p.y, this.ctxCar.x, this.ctxCar.y) > 3)) this.hide();
   },
   onMove(e) {
-    const dx = e.clientX - this.cx, dy = e.clientY - this.cy, d = Math.hypot(dx, dy), n = this.items.length;
+    const s = UI.scale, dx = e.clientX / s - this.cx, dy = e.clientY / s - this.cy, d = Math.hypot(dx, dy), n = this.items.length;
     let h = -1;
     if (d > this.R0 * 0.6 && d < this.R1 + 60 && n) {
       const a = (Math.atan2(dy, dx) + Math.PI / 2 + Math.PI * 2 + Math.PI / n) % (Math.PI * 2);

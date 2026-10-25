@@ -335,7 +335,7 @@ const Versions = {
         ${r.shots.length ? `<div class="ver-shots">${r.shots.map((s, i) => shot(s, k, i)).join('')}</div>` : ''}
         <div class="ver-commits">${r.commits.length ? r.commits.map(c => `<code>${c}</code>`).join('') : '<span>this build</span>'}</div></div>`).join('')
       + '</div></div>';
-    document.body.appendChild(el);
+    ($('#ui') || document.body).appendChild(el);
     const close = () => { el.remove(); window.removeEventListener('keydown', key, true); };
     const key = (e) => {
       const lb = el.querySelector('.ver-lb');

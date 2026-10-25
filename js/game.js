@@ -259,7 +259,10 @@ const Game = {
     requestAnimationFrame((t) => this.loop(t));
     // frame rate cap (settings): run on the display refresh nearest each due time, so a 144 Hz screen capped at 60
     // gets about 60 frames (skipping refreshes by a minimum gap gave it 48)
-    const cap = Settings.v.fps;
+    // menus, the pause screen and a paused game draw at 30 frames a second at most: nothing there needs more, and the
+    // processor and graphics card are left alone
+    const idle = G.mode === 'menu' || G.mode === 'create' || (G.mode === 'play' && (G.paused || UI.modalPause()));
+    const cap = idle ? Math.min(Settings.v.fps || 30, 30) : Settings.v.fps;
     if (this.rLast) this.rIv += (Math.min(50, ts - this.rLast) - this.rIv) * 0.1;
     this.rLast = ts;
     if (cap && this.last) {
@@ -304,6 +307,7 @@ const Game = {
       Menu.drawBackground(dt);
     }
     Input.endFrame();
+    Mem.tick(dt);
     this.fpsMeter(ts);
   },
   // frame rate counter (settings: off / FPS / detailed)
@@ -325,7 +329,8 @@ const Game = {
       txt += '\nframe ' + (1000 / Math.max(1, fps)).toFixed(1) + ' ms · render ' + (pf.rend / n).toFixed(1) + ' ms\nsim ' + (pf.sim / n).toFixed(1) + ' ms · ' + Math.round(pf.steps / sec) + ' steps/s'
         + '\nlight ' + Math.round((Render.lightN || 0) / sec) + '/s · UI ' + Math.round(pf.ui / sec) + '/s (' + (pf.uiMs / Math.max(1, pf.ui)).toFixed(1) + ' ms)'
         + '\nzombies ' + zs.length + ' · near ' + (Zombie.nearN || 0) + ' · updated ' + (Zombie.updN || 0)
-        + '\nground chunks ' + Render.chunks.size + ' · sprites ' + Spr.cache.size;
+        + '\nground chunks ' + Render.chunks.size + ' · sprites ' + Spr.cache.size
+        + '\n' + Mem.text();
     }
     el.innerHTML = txt;
     pf.sim = pf.steps = pf.rend = pf.ui = pf.uiMs = 0; Render.lightN = 0;

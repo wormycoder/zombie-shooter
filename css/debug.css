@@ -1,6 +1,6 @@
 /* debug mode: window, tabs, controls, title-screen switch and the "DEBUG" chip */
 #dbgwin {
-  position: fixed; right: 14px; top: 64px; width: 440px; max-height: calc(100vh - 110px); z-index: 900;
+  position: fixed; right: 14px; top: 64px; width: 440px; max-height: calc(100vh / var(--uis) - 110px); z-index: 900;
   display: flex; flex-direction: column; background: rgba(16, 18, 20, 0.95); border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 4px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7); font: 12px/1.4 Verdana, Geneva, sans-serif; color: #ddd8c8;
   pointer-events: auto; user-select: none;

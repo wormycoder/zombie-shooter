@@ -5,7 +5,40 @@
 const $ = (s, r) => (r || document).querySelector(s);
 const UI = {
   panels: {}, dirty: true, slowT: 0, typing: false, ctxOpen: false, logLines: [],
+  // ---- UI scale. The whole interface (#ui) is CSS-zoomed by --uis: Settings > Display > UI scale, or Auto, which
+  // fits it to the window - smaller on a laptop screen so no window or menu is cut off, a little larger on a very big
+  // screen. Mouse and window coordinates are screen px; things placed by them inside #ui use screen px / UI.scale.
+  scale: 1,
+  autoScale() {
+    const k = Math.min(innerWidth / 1440, innerHeight / 860);
+    const s = k < 1 ? Math.max(0.8, k) : 1 + Math.max(0, k - 1.4) * 0.5;
+    return Math.round(Math.min(1.6, s) * 100) / 100;
+  },
+  applyScale() {
+    const s = Settings.v.uiScale || this.autoScale();
+    if (s === this.scale && this._uis) return;
+    this.scale = s; this._uis = true;
+    document.documentElement.style.setProperty('--uis', s);
+    this.fitPanels();
+  },
+  // the window in the interface's own (zoomed) px
+  vw() { return innerWidth / this.scale; },
+  vh() { return innerHeight / this.scale; },
+  // keep open windows on screen after the window or the scale changes
+  fitPanels() {
+    for (const k in this.panels) this.fitPanel(this.panels[k].el);
+    const d = document.getElementById('dbgwin');
+    if (d && d.style.left) this.fitPanel(d);
+  },
+  fitPanel(el) {
+    const W = this.vw(), H = this.vh();
+    el.style.left = U.clamp(el.offsetLeft, 0, Math.max(0, W - Math.min(el.offsetWidth, W))) + 'px';
+    el.style.top = U.clamp(el.offsetTop, 0, Math.max(0, H - Math.min(el.offsetHeight, H))) + 'px';
+  },
   init() {
+    this.applyScale();
+    window.addEventListener('resize', () => { if (Settings.v.uiScale) this.fitPanels(); else this.applyScale(); });
+    Settings.onChange(() => this.applyScale());
     this.root = $('#ui');
     this.hud = $('#hud');
     this.ctx = $('#ctxmenu');
@@ -216,7 +249,7 @@ const UI = {
     const d = this.panelDefs[k];
     const el = document.createElement('div');
     el.className = 'panel hidden';
-    el.style.left = Math.min(window.innerWidth - d.w - 10, d.x) + 'px'; el.style.top = d.y + 'px';
+    el.style.left = Math.max(0, Math.min(this.vw() - d.w - 10, d.x)) + 'px'; el.style.top = Math.max(0, Math.min(this.vh() - d.h - 10, d.y)) + 'px';
     el.style.width = d.w + 'px'; el.style.height = d.h + 'px';
     el.innerHTML = `<div class="ph"><span class="pt">${d.title}</span><span class="px">✕</span></div><div class="pb"></div>`;
     $('#windows').appendChild(el);
@@ -227,8 +260,8 @@ const UI = {
     const ph = el.querySelector('.ph');
     ph.addEventListener('mousedown', (e) => {
       if (e.target.classList.contains('px')) return;
-      const ox = e.clientX - el.offsetLeft, oy = e.clientY - el.offsetTop;
-      const mv = (ev) => { el.style.left = U.clamp(ev.clientX - ox, 0, window.innerWidth - 60) + 'px'; el.style.top = U.clamp(ev.clientY - oy, 0, window.innerHeight - 30) + 'px'; };
+      const s = this.scale, ox = e.clientX / s - el.offsetLeft, oy = e.clientY / s - el.offsetTop;
+      const mv = (ev) => { el.style.left = U.clamp(ev.clientX / s - ox, 0, this.vw() - 60) + 'px'; el.style.top = U.clamp(ev.clientY / s - oy, 0, this.vh() - 30) + 'px'; };
       const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
       window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
       this.front(el);
@@ -238,7 +271,7 @@ const UI = {
     return P;
   },
   front(el) { this._z = (this._z || 10) + 1; el.style.zIndex = this._z; },
-  open(k) { const P = this.ensurePanel(k); P.open = true; P.el.classList.remove('hidden'); this.front(P.el); this.renderPanel(k); },
+  open(k) { const P = this.ensurePanel(k); P.open = true; P.el.classList.remove('hidden'); this.front(P.el); this.renderPanel(k); this.fitPanel(P.el); },
   close(k) { const P = this.panels[k]; if (!P) return; P.open = false; P.el.classList.add('hidden'); this.hideTip(); if (k === 'map') MapView.dragging = false; },
   toggle(k) {
     if (k === 'inv') {
@@ -640,9 +673,9 @@ const UI = {
     const html = opts.map((o, i) => o.info ? `<div class="ci info">${U.esc(o.label)}</div>` : `<div class="ci ${o.disabled ? 'dis' : ''} ${o.sub ? 'hassub' : ''}" data-i="${i}">${U.esc(o.label)}${o.sub ? '<span class="arr">▸</span><div class="sub">' + o.sub.map((s, j) => `<div class="ci" data-i="${i}" data-j="${j}">${U.esc(s.label)}</div>`).join('') + '</div>' : ''}</div>`).join('');
     this.ctx.innerHTML = html;
     this.ctx.classList.remove('hidden');
-    const r = this.ctx.getBoundingClientRect();
-    this.ctx.style.left = Math.min(x, window.innerWidth - r.width - 8) + 'px';
-    this.ctx.style.top = Math.min(y, window.innerHeight - r.height - 8) + 'px';
+    const r = this.ctx.getBoundingClientRect(), s = this.scale;
+    this.ctx.style.left = Math.max(0, Math.min(x, innerWidth - r.width - 8)) / s + 'px';
+    this.ctx.style.top = Math.max(0, Math.min(y, innerHeight - r.height - 8)) / s + 'px';
     this.ctx.onclick = (e) => {
       const c = e.target.closest('.ci');
       if (!c || c.classList.contains('dis') || c.classList.contains('info')) return;
@@ -658,9 +691,9 @@ const UI = {
   showTip(x, y, html) {
     const t = this.tip;
     t.innerHTML = html; t.classList.remove('hidden');
-    const r = t.getBoundingClientRect();
-    t.style.left = Math.min(x + 16, window.innerWidth - r.width - 6) + 'px';
-    t.style.top = Math.min(y + 12, window.innerHeight - r.height - 6) + 'px';
+    const r = t.getBoundingClientRect(), s = this.scale;
+    t.style.left = Math.max(0, Math.min(x + 16, innerWidth - r.width - 6)) / s + 'px';
+    t.style.top = Math.max(0, Math.min(y + 12, innerHeight - r.height - 6)) / s + 'px';
   },
   hideTip() { this.tip.classList.add('hidden'); },
 
@@ -712,7 +745,7 @@ const UI = {
         const r = e.target.closest('[data-part]');
         if (r) { P.sel = r.dataset.part; this.renderHealth(P); return; }
         const c = e.target.closest('.bodyc');
-        if (c) { const rect = c.getBoundingClientRect(); const pt = this.bodyHit(e.clientX - rect.left, e.clientY - rect.top); if (pt) { P.sel = pt; this.renderHealth(P); } return; }
+        if (c) { const rect = c.getBoundingClientRect(); const pt = this.bodyHit((e.clientX - rect.left) / this.scale, (e.clientY - rect.top) / this.scale); if (pt) { P.sel = pt; this.renderHealth(P); } return; }
         const a = e.target.closest('[data-ha]');
         if (a && P.sel) {
           const [k, uid] = a.dataset.ha.split(':');
@@ -919,7 +952,7 @@ const MapView = {
       cv.addEventListener('wheel', (e) => { e.preventDefault(); this.zoom = U.clamp(this.zoom * (e.deltaY > 0 ? 0.85 : 1.18), Math.min(1.2, 560 / (Wd.gw || Wd.w)), 10); this.draw(); }, { passive: false });
       cv.addEventListener('mousedown', (e) => {
         this.dragging = true; const sx = e.clientX, sy = e.clientY, ox = this.cx, oy = this.cy;
-        const mv = (ev) => { if (!this.dragging) return; this.cx = ox - (ev.clientX - sx) / this.zoom; this.cy = oy - (ev.clientY - sy) / this.zoom; this.draw(); };
+        const mv = (ev) => { if (!this.dragging) return; const k = this.zoom * UI.scale; this.cx = ox - (ev.clientX - sx) / k; this.cy = oy - (ev.clientY - sy) / k; this.draw(); };
         const up = () => { this.dragging = false; window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
         window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
       });

@@ -26,7 +26,8 @@ const PAL_TILE = ['#d8d8d0', '#c8d8e0', '#e0d0c0', '#d0e0d0', '#e8e8e8', '#c0c8c
 const PAL_LINO = ['#c8c0a8', '#b8c0b8', '#d0c8b0', '#a8b0b8', '#c0b8a0', '#d8d0c0', '#b0a898', '#c8c8c0'];
 
 // cache size factor (Sprite cache size setting: Small / Normal / Large)
-const CACHE_K = () => [0.5, 1, 2][Settings.v.cache === undefined ? 1 : Settings.v.cache] || 1;
+// (times Mem.k: lowered while the memory budget is exceeded)
+const CACHE_K = () => ([0.5, 1, 2][Settings.v.cache === undefined ? 1 : Settings.v.cache] || 1) * (typeof Mem !== 'undefined' ? Mem.k : 1);
 function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
 function poly(g, pts, fill, stroke, lw) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
@@ -58,10 +59,14 @@ const Spr = {
     if (this.cache.size > cap) {
       let n = this.cache.size - (cap * 0.8 | 0);
       const old = Facade.tick - 120;
-      for (const [k, r] of this.cache) { if (n <= 0) break; if (r.u < old) { this.cache.delete(k); n--; } }
+      for (const [k, r] of this.cache) { if (n <= 0) break; if (r.u < old) { this.cache.delete(k); this.drop(r); n--; } }
     }
     return rec;
   },
+  // a record put out of a cache: its pictures are let go at once, though the renderer's per-tile memos may still point
+  // at it (they see gone and fetch a new one) - otherwise every memo'd wall or object kept its old pictures alive and
+  // the cache painted duplicates
+  drop(r) { r.gone = true; r.c = null; r.sil = null; },
   // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory). The result is
   // always a new canvas (c may be a CPU canvas, which would be uploaded to the GPU again whenever it is drawn).
   trim(c, ax, ay) {
@@ -318,7 +323,7 @@ const Spr = {
       if (this.wcache.size > cap) {
         let n = this.wcache.size - (cap * 0.8 | 0);
         const old = Facade.tick - 2;
-        for (const [k, r] of this.wcache) { if (n <= 0) break; if (r.u < old) { this.wcache.delete(k); n--; } }
+        for (const [k, r] of this.wcache) { if (n <= 0) break; if (r.u < old) { this.wcache.delete(k); this.drop(r); n--; } }
       }
     }
     rec.u = Facade.tick;
