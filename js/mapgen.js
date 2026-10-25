@@ -664,8 +664,10 @@ const MapGen = {
     for (const c of cands) if (this.tryStairs(b, liv, c)) return true;
     return false;
   },
-  tryStairs(b, liv, c) {
-    const W = this.W, W0 = LV.W0;
+  // stairs up from room rm along its wall c.s (c: a candidate as secondFloor finds them): 3 steps and the landing past
+  // the top one. Null (and nothing left behind) if they would cut the room in two.
+  stairsDown(rm, c) {
+    const W = this.W;
     const dx = c.horiz ? c.sgn : 0, dy = c.horiz ? 0 : c.sgn;
     const at = (k) => {
       const a = c.sgn > 0 ? c.a + k : c.a + 3 - k;
@@ -680,10 +682,30 @@ const MapGen = {
     const base = { dir, ws: c.s, sx: top[0], sy: top[1], ddx: dx, ddy: dy };
     for (let k = 0; k < 3; k++) this.w.obj[T[k][1] * W + T[k][0]] = Object.assign({ t: 'stairs', part: k }, base);
     this.w.obj[T[3][1] * W + T[3][0]] = Object.assign({ t: 'landing' }, base);
-    if (!this.connected(liv)) { for (const [x, y] of T) this.w.obj[y * W + x] = null; return false; }
-    if (this.inRoom(liv, ex, ey)) this.resv.add(ey * W + ex);
-    for (const [x, y] of T) if (this.inRoom(liv, x + ox, y + oy)) this.resv.add((y + oy) * W + x + ox);
+    if (!this.connected(rm)) { for (const [x, y] of T) this.w.obj[y * W + x] = null; return null; }
+    if (this.inRoom(rm, ex, ey)) this.resv.add(ey * W + ex);
+    for (const [x, y] of T) if (this.inRoom(rm, x + ox, y + oy)) this.resv.add((y + oy) * W + x + ox);
     this.w.stairs.push({ x: top[0], y: top[1], dx, dy });
+    return { T, base, ox, oy };
+  },
+  // the stairwell upstairs, once the upper rooms are laid (laying a room clears its objects): railings round the hole,
+  // the top step, the landing and the walkway beside the hole kept free. Returns the hole's tiles.
+  stairsUp(S) {
+    const W = this.W, W0 = LV.W0, { T, base, ox, oy } = S, hole = new Set();
+    for (let k = 0; k < 3; k++) {
+      const [x, y] = T[k];
+      this.w.obj[y * W + x + W0] = Object.assign({ t: k < 2 ? 'railing' : 'stairtop', part: k }, base);
+      hole.add(y * W + x + W0);
+    }
+    this.resv.add(T[3][1] * W + T[3][0] + W0);
+    for (const [x, y] of T) if (World.inb(x + ox + W0, y + oy)) this.resv.add((y + oy) * W + x + ox + W0);
+    return hole;
+  },
+  tryStairs(b, liv, c) {
+    const W = this.W, W0 = LV.W0;
+    const S = this.stairsDown(liv, c);
+    if (!S) return false;
+    const { ox, oy } = S;
     // ---- upper floor layout: a 2-wide hall band through the stairwell, rooms on either side
     let ya, yc, xa, xc;
     if (c.horiz) { ya = Math.min(c.line, c.line + oy); yc = Math.max(c.line, c.line + oy); if (ya - b.y0 === 1) ya = b.y0; if (b.y1 - yc === 1) yc = b.y1; }
@@ -714,14 +736,7 @@ const MapGen = {
     const upRooms = [];
     for (const q of rects) upRooms.push(this.addRoom(b, q === bath ? 'bathroom' : 'bedroom', ...up(q.rc), q === bath ? FL.TILE : fl()));
     // the open stairwell and the landing upstairs
-    const hole = new Set();
-    for (let k = 0; k < 3; k++) {
-      const [x, y] = T[k];
-      this.w.obj[y * W + x + W0] = Object.assign({ t: k < 2 ? 'railing' : 'stairtop', part: k }, base);
-      hole.add(y * W + x + W0);
-    }
-    this.resv.add(T[3][1] * W + T[3][0] + W0);
-    for (const [x, y] of T) if (World.inb(x + ox + W0, y + oy)) this.resv.add((y + oy) * W + x + ox + W0);
+    const hole = this.stairsUp(S);
     this.buildWalls(b, W0);
     for (const rm of upRooms) {
       let cs = this.borderEdges(rm, (x, y) => World.room(x, y) === hall.id && !hole.has(y * W + x) && !this.w.obj[y * W + x]);
@@ -877,7 +892,7 @@ const MapGen = {
     const brick = ['police', 'firestation', 'bank', 'warehouse', 'school', 'church'].includes(type) || r.chance(0.5);
     const b = this.newBuilding(type, x0, y0, x0 + w - 1, y0 + h - 1, { wallType: brick ? WT.BRICK : WT.EXT, roof: 'flat', roofCol: r.pick(PAL.roofFlat), name, alarm: r.chance(Math.min(0.9, this.alarmP() * 4)), front: f });
     const M = this.mapper(x0, y0, w, h, f);
-    const fl = { clinic: FL.TILE, grocery: FL.LINO, hardware: FL.CONCRETE, gunstore: FL.WOOD, pharmacy: FL.LINO, restaurant: FL.TILE, bar: FL.WOOD, clothing: FL.CARPET, bookstore: FL.WOOD, office: FL.CARPET, firestation: FL.CONCRETE, police: FL.LINO, laundromat: FL.TILE, gasstation: FL.LINO, warehouse: FL.CONCRETE }[type] || FL.LINO;
+    const fl = { clinic: FL.TILE, grocery: FL.LINO, hardware: FL.CONCRETE, gunstore: FL.WOOD, pharmacy: FL.LINO, restaurant: FL.TILE, bar: FL.WOOD, clothing: FL.CARPET, bookstore: FL.WOOD, office: FL.CARPET, firestation: FL.CONCRETE, police: FL.LINO, laundromat: FL.TILE, gasstation: FL.LINO, warehouse: FL.CONCRETE, postoffice: FL.LINO, library: FL.CARPET }[type] || FL.LINO;
     const sd = M.D >= 9 ? 3 : 0;
     const sales = this.addRoom(b, type, ...M.rect(0, 0, M.W - 1, M.D - 1 - sd), fl, r.int(0, 7));
     let back = null;
@@ -991,7 +1006,32 @@ const MapGen = {
         break;
       case 'warehouse':
         for (let v = 2; v < sv; v += 3) for (let u = 1; u < W_ - 1; u++) if (u % 5 !== 0) P(u, v, r.chance(0.5) ? 'shelf' : 'crate', 'F');
+        // the loading bay behind: pallets of crates, a workbench (random numbers of its own: the map round it stays put)
+        if (back && this.withRng) this.withRng(b.id * 17 + 3, () => { for (let k = 0; k < 6; k++) this.place(back, 'crate'); this.place(back, 'toolcab'); this.place(back, 'shelf'); });
         break;
+      case 'postoffice':
+        // P.O. boxes along a wall, the service counter across the room (staff through the gap at one end), sorting
+        // shelves behind it, sacks and parcels in the back room
+        for (let v = 1; v < sv - 1; v++) P(0, v, 'locker', 'R');
+        for (let u = 2; u < W_ - 1; u++) P(u, sv - 1, u === (W_ >> 1) ? 'register' : 'counter', 'F');
+        for (let u = 2; u < W_ - 1; u += 2) P(u, sv, 'shelf', 'F');
+        P(W_ - 1, 1, 'desk', 'L');
+        if (back) { for (let k = 0; k < 5; k++) this.place(back, 'crate'); this.place(back, 'shelf'); this.place(back, 'shelf'); }
+        break;
+      case 'library': {
+        // the stacks round the walls and in rows at the back, reading tables up front, the desk by the door
+        for (let v = 1; v < sv; v++) { P(0, v, 'bookshelf', 'R'); P(W_ - 1, v, 'bookshelf', 'L'); }
+        const mu = W_ >> 1;
+        P(mu + 2, 2, 'desk', 'F'); P(mu + 2, 3, 'chair', 'F');
+        for (let u = 3; u < W_ - 3; u += 4) {
+          if (Math.abs(u - mu) < 3) continue;
+          const [x, y] = M.m(u, 2);
+          if (P(u, 2, 'table', 'F')) for (const s of ['N', 'S', 'W', 'E']) { const [dx, dy] = DIRV[s]; if (!this.w.obj[(y + dy) * this.W + x + dx] && World.room(x + dx, y + dy) === sales.id && !this.reserved(x + dx, y + dy) && r.chance(0.8)) this.w.obj[(y + dy) * this.W + x + dx] = this.mkObj('chair', OPP[s]); }
+        }
+        rows('bookshelf', 5, 2, 'F');
+        if (back) { back.type = 'library'; this.place(back, 'desk'); this.place(back, 'desk'); for (let k = 0; k < 3; k++) this.place(back, 'bookshelf'); this.place(back, 'crate'); }
+        break;
+      }
       case 'clinic':
         // waiting room up front, treatment beds and supply cabinets at the back
         for (let u = 2; u < W_ - 2; u++) if (u !== Math.floor(W_ / 2) && u !== Math.floor(W_ / 2) - 1) P(u, 1, 'chair', 'F');
@@ -1241,7 +1281,12 @@ const MapGen = {
         // concrete apron
         if (f === 'N') this.fill(x, y0, x + w - 1, y0, FL.CONCRETE, 0); else this.fill(x, y1, x + w - 1, y1, FL.CONCRETE, 0);
         if (type === 'police') this.police(x + 1, sy, sw, sh, f, names && names.police);
-        else this.store(type, x + 1, sy, sw, sh, f, names[type]);
+        else if (type === 'autorepair') this.autoRepair(x + 1, sy, sw, sh, f, names[type]);
+        else {
+          const b = this.store(type, x + 1, sy, sw, sh, f, names[type]);
+          // about half the main-street shops have a flat upstairs (buildings.js)
+          if (FLAT_SHOPS[type] && this.flatAbove) this.withRng(b.id * 131 + b.x0 * 7 + b.y0, () => this.rng.chance(0.5) && this.flatAbove(b));
+        }
         // trash & lamps around
         const bx = x, by = f === 'N' ? y0 + 11 : y0;
         if (this.free(bx, by)) this.put(bx, by, 'trash', 'S');
@@ -1804,15 +1849,17 @@ const MapGen = {
   // ---- the bigger world's towns, built on their street grids: shops round the main crossing (parking behind), the
   // civic buildings next out, then houses, the lots wider and emptier toward the edge of town
   TOWN_PLANS: {
-    Fairfield: { com: 1, civic: ['church', 'gas'],
-      shops: ['grocery', 'diner', 'hardware', 'bar', 'pharmacy', 'office'],
-      names: { grocery: 'Fairfield General Store', diner: 'Route 9 Diner', hardware: 'Fairfield Feed & Seed', bar: "Hank's Tavern", pharmacy: 'Fairfield Drugs', office: 'Fairfield Post Office', church: 'Fairfield Methodist Church', gas: 'Fairfield Fuel' } },
-    Riverton: { com: 3, civic: ['school', 'church', 'park', 'gas'],
-      shops: ['grocery', 'pharmacy', 'police', 'restaurant', 'bar', 'clinic', 'clothing', 'hardware', 'firestation', 'bookstore', 'laundromat', 'office', 'diner', 'gunstore'],
-      names: { grocery: 'River Valley Foods', pharmacy: 'Riverton Pharmacy', restaurant: 'Riverside Grill', bar: 'The Muddy Bank', clothing: 'Main Street Apparel', hardware: 'Riverton Hardware', bookstore: 'Chapter One Books', laundromat: 'Spin Cycle', office: 'Riverton Savings', diner: "Mel's Diner", gunstore: 'River Arms', school: 'Riverton Elementary', clinic: 'Riverton Medical Clinic', church: "St. Luke's Church", gas: 'Riverton Gas', police: 'Riverton Police', firestation: 'Riverton Fire Dept.' } },
-    Kingsbury: { com: 3, civic: ['courthouse', 'school', 'church', 'motel', 'park', 'industrial'],
-      shops: ['grocery', 'police', 'pharmacy', 'restaurant', 'clinic', 'bar', 'clothing', 'firestation', 'hardware', 'gunstore', 'bookstore', 'office', 'diner', 'laundromat', 'office', 'restaurant', 'bar'],
-      names: { grocery: 'Kingsbury Supermarket', pharmacy: 'County Drug Co.', restaurant: 'The Kingsbury Grill', bar: 'The Crown', clothing: 'Kingsbury Outfitters', hardware: 'Ace of Tools', gunstore: 'Kingsbury Gun Shop', bookstore: 'County Books', office: 'Kingsbury Realty', diner: 'Courthouse Diner', laundromat: 'Kingsbury Coin Laundry', school: 'Kingsbury High School', clinic: 'Kingsbury General Clinic', church: 'First Presbyterian Church', motel: 'Royal Inn Motel', gas: 'Interstate Gas', police: 'Kingsbury Sheriff', firestation: 'Kingsbury Fire Station', courthouse: 'Beacon County Courthouse', industrial: ['Kingsbury Freight', 'County Storage'] } },
+    Fairfield: { com: 2, civic: ['church', 'gas'],
+      shops: ['grocery', 'diner', 'hardware', 'postoffice', 'bar', 'pharmacy', 'autorepair'],
+      names: { grocery: 'Fairfield General Store', diner: 'Route 9 Diner', hardware: 'Fairfield Feed & Seed', bar: "Hank's Tavern", pharmacy: 'Fairfield Drugs', postoffice: 'Fairfield Post Office', autorepair: "Dale's Auto Repair", church: 'Fairfield Methodist Church', gas: 'Fairfield Fuel' } },
+    Riverton: { com: 4, civic: ['school', 'church', 'library', 'park', 'gas'],
+      shops: ['grocery', 'pharmacy', 'police', 'restaurant', 'bar', 'clinic', 'postoffice', 'clothing', 'hardware', 'firestation', 'autorepair', 'bookstore', 'laundromat', 'office', 'diner', 'gunstore'],
+      apts: ['Riverside Apartments', 'Mill Street Apartments'],
+      names: { grocery: 'River Valley Foods', pharmacy: 'Riverton Pharmacy', restaurant: 'Riverside Grill', bar: 'The Muddy Bank', clothing: 'Main Street Apparel', hardware: 'Riverton Hardware', bookstore: 'Chapter One Books', laundromat: 'Spin Cycle', office: 'Riverton Savings', diner: "Mel's Diner", gunstore: 'River Arms', school: 'Riverton Elementary', postoffice: 'Riverton Post Office', autorepair: 'River Road Garage', library: 'Riverton Public Library', clinic: 'Riverton Medical Clinic', church: "St. Luke's Church", gas: 'Riverton Gas', police: 'Riverton Police', firestation: 'Riverton Fire Dept.' } },
+    Kingsbury: { com: 3, civic: ['courthouse', 'school', 'library', 'church', 'motel', 'park', 'industrial'],
+      shops: ['grocery', 'police', 'pharmacy', 'restaurant', 'clinic', 'bar', 'postoffice', 'clothing', 'firestation', 'hardware', 'autorepair', 'gunstore', 'bookstore', 'office', 'diner', 'laundromat'],
+      apts: ['Kingsbury Arms', 'Maple Court', 'Elm Terrace', 'Courthouse Square'],
+      names: { grocery: 'Kingsbury Supermarket', pharmacy: 'County Drug Co.', restaurant: 'The Kingsbury Grill', bar: 'The Crown', clothing: 'Kingsbury Outfitters', hardware: 'Ace of Tools', gunstore: 'Kingsbury Gun Shop', bookstore: 'County Books', office: 'Kingsbury Realty', diner: 'Courthouse Diner', laundromat: 'Kingsbury Coin Laundry', school: 'Kingsbury High School', postoffice: 'Kingsbury Post Office', autorepair: 'Kingsbury Auto & Tire', library: 'Beacon County Library', clinic: 'Kingsbury General Clinic', church: 'First Presbyterian Church', motel: 'Royal Inn Motel', gas: 'Interstate Gas', police: 'Kingsbury Sheriff', firestation: 'Kingsbury Fire Station', courthouse: 'Beacon County Courthouse', industrial: ['Kingsbury Freight', 'County Storage'] } },
   },
   bigTowns() {
     const P = this.big, r = this.rng, W = this.W;
@@ -1829,7 +1876,7 @@ const MapGen = {
         if (B.x1 - B.x0 >= 16 && B.y1 - B.y0 >= 16) blocks.push(B);
       }
       blocks.sort((p, q) => Math.hypot((p.x0 + p.x1) / 2 - mx, (p.y0 + p.y1) / 2 - my) - Math.hypot((q.x0 + q.x1) / 2 - mx, (q.y0 + q.y1) / 2 - my));
-      const civic = plan.civic.slice();
+      const civic = plan.civic.slice(), apts = (plan.apts || []).slice();
       blocks.forEach((B, k) => {
         this.clearObj(B.x0, B.y0, B.x1, B.y1);
         this.mark(B.x0, B.y0, B.x1, B.y1, 1);
@@ -1839,6 +1886,8 @@ const MapGen = {
         let c = civic.length ? civic[0] : null;
         if ((c === 'park' || c === 'industrial') && k < plan.com + 2 && civic.length > 1) c = civic[1];
         if (c && k < plan.com + plan.civic.length + 2) { civic.splice(civic.indexOf(c), 1); this.civicBlock(c, B, names, sp, T); return; }
+        // apartment blocks next (buildings.js)
+        if (apts.length && this.aptBlock && this.withRng(B.x0 * 31 + B.y0, () => this.aptBlock(B, apts))) return;
         this.houseBlock(B.x0, B.y0, B.x1, B.y1, Math.max(0.2, sp));
       });
       // street lights along the grid
@@ -1856,7 +1905,7 @@ const MapGen = {
       const n = Math.max(1, Math.floor(w / 11)), out = [];
       for (let i = 0, left = w; i < n; i++) { const lw = i === n - 1 ? left : Math.floor(left / (n - i)); out.push([shops.length ? shops.shift() : 'house', lw]); left -= lw; }
       // a grocery or a police station takes two plots
-      for (let i = 0; i < out.length - 1; i++) if (out[i][0] === 'grocery' || out[i][0] === 'police') { out[i][1] += out[i + 1][1]; if (out[i + 1][0] !== 'house') shops.unshift(out[i + 1][0]); out.splice(i + 1, 1); }
+      for (let i = 0; i < out.length - 1; i++) if (out[i][0] === 'grocery' || out[i][0] === 'police' || out[i][0] === 'autorepair') { out[i][1] += out[i + 1][1]; if (out[i + 1][0] !== 'house') shops.unshift(out[i + 1][0]); out.splice(i + 1, 1); }
       return out;
     };
     this.commercialRow(B.x0, B.y0, B.x1, B.y0 + 11, 'N', row(), names);
@@ -1905,7 +1954,7 @@ const MapGen = {
       rest(y0 + 12); return;
     }
     // a public building fronting the north street, its lot behind
-    const bw = Math.min(w - 2, c === 'courthouse' ? 26 : c === 'police' ? 22 : 20), bh = c === 'courthouse' ? 14 : c === 'police' ? 12 : 10;
+    const bw = Math.min(w - 2, c === 'courthouse' ? 26 : c === 'police' ? 22 : 20), bh = c === 'courthouse' ? 14 : c === 'police' || c === 'library' ? 12 : 10;
     const bx = x0 + ((w - bw) >> 1), by = y0 + (c === 'courthouse' ? 4 : 1);
     if (c === 'police') { const b = this.police(bx, by, bw, bh, 'N'); if (b) { b.name = names.police; const l = this.w.labels[this.w.labels.length - 1]; if (l && l.text === 'Police Station') l.text = names.police; } }
     else this.store(c === 'courthouse' ? 'office' : c, bx, by, bw, bh, 'N', names[c]);
@@ -2154,8 +2203,8 @@ const MapGen = {
     this.w.zones.push({ x0: 2, y0: 145, x1: 44, y1: 232, n: 18 });
     // indoor zombies per building
     for (const b of this.w.buildings) {
-      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2, barracks: 4, prison: 6, tower: 0.5, hangar: 1, garage: 2 }[b.type];
-      if (b.zIndoor === undefined) b.zIndoor = n === undefined ? 2 : n;
+      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2, barracks: 4, prison: 6, tower: 0.5, hangar: 1, garage: 2, apartments: 4, library: 3, postoffice: 2, autorepair: 2 }[b.type];
+      if (b.zIndoor === undefined) b.zIndoor = (n === undefined ? 2 : n) + (b.flat ? 1 : 0);
     }
   },
 };

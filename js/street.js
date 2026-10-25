@@ -18,6 +18,7 @@ const SD = {
   STOP: 5, STOP_S_DASH: 9, STOP_W_DASH: 10, SW_CRACK: 11, SW_STAIN: 14, SW_LITTER: 15, SW_VALVE: 16, SW_PATCH: 17,
   MANHOLE: 18, VAULT: 19, DRAIN: 20, CRACK: 24, PATCH: 27, POTHOLE: 29, OIL: 30, TAR: 32, EDGE: 33,
   STALL_V: 37, STALL_U: 38, WSTOP_U: 39, WSTOP_V: 40, SCHOOL: 41, SLOW: 43, LITTER: 45, SKID_U: 46, SKID_V: 47, GLASS: 48, BUS: 49,
+  WSTOP_N: 90, WSTOP_W: 91,
 };
 const ST_STOP_CODE = [5, 6, 7, 8]; // stop bar on edge N, W, S, E
 
@@ -388,6 +389,8 @@ Object.assign(DECO_ART, {
   [SD.STALL_U]: (g, P) => { poly(g, stQ(P, 0, 0.465, 1, 0.535), ST_WHITE); stWear(g, P, new RNG(38), 12, 2); },
   [SD.WSTOP_U]: (g, P, ax, ay) => { const Q = (u, v, z) => isoP(ax, ay, u, v, z); stBar(g, Q, 0.2, 0.76, 0.8, 0.88); },
   [SD.WSTOP_V]: (g, P, ax, ay) => { const Q = (u, v, z) => isoP(ax, ay, u, v, z); stBar(g, Q, 0.76, 0.2, 0.88, 0.8); },
+  [SD.WSTOP_N]: (g, P, ax, ay) => { const Q = (u, v, z) => isoP(ax, ay, u, v, z); stBar(g, Q, 0.2, 0.12, 0.8, 0.24); },
+  [SD.WSTOP_W]: (g, P, ax, ay) => { const Q = (u, v, z) => isoP(ax, ay, u, v, z); stBar(g, Q, 0.12, 0.2, 0.24, 0.8); },
   // words
   [SD.SCHOOL]: (g, P) => stWord(g, P, 'SCHOOL', 0),
   [SD.SCHOOL + 1]: (g, P) => stWord(g, P, 'SCHOOL', 1),
@@ -1395,6 +1398,7 @@ const ST_SOFT = []; for (const f of [FL.GRASS, FL.GRASS2, FL.FOREST, FL.DIRT, FL
 const ST_RING = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
 Object.assign(MapGen, {
   streetPass() {
+    this.stLots();
     this.stSetup();
     this.stSurface();
     this.stJunctions();
@@ -1407,6 +1411,69 @@ Object.assign(MapGen, {
     this.stBusStops();
     this.stTrouble();
     this.stCountry();
+  },
+  // ---------------------------------------------------------------- car parks
+  // Every plain rectangular lot is painted: stalls in two facing rows with the aisle between (one row on a shallow
+  // lot), a wheel stop at the head of each, lights at the ends of the aisle, and cars left in about a third of the
+  // stalls - the loose cars dropped in the lot before are parked in them. Random numbers of its own (the rest of
+  // the street pass stays as it was); lots with army trucks are left alone.
+  stLots() {
+    const W = this.W, F = this.w.floor, seen = new Uint8Array(W * this.H);
+    for (let y = 1; y < this.H - 1; y++) for (let x = 1; x < this.GW - 1; x++) {
+      const i0 = y * W + x;
+      if (seen[i0] || F[i0] !== FL.PARKING || this.w.room[i0] >= 0) continue;
+      const st = [i0];
+      let n = 0, x0 = x, y0 = y, x1 = x, y1 = y;
+      seen[i0] = 1;
+      while (st.length) {
+        const i = st.pop(), ix = i % W, iy = (i / W) | 0;
+        n++; if (ix < x0) x0 = ix; if (ix > x1) x1 = ix; if (iy < y0) y0 = iy; if (iy > y1) y1 = iy;
+        for (const k of [i + 1, i - 1, i + W, i - W]) if (!seen[k] && F[k] === FL.PARKING && this.w.room[k] < 0) { seen[k] = 1; st.push(k); }
+      }
+      if (n >= 24 && n >= (x1 - x0 + 1) * (y1 - y0 + 1) * 0.92) this.withRng(x0 * 7 + y0 * 131, () => this.stLot(x0, y0, x1, y1));
+    }
+  },
+  stLot(x0, y0, x1, y1) {
+    const W = this.W, D = this.w.deco, r = this.rng, lw = x1 - x0 + 1, ld = y1 - y0 + 1;
+    const inLot = (sp) => sp.x >= x0 && sp.x < x1 + 1 && sp.y >= y0 && sp.y < y1 + 1;
+    if (this.w.carSpots.some(sp => inLot(sp) && sp.kind === 'army')) return;
+    // rows of stalls run along the lot's long side; a: along a row, c: across
+    const along = lw >= ld, L = along ? lw : ld, Dp = along ? ld : lw;
+    if (Dp < 4 || L < 5) return;
+    const T = (a, c) => along ? [x0 + a, y0 + c] : [x0 + c, y0 + a];
+    const rows = Dp >= 8 ? [[0, -1], [Dp - 3, 1]] : [[0, -1]];
+    // the plain cars already standing in the lot are taken out and parked in stalls instead
+    const loose = this.w.carSpots.filter(sp => inLot(sp) && !sp.kind && !sp.repair).length;
+    this.w.carSpots = this.w.carSpots.filter(sp => !(inLot(sp) && !sp.kind && !sp.repair));
+    const others = this.w.carSpots.filter(sp => Math.abs(sp.x - (x0 + x1) / 2) < lw / 2 + 4 && Math.abs(sp.y - (y0 + y1) / 2) < ld / 2 + 4);
+    const stalls = [];
+    for (const [c0, side] of rows) {
+      for (let a = 1; a < L - 1; a += 2) for (let c = c0; c < c0 + 3; c++) {
+        const [x, y] = T(a, c), i = y * W + x;
+        if (!D[i] && !this.w.obj[i]) D[i] = along ? SD.STALL_V : SD.STALL_U;
+      }
+      for (let a = 1; a + 2 < L; a += 2) {
+        const co = side < 0 ? c0 : c0 + 2, [sx, sy] = T(a + 1, co), si = sy * W + sx;
+        let ok = true;
+        for (let c = c0; c < c0 + 3 && ok; c++) {
+          const [x, y] = T(a + 1, c);
+          if (this.w.obj[y * W + x] || World.tileSolid(x, y) || this.reservedOutside(x, y)) ok = false;
+        }
+        if (!ok) continue;
+        if (!D[si]) D[si] = along ? (side < 0 ? SD.WSTOP_N : SD.WSTOP_U) : (side < 0 ? SD.WSTOP_W : SD.WSTOP_V);
+        const [cx, cy] = T(a + 1, c0 + 1), px = cx + 0.5, py = cy + 0.5;
+        // nose in, toward the head of the stall
+        const ang = along ? (side < 0 ? -Math.PI / 2 : Math.PI / 2) : (side < 0 ? Math.PI : 0);
+        if (others.some(sp => Math.hypot(sp.x - px, sp.y - py) < 2.9)) continue;
+        stalls.push({ x: px, y: py, a: ang });
+      }
+    }
+    // lights at both ends of the aisle
+    const mid = Dp >> 1;
+    for (const a of [0, L - 1]) { const [x, y] = T(a, mid); if (this.free(x, y) && !this.reservedOutside(x, y) && !this.w.obj[y * W + x]) this.put(x, y, 'st_lotlight', 'S'); }
+    r.shuffle(stalls);
+    const want = Math.max(loose, Math.round(stalls.length * r.f(0.25, 0.45)));
+    for (const sp of stalls.slice(0, want)) this.w.carSpots.push({ x: Math.round((sp.x + r.f(-0.06, 0.06)) * 100) / 100, y: Math.round((sp.y + r.f(-0.06, 0.06)) * 100) / 100, a: Math.round((sp.a + r.f(-0.04, 0.04)) * 1000) / 1000 });
   },
   // ---------------------------------------------------------------- shared helpers
   stSetup() {
@@ -1677,12 +1744,12 @@ Object.assign(MapGen, {
 // ---------------------------------------------------------------------------
 // Generation part 2: storefronts, gas stations, motel, school, parks, bus stops, trouble, countryside
 // ---------------------------------------------------------------------------
-const ST_SHOPS = { grocery: 1, hardware: 1, gunstore: 1, pharmacy: 1, restaurant: 1, bar: 1, clothing: 1, bookstore: 1, office: 1, firestation: 1, laundromat: 1, diner: 1, clinic: 1, police: 1 };
+const ST_SHOPS = { grocery: 1, hardware: 1, gunstore: 1, pharmacy: 1, restaurant: 1, bar: 1, clothing: 1, bookstore: 1, office: 1, firestation: 1, laundromat: 1, diner: 1, clinic: 1, police: 1, postoffice: 1, library: 1, autorepair: 1 };
 // props against the shop window, per store type
 const ST_KIT = {
   grocery: ['icechest', 'vending', 'corral'], hardware: ['pallet2', 'propane', 'pallet'], gunstore: ['bench'], pharmacy: ['bench', 'planter'],
   restaurant: ['table', 'table'], diner: ['table', 'table'], bar: ['bench', 'planter'], clothing: ['planter', 'planter'],
-  bookstore: ['bench', 'planter'], office: ['planter', 'bench', 'planter'], laundromat: ['bench', 'vending'], clinic: ['bench', 'planter'], police: ['bench', 'planter'],
+  bookstore: ['bench', 'planter'], office: ['planter', 'bench', 'planter'], postoffice: ['bench', 'planter'], library: ['bench', 'planter', 'bench'], autorepair: ['pallet', 'vending'], laundromat: ['bench', 'vending'], clinic: ['bench', 'planter'], police: ['bench', 'planter'],
 };
 const ST_WORD = { grocery: 'sale', hardware: 'sale', restaurant: 'eat', diner: 'eat', bar: 'beer', clothing: 'sale', bookstore: 'books', gunstore: 'open', pharmacy: 'open', laundromat: 'open' };
 const ST_CARS = [['sedan', 5], ['hatchback', 2.5], ['wagon', 1.5], ['suv', 2], ['pickup', 2.5], ['van', 1.5], ['taxi', 0.4], ['sports', 0.4]];
@@ -1738,7 +1805,7 @@ Object.assign(MapGen, {
         const lane = S ? wy + 1 : wy - 1, cx = (b.x0 + b.x1 + 1) / 2;
         for (let j = 0; j < (b.type === 'police' ? 2 : 1); j++) this.stTryCar(cx - 1.6 + j * 3.4, lane + 0.5 + (S ? 0.25 : -0.25), S ? Math.PI : 0, { kind: b.type === 'police' ? 'police' : 'ambulance' });
       }
-      if (b.type === 'police' || b.type === 'firestation') {
+      if (b.type === 'police' || b.type === 'firestation' || b.type === 'postoffice') {
         const fx = [b.x0, b.x1].find(x => this.stFree(x, ay) && !nearDoor(x));
         if (fx !== undefined) this.put(fx, ay, 'st_flagpole', 'S', { v: r.int(0, 7) });
       }

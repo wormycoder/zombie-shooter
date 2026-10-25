@@ -39,7 +39,7 @@ function poly(g, pts, fill, stroke, lw) {
 function line(g, a, b, col, w) { g.strokeStyle = col; g.lineWidth = w || 1; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
 
 // floor decal painters registered by other modules: DECO_ART[code] = (g, P, ax, ay) => {...}
-// codes: 1-9 road markings (sprites.js), 10-49 street details (street.js), 50-89 yards (yard.js)
+// codes: 1-9 road markings (sprites.js), 10-49 street details (street.js), 50-89 yards (yard.js), 90-99 car parks (street.js)
 const DECO_ART = {};
 const Spr = {
   // furniture, ground tiles, props: bounded by the Sprite cache size setting; past it the sprites not drawn for the
@@ -920,7 +920,7 @@ const Facade = {
     const plinth = mat === 'brick' ? 'brick' : mat === 'metal' ? 'metal' : mat === 'trailer' ? 'skirt' : (mat === 'log' || t === 'barn' || t === 'farmhouse') ? 'stone' : 'conc';
     const gut = flat || mat === 'log' || shed ? '' : mat === 'brick' ? r.pick(['#e8e6e0', '#5a4636']) : r.pick(['#ecebe6', '#ecebe6', trim, '#6a5646']);
     const shop = !house && !shed && flat && t !== 'trailer';
-    const awn = shop && !/police|school|firestation|warehouse|gasstation|clinic|bank/.test(t) && r.chance(0.72) ? r.pick(this.AWN) : null;
+    const awn = shop && !/police|school|firestation|warehouse|gasstation|clinic|bank|apartments|autorepair|library|postoffice/.test(t) && r.chance(0.72) ? r.pick(this.AWN) : null;
     const frame = r.pick(['#4a4036', '#a9adb1', '#2c2c2c']), sign = r.pick(this.SIGN), acc = r.pick(this.ACC);
     const gm = house && (mat === 'clap' || mat === 'vinyl') ? r.weighted([[mat, 5], ['scale', 1.6], ['batten', 1]]) : mat;
     let num = 0;
@@ -949,7 +949,8 @@ const Facade = {
     if (t === 'kitchen') return 'k';
     if (bt === 'trailer') return 'p';
     if (bt === 'church') return 'c';
-    if (bt === 'school' || bt === 'police' || bt === 'clinic' || bt === 'firestation') return 'e';
+    if (bt === 'autorepair') return 'g';
+    if (bt === 'school' || bt === 'police' || bt === 'clinic' || bt === 'firestation' || bt === 'library' || bt === 'postoffice') return 'e';
     if (bt === 'house' || bt === 'farmhouse' || bt === 'motel') { const h = this.hash(rm.id * 13 + 5) % 5; return h < 3 ? 'w' + h : ''; }
     return '';
   },

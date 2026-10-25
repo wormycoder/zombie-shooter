@@ -361,6 +361,12 @@ const Vehicles = {
       if (R.chance(0.15)) c.doorOpen |= R.pick([2, 4, 8]);
       if (R.chance(0.2)) c.trunkOpen = true;
       c.loot = 'car_jam';
+    } else if (sp.repair) {
+      // in a workshop for repair: the hood up, a part or a wheel off, the key left in it
+      spread(R.f(40, 75), -15, 8);
+      c.hoodOpen = true; c.keyIn = R.chance(0.7); c.locked = false; c.alarm = false; c.gas = R.f(0.05, 0.5);
+      P[R.pick(['battery', 'muffler', 'brakes', 'suspension', R.pick(CAR_TIRES)])] = -1;
+      if (R.chance(0.4)) P[R.pick(['engine', 'brakes', 'suspension'])] = R.int(5, 30);
     } else if (sp.driveway !== undefined) {
       spread(R.f(60, 100), -12, 8);
       c.gas = R.f(0.12, 0.9); c.locked = R.chance(0.75);
