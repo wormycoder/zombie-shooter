@@ -802,6 +802,8 @@ const Save = {
     MIN_PER_SEC = 24 * 60 / (G.sb.day * 3600);
     Items.setUidBase(s.uid); _zid = s.zid; _carId = s.cid;
     G.cars = s.cars;
+    // (vehicles grew in 000.020: a car saved in a tight spot is nudged clear if it can be)
+    for (const c of G.cars) if (CAR_TYPES[c.type] && c.id !== (s.player && s.player.inCar)) Vehicles.settle(c, true);
     Vehicles.active = null;
     if (typeof CarArt !== 'undefined' && CarArt.flush) CarArt.flush();
     G.zombies = s.zombies;

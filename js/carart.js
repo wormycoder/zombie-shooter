@@ -94,7 +94,8 @@ Object.assign(CarArt, {
   // F maps car-local points to canvas pixels for heading a at scale sc around (ox, oy).
   // tilt [d0, df, ds] lowers the body by d0 + df*f + ds*s (missing tyres, burnt shells).
   proj(a, ox, oy, sc, tilt) {
-    const ca = Math.cos(a), sa = Math.sin(a), kx = HTW * sc, ky = HTH * sc, kz = ZU * sc;
+    // (models are built at half scale: CAR_K brings them up to the vehicles' footprints)
+    const ca = Math.cos(a), sa = Math.sin(a), kx = HTW * sc * CAR_K, ky = HTH * sc * CAR_K, kz = ZU * sc * CAR_K;
     const t = tilt || [0, 0, 0];
     return {
       ca, sa, sc, ox, oy, b: 1, tilt: true, glass: null, cf: ca + sa, cs: ca - sa,
@@ -614,11 +615,11 @@ Object.assign(CarArt, {
     const k = rec.sc || CA_SC, x0 = X - rec.ax / k, y0 = Y - rec.ay / k, w = rec.c.width / k, h = rec.c.height / k;
     const lit = !!(c.engine && !c.burnt), night = 1 - U.clamp((G.light.amb - 0.25) / 0.5, 0, 1);
     const a = rec.a, ca = Math.cos(a), sa = Math.sin(a), tl = M.tilt;
-    const LP = (f, sd, z) => { z -= tl[0] + tl[1] * f + tl[2] * sd; const dx = f * ca - sd * sa, dy = f * sa + sd * ca; return [X + (dx - dy) * HTW, Y + (dx + dy) * HTH - z * ZU]; };
+    const K = CAR_K, LP = (f, sd, z) => { z -= tl[0] + tl[1] * f + tl[2] * sd; const dx = (f * ca - sd * sa) * K, dy = (f * sa + sd * ca) * K; return [X + (dx - dy) * HTW, Y + (dx + dy) * HTH - z * K * ZU]; };
     const heads = lit && c.lightsOn && M.lt.some(L => L.k === 'h' && !L.broken);
     // headlight beam on the ground ahead (under the car)
     if (heads && night > 0.05) {
-      const C = LP(M.hl + 2.3, 0, 0), u = [(ca - sa) * HTW * 2.4, (ca + sa) * HTH * 2.4], v = [(-sa - ca) * HTW * 1.25, (-sa + ca) * HTH * 1.25];
+      const C = LP(M.hl + 2.3, 0, 0), u = [(ca - sa) * HTW * 2.4 * K, (ca + sa) * HTH * 2.4 * K], v = [(-sa - ca) * HTW * 1.25 * K, (-sa + ca) * HTH * 1.25 * K];
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.3 * night;
       ctx.transform(u[0], u[1], v[0], v[1], C[0], C[1]); ctx.drawImage(this.glow('h'), -1, -1, 2, 2);
       ctx.restore();
@@ -1143,7 +1144,8 @@ Object.assign(CarArt, {
   // ---------------------------------------------------------------- model assembly
   build(mk) {
     const S = this.parseKey(mk);
-    const T = CAR_TYPES[S.type] || { len: 2.3, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52 };
+    // the model is built at its half scale (the footprint over CAR_K); proj draws it CAR_K times bigger
+    const T0 = CAR_TYPES[S.type], T = T0 ? Object.assign({}, T0, { len: T0.len / CAR_K, wid: T0.wid / CAR_K }) : { len: 2.3, wid: 1.05, h: 0.72, cab: [-0.32, 0.22], cabH: 0.52 };
     const M = { parts: [], wheels: [], lt: [], tilt: [0, 0, 0], S, T, hl: T.len / 2, hw: T.wid / 2, seat: [0, -T.wid * 0.2, T.h + 0.12], bar: null };
     // cosmetic damage derived from the key: faded paint, crumpled ends, a cracked windshield
     S.col0 = S.col;

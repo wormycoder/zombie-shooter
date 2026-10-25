@@ -833,7 +833,8 @@ const MapGen = {
         tiles.push([x, y]);
         x += fdx; y += fdy;
       }
-      if (tiles.length >= 3 && r.chance(0.55)) {
+      // (a car needs four tiles of it)
+      if (tiles.length >= 4 && r.chance(0.55)) {
         const t = tiles[Math.min(tiles.length - 1, 1)];
         this.w.carSpots.push({ x: t[0] + 0.5 + px * 0.5 + fdx * 0.5, y: t[1] + 0.5 + py * 0.5 + fdy * 0.5, a: Math.atan2(fdy, fdx), driveway: b.id });
       }

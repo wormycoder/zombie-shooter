@@ -1441,27 +1441,30 @@ Object.assign(MapGen, {
     const along = lw >= ld, L = along ? lw : ld, Dp = along ? ld : lw;
     if (Dp < 4 || L < 5) return;
     const T = (a, c) => along ? [x0 + a, y0 + c] : [x0 + c, y0 + a];
-    const rows = Dp >= 8 ? [[0, -1], [Dp - 3, 1]] : [[0, -1]];
+    // stalls as deep as a car (DS deep), two facing rows when there is room for an aisle between
+    const DS = Math.ceil(CAR_TYPES.sedan.len), rows = Dp >= 2 * DS + 2 ? [[0, -1], [Dp - DS, 1]] : Dp >= DS + 1 ? [[0, -1]] : [];
+    if (!rows.length) return;
     // the plain cars already standing in the lot are taken out and parked in stalls instead
     const loose = this.w.carSpots.filter(sp => inLot(sp) && !sp.kind && !sp.repair).length;
     this.w.carSpots = this.w.carSpots.filter(sp => !(inLot(sp) && !sp.kind && !sp.repair));
     const others = this.w.carSpots.filter(sp => Math.abs(sp.x - (x0 + x1) / 2) < lw / 2 + 4 && Math.abs(sp.y - (y0 + y1) / 2) < ld / 2 + 4);
     const stalls = [];
     for (const [c0, side] of rows) {
-      for (let a = 1; a < L - 1; a += 2) for (let c = c0; c < c0 + 3; c++) {
+      for (let a = 1; a < L - 1; a += 2) for (let c = c0; c < c0 + DS; c++) {
         const [x, y] = T(a, c), i = y * W + x;
         if (!D[i] && !this.w.obj[i]) D[i] = along ? SD.STALL_V : SD.STALL_U;
       }
       for (let a = 1; a + 2 < L; a += 2) {
-        const co = side < 0 ? c0 : c0 + 2, [sx, sy] = T(a + 1, co), si = sy * W + sx;
+        const co = side < 0 ? c0 : c0 + DS - 1, [sx, sy] = T(a + 1, co), si = sy * W + sx;
         let ok = true;
-        for (let c = c0; c < c0 + 3 && ok; c++) {
+        for (let c = c0; c < c0 + DS && ok; c++) {
           const [x, y] = T(a + 1, c);
           if (this.w.obj[y * W + x] || World.tileSolid(x, y) || this.reservedOutside(x, y)) ok = false;
         }
         if (!ok) continue;
         if (!D[si]) D[si] = along ? (side < 0 ? SD.WSTOP_N : SD.WSTOP_U) : (side < 0 ? SD.WSTOP_W : SD.WSTOP_V);
-        const [cx, cy] = T(a + 1, c0 + 1), px = cx + 0.5, py = cy + 0.5;
+        // the car's middle half way down the stall
+        const [cx, cy] = T(a + 1, c0), px = cx + 0.5 + (along ? 0 : DS / 2 - 0.5), py = cy + 0.5 + (along ? DS / 2 - 0.5 : 0);
         // nose in, toward the head of the stall
         const ang = along ? (side < 0 ? -Math.PI / 2 : Math.PI / 2) : (side < 0 ? Math.PI : 0);
         if (others.some(sp => Math.hypot(sp.x - px, sp.y - py) < 2.9)) continue;
@@ -1507,7 +1510,7 @@ Object.assign(MapGen, {
   stIn(x, y) { for (const q of this.stBoxes) if (x >= q[0] && x <= q[2] && y >= q[1] && y <= q[3]) return true; return false; },
   stRoad(x, y) { const f = this.w.floor[y * this.W + x]; return f === FL.ASPHALT || f === FL.PARKING; },
   stCarMark(sp) {
-    const L = (sp.kind === 'bus' ? 4.7 : sp.kind === 'firetruck' || sp.kind === 'army' ? 3.5 : 2.6) / 2 + 1.1, S = 1.55;
+    const L = this.stLen(sp.kind) / 2 + 1.1, S = this.stWid(sp.kind) / 2 + 0.8;
     const ca = Math.cos(sp.a), sa = Math.sin(sp.a), R = Math.ceil(L + 1), cx = Math.floor(sp.x), cy = Math.floor(sp.y);
     for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) {
       if (x < 0 || y < 0 || x >= this.GW || y >= this.H) continue;
@@ -1518,6 +1521,9 @@ Object.assign(MapGen, {
     }
   },
   stSpot(sp) { this.w.carSpots.push(sp); this.stCarMark(sp); return sp; },
+  // a planned car's size: its type's, or (the type picked when it spawns) the longest of the everyday ones
+  stLen(kind) { return CAR_TYPES[kind] ? CAR_TYPES[kind].len : CAR_TYPES.van.len; },
+  stWid(kind) { return CAR_TYPES[kind] ? CAR_TYPES[kind].wid : CAR_TYPES.van.wid; },
   // a free outdoor ground tile that is not a door front, reserved, or next to a car spot
   stFree(x, y) {
     if (x < 1 || y < 1 || x >= this.GW - 1 || y >= this.H - 1) return false;
@@ -1803,7 +1809,8 @@ Object.assign(MapGen, {
       // emergency vehicles at the kerb
       if (b.type === 'police' || b.type === 'clinic') {
         const lane = S ? wy + 1 : wy - 1, cx = (b.x0 + b.x1 + 1) / 2;
-        for (let j = 0; j < (b.type === 'police' ? 2 : 1); j++) this.stTryCar(cx - 1.6 + j * 3.4, lane + 0.5 + (S ? 0.25 : -0.25), S ? Math.PI : 0, { kind: b.type === 'police' ? 'police' : 'ambulance' });
+        const gap = this.stLen(b.type === 'police' ? 'police' : 'ambulance') + 0.8;
+        for (let j = 0; j < (b.type === 'police' ? 2 : 1); j++) this.stTryCar(cx - gap / 2 + j * gap, lane + 0.5 + (S ? 0.25 : -0.25), S ? Math.PI : 0, { kind: b.type === 'police' ? 'police' : 'ambulance' });
       }
       if (b.type === 'police' || b.type === 'firestation' || b.type === 'postoffice') {
         const fx = [b.x0, b.x1].find(x => this.stFree(x, ay) && !nearDoor(x));
@@ -1839,12 +1846,12 @@ Object.assign(MapGen, {
   },
   // ---------------------------------------------------------------- vehicles placed by this pass
   stCarOK(x, y, a, kind, loose) {
-    const len = kind === 'bus' ? 4.7 : kind === 'firetruck' || kind === 'army' ? 3.5 : 2.6;
+    const len = this.stLen(kind), wid = this.stWid(kind);
     const ca = Math.cos(a), sa = Math.sin(a);
     for (const sp of this.w.carSpots) {
       const dx = sp.x - x, dy = sp.y - y, d = Math.sqrt(dx * dx + dy * dy);
       if (d < 2.75) return false;
-      const ol = sp.kind === 'bus' ? 4.7 : sp.kind === 'firetruck' || sp.kind === 'army' ? 3.5 : 2.6;
+      const ol = this.stLen(sp.kind);
       if (!loose && Math.abs(-dx * sa + dy * ca) < 0.8 && Math.abs(dx * ca + dy * sa) < Math.max(3, (len + ol) / 2 + 0.4)) return false;
     }
     for (let f = -len / 2; f <= len / 2 + 0.01; f += len / 4) for (const s of [-0.5, 0.5]) {

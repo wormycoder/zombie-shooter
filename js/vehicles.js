@@ -20,6 +20,11 @@ const CAR_TYPES = {
   bus: { n: 'School Bus', len: 4.6, wid: 1.25, h: 1.15, cab: [-0.48, 0.46], cabH: 0.45, maxV: 21, acc: 3.0, trunk: 30, cols: ['#e8b020'], m: 10, br: 5, grip: 0.85, st: 0.5, rev: 3, drv: 'r', hd: true, horn: 'bus', doors: 4, pitch: 0.55, fuel: 1.8 },
   army: { n: 'Military Truck', len: 3.1, wid: 1.25, h: 1.0, cab: [0.2, 0.48], cabH: 0.55, maxV: 24, acc: 4.0, trunk: 80, cols: ['#4a5a3a'], m: 6, br: 6, grip: 0.95, st: 0.5, rev: 4, drv: '4', hd: true, horn: 'truck', doors: 2, pitch: 0.65, fuel: 1.7 },
 };
+// The vehicles' bodies (CarArt) are real late-80s cars at half scale, fitted to these footprints, which made them toys
+// beside the people and the houses: every vehicle is CAR_K times that - its footprint here (what it hits, where it
+// parks, its wheelbase) and its drawing - as big as the two-tile lanes allow
+const CAR_K = 1.45;
+for (const T of Object.values(CAR_TYPES)) { T.len = Math.round(T.len * CAR_K * 100) / 100; T.wid = Math.round(T.wid * CAR_K * 100) / 100; }
 // Vehicle parts. grp: mechanics window group; item: part item (heavy-duty vehicles use item + 'HD' unless noHD);
 // tools/sk/t: tools, Mechanics level and seconds to (un)install; bay: needs the hood open; under: needs a jack;
 // w: weight in the overall condition; f/s: where on the car it sits (front/back, left/right) for the mechanic.
@@ -185,7 +190,7 @@ const Vehicles = {
     for (const sp of spots) {
       const type = sp.kind && CAR_TYPES[sp.kind] ? sp.kind : this.pickType(sp);
       const c = this.mk(type, sp.x, sp.y, sp.a);
-      if (this.overlapsCar(c, 0.35)) continue;
+      if (!this.settle(c)) continue;
       this.condition(c, sp);
       G.cars.push(c);
       this.placeKey(c, sp);
@@ -327,6 +332,20 @@ const Vehicles = {
       if (Math.abs(d[0] * n[0] + d[1] * n[1]) > ra + rb) return false;
     }
     return true;
+  },
+  // a parked car clear of walls, solid things and the other cars: where it stands, else nudged along its length or
+  // sideways a little (a spot planned for a smaller car, a tight driveway). False (and back where it was) if it will
+  // not fit anywhere near; keep: a car from a save stays put then
+  settle(c, keep) {
+    const x0 = c.x, y0 = c.y, ca = Math.cos(c.a), sa = Math.sin(c.a);
+    const fits = () => !this.collides(c, c.x, c.y, c.a) && !this.overlapsCar(c, 0.15);
+    if (fits()) return true;
+    for (const f of [0.3, -0.3, 0.6, -0.6, 1, -1, 1.5, -1.5]) for (const s of [0, 0.3, -0.3, 0.6, -0.6]) {
+      c.x = x0 + f * ca - s * sa; c.y = y0 + f * sa + s * ca;
+      if (fits()) return true;
+    }
+    c.x = x0; c.y = y0;
+    return !!keep;
   },
   overlapsCar(c, pad) { for (const o of G.cars) if (o !== c && Math.abs(o.x - c.x) < 7 && Math.abs(o.y - c.y) < 7 && this.obbHit(c, o, pad)) return true; return false; },
   // state of a freshly spawned car: wear, defects, crash damage, abandoned in a jam, burnt out
