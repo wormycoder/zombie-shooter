@@ -13,6 +13,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.019.000.125', date: '2026-10-25', title: 'Flats, apartments and new places in town',
+    notes: [
+      'About half the shops on the main streets are two storeys now, on both maps: stairs in the stock room lead up to a flat the size of the shop, with a living room, a kitchen, a bedroom and a bathroom, and windows over the street. The rest of the Stable map is as it was.',
+      'Apartment blocks in Riverton and Kingsbury (Expanded): two storeys of brick round a stair hall, four flats in each, mailboxes by the front door, a car park beside and a shared yard behind with trees, picnic tables and a clothesline.',
+      'New places in the Expanded towns: a post office in each (P.O. boxes, the service counter, sacks of mail behind), a library in Riverton and in Kingsbury (shelves of books, plenty of them skill books, and reading tables), and an auto repair shop in each town: roll-up doors, workbenches, car parts and tyres, and a car in for repair with its hood up and a part or a wheel off, the key often still in it.',
+      'Car parks are painted: stalls with wheel stops, lights at the ends of the aisle, and the cars parked in the stalls.',
+      'Warehouses have their loading bays stocked (crates, a workbench and shelves).',
+      'Fixed: a rare crash while drawing, seen when moving quickly across a busy town (a wall picture could be thrown out of the memory cache before it was drawn).',
+    ],
+    commits: ['1f3ac34', 'ceba02c'], shots: ['v019000_1', 'v019000_2', 'v019000_3', 'v019000_4'],
+  },
+  {
     v: '000.018.000.122', date: '2026-10-25', title: 'A Zomboid-style interface',
     notes: [
       'The interface is restyled after Project Zomboid: black glass panels with thin light frames, white text and grey highlights in place of the brown and gold, text a step bigger, and the windows with Zomboid\'s title bar (close at the left, the title in the middle, a collapse button at the right that folds the window to its title bar).',

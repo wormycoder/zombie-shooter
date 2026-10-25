@@ -111,7 +111,27 @@ FIX - LOOK INTO HOW MANY CORES OR THREADS THE GAME IS USING, MAKE SURE IT
      and graphics card idle there. Still possible later: making the new
      world (about 1 s on Expanded) in a background worker.
 
-VERY HIGH - CONTINUE UPDATING THE MAP, AND FINISH ON ALL BUILDINGS. UNFINISHED
+VERY HIGH - CONTINUE UPDATING THE MAP, AND FINISH ON ALL BUILDINGS.
+  -> STARTED (000.019.000.125). Audit: every building was furnished and
+     reachable, but the towns read as rows of identical one-storey boxes and
+     bare car parks, and the Expanded towns had no flats, post office,
+     library or garage. Done:
+     - flats over about half the main-street shops (both maps): stairs in
+       the stock room, a flat the size of the shop upstairs (living room,
+       kitchen, bedroom, bathroom); the rest of the Stable map unchanged;
+     - apartment blocks in Riverton (1) and Kingsbury (2): two storeys,
+       a stair hall, four flats each, car park, mailboxes, a shared yard;
+     - post offices (all three towns), libraries (Riverton, Kingsbury),
+       auto repair shops (all three: roll-up doors, parts, a car in for
+       repair with its hood up and a part off);
+     - car parks striped: stalls, wheel stops, lot lights, cars in stalls;
+     - warehouses' empty loading bays stocked;
+     - fixed a rare drawing crash (a wall picture could be evicted from the
+       memory cache before it was drawn).
+     Next for the map: Fort Hale's and the prison's bare grounds (tents,
+     sandbags, an obstacle course; a basketball court, weights, picnic
+     tables), a hospital for Kingsbury, more shop types (a hotel, a car
+     dealer, a factory), and the empty stretches of countryside.
 
 HIGH - ZOMBIES AREN'T MUCH OF A THREAT, AND IN SOME INSTANCES, YOU CAN WALK
       IN THE MIDDLE OF A HORDE AND GET OUT JUST FINE. ZOMBIES FOR WHATEVER
@@ -206,5 +226,8 @@ Run 1 (000.016.000.117): car speeds, guns, casings, title-screen zombies,
 Run 2 (000.017.000.120): UI scaling (added), memory budget + a memory
   leak, efficiency on menus, zombies grab and bite (the footstep bug).
 Run 3 (000.018.000.122): the UI rework, first pass.
-Next run, planned: continue the map and buildings, then vehicles (wheels,
-  proportions), then the character and zombie models.
+Run 4 (000.019.000.125): the map and buildings, part 1 (flats, apartments,
+  post office, library, auto repair, striped car parks; a drawing crash).
+Next run, planned: vehicles (wheels spinning, proportions), then the
+  character and zombie models; the map's part 2 (Fort Hale, the prison,
+  a hospital) after that.
