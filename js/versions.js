@@ -13,6 +13,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.020.000.133', date: '2026-10-25', title: 'Vehicles at full size, wheels that turn',
+    notes: [
+      'Vehicles are a believable size. Their bodies were real cars at half scale, so beside people and houses they looked like toys, the roof of a sedan at your waist; every vehicle is now about one and a half times bigger, a sedan\'s roof at your chest. What a vehicle hits, where it parks and how wide it turns grew with it.',
+      'Wheels turn as the car rolls: the hub caps, spokes and lug nuts go round and the grooves on the tyres move; at speed the rims blur. A wheel locked under hard braking stops turning.',
+      'Parking fits the bigger cars: car park stalls are a car deep, police cars at the kerb are spaced out, and a car that would stand in a wall or another car is moved clear (or left out). Cars in an old save are moved clear the same way when it loads.',
+    ],
+    commits: ['5d5356a', '23d3871'], shots: ['v020000_1', 'v020000_2', 'v020000_3', 'v020000_4'],
+  },
+  {
     v: '000.019.001.130', date: '2026-10-25', title: 'Clean-up and polish',
     notes: [
       'Fixed buildings you could not walk into: schools, barracks, the armory and the prison blocks had no outside doors (the armory could not be entered at all), no trailer bedroom had a door, and some narrow bathrooms and upstairs rooms behind the stairs had none. Every room of every building can now be reached through a door (checked room by room on five maps).',

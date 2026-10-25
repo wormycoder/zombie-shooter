@@ -188,10 +188,20 @@ FIX - THE CHARACTER AND ZOMBIE MODELS LOOK ODD, ALMOST OUT OF STYLE.
   -> HIGH. Goes with the 3D models / textures item. UNFINISHED
 
 FIX - FIX WHEELS NOT VISUALLY SPINNING.
-  -> HIGH. UNFINISHED
+  -> HIGH. DONE (000.020.000.133): the rim (hub cap slots, spokes, lug nuts)
+     and grooves on the tread turn with the distance rolled, in steps; past
+     ~5.5 tiles/s the rim is a blur (no new sprite every frame then). A
+     locked, sliding axle does not turn.
 
 FIX - CARS FEEL WEIRDLY PROPORTIONED
-  -> HIGH. Goes with the wheels item: a vehicle art pass. UNFINISHED
+  -> HIGH. DONE (000.020.000.133). The cause: the car bodies are real cars
+     at half scale, so beside the people and houses they were toys (a
+     sedan's roof at the survivor's waist). Every vehicle is now 1.45 times
+     bigger - its footprint (collisions, parking, turning circle) and its
+     drawing - as big as the two-tile lanes allow; a sedan's roof is at
+     about 70% of a person's height. Parking follows: cars nudged clear of
+     walls when they spawn (and in old saves), car park stalls a car deep,
+     spacing from the real lengths.
 
 FIX - THE GAME IS LACKING FOLIAGE
   -> MEDIUM. Bushes, tall grass, weeds in lots and along roads. UNFINISHED
@@ -241,6 +251,8 @@ Polish pass (000.019.001.130), asked for: clean-up and polish - unused
   code, leftover colours and texts, a bug sweep (a scripted play session
   on both maps: no errors; a doors-only check found the unreachable rooms
   above), Zomboid-style item tooltips, Fort Hale and the prison dressed.
-Next run, planned: vehicles (wheels spinning, proportions), then the
-  character and zombie models; the map's part 2 (a hospital, more shop
-  types, the countryside) after that.
+Run 5 (000.020.000.133): vehicles - a believable size (1.45x, parking
+  made to fit) and wheels that turn.
+Next run, planned: the character and zombie models (and their textures);
+  the map's part 2 (a hospital, more shop types, the countryside) after
+  that.
