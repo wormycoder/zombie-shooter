@@ -317,7 +317,8 @@ const Spr = {
       const ax = d ? 44 : 24, ay = H + 12;
       const c = mkCanvas(w, h);
       this._drawWall(c.getContext('2d'), ax, ay, type, d, col, f, hz, cut, st, Facade.shash(key));
-      rec = { c, ax, ay, sil: null, u: 0 };
+      // in use from now (u), so the eviction it may set off never takes it straight back out
+      rec = { c, ax, ay, sil: null, u: Facade.tick };
       this.wcache.set(key, rec);
       const cap = this.WCAP * CACHE_K();
       if (this.wcache.size > cap) {
