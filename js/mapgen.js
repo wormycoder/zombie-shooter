@@ -26,6 +26,7 @@ const MapGen = {
     this.W = 2 * S;
     const W = this.W, H = this.H;
     this.rng = new RNG(seed);
+    this.nameUse = null;
     const w = this.w = World.create(W, H, this.GW);
     World.use(w);
     w.seed = seed;
@@ -44,7 +45,7 @@ const MapGen = {
     this.town2();
     this.outskirts();
     this.outskirts2();
-    // a bigger world's new land: slabs where towns and sites will stand, the countryside round them built
+    // a bigger world's new land: the towns and sites, the countryside round them
     if (S > 400) { this.bigSites(); this.bigOutskirts(); }
     // detail passes (street furniture, yards) - defined in street.js / yard.js
     if (this.streetPass) this.streetPass();
@@ -298,8 +299,14 @@ const MapGen = {
     return c;
   },
   exteriorDoor(rm, dirPref, opts) {
-    let cands = this.borderEdges(rm, (x, y) => World.room(x, y) < 0).filter(c => !c.corner && !World.feat(c.ex, c.ey, c.ed));
-    if (dirPref) { const p = cands.filter(c => c.dir === dirPref); if (p.length) cands = p; else if (opts && opts.strict) return null; }
+    const all = this.borderEdges(rm, (x, y) => World.room(x, y) < 0).filter(c => !World.feat(c.ex, c.ey, c.ed));
+    let cands = all.filter(c => !c.corner);
+    if (dirPref) {
+      let p = cands.filter(c => c.dir === dirPref);
+      // a corridor running out to a wall between rooms meets it only at corners: its end is the door
+      if (!p.length) p = all.filter(c => c.dir === dirPref);
+      if (p.length) cands = p; else if (opts && opts.strict) return null;
+    }
     if (!cands.length) return null;
     const c = cands[Math.floor(cands.length / 2)];
     this.setDoor(c, opts);
@@ -600,6 +607,11 @@ const MapGen = {
           if (n > bestN || (n === bestN && fr === rooms.living && n > 0)) { bestN = n; target = fr; }
         }
       }
+      // a narrow room meets the front rooms only at corners: through the room beside it, else any shared wall
+      if (!target) {
+        const shares = (o, open) => this.borderEdges(br, (x, y) => World.room(x, y) === o.id).some(c => !open || !c.corner);
+        target = backRooms.find(o => o !== br && o.type === 'bedroom' && shares(o, true)) || fronts.find(o => shares(o, false)) || backRooms.find(o => o !== br && shares(o, false)) || null;
+      }
       if (target) this.doorBetween(br, target);
     }
     if (garage) {
@@ -738,6 +750,7 @@ const MapGen = {
     // the open stairwell and the landing upstairs
     const hole = this.stairsUp(S);
     this.buildWalls(b, W0);
+    const doored = new Set();
     for (const rm of upRooms) {
       let cs = this.borderEdges(rm, (x, y) => World.room(x, y) === hall.id && !hole.has(y * W + x) && !this.w.obj[y * W + x]);
       const good = cs.filter(q => !q.corner);
@@ -746,6 +759,13 @@ const MapGen = {
       const q = cs[Math.floor(cs.length / 2)];
       this.setDoor(q, { style: 'wood', col: '#c8b8a0' });
       this.resv.add(q.ny * W + q.nx);
+      doored.add(rm);
+    }
+    // a room behind the stairwell meets the hall only at the hole: a door through to the room beside it
+    for (const rm of upRooms) {
+      if (doored.has(rm)) continue;
+      const nb = upRooms.find(o => o !== rm && doored.has(o) && this.borderEdges(rm, (x, y) => World.room(x, y) === o.id).length);
+      if (nb && this.doorBetween(rm, nb)) doored.add(rm);
     }
     b.floors = 2;
     b.stair = this.w.stairs[this.w.stairs.length - 1];
@@ -1090,7 +1110,7 @@ const MapGen = {
     const shops = ['hardware', 'gunstore', 'pharmacy', 'restaurant', 'bar', 'clothing', 'bookstore', 'office', 'firestation', 'laundromat', 'diner', 'office'];
     const names = {
       grocery: 'Fresh Mart', hardware: 'Hollow Hardware', gunstore: 'Ridgeline Guns & Ammo', pharmacy: 'Corner Pharmacy', restaurant: "Pip's Burgers",
-      bar: 'The Rusty Nail', clothing: 'Threads Clothing', bookstore: 'Page Turner Books', office: 'Valley Insurance', firestation: 'Fire Station', laundromat: 'Suds Laundromat', diner: 'Lucky Star Diner',
+      bar: 'The Rusty Nail', clothing: 'Threads Clothing', bookstore: 'Page Turner Books', office: ['Valley Insurance', 'Creekside Realty'], firestation: 'Fire Station', laundromat: 'Suds Laundromat', diner: 'Lucky Star Diner',
     };
     r.shuffle(shops);
     const commercialRows = [];
@@ -1170,9 +1190,10 @@ const MapGen = {
     const hw = horiz ? 8 : 4, hh = horiz ? 4 : 8;
     const b = this.newBuilding('trailer', hx, hy, hx + hw - 1, hy + hh - 1, { wallType: WT.EXT, extCol: r.pick(['#d8d8d0', '#c8d0d8', '#e0d8c0', '#a8b8a8', '#d0c0b0']), roofCol: '#8a8a88', roof: 'flat', front: f });
     const M = this.mapper(hx, hy, hw, hh, f);
+    // the living room at one end; the bathroom and the bedroom share the other, both off the living room
     const main = this.addRoom(b, 'living', ...M.rect(0, 0, 4, M.D - 1), FL.LINO, r.int(0, 7));
-    const bath = this.addRoom(b, 'bathroom', ...M.rect(5, 0, 5, M.D - 1), FL.LINO, 2);
-    const bed = this.addRoom(b, 'bedroom', ...M.rect(6, 0, 7, M.D - 1), FL.CARPET, r.int(0, 7));
+    const bath = this.addRoom(b, 'bathroom', ...M.rect(5, 0, 7, 1), FL.LINO, 2);
+    const bed = this.addRoom(b, 'bedroom', ...M.rect(5, 2, 7, M.D - 1), FL.CARPET, r.int(0, 7));
     this.buildWalls(b);
     this.doorBetween(main, bath); this.doorBetween(main, bed);
     this.exteriorDoor(main, M.dir('F'), { locked: r.chance(0.5), b: b.id, ext: true });
@@ -1270,6 +1291,14 @@ const MapGen = {
     const ft = r.weighted([[WT.WOODFENCE, 5], [WT.CHAIN, 2], [WT.PICKET, 1], [0, 2 + 2 * sp]]);
     if (ft) this.fenceLine(x0, m, x1 - x0 + 1, 0, ft, 0.06);
   },
+  // a town's name for a building of this type: a list of names is handed out in turn
+  shopName(names, type) {
+    const n = names && names[type];
+    if (!Array.isArray(n)) return n;
+    const u = this.nameUse || (this.nameUse = new Map()), k = u.get(n) || 0;
+    u.set(n, k + 1);
+    return n[k % n.length];
+  },
   commercialRow(x0, y0, x1, y1, f, plan, names) {
     let x = x0;
     for (const [type, lw] of plan) {
@@ -1281,9 +1310,9 @@ const MapGen = {
         // concrete apron
         if (f === 'N') this.fill(x, y0, x + w - 1, y0, FL.CONCRETE, 0); else this.fill(x, y1, x + w - 1, y1, FL.CONCRETE, 0);
         if (type === 'police') this.police(x + 1, sy, sw, sh, f, names && names.police);
-        else if (type === 'autorepair') this.autoRepair(x + 1, sy, sw, sh, f, names[type]);
+        else if (type === 'autorepair') this.autoRepair(x + 1, sy, sw, sh, f, this.shopName(names, type));
         else {
-          const b = this.store(type, x + 1, sy, sw, sh, f, names[type]);
+          const b = this.store(type, x + 1, sy, sw, sh, f, this.shopName(names, type));
           // about half the main-street shops have a flat upstairs (buildings.js)
           if (FLAT_SHOPS[type] && this.flatAbove) this.withRng(b.id * 131 + b.x0 * 7 + b.y0, () => this.rng.chance(0.5) && this.flatAbove(b));
         }
@@ -1521,13 +1550,12 @@ const MapGen = {
       if (this.free(x, y)) this.put(x, y, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430', kind: ['sedan', 'wagon', 'pickup', 'van', 'hatchback', 'suv'][(x * 7 + y * 13) % 6] });
     }
   },
-  // ---------------------------------------------------------------- bigger worlds: the block-out
-  // The land around the county is laid out but not built yet. bigPlan() fixes where everything goes, from the long
-  // roads: County Rd 14 (north - south) and 22 (west - east), and from 800 tiles a divided interstate down the far east.
-  // Towns are street grids with a concrete slab on every lot where a building will stand; farms are bare furrowed
-  // fields round a farmyard; the base and the prison are fenced slabs; the river and the reservoir are cut before the
-  // roads (bigWater), so roads cross them as bridges. New things stay out of the old 400 x 400 county, where houses are
-  // placed by hand after the roads. this.big.boxes: everything planned (for the tracks and the plan view).
+  // ---------------------------------------------------------------- bigger worlds: the plan
+  // bigPlan() fixes where everything in the land around the county goes, from the long roads: County Rd 14 (north -
+  // south) and 22 (west - east), and from 800 tiles a divided interstate down the far east. The towns are street grids
+  // (built by bigTowns), the farms furrowed fields round a farmyard, the base and the prison fenced grounds; the river
+  // and the reservoir are cut before the roads (bigWater), so roads cross them as bridges. New things stay out of the
+  // old 400 x 400 county. this.big.boxes: everything planned (for the tracks and the plan view).
   bigPlan() {
     const S = this.GW, D = S - 400, big = S >= 760;
     const ex = 400 + Math.round(D * 0.4), sy = 400 + Math.round(D * 0.45), ix = big ? S - 64 : 0;
@@ -1626,8 +1654,8 @@ const MapGen = {
       { x: Math.round((400 + ex) / 2) - 10, y: 107, text: 'Route 9' }, { x: Math.round((ex + S) / 2), y: 48, text: 'Wildwood State Forest' },
       { x: Math.round(S * 0.12), y: Math.round((sy + S) / 2) + 20, text: 'Bear Run Woods' });
   },
-  // the planned sites, laid out after the county is built: town slabs, fields, fences, the quarry pit, the campground
-  // clearing (bigOutskirts builds the countryside's buildings on top)
+  // the planned sites, built after the county: the towns (bigTowns), the fields, the quarry pit, the campground
+  // clearing, Fort Hale, the prison and the airfield (bigOutskirts builds the countryside's buildings on top)
   bigSites() {
     const P = this.big, r = this.rng, W = this.W, F = this.w.floor, S = this.GW;
     const hard = (x, y) => { const f = F[y * W + x]; return f === FL.ASPHALT || f === FL.SIDEWALK || f === FL.WATER || f === FL.DEEPWATER || f === FL.SAND; };
@@ -1973,8 +2001,7 @@ const MapGen = {
   },
   // The countryside of a bigger world, built: the farmyards, Shady Pines, the truck stop, the quarry office, the ranger
   // station, a gas station and a church where Main St meets County Rd 22, and homesteads (houses, now and then a
-  // trailer) along the long roads, each fronting its road with a gravel drive. The yard pass dresses them afterwards;
-  // the towns, the base, the prison and the airfield are still slabs.
+  // trailer) along the long roads, each fronting its road with a gravel drive. The yard pass dresses them afterwards.
   bigOutskirts() {
     const P = this.big, r = this.rng, W = this.W, F = this.w.floor, S = this.GW;
     const hard = (x, y) => { const f = F[y * W + x]; return f === FL.ASPHALT || f === FL.SIDEWALK || f === FL.WATER || f === FL.DEEPWATER || f === FL.SAND; };
