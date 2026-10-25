@@ -234,14 +234,14 @@ Object.assign(CarArt, {
   },
   // ---------------------------------------------------------------- wheels
   // wheel spec w: { f, s (outer face), r, w (width), side, steer, st (0 ok / 1 flat / 2 missing), rim, burnt }
-  wheelParts(M, steer) {
+  wheelParts(M, steer, spin) {
     const out = [];
     for (const w of M.wheels) {
       const ang = w.steer ? steer * 0.36 : 0;
       const bb = [w.f - w.r - 0.02, w.f + w.r + 0.02, w.side > 0 ? w.s - w.w : w.s, w.side > 0 ? w.s : w.s + w.w, 0, w.r * 2];
       const c = [w.f, w.s - w.side * w.w / 2, w.r];
-      out.push({ wheel: w.side, pass: 0, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
-      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, draw: this.drawWheel });
+      out.push({ wheel: w.side, pass: 0, bb, c, faces: [], spec: w, ang, spin, draw: this.drawWheel });
+      out.push({ wheel: w.side, pass: 1, bb, c, faces: [], spec: w, ang, spin, draw: this.drawWheel });
     }
     return out;
   },
@@ -270,6 +270,8 @@ Object.assign(CarArt, {
       pi.push(F.P(I[0] + fw[0] * r * c, I[1] + fw[1] * r * c, z));
     }
     const tyre = bare ? (w.burnt ? '#3a2a22' : CA_COL.steel) : CA_COL.tread;
+    // how far round the wheel has turned (a step of its rim's repeat), or a blur
+    const n = P.spec.spinN || 5, blur = P.spin === 'z', rot = P.spin && !blur ? +P.spin * Math.PI * 2 / (n * 3) : 0;
     // tread band: quads whose radial normal faces the camera
     for (let k = 0; k < N; k++) {
       const j = (k + 1) % N, t = (k + 0.5) / N * Math.PI * 2;
@@ -278,18 +280,33 @@ Object.assign(CarArt, {
       g.fillStyle = Col.shade(tyre, F.bright(n)); g.beginPath(); g.moveTo(po[k][0], po[k][1]); g.lineTo(po[j][0], po[j][1]); g.lineTo(pi[j][0], pi[j][1]); g.lineTo(pi[k][0], pi[k][1]); g.closePath(); g.fill();
       g.strokeStyle = g.fillStyle; g.lineWidth = 0.6; g.stroke();
     }
+    // grooves across the tread, turning with the wheel (smeared out when it spins fast)
+    if (!bare && !blur && P.pass === 0) {
+      const G2 = 18;
+      g.lineWidth = 0.9;
+      for (let k = 0; k < G2; k++) {
+        const t = -rot + k / G2 * Math.PI * 2, c = Math.cos(t), s = Math.sin(t), nn = [fw[0] * c, fw[1] * c, s];
+        const vz = cz + r * s;
+        if (F.vis(nn) <= 0.15 || vz < 0.02) continue;
+        const a = F.P(O[0] + fw[0] * r * c, O[1] + fw[1] * r * c, vz), b2 = F.P(I[0] + fw[0] * r * c, I[1] + fw[1] * r * c, vz);
+        g.strokeStyle = Col.shade('#060607', F.bright(nn)); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b2[0], b2[1]); g.stroke();
+      }
+    }
     const outV = F.vis(ax) > 0, disc = outV ? po : pi, b = F.bright(outV ? ax : [-ax[0], -ax[1], 0]);
     g.fillStyle = Col.shade(bare ? tyre : CA_COL.wall, b * (outV ? 1 : 0.7)); g.beginPath(); this.path(g, disc); g.fill();
     if (outV) {
-      // rim / wheel cover painted in the wheel plane (x forward, y down; units of 0.01)
+      // rim / wheel cover painted in the wheel plane (x forward, y down; units of 0.01), turned with the wheel (the
+      // top rolls forward); a fast-spinning one is the pattern smeared round a few times
       F.frame(g, O, fw, [0, 0, -1], 0.01);
       const R = r * 100, st = bare ? 'bare' : w.rim || 'cap', C = (c, m) => Col.shade(c, b * (m || 1));
+      g.rotate(rot);
       const disc = (rr, c) => { g.fillStyle = c; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); };
       const ring = (rr, lw, c) => { g.strokeStyle = c; g.lineWidth = lw; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.stroke(); };
       const dots = (n, rr, d, c, a0) => { g.fillStyle = c; for (let k = 0; k < n; k++) { const an = (a0 || 0) + k * Math.PI * 2 / n; g.beginPath(); g.arc(Math.cos(an) * rr, Math.sin(an) * rr, d, 0, 7); g.fill(); } };
       // tyre shoulder catches a little light; whitewall / white-letter band
       ring(R * 0.93, R * 0.08, C('#3a3a3c'));
       if (!bare && w.white) ring(R * 0.77, R * 0.13, C('#e6e4da'));
+      const pattern = () => {
       if (st === 'bare') {
         const m = w.burnt ? '#4a3a30' : CA_COL.steel;
         disc(R * 0.96, C(m)); disc(R * 0.7, C(m, 0.7)); dots(5, R * 0.36, R * 0.07, C(m, 1.2), 0.3); disc(R * 0.2, C(m, 0.85));
@@ -309,8 +326,8 @@ Object.assign(CarArt, {
         for (let k = 0; k < 5; k++) { const an = k * 1.2566 - 1.57, ca = Math.cos(an), sa = Math.sin(an), px = -sa, py = ca; g.moveTo(px * R * 0.1, py * R * 0.1); g.lineTo(ca * R * 0.58 + px * R * 0.13, sa * R * 0.58 + py * R * 0.13); g.lineTo(ca * R * 0.58 - px * R * 0.13, sa * R * 0.58 - py * R * 0.13); g.lineTo(-px * R * 0.1, -py * R * 0.1); }
         g.fill(); disc(R * 0.2, C(m, 1.1)); disc(R * 0.08, C('#5a5e62'));
       } else if (st === 'dog') {
-        // black steel wheel with a chrome dog-dish cap (police, taxis)
-        disc(R * 0.62, C('#26282b')); ring(R * 0.5, R * 0.04, C('#3a3c40'));
+        // black steel wheel with a chrome dog-dish cap (police, taxis), the lug nuts showing round it
+        disc(R * 0.62, C('#26282b')); ring(R * 0.5, R * 0.04, C('#3a3c40')); dots(5, R * 0.43, R * 0.04, C('#8a9096'), 0.3);
         disc(R * 0.36, C('#9aa0a6')); disc(R * 0.3, C(CA_COL.chrome)); disc(R * 0.12, C('#7a8086'));
       } else if (st === 'mil') {
         const m = w.rimCol || '#4a5238';
@@ -320,6 +337,15 @@ Object.assign(CarArt, {
         const m = w.rimCol || CA_COL.steel;
         disc(R * 0.62, C(m)); ring(R * 0.5, R * 0.05, C(m, 0.72)); disc(R * 0.34, C(m, 0.86));
         dots(5, R * 0.24, R * 0.045, C('#c8ccd0'), 0.3); disc(R * 0.12, C(CA_COL.chrome));
+      }
+      };
+      if (!blur) pattern();
+      else {
+        const a0 = g.globalAlpha;
+        pattern();
+        g.globalAlpha = a0 * 0.45;
+        for (let j = 1; j < 4; j++) { g.save(); g.rotate(j * Math.PI * 2 / (n * 4)); pattern(); g.restore(); }
+        g.globalAlpha = a0;
       }
       if (w.dual) ring(R * 0.46, R * 0.05, C('#222222'));
       g.setTransform(1, 0, 0, 1, 0, 0);
@@ -421,10 +447,10 @@ Object.assign(CarArt, {
   // A near-side wheel's outer pass is painted straight after the last-drawn body part whose side carries its
   // arch (sorting it with the rest only adds cycles that can push it under the body); far-side outer passes
   // draw nothing and are dropped.
-  paint(g, F, M, steer) {
+  paint(g, F, M, steer, spin) {
     if (Settings.v.shadows !== 0) this.drawShadow(g, F, M);
     const parts = M.parts.slice(), outer = [];
-    for (const p of this.wheelParts(M, steer)) {
+    for (const p of this.wheelParts(M, steer, spin)) {
       if (p.pass === 0) { parts.push(p); continue; }
       if (p.spec.side * F.cs <= 0) continue;
       const hs = this.hostsOf(M, p.spec);
@@ -491,17 +517,18 @@ Object.assign(CarArt, {
   // sprite resolution (Car detail): 2x, or 1x while zoomed out (Auto) or always (Low); shadows on or off
   sc() { const d = Settings.v.carDetail, z = Render.cam.zoom * Render.dpr; return (Settings.v.texCap || 2) >= 2 && (d === 2 || (d === 1 && z > 1.05)) ? CA_SC : 1; },
   sKey() { return (this.sc() === CA_SC ? '' : '|1') + (Settings.v.shadows === 0 ? '|n' : ''); },
-  sprite(c, mk, bk, st) {
-    const sk = this.sKey(), key = mk + '|' + bk + st + sk;
+  sprite(c, mk, bk, st, spin) {
+    spin = spin || '';
+    const sk = this.sKey(), key = mk + '|' + bk + st + spin + sk;
     let rec = this.cache.get(key);
     if (rec) { this.cache.delete(key); this.cache.set(key, rec); return rec; }
     // per-frame budget for new sprites: past it, reuse the nearest cached heading of the same model
     const now = performance.now();
     if (now - this.bT > 12) { this.bT = now; this.bMs = 0; }
     if (this.bMs > 5) {
-      for (let d = 1; d < CA_NB / 2; d++) for (const b2 of [bk - d, bk + d]) { const r2 = this.cache.get(mk + '|' + ((b2 + CA_NB) % CA_NB) + st + sk); if (r2) return r2; }
+      for (let d = 1; d < CA_NB / 2; d++) for (const b2 of [bk - d, bk + d]) { const r2 = this.cache.get(mk + '|' + ((b2 + CA_NB) % CA_NB) + st + spin + sk); if (r2) return r2; }
       // (or this heading at the other resolution, while the zoom crosses over)
-      const r3 = this.cache.get(mk + '|' + bk + st + (sk.indexOf('|1') === 0 ? sk.slice(2) : '|1' + sk));
+      const r3 = this.cache.get(mk + '|' + bk + st + spin + (sk.indexOf('|1') === 0 ? sk.slice(2) : '|1' + sk));
       if (r3) return r3;
     }
     let M = this.models.get(mk);
@@ -511,9 +538,9 @@ Object.assign(CarArt, {
       if (this.models.size > 64) this.models.delete(this.models.keys().next().value);
     }
     const sc = this.sc();
-    try { rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc); } catch (e) {
+    try { rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc, null, spin); } catch (e) {
       M = this.fallback(c, mk, e); this.models.set(mk, M);
-      rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc);
+      rec = this.render(M, bk * Math.PI * 2 / CA_NB, st - 1, sc, null, spin);
     }
     this.bMs += performance.now() - now;
     this.cache.set(key, rec); this.bytes += rec.bytes;
@@ -525,18 +552,28 @@ Object.assign(CarArt, {
   },
   // the car being driven is rendered at its exact heading (no 64-step snapping or stale headings while
   // turning); the render is reused while heading, state and steering stay the same
-  liveSprite(c, mk, bk, st) {
+  liveSprite(c, mk, bk, st, spin) {
     const L = this.live;
     const sk = this.sKey();
-    if (L && L.id === c.id && L.mk === mk && L.st === st && L.sk === sk && Math.abs(U.angDiff(L.a, c.a)) < 0.003) return L.rec;
+    if (L && L.id === c.id && L.mk === mk && L.st === st && L.spin === spin && L.sk === sk && Math.abs(U.angDiff(L.a, c.a)) < 0.003) return L.rec;
     let M = this.models.get(mk);
     try {
       if (!M) { M = this.build(mk); this.models.set(mk, M); this.stats.models++; }
-      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1, this.sc(), (L && L.rec) || true);
+      const rec = this.render(M, Number.isFinite(c.a) ? c.a : 0, st - 1, this.sc(), (L && L.rec) || true, spin);
       rec.live = true; rec.silC = L ? L.rec.sil || L.rec.silC : null;
-      this.live = { id: c.id, mk, st, sk, a: c.a, rec };
+      this.live = { id: c.id, mk, st, spin, sk, a: c.a, rec };
       return rec;
-    } catch (e) { return this.sprite(c, mk, bk, st); }
+    } catch (e) { return this.sprite(c, mk, bk, st, spin); }
+  },
+  // how the wheels look turned: '' at rest; '0' '1' '2' the step of the rim's turn (three to each repeat of its
+  // pattern) while rolling; 'z' a blur when they turn too fast to follow (no new sprite every frame then either)
+  spinOf(c, mk) {
+    const v = Math.abs(c.v || 0), M = this.models.get(mk);
+    if (!M || !M.wheels.length || v < 0.05) return '';
+    if (v > 5.5) return 'z';
+    const tm = Vehicles.tmp(c), th = (tm.roll || 0) / (M.wheels[0].r * CAR_K), n = M.spinN || 5;
+    const k = Math.floor(th * n * 3 / (Math.PI * 2));
+    return String(((k % 3) + 3) % 3);
   },
   // drop every cached sprite and model (e.g. after loading a save)
   flush() { this.cache.clear(); this.models.clear(); this.bytes = 0; this.live = null; },
@@ -548,7 +585,7 @@ Object.assign(CarArt, {
   // render model M at heading a into a fresh canvas (sc: 2 or 1 px per world px) sized to its projected bounds;
   // reuse (the driven car): true or the previous live render, whose canvas is repainted while it is big enough; new
   // ones get room to spare, so a turn does not make a new canvas every few frames
-  render(M, a, steer, sc, reuse) {
+  render(M, a, steer, sc, reuse, spin) {
     const t0 = performance.now();
     sc = sc || CA_SC;
     const F0 = this.proj(a, 0, 0, sc, M.tilt);
@@ -573,7 +610,7 @@ Object.assign(CarArt, {
     const F = this.proj(a, ax, ay, sc, M.tilt);
     F.glass = [];
     g.lineJoin = 'round';
-    this.paint(g, F, M, steer);
+    this.paint(g, F, M, steer, spin);
     const ms = performance.now() - t0;
     this.stats.sprites++; this.stats.ms += ms; if (ms > this.stats.maxMs) this.stats.maxMs = ms;
     return { c: cv, ax, ay, sil: null, bytes: cv.width * cv.height * 4, glass: F.glass, a, M, sc };
@@ -609,8 +646,8 @@ Object.assign(CarArt, {
     if (!World.isVis(c.x | 0, c.y | 0) && !World.isVis((c.x + Math.cos(c.a)) | 0, (c.y + Math.sin(c.a)) | 0) && G.player && !G.player.inCar && Render.shadeAt(c.x, c.y) < 0.05) return;
     const mk = this.mkey(c);
     const bk = ((Math.round((Number.isFinite(c.a) ? c.a : 0) / (Math.PI * 2) * CA_NB) % CA_NB) + CA_NB) % CA_NB;
-    const st = c.steer > 0.15 ? 2 : c.steer < -0.15 ? 0 : 1;
-    const rec = G.player && G.player.inCar === c ? this.liveSprite(c, mk, bk, st) : this.sprite(c, mk, bk, st), M = rec.M;
+    const st = c.steer > 0.15 ? 2 : c.steer < -0.15 ? 0 : 1, spin = this.spinOf(c, mk);
+    const rec = G.player && G.player.inCar === c ? this.liveSprite(c, mk, bk, st, spin) : this.sprite(c, mk, bk, st, spin), M = rec.M;
     const X = (c.x - c.y) * HTW, Y = (c.x + c.y) * HTH;
     const k = rec.sc || CA_SC, x0 = X - rec.ax / k, y0 = Y - rec.ay / k, w = rec.c.width / k, h = rec.c.height / k;
     const lit = !!(c.engine && !c.burnt), night = 1 - U.clamp((G.light.amb - 0.25) / 0.5, 0, 1);
@@ -1365,6 +1402,9 @@ Object.assign(CarArt, {
   finish(M) {
     const d = [0, 0, 0, 0];
     let fA = -1e9, fB = 1e9;
+    // how many times each wheel's rim pattern repeats round it (its turn is drawn in steps within one repeat)
+    for (const w of M.wheels) w.spinN = w.st === 2 || w.burnt ? 5 : { cap: 10, mil: 8 }[w.rim || 'cap'] || 5;
+    M.spinN = M.wheels.length ? M.wheels[0].spinN : 5;
     for (const w of M.wheels) {
       const dr = w.burnt || w.st === 2 ? w.r * 0.34 : w.st === 1 ? w.r * 0.18 : 0;
       d[w.idx] = Math.max(d[w.idx], dr);

@@ -777,6 +777,8 @@ const Vehicles = {
     }
     if (Math.abs(vf) < 0.02 && Math.abs(vr) < 0.02) w = 0;
     c.v = vf; c.vs = vr; tm.w = w;
+    // how far the tyres have rolled (CarArt turns the wheels by it); a locked axle slides instead
+    tm.roll = (tm.roll || 0) + (locked ? 0 : vf * dt);
     c.braking = !!inp && braking && Math.abs(vf) > 0.05;
     c.rev = vf < -0.2 || (!!inp && bk > 0 && vf < 0.4 && eng);
     tm.slip = slide; tm.locked = locked && Math.abs(vf) > 1.5; tm.spin = spin; tm.hb = hb && !!inp && Math.abs(vf) > 1.5; tm.sf = sf; tm.inp = !!inp;
