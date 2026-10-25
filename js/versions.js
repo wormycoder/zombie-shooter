@@ -13,6 +13,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.020.001.135', date: '2026-10-25', title: 'Seeing through the trees',
+    notes: [
+      'Driving through the woods you can see the road. The see-through window in the tree crowns used to be a small circle round you, so in a car it showed little more than the car, and the road ahead stayed under the canopy. Now it runs ahead along the way the car is going, from a little way ahead when stopped to about eight tiles at speed, and trees open almost at once as you come up to them.',
+      'Driving, the view leads the car by up to five tiles as it speeds up, so more of the road ahead is on screen.',
+      'On foot the window round you is wider, and every zombie you can see gets a small window of its own in any crown over it: the dead in the woods are no longer hidden a few tiles away.',
+    ],
+    commits: ['61e1f4e'], shots: ['v020001_1', 'v020001_2', 'v020001_3', 'v020001_4'],
+  },
+  {
     v: '000.020.000.133', date: '2026-10-25', title: 'Vehicles at full size, wheels that turn',
     notes: [
       'Vehicles are a believable size. Their bodies were real cars at half scale, so beside people and houses they looked like toys, the roof of a sedan at your waist; every vehicle is now about one and a half times bigger, a sedan\'s roof at your chest. What a vehicle hits, where it parks and how wide it turns grew with it.',

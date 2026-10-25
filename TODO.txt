@@ -203,6 +203,18 @@ FIX - CARS FEEL WEIRDLY PROPORTIONED
      walls when they spawn (and in old saves), car park stalls a car deep,
      spacing from the real lengths.
 
+FIX (added) - VISIBILITY AROUND TREES (ESPECIALLY WHILE DRIVING) IS VERY
+      BAD.
+  -> VERY HIGH. DONE (000.020.001.135). The cause: the see-through window
+     in the crowns was a small circle round the survivor, sized before the
+     cars grew, so in a car it showed little more than the car, and at speed
+     trees opened too slowly; zombies under the canopy a few tiles off could
+     not be seen at all. Now: in a car the window runs ahead along the way
+     the car is going (1.5 tiles stopped, up to 8 at speed) and opens in a
+     tenth of a second; on foot it is wider; every zombie in sight gets a
+     small window in any crown over it; the view leads a moving car by up
+     to 5 tiles.
+
 FIX - THE GAME IS LACKING FOLIAGE
   -> MEDIUM. Bushes, tall grass, weeds in lots and along roads. UNFINISHED
 
@@ -253,6 +265,9 @@ Polish pass (000.019.001.130), asked for: clean-up and polish - unused
   above), Zomboid-style item tooltips, Fort Hale and the prison dressed.
 Run 5 (000.020.000.133): vehicles - a believable size (1.45x, parking
   made to fit) and wheels that turn.
+Fix (000.020.001.135), asked for: visibility around trees - a see-through
+  window ahead of the car, wider on foot, windows over zombies in sight, a
+  camera that leads the car.
 Next run, planned: the character and zombie models (and their textures);
   the map's part 2 (a hospital, more shop types, the countryside) after
   that.
