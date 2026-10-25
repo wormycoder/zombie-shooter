@@ -36,15 +36,17 @@ const Menu = {
     if (this.bgWorld) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
     const meta = Save.meta();
     $('#menu').className = '';
-    $('#menu').innerHTML = `<div class="modal title"><div class="tbox">
+    // Zomboid's title screen: the name at the top left, the menu as plain words down the left side
+    $('#menu').innerHTML = `<div class="modal title"><div class="tlogo">
       <div class="logo">HOLLOW CREEK</div>
-      <div class="tag">There is no cure. There is no rescue.<br>There is only how long you last.</div>
-      ${meta ? `<div class="btn big" data-m="continue">Continue <span class="sml">— ${U.esc(meta.name)}, Day ${meta.day} ${meta.time}</span></div>` : ''}
-      <div class="btn big" data-m="new">New Game</div>
-      <div class="btn big" data-m="options">Settings</div>
-      <div class="btn big" data-m="controls">How to Play</div>
-      <div class="foot">An isometric zombie survival sandbox · all art and audio generated procedurally</div>
-    </div></div>`;
+      <div class="tag">There is no cure. There is no rescue.<br>There is only how long you last.</div></div>
+      <div class="tmenu">
+      ${meta ? `<div class="tm" data-m="continue">Continue<span class="tsub">${U.esc(meta.name)} · Day ${meta.day}, ${meta.time}</span></div>` : ''}
+      <div class="tm" data-m="new">New Game</div>
+      <div class="tm" data-m="options">Settings</div>
+      <div class="tm" data-m="controls">How to Play</div>
+      <div class="foot">An isometric zombie survival sandbox · all art and audio generated procedurally</div></div>
+    </div>`;
     $('#menu').onclick = (e) => {
       Sfx.init();
       const b = e.target.closest('[data-m]'); if (!b) return;

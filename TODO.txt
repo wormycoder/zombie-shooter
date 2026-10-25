@@ -132,7 +132,21 @@ HIGH - ZOMBIES AREN'T MUCH OF A THREAT, AND IN SOME INSTANCES, YOU CAN WALK
        the middle of them is worse.
 
 HIGH TO VERY HIGH - BETTER UI - MORE ZOMBOID ESQUE, COULD RE-WRITE WHOLE UI
-      SECTOR IF NEEDED. UNFINISHED
+      SECTOR IF NEEDED.
+  -> DONE, first pass (000.018.000.122): Zomboid's neutral look (black
+     glass panels, thin light frames, white text, grey highlights instead of
+     the brown and gold); window chrome as in Zomboid (close at the left,
+     centred title, collapse at the right); the hands (what you hold) at the
+     top of the left bar; the clock as a wristwatch's LCD (only with a watch
+     on; without one, a rough time of day) with Zomboid's speed buttons;
+     one Character window with Info / Skills / Health / Protection tabs (H
+     and K open it; Protection is new: bite and scratch protection of what
+     you wear, per body part); a smooth grey body figure on the Health tab
+     (wounds tinted, bandages wrapped round, fractures, bleeding); the title,
+     pause and death screens as plain words down the side or centre; text a
+     step bigger, and Auto UI scale 125% on 1920 x 1080. Still to do: item
+     tooltips like Zomboid's (condition bars, stats), the crafting window's
+     layout, the world map's look.
 
 HIGH (added) - MAKE SURE THE UI SCALES WITH THE RESOLUTION OF THE SCREEN,
       SOMETIMES STUFF GETS CUT OFF ON LOWER RESOLUTIONS (LIKE ON MY LAPTOP)
@@ -191,5 +205,6 @@ Run 1 (000.016.000.117): car speeds, guns, casings, title-screen zombies,
   texture settings.
 Run 2 (000.017.000.120): UI scaling (added), memory budget + a memory
   leak, efficiency on menus, zombies grab and bite (the footstep bug).
-Next run, planned: the UI rework (more Zomboid-like), then continue the map
-  and buildings, then vehicles (wheels, proportions).
+Run 3 (000.018.000.122): the UI rework, first pass.
+Next run, planned: continue the map and buildings, then vehicles (wheels,
+  proportions), then the character and zombie models.

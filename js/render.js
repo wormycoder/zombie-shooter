@@ -1125,7 +1125,7 @@ const Render = {
   // ------------------------------------------------------------------ hover highlight
   drawHover(ctx, h) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,230,120,0.85)'; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.5;
     const P = (x, y, z) => this.P(x, y, z);
     if (h.edge) {
       const [x, y, d] = h.edge;

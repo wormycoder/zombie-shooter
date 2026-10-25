@@ -9,10 +9,10 @@ const UI = {
   // fits it to the window - smaller on a laptop screen so no window or menu is cut off, a little larger on a very big
   // screen. Mouse and window coordinates are screen px; things placed by them inside #ui use screen px / UI.scale.
   scale: 1,
+  // (about the window's height over 860 px: 80% on a laptop, 100% at 1600 x 900, 125% at 1920 x 1080, 160% at most)
   autoScale() {
-    const k = Math.min(innerWidth / 1440, innerHeight / 860);
-    const s = k < 1 ? Math.max(0.8, k) : 1 + Math.max(0, k - 1.4) * 0.5;
-    return Math.round(Math.min(1.6, s) * 100) / 100;
+    const k = Math.min(innerWidth / 1500, innerHeight / 860);
+    return Math.round(U.clamp(k, 0.8, 1.6) * 20) / 20;
   },
   applyScale() {
     const s = Settings.v.uiScale || this.autoScale();
@@ -47,7 +47,7 @@ const UI = {
     document.addEventListener('focusout', () => { this.typing = false; });
     document.addEventListener('mousedown', (e) => { if (this.ctxOpen && !this.ctx.contains(e.target)) this.closeContext(); });
     // sidebar
-    $('#sidebar').innerHTML = [['inv', 'Inventory (I)', 'I'], ['health', 'Health (H)', 'H'], ['craft', 'Crafting (B)', 'B'], ['skills', 'Character & Skills (K)', 'K'], ['map', 'Map (M)', 'M'], ['pause', 'Menu (Esc)', '≡']].map(([k, t, l]) => `<div class="sbtn" data-k="${k}" title="${t}"><canvas width="28" height="28" data-icon="${k}"></canvas><span>${l}</span></div>`).join('');
+    $('#sidebar').innerHTML = [['inv', 'Inventory (I)', 'I'], ['health', 'Health (H)', 'H'], ['craft', 'Crafting (B)', 'B'], ['skills', 'Character (K)', 'K'], ['map', 'Map (M)', 'M'], ['pause', 'Menu (Esc)', '≡']].map(([k, t, l]) => `<div class="sbtn" data-k="${k}" title="${t}"><canvas width="28" height="28" data-icon="${k}"></canvas><span>${l}</span></div>`).join('');
     for (const c of document.querySelectorAll('#sidebar canvas')) this.sideIcon(c.getContext('2d'), c.dataset.icon);
     $('#sidebar').addEventListener('click', (e) => {
       const b = e.target.closest('.sbtn'); if (!b) return;
@@ -154,8 +154,8 @@ const UI = {
     const temp = Math.round(G.weather.temp);
     const wIcon = G.weather.rain > 0.6 ? 'Storm' : G.weather.rain > 0.1 ? 'Rain' : G.weather.fog > 0.3 ? 'Fog' : G.light.night ? 'Clear night' : 'Clear';
     const sp = G.speed;
-    const btn = (s, l) => `<span class="spd ${(!G.paused && sp === s) || (s === 0 && G.paused) ? 'on' : ''}" data-speed="${s}">${l}</span>`;
-    const clockHtml = `<div class="date">${watch ? Game.dateStr() : 'Day ' + (Game.day() + 1)}</div><div class="time">${watch ? Game.timeStr() : Game.fuzzyTime()}</div><div class="wx">${wIcon} · ${temp}°C${G.events.powerOff ? ' · <span class="bad">No power</span>' : ''}</div><div class="speeds">${btn(0, '❚❚')}${btn(1, '▶')}${btn(3, '▶▶')}${btn(8, '▶▶▶')}${btn(20, '▶▶▶▶')}</div>`;
+    const btn = (s, l, t) => `<span class="spd ${(!G.paused && sp === s) || (s === 0 && G.paused) ? 'on' : ''}" data-speed="${s}" title="${t}">${l}</span>`;
+    const clockHtml = `<div class="lcd ${watch ? '' : 'none'}"><div class="date">${watch ? Game.dateStr() : 'Day ' + (Game.day() + 1)}</div><div class="time">${watch ? Game.timeStr() : Game.fuzzyTime()}</div><div class="wx">${wIcon} · ${temp}°C${G.events.powerOff ? ' · <span class="bad">No power</span>' : ''}</div></div><div class="speeds">${btn(0, '❚❚', 'Pause (P)')}${btn(1, '▶', 'Normal speed')}${btn(3, '▶▶', 'Fast forward x3')}${btn(8, '▶▶▶', 'Fast forward x8')}${btn(20, '▶▶▶▶', 'Fast forward x20')}</div>`;
     if (clockHtml !== this._clock) { $('#clock').innerHTML = clockHtml; this._clock = clockHtml; }
     this.slowT -= dt;
     if (this.slowT <= 0) {
@@ -164,9 +164,9 @@ const UI = {
       this.renderEquip();
       this.renderLog();
       if (this.panels.loot && this.panels.loot.open) this.checkLootChange();
-      if (this.panels.health && this.panels.health.open) this.healthT = (this.healthT || 0) + 1;
-      if (this.healthT > 4) { this.healthT = 0; this.renderPanel('health'); }
-      if (this.panels.skills && this.panels.skills.open) { this.skT = (this.skT || 0) + 1; if (this.skT > 8) { this.skT = 0; this.renderPanel('skills'); } }
+      // the character window: health every second, the other tabs every two
+      const CP = this.panels.char;
+      if (CP && CP.open) { this.chT = (this.chT || 0) + 1; if (this.chT > (CP.tab === 'health' ? 4 : 8)) { this.chT = 0; this.renderPanel('char'); } }
       if (this.panels.map && this.panels.map.open) { this.mapT = (this.mapT || 0) + 1; if (this.mapT > 4) { this.mapT = 0; MapView.draw(); } }
     }
     if (this.dirty) { this.dirty = false; for (const k in this.panels) if (this.panels[k].open) this.renderPanel(k); this.renderEquip(); }
@@ -202,9 +202,8 @@ const UI = {
       return `<div class="eslot" data-slot="${k}" title="${U.esc(Items.name(it))}"><img src="${Icons.url(it)}">${bar}${ammo}<span class="lbl">${label}</span></div>`;
     };
     const pr = Player.primary(), se = Player.secondary();
-    let html = slot(pr, 'p', pr && pr === se ? 'Both hands' : 'Primary') + (pr && pr === se ? '' : slot(se, 's', 'Secondary'));
-    const wt = Player.weight(), cap = Player.capacity();
-    html += `<div class="estat"><span class="${wt > cap ? 'bad' : ''}">${U.fmt1(wt)} / ${U.fmt1(cap)} kg</span> · Kills: ${p.kills} · Day ${Game.day() + 1}</div>`;
+    let html = pr && pr === se ? slot(pr, 'p', 'Both').replace('class="eslot"', 'class="eslot both"') : slot(pr, 'p', 'Primary') + slot(se, 's', 'Second');
+    void p;
     if (html !== this._eq) { $('#equip').innerHTML = html; this._eq = html; }
     this.renderHotbar();
   },
@@ -239,8 +238,7 @@ const UI = {
   panelDefs: {
     inv: { title: 'Inventory', w: 420, h: 420, x: 70, y: 90 },
     loot: { title: 'Loot', w: 420, h: 420, x: 500, y: 90 },
-    health: { title: 'Health', w: 460, h: 420, x: 120, y: 80 },
-    skills: { title: 'Character', w: 440, h: 520, x: 140, y: 60 },
+    char: { title: 'Character', w: 480, h: 560, x: 120, y: 50 },
     craft: { title: 'Crafting', w: 560, h: 440, x: 160, y: 80 },
     map: { title: 'Map', w: 600, h: 600, x: 200, y: 40 },
   },
@@ -251,15 +249,17 @@ const UI = {
     el.className = 'panel hidden';
     el.style.left = Math.max(0, Math.min(this.vw() - d.w - 10, d.x)) + 'px'; el.style.top = Math.max(0, Math.min(this.vh() - d.h - 10, d.y)) + 'px';
     el.style.width = d.w + 'px'; el.style.height = d.h + 'px';
-    el.innerHTML = `<div class="ph"><span class="pt">${d.title}</span><span class="px">✕</span></div><div class="pb"></div>`;
+    // Zomboid's window chrome: close at the left, the title in the middle, collapse to the title bar at the right
+    el.innerHTML = `<div class="ph"><span class="px" title="Close">✕</span><span class="pt">${d.title}</span><span class="pc" title="Collapse">▾</span></div><div class="pb"></div>`;
     $('#windows').appendChild(el);
     const P = { k, el, body: el.querySelector('.pb'), open: false, tab: null };
     this.panels[k] = P;
     el.querySelector('.px').onclick = () => this.close(k);
+    el.querySelector('.pc').onclick = () => { const c = el.classList.toggle('collapsed'); el.querySelector('.pc').textContent = c ? '▸' : '▾'; };
     // drag
     const ph = el.querySelector('.ph');
     ph.addEventListener('mousedown', (e) => {
-      if (e.target.classList.contains('px')) return;
+      if (e.target.classList.contains('px') || e.target.classList.contains('pc')) return;
       const s = this.scale, ox = e.clientX / s - el.offsetLeft, oy = e.clientY / s - el.offsetTop;
       const mv = (ev) => { el.style.left = U.clamp(ev.clientX / s - ox, 0, this.vw() - 60) + 'px'; el.style.top = U.clamp(ev.clientY / s - oy, 0, this.vh() - 30) + 'px'; };
       const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
@@ -271,9 +271,13 @@ const UI = {
     return P;
   },
   front(el) { this._z = (this._z || 10) + 1; el.style.zIndex = this._z; },
-  open(k) { const P = this.ensurePanel(k); P.open = true; P.el.classList.remove('hidden'); this.front(P.el); this.renderPanel(k); this.fitPanel(P.el); },
+  open(k) {
+    if (k === 'health' || k === 'skills') { this.openChar(k === 'health' ? 'health' : 'info'); return; }
+    const P = this.ensurePanel(k); P.open = true; P.el.classList.remove('hidden'); this.front(P.el); this.renderPanel(k); this.fitPanel(P.el); },
   close(k) { const P = this.panels[k]; if (!P) return; P.open = false; P.el.classList.add('hidden'); this.hideTip(); if (k === 'map') MapView.dragging = false; },
   toggle(k) {
+    // Health (H) and Character (K) are tabs of one window, as in Zomboid
+    if (k === 'health' || k === 'skills') { this.openChar(k === 'health' ? 'health' : 'info', true); return; }
     if (k === 'inv') {
       const o = this.panels.inv && this.panels.inv.open;
       if (o) { this.close('inv'); this.close('loot'); } else { this.open('inv'); this.open('loot'); }
@@ -293,8 +297,7 @@ const UI = {
     if (!P || !P.open) return;
     if (k === 'inv') this.renderContainers(P, Player.containers().map((c, i) => i === 0 ? Cont.inv() : Cont.bag(c.bag)), true);
     else if (k === 'loot') this.renderContainers(P, Interact.nearby(), false);
-    else if (k === 'health') this.renderHealth(P);
-    else if (k === 'skills') this.renderSkills(P);
+    else if (k === 'char') this.renderChar(P);
     else if (k === 'craft') this.renderCraft(P);
     else if (k === 'map') MapView.render(P);
   },
@@ -617,7 +620,7 @@ const UI = {
       if (it.fl > 0.001) { add('Drink', via(() => Actions.drink(it))); if (mine) add('Pour out', () => Actions.queue(Actions.pour(it))); }
     }
     if (d.pill) add('Take ' + d.n, via(() => Actions.pills(it)));
-    if (d.bandage !== undefined || d.disinfect || d.suture) add('Treat wounds…', () => this.open('health'));
+    if (d.bandage !== undefined || d.disinfect || d.suture) add('Treat wounds…', () => this.openChar('health'));
     if (d.smoke) add('Smoke', via(() => Actions.smoke(it)));
     if (d.cat === 'Literature' && !d.mapItem) add('Read', via(() => Actions.read(it)));
     if (d.mapItem) add('Read map', () => { MapView.reveal(); this.open('map'); });
@@ -767,38 +770,121 @@ const UI = {
     UpperLegL: [52, 150, 22, 64], UpperLegR: [76, 150, 22, 64], LowerLegL: [52, 214, 21, 74], LowerLegR: [77, 214, 21, 74], FootL: [46, 288, 26, 14], FootR: [78, 288, 26, 14],
   },
   bodyHit(x, y) { for (const pt of PARTS) { const [a, b, w, h] = this.BODY_RECTS[pt]; if (x >= a && x <= a + w && y >= b && y <= b + h) return pt; } return null; },
+  // the body: a grey mannequin (smooth limbs, a shaped torso), each part tinted by its worst wound, bandages wrapped
+  // round, fractures cracked, bleeding dripping; the selected part outlined in white. Drawn at twice the size.
   drawBody(cv, sel) {
-    const g = cv.getContext('2d');
-    const p = G.player;
-    g.clearRect(0, 0, cv.width, cv.height);
-    for (const pt of PARTS) {
+    const K = 2;
+    if (cv.width !== 150 * K) { cv.width = 150 * K; cv.height = 330 * K; cv.style.width = '150px'; cv.style.height = '330px'; }
+    const g = cv.getContext('2d'), p = G.player;
+    g.setTransform(K, 0, 0, K, 0, 0);
+    g.clearRect(0, 0, 150, 330);
+    const shape = (pt) => {
       const [x, y, w, h] = this.BODY_RECTS[pt];
-      const b = p.body[pt];
-      let col = '#4a6a4a';
-      if (b.w.scratch) col = '#b0a040';
-      if (b.w.cut || b.w.burn) col = '#c07030';
-      if (b.w.fracture) col = '#c05a20';
-      if (b.w.bite || b.w.deep) col = '#b03030';
-      if (b.infect > 0.05) col = '#8a3a8a';
-      g.fillStyle = col;
-      const r = pt === 'Head' ? 14 : 5;
-      roundRect(g, x, y, w, h, r); g.fill();
-      if (b.bandage) { g.fillStyle = b.bandage.dirt >= 0.99 ? 'rgba(150,120,80,0.75)' : 'rgba(240,240,230,0.7)'; for (let k = 0; k < 3; k++) g.fillRect(x + 2, y + h * (0.25 + k * 0.2), w - 4, 3); }
-      if (b.w.fracture) { g.strokeStyle = '#2a1a10'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + 3, y + h * 0.45); g.lineTo(x + w * 0.45, y + h * 0.55); g.lineTo(x + w * 0.6, y + h * 0.42); g.lineTo(x + w - 3, y + h * 0.52); g.stroke(); if (b.splint) { g.fillStyle = '#c8a878'; g.fillRect(x - 2, y + 4, 3, h - 8); g.fillRect(x + w - 1, y + 4, 3, h - 8); } }
-      if (Player.partBleed(b) > 0) { g.fillStyle = '#e02020'; g.beginPath(); g.arc(x + w / 2, y + h / 2, 3, 0, 7); g.fill(); }
-      g.strokeStyle = sel === pt ? '#ffe080' : 'rgba(0,0,0,0.5)'; g.lineWidth = sel === pt ? 2 : 1;
-      roundRect(g, x, y, w, h, r); g.stroke();
+      g.beginPath();
+      if (pt === 'Head') g.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, 7);
+      else if (pt === 'TorsoUpper') { g.moveTo(x + 6, y); g.lineTo(x + w - 6, y); g.quadraticCurveTo(x + w, y + 1, x + w, y + 9); g.lineTo(x + w - 4, y + h); g.lineTo(x + 4, y + h); g.lineTo(x, y + 9); g.quadraticCurveTo(x, y + 1, x + 6, y); }
+      else if (pt === 'TorsoLower') { g.moveTo(x + 2, y); g.lineTo(x + w - 2, y); g.quadraticCurveTo(x + w - 5, y + h * 0.5, x + w, y + h); g.lineTo(x, y + h); g.quadraticCurveTo(x + 5, y + h * 0.5, x + 2, y); }
+      else if (pt === 'Groin') { g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w - 3, y + h); g.lineTo(x + w / 2 + 2, y + h); g.lineTo(x + w / 2, y + h * 0.55); g.lineTo(x + w / 2 - 2, y + h); g.lineTo(x + 3, y + h); g.closePath(); }
+      else roundRect(g, x, y, w, h, Math.min(w, h) / 2);
+    };
+    const tint = (b) => b.infect > 0.05 ? [120, 150, 70] : b.w.bite || b.w.deep ? [170, 30, 30] : b.w.fracture ? [150, 70, 160] : b.w.cut || b.w.burn ? [205, 90, 40] : b.w.scratch ? [215, 175, 60] : null;
+    for (const pt of PARTS) {
+      const [x, y, w, h] = this.BODY_RECTS[pt], b = p.body[pt];
+      shape(pt);
+      const gr = g.createLinearGradient(x, 0, x + w, 0);
+      gr.addColorStop(0, '#9c9c9c'); gr.addColorStop(0.45, '#c4c4c4'); gr.addColorStop(1, '#828282');
+      g.fillStyle = gr; g.fill();
+      const t = tint(b);
+      if (t) { g.fillStyle = `rgba(${t[0]},${t[1]},${t[2]},0.78)`; g.fill(); }
+      g.save(); shape(pt); g.clip();
+      if (b.bandage) { g.fillStyle = b.bandage.dirt >= 0.99 ? 'rgba(150,120,80,0.9)' : 'rgba(250,250,245,0.92)'; for (let k = 0; k < 3; k++) g.fillRect(x - 2, y + h * (0.28 + k * 0.17), w + 4, 3.5); }
+      if (b.w.fracture) { g.strokeStyle = '#1a0a18'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x, y + h * 0.45); g.lineTo(x + w * 0.4, y + h * 0.56); g.lineTo(x + w * 0.62, y + h * 0.42); g.lineTo(x + w, y + h * 0.53); g.stroke(); }
+      if (b.splint) { g.fillStyle = 'rgba(150,110,60,0.95)'; g.fillRect(x + 1, y + h * 0.15, 3, h * 0.7); g.fillRect(x + w - 4, y + h * 0.15, 3, h * 0.7); }
+      g.restore();
+      if (Player.partBleed(b) > 0) { g.fillStyle = '#e01818'; g.beginPath(); g.arc(x + w / 2, y + h * 0.6, 3.2, 0, 7); g.fill(); g.beginPath(); g.moveTo(x + w / 2 - 2, y + h * 0.6); g.lineTo(x + w / 2, y + h * 0.6 + 7); g.lineTo(x + w / 2 + 2, y + h * 0.6); g.fill(); }
+      shape(pt);
+      g.strokeStyle = sel === pt ? '#ffffff' : 'rgba(0,0,0,0.55)'; g.lineWidth = sel === pt ? 2.2 : 1; g.stroke();
     }
+    g.setTransform(1, 0, 0, 1, 0, 0);
   },
 
-  // ------------------------------------------------------------------ skills panel
-  renderSkills(P) {
-    const p = G.player;
+  // ------------------------------------------------------------------ the character window: Info, Skills, Health, Protection
+  CHAR_TABS: [['info', 'Info'], ['skills', 'Skills'], ['health', 'Health'], ['prot', 'Protection']],
+  // open on a tab (again on the same tab: close, when toggling from a key or button)
+  openChar(tab, toggle) {
+    const P = this.ensurePanel('char');
+    if (toggle && P.open && P.tab === tab) { this.close('char'); return; }
+    P.tab = tab; P.open = true; P.el.classList.remove('hidden'); P.el.classList.remove('collapsed');
+    this.front(P.el); this.renderPanel('char'); this.fitPanel(P.el);
+  },
+  // a tab's own body (each keeps its element, selection and click handlers)
+  charSub(tab) { const P = this.ensurePanel('char'); this.charInit(P); return P.subs[tab]; },
+  charInit(P) {
+    if (P.subs) return;
+    P.body.innerHTML = `<div class="ctabs2">${this.CHAR_TABS.map(([k, n]) => `<span class="ctab2" data-ct="${k}">${n}</span>`).join('')}</div>`
+      + this.CHAR_TABS.map(([k]) => `<div class="csub" data-cs="${k}"></div>`).join('');
+    P.subs = {};
+    for (const [k] of this.CHAR_TABS) P.subs[k] = { k, body: P.body.querySelector(`[data-cs="${k}"]`), sel: null };
+    P.body.querySelector('.ctabs2').addEventListener('click', (e) => { const t = e.target.closest('[data-ct]'); if (t) { P.tab = t.dataset.ct; this.renderPanel('char'); Sfx.play('pickup'); } });
+  },
+  renderChar(P) {
+    this.charInit(P);
+    const tab = P.tab || 'info';
+    for (const el of P.body.querySelectorAll('.ctab2')) el.classList.toggle('on', el.dataset.ct === tab);
+    for (const k in P.subs) P.subs[k].body.style.display = k === tab ? '' : 'none';
+    const S = P.subs[tab];
+    if (tab === 'info') this.renderInfo(S); else if (tab === 'skills') this.renderSkills(S); else if (tab === 'health') this.renderHealth(S); else this.renderProt(S);
+    for (const b of document.querySelectorAll('#sidebar .sbtn')) b.classList.toggle('on', (b.dataset.k === 'health' && tab === 'health') || (b.dataset.k === 'skills' && tab !== 'health'));
+  },
+  renderInfo(P) {
+    const p = G.player, st = p.st;
     const occ = OCCUPATIONS.find(o => o.id === p.occ);
     const days = Math.floor(p.minutesAlive / 1440), hrs = Math.floor((p.minutesAlive % 1440) / 60);
     const traits = p.traits.map(t => { const d = traitDef(t); return d ? `<span class="trait ${d.cost < 0 ? 'pos' : d.cost > 0 ? 'neg' : ''}" title="${U.esc(d.desc)}">${d.n}</span>` : ''; }).join('');
-    let html = `<div class="cinfo"><canvas class="cprev" width="70" height="90"></canvas><div><div class="cname">${U.esc(p.name)}</div><div>${occ ? occ.n : ''}</div><div class="sml">Survived ${days} days, ${hrs} hours · Zombies killed: ${p.kills}</div><div class="traits">${traits}</div>
-      <div class="exr"><span class="sml">Exercise:</span><span class="btn xs" data-ex="squats">Squats</span><span class="btn xs" data-ex="pushups">Push-ups</span><span class="btn xs" data-ex="situps">Sit-ups</span></div></div></div><div class="skills">`;
+    const wt = Player.weight(), cap = Player.capacity();
+    const row = (n, v, cls) => `<div class="irow"><span>${n}</span><span class="${cls || ''}">${v}</span></div>`;
+    P.body.innerHTML = `<div class="cinfo"><canvas class="cprev" width="110" height="150"></canvas><div class="cright"><div class="cname">${U.esc(p.name)}</div><div>${occ ? occ.n : ''}</div>
+      <div class="sml">Survived ${days} day${days === 1 ? '' : 's'}, ${hrs} hour${hrs === 1 ? '' : 's'}</div><div class="traits">${traits || '<span class="sml">No traits</span>'}</div></div></div>
+      <div class="istats">${row('Zombies killed', p.kills)}${row('Carrying', U.fmt1(wt) + ' / ' + U.fmt1(cap) + ' kg', wt > cap ? 'bad' : '')}${row('Health', Math.round(Math.max(0, p.health)) + '%', p.health < 40 ? 'bad' : '')}
+      ${row('Endurance', Math.round(st.endurance * 100) + '%', st.endurance < 0.25 ? 'warn' : '')}${row('Body temperature', st.temp.toFixed(1) + '°C', st.temp < 35.5 || st.temp > 38.5 ? 'warn' : '')}
+      ${row('Hunger', Math.round(st.hunger * 100) + '%', st.hunger > 0.5 ? 'warn' : '')}${row('Thirst', Math.round(st.thirst * 100) + '%', st.thirst > 0.5 ? 'warn' : '')}${row('Fatigue', Math.round(st.fatigue * 100) + '%', st.fatigue > 0.6 ? 'warn' : '')}</div>
+      <div class="exr"><span class="sml">Exercise:</span><span class="btn xs" data-ex="squats">Squats</span><span class="btn xs" data-ex="pushups">Push-ups</span><span class="btn xs" data-ex="situps">Sit-ups</span></div>`;
+    if (!P.bound2) {
+      P.bound2 = true;
+      P.body.addEventListener('click', (e) => { const b = e.target.closest('[data-ex]'); if (b) { Actions.queue(Actions.exercise(b.dataset.ex)); } });
+    }
+    const cv = P.body.querySelector('.cprev');
+    const g = cv.getContext('2d');
+    g.save(); g.translate(55, 136); g.scale(1.75, 1.75);
+    if (!Char3D.preview(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 })) Humanoid.draw(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 }, 1);
+    g.restore();
+  },
+  // what is worn over each part of the body and what it stops, as an attack reckons it (bite, scratch)
+  renderProt(P) {
+    const p = G.player;
+    const REG = [['head', 'Head'], ['neck', 'Neck'], ['torso', 'Torso'], ['uarms', 'Upper arms'], ['farms', 'Forearms'], ['hands', 'Hands'], ['groin', 'Groin'], ['ulegs', 'Thighs'], ['llegs', 'Shins'], ['feet', 'Feet']];
+    let rows = '';
+    for (const [r, n] of REG) {
+      let bi = 0, sc = 0;
+      const on = [];
+      for (const it of p.inv) {
+        if (!it.worn) continue;
+        const d = ITEMS[it.id];
+        if (!d.cover || !d.cover.includes(r)) continue;
+        const k = it.cond === undefined ? 1 : 0.5 + it.cond * 0.5;
+        bi = 1 - (1 - bi) * (1 - (d.bi || 0) / 100 * k); sc = 1 - (1 - sc) * (1 - (d.sc || 0) / 100 * k);
+        on.push(Items.name(it));
+      }
+      const bar = (v) => `<div class="pbar"><i style="width:${Math.round(v * 100)}%"></i></div><span class="pv">${Math.round(v * 100)}%</span>`;
+      rows += `<div class="prow"><span class="pn">${n}</span><span class="pc2">${bar(bi)}</span><span class="pc2">${bar(sc)}</span><span class="pw">${on.length ? U.esc(on.join(', ')) : '<i>bare</i>'}</span></div>`;
+    }
+    P.body.innerHTML = `<div class="prot"><div class="prow ph2"><span class="pn">Body</span><span class="pc2">Bite</span><span class="pc2">Scratch</span><span class="pw">Worn</span></div>${rows}
+      <div class="sml" style="margin-top:8px">How likely your clothing stops a zombie's bite or scratch there. Worn-out clothing protects less; layers add up.</div></div>`;
+  },
+  // ------------------------------------------------------------------ skills panel
+  renderSkills(P) {
+    const p = G.player;
+    let html = `<div class="skills">`;
     for (const [grp, list] of SKILL_GROUPS) {
       html += `<div class="sgrp">${grp}</div>`;
       for (const sk of list) {
@@ -813,15 +899,6 @@ const UI = {
     }
     html += '</div>';
     P.body.innerHTML = html;
-    if (!P.bound2) {
-      P.bound2 = true;
-      P.body.addEventListener('click', (e) => { const b = e.target.closest('[data-ex]'); if (b) { Actions.queue(Actions.exercise(b.dataset.ex)); } });
-    }
-    const cv = P.body.querySelector('.cprev');
-    const g = cv.getContext('2d');
-    g.save(); g.translate(35, 78); g.scale(1.1, 1.1);
-    if (!Char3D.preview(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 })) Humanoid.draw(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 }, 1);
-    g.restore();
   },
   // ------------------------------------------------------------------ crafting
   renderCraft(P) {
