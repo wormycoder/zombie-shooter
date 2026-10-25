@@ -13,6 +13,16 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.019.001.130', date: '2026-10-25', title: 'Clean-up and polish',
+    notes: [
+      'Fixed buildings you could not walk into: schools, barracks, the armory and the prison blocks had no outside doors (the armory could not be entered at all), no trailer bedroom had a door, and some narrow bathrooms and upstairs rooms behind the stairs had none. Every room of every building can now be reached through a door (checked room by room on five maps).',
+      'Item tooltips as in Zomboid: the item\'s kind, then rows of stats, with a coloured bar for anything that runs down (condition, ammo, contents, fuel, battery, uses left, freshness, clothing protection). The hand slots on the left bar show the same tooltip.',
+      'Fort Hale has lawns and trees, a tree-lined road in from the gate, an obstacle course across the parade ground, sandbagged posts in the corners and a supply dump by the motor pool. The prison\'s exercise yard is a running track round a lawn with picnic tables.',
+      'Clean-up: the settings menu\'s tabs and presets follow the grey look, prisons and army buildings no longer have shop awnings, Hollow Creek\'s second office is Creekside Realty (there were two Valley Insurances), the Expanded map is no longer described as still being built, and unused code is gone.',
+    ],
+    commits: ['39fb32f', 'b4c8487', '00dca0a', '9b3bb13'], shots: ['v019001_1', 'v019001_2', 'v019001_3', 'v019001_4'],
+  },
+  {
     v: '000.019.000.125', date: '2026-10-25', title: 'Flats, apartments and new places in town',
     notes: [
       'About half the shops on the main streets are two storeys now, on both maps: stairs in the stock room lead up to a flat the size of the shop, with a living room, a kitchen, a bedroom and a bathroom, and windows over the street. The rest of the Stable map is as it was.',

@@ -128,10 +128,13 @@ VERY HIGH - CONTINUE UPDATING THE MAP, AND FINISH ON ALL BUILDINGS.
      - warehouses' empty loading bays stocked;
      - fixed a rare drawing crash (a wall picture could be evicted from the
        memory cache before it was drawn).
-     Next for the map: Fort Hale's and the prison's bare grounds (tents,
-     sandbags, an obstacle course; a basketball court, weights, picnic
-     tables), a hospital for Kingsbury, more shop types (a hotel, a car
-     dealer, a factory), and the empty stretches of countryside.
+     Polish pass (000.019.001.130): Fort Hale's and the prison's bare
+     grounds dressed (lawns and trees, an obstacle course, sandbagged posts,
+     a supply dump; the prison yard a running track round a lawn with picnic
+     tables), and every room of every building now reachable through a door
+     (see ALSO FIXED).
+     Next for the map: a hospital for Kingsbury, more shop types (a hotel,
+     a car dealer, a factory), and the empty stretches of countryside.
 
 HIGH - ZOMBIES AREN'T MUCH OF A THREAT, AND IN SOME INSTANCES, YOU CAN WALK
       IN THE MIDDLE OF A HORDE AND GET OUT JUST FINE. ZOMBIES FOR WHATEVER
@@ -164,8 +167,9 @@ HIGH TO VERY HIGH - BETTER UI - MORE ZOMBOID ESQUE, COULD RE-WRITE WHOLE UI
      you wear, per body part); a smooth grey body figure on the Health tab
      (wounds tinted, bandages wrapped round, fractures, bleeding); the title,
      pause and death screens as plain words down the side or centre; text a
-     step bigger, and Auto UI scale 125% on 1920 x 1080. Still to do: item
-     tooltips like Zomboid's (condition bars, stats), the crafting window's
+     step bigger, and Auto UI scale 125% on 1920 x 1080. Item tooltips
+     like Zomboid's (stat rows, condition / contents / battery / freshness
+     bars) DONE (000.019.001.130). Still to do: the crafting window's
      layout, the world map's look.
 
 HIGH (added) - MAKE SURE THE UI SCALES WITH THE RESOLUTION OF THE SCREEN,
@@ -216,6 +220,11 @@ ALSO FIXED (found along the way)
   - "I can't get there." on furniture whose clicked end is boxed in (a bed's
     head between the wall, a wardrobe and its other half): the survivor now
     goes to the end that can be reached. (000.016.000.117)
+  - Rooms you could not walk into, found by a doors-only check of every room
+    of every building: schools, barracks, the armory and the prison blocks
+    had no outside doors (corridor ends counted as corners), every trailer
+    bedroom had no door, some narrow house bathrooms and upstairs rooms
+    behind the stairwell had none. (000.019.001.130)
 
 --------------------------------------------------------------------
 RUN LOG
@@ -228,6 +237,10 @@ Run 2 (000.017.000.120): UI scaling (added), memory budget + a memory
 Run 3 (000.018.000.122): the UI rework, first pass.
 Run 4 (000.019.000.125): the map and buildings, part 1 (flats, apartments,
   post office, library, auto repair, striped car parks; a drawing crash).
+Polish pass (000.019.001.130), asked for: clean-up and polish - unused
+  code, leftover colours and texts, a bug sweep (a scripted play session
+  on both maps: no errors; a doors-only check found the unreachable rooms
+  above), Zomboid-style item tooltips, Fort Hale and the prison dressed.
 Next run, planned: vehicles (wheels spinning, proportions), then the
-  character and zombie models; the map's part 2 (Fort Hale, the prison,
-  a hospital) after that.
+  character and zombie models; the map's part 2 (a hospital, more shop
+  types, the countryside) after that.
