@@ -13,6 +13,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.018.000.122', date: '2026-10-25', title: 'A Zomboid-style interface',
+    notes: [
+      'The interface is restyled after Project Zomboid: black glass panels with thin light frames, white text and grey highlights in place of the brown and gold, text a step bigger, and the windows with Zomboid\'s title bar (close at the left, the title in the middle, a collapse button at the right that folds the window to its title bar).',
+      'What you hold sits at the top of the left bar, above the window buttons, as in Zomboid. The clock is your wristwatch\'s display (date, time, temperature); without a watch you only have a rough idea of the time of day. The game speed buttons sit under it.',
+      'Health and character are one Character window with four tabs: Info (your survivor, carrying weight, hunger, thirst, fatigue, exercise), Skills, Health and a new Protection tab that shows, for every part of the body, how likely your clothes stop a bite or a scratch and what you have on there. H opens it on Health, K on Info.',
+      'The Health tab has a proper body figure: wounds tint the part they are on, bandages wrap round it, fractures crack it and bleeding drips.',
+      'The title screen, the pause menu and the death screen are plain words down the side or in the middle, as in Zomboid. Objects under the mouse are outlined in white.',
+      'Auto UI scale is a little larger on big screens (125% at 1920 x 1080), still fitting laptops.',
+    ],
+    commits: ['7b5f7d1'], shots: ['v018000_1', 'v018000_2', 'v018000_3', 'v018000_4'],
+  },
+  {
     v: '000.017.000.120', date: '2026-10-25', title: 'The dead grab you; the UI fits your screen',
     notes: [
       'Zombies are dangerous now. A zombie that reaches you lunges the last stretch and keeps coming through its swing faster than you can walk (running still gets you clear), and if it lands it has hold of you: hands on your shoulders, leaning in, biting or clawing every second and a half or so. Held, you can barely move, and two of them pin you; three holding on for two seconds drag you down. Shove (Space) throws one off, even one behind you, or pull away to break free (strength and fitness help).',
