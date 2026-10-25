@@ -13,6 +13,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.017.000.120', date: '2026-10-25', title: 'The dead grab you; the UI fits your screen',
+    notes: [
+      'Zombies are dangerous now. A zombie that reaches you lunges the last stretch and keeps coming through its swing faster than you can walk (running still gets you clear), and if it lands it has hold of you: hands on your shoulders, leaning in, biting or clawing every second and a half or so. Held, you can barely move, and two of them pin you; three holding on for two seconds drag you down. Shove (Space) throws one off, even one behind you, or pull away to break free (strength and fitness help).',
+      'Fixed: your own footsteps distracted the zombies attacking you (every step turned them to investigate the noise), so walking through a crowd broke off every attack. Walking straight through six zombies used to leave you untouched; now it leaves you wounded, and sometimes dead.',
+      'The interface scales with the screen (Settings > Display > UI scale: Auto, or 75% to 150%). Auto shrinks it on laptop screens so nothing is cut off and grows it a little on very big ones. Long dialogs (World settings, Settings, How to play) scroll and windows never run off the screen.',
+      'Memory budget (Settings > Experimental, 1 GB by default; 512 MB to 8 GB): past it, pictures not drawn lately are dropped and painted again when needed. The detailed frame counter and the performance report show the estimate.',
+      'Fixed a memory leak: pictures of walls and furniture put out of their caches were kept alive by the renderer and painted again as duplicates. Touring a town now takes about 100 MB less.',
+      'Menus, the pause screen and a paused game draw at 30 frames a second at most, so the computer idles there.',
+    ],
+    commits: ['686382e', '2e905cc'], shots: ['v017000_1', 'v017000_2', 'v017000_3', 'v017000_4'],
+  },
+  {
     v: '000.016.000.117', date: '2026-10-23', title: 'Faster cars, better guns and aim, lighter crowds',
     notes: [
       'Cars are much faster: a sedan reaches about 72 mph, a police car 88, a sports car over 100, pickups, vans and SUVs around 60-70, the fire truck, army truck and school bus 50-60. A worn engine loses less top speed than before, and a gear-shift bug is fixed that kept cars hunting between two gears, stuck at 25-50 mph.',
