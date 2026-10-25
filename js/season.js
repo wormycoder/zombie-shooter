@@ -66,7 +66,6 @@ const Season = {
     this.grass = this.grassOf(this.doy);
     this.snow = G.weather ? (G.weather.snow || 0) : 0;
   },
-  snowing() { const w = G.weather; return !!w && w.rain > 0.03 && w.temp < 1; },
   // tint a grass colour for the season
   grassCol(base, st) {
     if (st === 'a') return Col.mix(base, '#a0904a', 0.38);

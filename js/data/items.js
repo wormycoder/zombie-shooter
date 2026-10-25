@@ -357,8 +357,6 @@ const Items = {
   },
   contentWeight(arr) { let w = 0; for (const it of arr) w += this.weight(it); return w; },
   has(it, tag) { return ITEMS[it.id].tags.includes(tag); },
-  isWeapon(it) { const d = ITEMS[it.id]; return !!(d.wpn || d.gun); },
-  catOf(it) { return ITEMS[it.id].cat; },
   // items are considered stackable in UI if same id & no distinguishing state
   stackKey(it) {
     const d = ITEMS[it.id];

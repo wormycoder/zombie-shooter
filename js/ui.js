@@ -553,17 +553,6 @@ const UI = {
     opts.push({ label: n + ' items selected', info: true });
     this.showContext(x, y, opts);
   },
-  quickMove(g, cur, pk) {
-    if (!g || !cur) return;
-    let to;
-    if (pk === 'loot') to = Cont.inv();
-    else {
-      const loot = this.panels.loot;
-      to = loot && loot.open && loot.conts ? loot.conts.find(c => c.key === loot.tab) : Cont.floor(Math.floor(G.player.x), Math.floor(G.player.y));
-    }
-    if (!to || to.key === cur.key) return;
-    this.moveItems(g.items, cur, to);
-  },
   panelAction(P, act) {
     const cur = P.conts && P.conts.find(c => c.key === P.tab);
     if (!cur) return;

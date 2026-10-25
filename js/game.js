@@ -320,7 +320,7 @@ const Game = {
     let el = document.getElementById('fps');
     const mode = Settings.v.fpsShow;
     if (!mode) { if (el) el.style.display = 'none'; Render.lightN = 0; return; }
-    if (!el) { el = document.createElement('div'); el.id = 'fps'; el.style.cssText = 'position:fixed;left:8px;top:6px;z-index:30;font:11px/1.45 Verdana,sans-serif;color:#e8e0c0;background:rgba(0,0,0,0.55);padding:2px 7px;border-radius:3px;pointer-events:none;white-space:pre'; document.body.appendChild(el); }
+    if (!el) { el = document.createElement('div'); el.id = 'fps'; el.style.cssText = 'position:fixed;left:8px;top:6px;z-index:30;font:11px/1.45 Verdana,sans-serif;color:#e8e8e8;background:rgba(0,0,0,0.55);padding:2px 7px;border-radius:3px;pointer-events:none;white-space:pre'; document.body.appendChild(el); }
     el.style.display = 'block';
     const col = fps >= 50 ? '#9be08a' : fps >= 28 ? '#e8d070' : '#f08a6a';
     let txt = '<b style="color:' + col + '">' + Math.round(fps) + ' FPS</b>';
@@ -667,7 +667,6 @@ const Weather = {
 // ---------------------------------------------------------------------------
 const Save = {
   KEY: 'hollowcreek_save_v1',
-  exists() { try { return !!localStorage.getItem(this.KEY); } catch (e) { return false; } },
   meta() { try { const m = localStorage.getItem(this.KEY + '_meta'); return m ? JSON.parse(m) : null; } catch (e) { return null; } },
   wipe() { try { localStorage.removeItem(this.KEY); localStorage.removeItem(this.KEY + '_meta'); } catch (e) { /* ignore */ } },
   ZSKIP: { path: 1, obE: 1, obTo: 1, cFrom: 1, dcOk: 1, look: 1 },

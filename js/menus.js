@@ -106,7 +106,7 @@ const Menu = {
       <div class="opt"><span>Starting location</span><select data-spawn="1">${places.map(n => opt(n, n, n === this.spawnSel)).join('')}</select></div>`;
     $('#menu').innerHTML = `<div class="modal"><div class="mbox"><h2>World settings</h2>
       ${mapRows}
-      <div class="sml" style="margin:2px 0 10px;max-width:360px">${big ? 'Expanded is the county with the land round it still being built: new towns, Fort Hale, the prison and the airfield. A work in progress.' : 'Stable is the county as it stands, finished.'}</div>
+      <div class="sml" style="margin:2px 0 10px;max-width:360px">${big ? 'Expanded is the county with the land round it: three more towns, Fort Hale, the prison, the airfield and the interstate. Still being finished, so it may change.' : 'Stable is the county as it stands, finished.'}</div>
       <div class="sml" style="margin-bottom:6px">Presets</div><div style="margin-bottom:10px">${presets}</div>
       ${rows}
       <div class="sml" style="margin:8px 0 4px;max-width:360px">Sprinters run as fast as you do. Shorter days make hunger, thirst and fatigue tick faster in real time.</div>
@@ -278,27 +278,27 @@ const Menu = {
     clearInterval(this.liveT);
     let lastGrp = null;
     const rows = (t) => Object.keys(SETTINGS_OPTS).filter(k => SETTINGS_OPTS[k].tab === t).map(k => {
-      const g = SETTINGS_OPTS[k].grp, head = g && g !== lastGrp ? `<div class="sml" style="margin:10px 0 3px;color:#c8a870;letter-spacing:1px;text-transform:uppercase;font-size:10px">${g}</div>` : '';
+      const g = SETTINGS_OPTS[k].grp, head = g && g !== lastGrp ? `<div class="sml" style="margin:10px 0 3px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;font-size:10px">${g}</div>` : '';
       lastGrp = g;
       return head + row(k);
     }).join('');
     const row = (k) => {
       const o = SETTINGS_OPTS[k], na = k === 'chars3d' && !GL3D.ok();
       const tip = (o.tip || '') + (na ? ' Not available in this browser (WebGL missing or running without GPU acceleration), so the 2D figures are used.' : '');
-      return `<div class="opt" data-tip="${tip}"><span>${o.n}${na ? ' <span style="color:#c08060;font-size:11px">(unavailable: no GPU)</span>' : ''}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
+      return `<div class="opt" data-tip="${tip}"><span>${o.n}${na ? ' <span style="color:var(--dim);font-size:11px">(unavailable: no GPU)</span>' : ''}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     };
-    const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm" data-gpre="${n}" style="${n === pn ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('') + '</div>';
+    const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm${n === pn ? ' on' : ''}" data-gpre="${n}">${n}</span>`).join('') + '</div>';
     const tabs = [['opt', 'Optimization'], ['display', 'Display'], ['audio', 'Audio'], ['controls', 'Controls'], ['exp', 'Experimental']]
-      .map(([k, n]) => `<span class="btn sm" data-tab="${k}" style="${k === tab || (k === 'opt' && tab === 'report') ? 'border-color:#c8b070;color:#f0e0b0;background:rgba(200,176,112,0.18)' : ''}">${n}</span>`).join('');
+      .map(([k, n]) => `<span class="btn sm${k === tab || (k === 'opt' && tab === 'report') ? ' on' : ''}" data-tab="${k}">${n}</span>`).join('');
     let body = '';
     if (tab === 'report') body = `<div class="sml" style="margin:2px 0 6px">Performance report: copy it and send it along with a description of what was slow.</div>
-      <textarea id="perfRep" readonly spellcheck="false" style="width:100%;height:300px;box-sizing:border-box;background:rgba(0,0,0,0.35);color:#e0d8c0;border:1px solid rgba(255,255,255,0.12);font:11px/1.45 Consolas,monospace;padding:6px;resize:vertical">${U.esc(Perf.report())}</textarea>
+      <textarea id="perfRep" readonly spellcheck="false" style="width:100%;height:300px;box-sizing:border-box;background:rgba(0,0,0,0.35);color:var(--text);border:1px solid rgba(255,255,255,0.12);font:11px/1.45 Consolas,monospace;padding:6px;resize:vertical">${U.esc(Perf.report())}</textarea>
       <div style="margin-top:6px"><span class="btn sm" data-prep="copy">Copy to clipboard</span><span class="btn sm" data-prep="again">Refresh</span><span class="sml" id="perfRepMsg" style="margin-left:8px;color:#9be08a"></span></div>`;
     else if (tab === 'opt') body = presets
-      + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:#d8d0b8">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
-      + `<div style="max-height:360px;overflow-y:auto;padding-right:6px">${rows('opt')}</div><div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
-    else if (tab === 'display') body = presets + rows('display') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
-    else if (tab === 'exp') body = `<div class="sml" style="margin:2px 0 4px;color:#d8b070">Work in progress: these may change, be slow or break saves made with them.</div>` + rows('exp') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:#a89c80"></div>`;
+      + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:var(--text)">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
+      + `<div style="max-height:360px;overflow-y:auto;padding-right:6px">${rows('opt')}</div><div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
+    else if (tab === 'display') body = presets + rows('display') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
+    else if (tab === 'exp') body = `<div class="sml" style="margin:2px 0 4px;color:#d8b070">Work in progress: these may change, be slow or break saves made with them.</div>` + rows('exp') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
     else if (tab === 'audio') body = `<div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
       <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>`;

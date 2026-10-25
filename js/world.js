@@ -105,7 +105,6 @@ const World = {
   isWater(x, y) { const f = this.floor(x, y); return f === FL.WATER || f === FL.DEEPWATER; },
   obj(x, y) { return this.inb(x, y) ? Wd.obj[y * Wd.w + x] : null; },
   setObj(x, y, o) { if (this.inb(x, y)) Wd.obj[y * Wd.w + x] = o; },
-  odef(o) { return o ? OBJ[o.t] : null; },
 
   // ------------------------------------------------------------------ blocking
   edgeBlocksMove(x, y, d) {
@@ -130,17 +129,6 @@ const World = {
       return false;
     }
     return !WALL_INFO[t].see;
-  },
-  // edge can be climbed over (window open/smashed, fence)
-  edgeClimbable(x, y, d) {
-    const t = this.wall(x, y, d);
-    if (!t) return false;
-    const f = this.feat(x, y, d);
-    if (f) {
-      if (f.k === 'window') return (f.open || f.smashed) && !f.barricade;
-      return false;
-    }
-    return !!WALL_INFO[t].climb;
   },
   tileSolid(x, y) {
     if (!this.inb(x, y)) return true;
@@ -583,7 +571,6 @@ const World = {
     }
     return false;
   },
-  hasWater() { return !G.events.waterOff; },
 };
 const DIR8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const DIR4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];

@@ -10,7 +10,6 @@ const U = {
   clamp(v, a, b) { return v < a ? a : v > b ? b : v; },
   lerp(a, b, t) { return a + (b - a) * t; },
   dist(ax, ay, bx, by) { const dx = bx - ax, dy = by - ay; return Math.sqrt(dx * dx + dy * dy); },
-  dist2(ax, ay, bx, by) { const dx = bx - ax, dy = by - ay; return dx * dx + dy * dy; },
   angDiff(a, b) {
     let d = b - a;
     while (d > Math.PI) d -= Math.PI * 2;
@@ -24,9 +23,6 @@ const U = {
   pad2(n) { return (n < 10 ? '0' : '') + n; },
   cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
   esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); },
-  // world -> screen (relative, before camera)
-  isoX(x, y) { return (x - y) * HTW; },
-  isoY(x, y, z) { return (x + y) * HTH - (z || 0) * ZU; },
 };
 
 // ---------------------------------------------------------------------------

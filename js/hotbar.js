@@ -40,11 +40,6 @@ const Hotbar = {
     if (a) for (const s in a) if (a[s] === it.uid) return s;
     return null;
   },
-  // first free slot the item fits, else the first one it fits
-  bestSlot(it) {
-    const ok = this.slots().filter(s => this.fits(it, s));
-    return ok.find(s => !this.item(s)) || ok[0] || null;
-  },
   attach(it, slot) {
     const p = G.player;
     if (!slot || !this.fits(it, slot) || !this.slots().includes(slot)) { Player.say("That won't fit there.", '#ccc'); return false; }
