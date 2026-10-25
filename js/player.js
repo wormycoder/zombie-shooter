@@ -221,7 +221,9 @@ const Player = {
     else p.dragT = Math.max(0, (p.dragT || 0) - dt);
     if (p.fireCd > 0) p.fireCd -= dt;
     // camera
-    const cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
+    let cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
+    // driving, the view leads the car by up to 5 tiles so more of the road ahead is on screen
+    if (p.inCar) { const c = p.inCar, L = U.clamp((c.v || 0) * 0.2, -2, 5); cx += Math.cos(c.a) * L; cy += Math.sin(c.a) * L; }
     const cz = p.inCar ? 0 : Render.entZ(p);
     Render.cam.x += (cx - Render.cam.x) * Math.min(1, dt * 8);
     Render.cam.y += (cy - Render.cam.y) * Math.min(1, dt * 8);

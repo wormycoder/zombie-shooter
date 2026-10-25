@@ -565,6 +565,7 @@ const Trees = {
     this.wind += (tw - this.wind) * Math.min(1, this.dt * 0.5);
     const z = Render.cam.zoom;
     this.mx = Input.overUI ? -1e9 : (Input.mx - Render.ox) / z; this.my = (Input.my - Render.oy) / z;
+    this.win();
     // sway is a sheared draw, far dearer than a plain one on a software canvas: only where it shows
     this.swayOn = Settings.v.detail !== 0 && z >= 0.8; this.z = z;
     const tc = Settings.v.texCap || 2;
@@ -584,12 +585,58 @@ const Trees = {
     return Math.abs(px - bx) < m.tw && py < by && py > by + m.th;
   },
   // see-through, PZ style: every tree standing in front of the player gets a soft window erased around
-  // the player, and every tree whose crown covers the cursor a smaller one around the cursor. Both ease
-  // in and out per tree (fade: tile -> [player, cursor]). In a forest a dozen trees stack over the
-  // spot, and a dozen half-transparent layers add up to an opaque one, so each tree erases the N-th root
-  // of the wanted see-through (N = trees over that spot last frame): the middle stays clear however
-  // dense the wood is.
-  HOLE: 84, CHOLE: 58, holeN: 1, holeC: 0, curN: 1, curC: 0,
+  // the player, every tree whose crown covers the cursor a smaller one around the cursor, and every crown
+  // over one of the dead the player can see a small one around it. They ease in and out per tree (fade:
+  // tile -> [player, cursor, tick, dead]). In a forest a dozen trees stack over the spot, and a dozen
+  // half-transparent layers add up to an opaque one, so each tree erases the N-th root of the wanted
+  // see-through (N = trees over that spot last frame): the middle stays clear however dense the wood is.
+  // In a car the player's window runs ahead of the car along its way, longer the faster it goes
+  HOLE: 100, CARHOLE: 124, CHOLE: 58, ZRX: 34, ZRY: 46, holeN: 1, holeC: 0, curN: 1, curC: 0,
+  zw: [], zcnt: new Map(), hl: [],
+  // the player's window this frame: ellipse centre wx, wy, half-axes wa along (wc, ws) and wb across, its
+  // bounding half-extents wex, wey (world px), and the depth (x + y) a tree must stand in front of to be cut
+  win() {
+    const p = G.player, c = p && p.inCar;
+    if (c) {
+      const sp = c.v || 0, dir = sp < -0.5 ? -1 : 1, ca = Math.cos(c.a) * dir, sa = Math.sin(c.a) * dir;
+      const Lt = 1.5 + Math.min(26, Math.abs(sp)) * 0.26, sx = (ca - sa) * HTW, sy = (ca + sa) * HTH, l = Math.hypot(sx, sy) || 1;
+      // from 1.4 R behind the car to R past the point Lt tiles ahead
+      const L = Lt * l, R = this.CARHOLE, off = (L - 0.4 * R) / 2;
+      this.wc = sx / l; this.ws = sy / l; this.wa = (L + 2.4 * R) / 2; this.wb = R;
+      this.wx = Render.PX + this.wc * off; this.wy = Render.PY - 16 + this.ws * off;
+      this.wd = Math.min(c.x + c.y - 1.5, c.x + c.y + (ca + sa) * Lt);
+    } else {
+      this.wc = 1; this.ws = 0; this.wa = this.HOLE; this.wb = this.HOLE * 1.1;
+      this.wx = Render.PX; this.wy = Render.PY - 34;
+      this.wd = p ? (p.x >= LV.W0 ? p.x - LV.W0 : p.x) + p.y : 1e9;
+    }
+    this.wex = Math.hypot(this.wa * this.wc, this.wb * this.ws); this.wey = Math.hypot(this.wa * this.ws, this.wb * this.wc);
+    // the dead in sight within 16 tiles, nearest 24: screen x, y (body), depth, id, trees over it last frame, this frame
+    const zw = this.zw, M = this.zcnt;
+    M.clear();
+    for (let i = 0; i < zw.length; i += 6) M.set(zw[i + 3], zw[i + 5]);
+    zw.length = 0;
+    if (!p || p.dead || !G.zombies) return;
+    const px = p.x >= LV.W0 ? p.x - LV.W0 : p.x, near = Zombie.near(px, p.y, 16);
+    if (near.length > 24) near.sort((a, b) => Math.abs(a.x - px) + Math.abs(a.y - p.y) - Math.abs(b.x - px) - Math.abs(b.y - p.y));
+    for (let k = 0, n = 0; k < near.length && n < 24; k++) {
+      const z = near[k];
+      if (z.dead || z.va < 0.25 || z.x >= LV.W0) continue;
+      zw.push((z.x - z.y) * HTW, (z.x + z.y) * HTH - 30, z.x + z.y, z.id, M.get(z.id) || 1, 0); n++;
+    }
+  },
+  // could the window (centre x, y, half-axes a along (c, s) and b across) reach the crown or trunk of a tree
+  // standing at bx, by: crown and trunk taken as circles, tested against the window grown by their radius
+  // (the window's outer tenth erases next to nothing and is left out: a tree only it touches is drawn plain)
+  reaches(m, bx, by, x, y, a, b, c, s) {
+    a *= 0.9; b *= 0.9;
+    const rc = Math.max(m.rx, m.ry), ux = bx + m.cx - x, uy = by + m.cy - y;
+    let u = (ux * c + uy * s) / (a + rc), v = (uy * c - ux * s) / (b + rc);
+    if (u * u + v * v < 1) return true;
+    const rt = -m.th / 2 + m.tw, tx = bx - x, ty = by + m.th / 2 - y;
+    u = (tx * c + ty * s) / (a + rt); v = (ty * c - tx * s) / (b + rt);
+    return u * u + v * v < 1;
+  },
   draw(o, x, y, X, Y, p, t, vx) {
     if (this.tick !== Facade.tick) this.frame();
     const ctx = Render.ctx, isT = o.t === 'tree';
@@ -601,30 +648,39 @@ const Trees = {
     // wholly off screen (rows run on below the screen for the tallest crowns): nothing to draw
     const V = Render.scr;
     if (dx > V.R + 8 || dy > V.B || dx + dw < V.L - 8 || dy + dh < V.T) return;
-    let fh = 0, fc = 0;
-    const hx = Render.PX, hy = Render.PY - 34, R = this.HOLE;
+    let fh = 0, fc = 0, fz = 0, zn = 0;
+    const hl = this.hl, zw = this.zw;
     if (!o.stump) {
+      const m = rec.m || this.estM(rec), d = (vx === undefined ? x : vx) + y + 1.2, wx = this.wx, wy = this.wy;
       let hole = false;
-      if (p && (vx === undefined ? x : vx) + y + 1.2 > (p.x >= LV.W0 ? p.x - LV.W0 : p.x) + p.y) hole = hx + R > dx && hx - R < dx + dw && hy + R > dy && hy - R < dy + dh;
-      if (hole && hx > dx && hx < dx + dw && hy > dy && hy < dy + dh) this.holeC++;
-      const cur = this.covers(rec.m || this.estM(rec), X, by, this.mx, this.my);
+      if (p && d > this.wd && wx + this.wex > dx && wx - this.wex < dx + dw && wy + this.wey > dy && wy - this.wey < dy + dh) hole = this.reaches(m, X, by, wx, wy, this.wa, this.wb, this.wc, this.ws);
+      if (hole && wx > dx && wx < dx + dw && wy > dy && wy < dy + dh) this.holeC++;
+      const cur = this.covers(m, X, by, this.mx, this.my);
       if (cur) this.curC++;
+      // the dead behind this tree whose windows reach its crown: their indices in zw go to hl
+      for (let i = 0; i < zw.length; i += 6) {
+        if (d <= zw[i + 2]) continue;
+        const zx = zw[i], zy = zw[i + 1];
+        if (zx + this.ZRX < dx || zx - this.ZRX > dx + dw || zy + this.ZRY < dy || zy - this.ZRY > dy + dh) continue;
+        if (!this.reaches(m, X, by, zx, zy, this.ZRX, this.ZRY, 0, 1)) continue;
+        hl[zn++] = i;
+        if (this.covers(m, X, by, zx, zy)) zw[i + 5]++;
+      }
       const i = y * Wd.w + x, st = this.fade.get(i);
-      if (hole || cur || st) {
-        const e = st || [0, 0, 0], up = this.dt * 4, dn = this.dt * 2.5;
+      if (hole || cur || zn || st) {
+        const e = st || [0, 0, 0, 0], car = p && p.inCar, up = this.dt * (car ? 10 : 5), dn = this.dt * (car ? 4 : 2.5);
         e[2] = this.tick;
         e[0] = hole ? Math.min(1, e[0] + up) : Math.max(0, e[0] - dn);
         e[1] = cur ? Math.min(1, e[1] + up) : Math.max(0, e[1] - dn);
-        if (e[0] + e[1] <= 0) this.fade.delete(i); else if (!st) this.fade.set(i, e);
-        fh = e[0]; fc = e[1];
+        e[3] = zn ? Math.min(1, (e[3] || 0) + this.dt * 6) : Math.max(0, (e[3] || 0) - this.dt * 4);
+        if (e[0] + e[1] + e[3] <= 0) this.fade.delete(i); else if (!st) this.fade.set(i, e);
+        fh = e[0]; fc = e[1]; fz = zn ? e[3] : 0;
       }
     }
     let k = this.swayOn && !o.stump ? this.sway(x, y, t) : 0;
     if (k && Math.abs(k) * dh * this.z < 0.4) k = 0;
-    if (fh > 0.01 || fc > 0.01) {
-      // hole centres in sprite pixels (undo the sway shear and the sprite's scale)
-      const S = this.holed(rec, s, sc, fh > 0.01 ? fh : 0, (hx - k * (hy - by) - dx) / sc, (hy - dy) / sc, R / sc,
-        fc > 0.01 ? fc : 0, (this.mx - k * (this.my - by) - dx) / sc, (this.my - dy) / sc, this.CHOLE / sc);
+    if (fh > 0.01 || fc > 0.01 || fz > 0.01) {
+      const S = this.holed(rec, s, sc, dx, dy, k, by, fh > 0.01 ? fh : 0, fc > 0.01 ? fc : 0, fz > 0.01 ? fz : 0, zn);
       if (k) ctx.transform(1, 0, k, 1, -k * by, 0);
       ctx.drawImage(S, 0, 0, rec.c.width, rec.c.height, dx, dy, dw, dh);
       if (k) ctx.transform(1, 0, -k, 1, k * by, 0);
@@ -634,9 +690,10 @@ const Trees = {
     this.lit(ctx, rec, dx, dy, dw, dh, s, 1);
     if (k) ctx.transform(1, 0, -k, 1, k * by, 0);
   },
-  // the lit sprite composed in a scratch canvas with soft windows erased: around the player (f1 at
-  // x1, y1, radius r1) and around the cursor (f2 ...), all in sprite pixels
-  holed(rec, s, sc, f1, x1, y1, r1, f2, x2, y2, r2) {
+  // the lit sprite composed in a scratch canvas with soft windows erased: the player's (eased in by f1), the
+  // cursor's (f2) and those of the dead listed in hl[0 .. zn) (fz). Window centres go to sprite pixels: the
+  // sway shear (k about the base line by) and the sprite's scale undone
+  holed(rec, s, sc, dx, dy, k, by, f1, f2, fz, zn) {
     const w = rec.c.width, h = rec.c.height;
     let S = this.scr;
     if (!S || S.width < w || S.height < h) { S = this.scr = mkCanvas(Math.max(w, S ? S.width : 0, 320), Math.max(h, S ? S.height : 0, 400)); this.sg = S.getContext('2d'); }
@@ -645,8 +702,14 @@ const Trees = {
     if (dk > 0.02) { this.silOf(rec); g.drawImage(rec.sil, 0, 0, w, h); if (dk < 0.97) { g.globalAlpha = 1 - dk; g.drawImage(rec.c, 0, 0); g.globalAlpha = 1; } }
     else g.drawImage(rec.c, 0, 0);
     g.globalCompositeOperation = 'destination-out';
-    if (f1) { g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, this.holeN)), Math.round(f1 * 8)); g.setTransform(r1 / 100, 0, 0, r1 * 1.1 / 100, x1, y1); g.fillRect(-100, -100, 200, 200); }
-    if (f2) { g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, this.curN)), Math.round(f2 * 8)); g.setTransform(r2 / 100, 0, 0, r2 / 100, x2, y2); g.fillRect(-100, -100, 200, 200); }
+    const win = (n, f, x, y, a, b, c, sn) => {
+      g.fillStyle = this.holeGrad(g, Math.min(12, Math.max(1, n)), Math.round(f * 8));
+      x = (x - k * (y - by) - dx) / sc; y = (y - dy) / sc; a /= sc * 100; b /= sc * 100;
+      g.setTransform(a * c, a * sn, -b * sn, b * c, x, y); g.fillRect(-100, -100, 200, 200);
+    };
+    if (f1) win(this.holeN, f1, this.wx, this.wy, this.wa, this.wb, this.wc, this.ws);
+    if (f2) win(this.curN, f2, this.mx, this.my, this.CHOLE, this.CHOLE, 1, 0);
+    if (fz) for (let j = 0; j < zn; j++) { const i = this.hl[j], zw = this.zw; win(zw[i + 4], fz, zw[i], zw[i + 1], this.ZRX, this.ZRY, 1, 0); }
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-over';
     return S;
