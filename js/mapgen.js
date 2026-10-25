@@ -1783,8 +1783,9 @@ const MapGen = {
         furnish: (rm) => { this.place(rm, 'bed', { two: 'along', extra: { col: '#5a6a4a' } }); this.place(rm, 'locker'); if (r.chance(0.6)) this.place(rm, 'locker'); } });
     }
     // parade ground below the barracks, a flag on it
-    const py0 = y0 + 6 + 3 * (bh + 5), cxp = (x0 + 4 + wE) >> 1;
+    const py0 = y0 + 6 + 3 * (bh + 5), cxp = (x0 + 4 + wE) >> 1, L = { rx };
     if (y1 - 6 - py0 > 8) {
+      L.parade = [x0 + 4, py0, wE, y1 - 6];
       pad(x0 + 4, py0, wE, y1 - 6, FL.DIRT);
       this.put(cxp, (py0 + y1 - 6) >> 1, 'st_flagpole', 'S');
       for (let x = x0 + 6; x < wE - 2; x += 5) if (this.free(x, py0)) this.put(x, py0, 'bench', 'S');
@@ -1800,6 +1801,7 @@ const MapGen = {
     for (let x = mx0 + 2; x + 3 <= mx1; x += 5) if (r.chance(0.6)) this.w.carSpots.push({ x: x + 1, y: my1 - 4, a: -Math.PI / 2, kind: r.chance(0.7) ? 'army' : 'pickup' });
     // HQ, the armory (locked, crates of weapons), the mess hall, the helipad
     const hy = my1 + 4;
+    L.dump = [mx0 + 1, my1 + 1, mx0 + 12, my1 + 2];
     if (hy + 10 < y1 - 4) {
       this.inst('military', mx0, hy, mx0 + 17, hy + 9, 'W', { name: 'Fort Hale HQ', kind: 'office', extCol: '#8a5a48', alarm: true });
       const ax = mx0 + 21;
@@ -1815,6 +1817,8 @@ const MapGen = {
     // floodlights along the fence
     for (let x = x0 + 8; x < x1 - 4; x += 22) if (this.free(x, y1 - 1)) this.put(x, y1 - 1, 'st_floodlight', 'N');
     this.w.zones.push({ x0, y0, x1, y1, n: Math.round((x1 - x0) * (y1 - y0) * 0.005), outfit: 'military' });
+    // lawns, trees, the obstacle course, sandbags, the supply dump (buildings.js; random numbers of their own)
+    if (this.fortDress) this.withRng(x0 * 3 + y0, () => this.fortDress(q, L));
   },
   // Rock Creek Correctional: two cell blocks, the mess hall and administration, the exercise yard, a tower at each
   // corner; prisoners and guards among the dead
@@ -1837,7 +1841,9 @@ const MapGen = {
     }
     // the yard: dirt, benches, weights, a hoop's worth of concrete
     const yx0 = x0 + 28, yx1 = x1 - 12, yy0 = y0 + 26, yy1 = y1 - 26;
+    let Y = null;
     if (yx1 - yx0 > 8 && yy1 - yy0 > 6) {
+      Y = [yx0, yy0, yx1, yy1];
       pad(yx0, yy0, yx1, yy1, FL.DIRT); pad(yx1 - 10, yy0 + 1, yx1 - 1, yy0 + 8, FL.CONCRETE);
       for (let x = yx0 + 2; x < yx1 - 12; x += 4) if (this.free(x, yy1)) this.put(x, yy1, 'bench', 'N');
       this.w.labels.push({ x: (yx0 + yx1) >> 1, y: (yy0 + yy1) >> 1, text: 'Exercise Yard' });
@@ -1854,6 +1860,7 @@ const MapGen = {
     if (gx !== undefined) { this.put(x1 - 4, gx - 2, 'st_booth', 'E'); this.w.carSpots.push({ x: x1 - 8, y: gx + 1.5, a: Math.PI, kind: 'police' }); }
     this.w.zones.push({ x0: x0 + 8, y0: y0 + 8, x1: x1 - 8, y1: y1 - 8, n: Math.round((x1 - x0) * (y1 - y0) * 0.004), outfit: 'prisoner' });
     this.w.zones.push({ x0, y0, x1, y1, n: 6, outfit: 'police' });
+    if (this.prisonDress) this.withRng(x0 * 3 + y0, () => this.prisonDress(q, Y));
   },
   // Hawk Field: hangars on the apron, the control tower, a terminal office, fuel
   airfieldSite(q) {

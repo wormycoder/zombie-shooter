@@ -239,4 +239,79 @@ Object.assign(MapGen, {
     b.keyId = b.id;
     return b;
   },
+  // ---------------------------------------------------------------- fenced grounds
+  // The bare gravel of a fenced site turned to lawn, with a tile of gravel kept along paving, buildings and walls;
+  // trees on the lawn here and there (treeP a tile, kept apart). Returns the lawn's tiles.
+  siteLawn(x0, y0, x1, y1, treeP) {
+    const W = this.W, F = this.w.floor, r = this.rng, lawn = [];
+    const soft = (i) => (F[i] === FL.GRAVEL || F[i] === FL.GRASS || F[i] === FL.GRASS2) && this.w.room[i] < 0;
+    const walled = (x, y) => World.wall(x, y, 0) || World.wall(x, y + 1, 0) || World.wall(x, y, 1) || World.wall(x + 1, y, 1);
+    for (let y = y0 + 1; y < y1; y++) for (let x = x0 + 1; x < x1; x++) {
+      const i = y * W + x;
+      if (F[i] !== FL.GRAVEL || this.w.room[i] >= 0 || walled(x, y)) continue;
+      let ok = true;
+      for (let dy = -1; dy <= 1 && ok; dy++) for (let dx = -1; dx <= 1 && ok; dx++) if (!soft(i + dy * W + dx)) ok = false;
+      if (ok) lawn.push(i);
+    }
+    for (const i of lawn) { F[i] = FL.GRASS; this.w.fvar[i] = r.int(0, 3); }
+    if (treeP) {
+      const isLawn = new Set(lawn), planted = [];
+      for (const i of r.shuffle(lawn.slice())) {
+        if (!r.chance(treeP * 6)) continue;
+        const x = i % W, y = (i / W) | 0;
+        let ok = !this.w.obj[i] && !this.reservedOutside(x, y);
+        for (let dy = -1; dy <= 1 && ok; dy++) for (let dx = -1; dx <= 1 && ok; dx++) if (!isLawn.has(i + dy * W + dx)) ok = false;
+        if (ok && planted.some(([px, py]) => Math.abs(px - x) < 4 && Math.abs(py - y) < 4)) ok = false;
+        if (!ok) continue;
+        this.put(x, y, 'tree', 'S', this.tree(x, y, r.f(0.85, 1.2), 0, r.pick(['oak', 'maple', 'pine'])));
+        planted.push([x, y]);
+        if (planted.length >= lawn.length * treeP) break;
+      }
+    }
+    return lawn;
+  },
+  // Fort Hale dressed: lawns and trees, trees along the road in, an obstacle course across the parade ground,
+  // sandbagged posts in the corners, a supply dump by the motor pool. P: the base's layout from fortHale
+  fortDress(q, P) {
+    const r = this.rng, W = this.W, { x0, y0, x1, y1 } = q;
+    const ok = (x, y) => this.free(x, y) && !this.reservedOutside(x, y) && this.w.floor[y * W + x] !== FL.ASPHALT && this.w.floor[y * W + x] !== FL.PARKING;
+    for (let y = y0 + 8; y < y1 - 4; y += 6) for (const x of [P.rx - 2, P.rx + 5]) if (ok(x, y) && ok(x, y - 1) && ok(x, y + 1)) this.put(x, y, 'tree', 'S', this.tree(x, y, r.f(0.95, 1.15), 0, 'oak'));
+    if (P.parade) {
+      const [px0, py0, px1, py1] = P.parade, oy = py1 - 2;
+      for (let x = px0 + 3, k = 0; x < px1 - 2; x += 3, k++) {
+        if (!ok(x, oy)) continue;
+        if (k % 3 === 0) this.put(x, oy, 'logwall', 'S');
+        else if (k % 3 === 1) this.put(x, oy, 'hay', 'S', { sandbag: true, v: r.int(0, 5) });
+        else this.put(x, oy, 'st_jersey', 'S', { v: 0 });
+      }
+    }
+    for (const [cx, cy] of [[x0 + 3, y0 + 3], [x1 - 3, y0 + 3], [x0 + 3, y1 - 3], [x1 - 3, y1 - 3]]) {
+      for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]]) if (ok(cx + dx, cy + dy)) this.put(cx + dx, cy + dy, 'hay', 'S', { sandbag: true, v: r.int(0, 5) });
+    }
+    if (P.dump) {
+      const [dx0, dy0, dx1, dy1] = P.dump;
+      for (let k = 0; k < 12; k++) {
+        const x = r.int(dx0, dx1), y = r.int(dy0, dy1);
+        if (!ok(x, y)) continue;
+        if (r.chance(0.6)) this.put(x, y, 'woodcrate', 'S', { c: { type: 'crate', cap: 50, items: null, loot: 'militarysupply' } });
+        else this.put(x, y, 'st_pallet', 'S', { v: r.int(0, 3) });
+      }
+    }
+    this.siteLawn(x0, y0, x1, y1, 0.004);
+  },
+  // the prison's yard as a dirt running track round a lawn with picnic tables; lawn inside the inner fence (the
+  // gravel strip between the fences stays bare)
+  prisonDress(q, Y) {
+    const r = this.rng, W = this.W, F = this.w.floor, { x0, y0, x1, y1 } = q;
+    if (Y) {
+      const [yx0, yy0, yx1, yy1] = Y;
+      for (let y = yy0 + 2; y <= yy1 - 2; y++) for (let x = yx0 + 2; x <= yx1 - 2; x++) { const i = y * W + x; if (F[i] === FL.DIRT && !this.w.obj[i]) { F[i] = FL.GRASS; this.w.fvar[i] = r.int(0, 3); } }
+      let n = 0;
+      for (let t = 0; t < 40 && n < 4; t++) {
+        const x = r.int(yx0 + 4, yx1 - 14), y = r.int(yy0 + 4, yy1 - 4);
+        if (F[y * W + x] === FL.GRASS && this.free(x, y) && this.free(x - 1, y) && this.free(x + 1, y) && this.free(x, y - 1) && this.free(x, y + 1)) { this.put(x, y, 'st_table', 'S', { kind: 'picnic' }); n++; }
+      }
+    }
+    this.siteLawn(x0 + 3, y0 + 3, x1 - 2, y1 - 2, 0);
+  },
 });

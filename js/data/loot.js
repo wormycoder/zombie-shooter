@@ -121,6 +121,8 @@ const LOOT = {
   'prison.desk': { n: [0, 2], empty: 0.4, items: [['Newspaper', 2], ['Cigarettes', 2], ['Magazine', 1], ['Nightstick', 0.5]] },
   'hangar.toolcab': { n: [2, 5], empty: 0.1, items: [['@tools', 10], ['@cartools', 4], ['@carparts', 4], ['GasCan', 3], ['DuctTape', 2], ['Flashlight', 1]] },
   'hangar.crate': { n: [1, 4], empty: 0.2, items: [['@carparts', 4], ['@tools', 3], ['GasCan', 2], ['Plank', 1], ['@junk', 2]] },
+  // the supply dump outside the motor pool at Fort Hale
+  'militarysupply.crate': { n: [1, 4], empty: 0.15, items: [['@canned', 6], ['WaterBottle', 4], ['SterileBandage', 2], ['Bandage', 2], ['Box556', 1], ['Box9mm', 1], ['MilitaryJacket', 1], ['CargoPants', 1], ['Boots', 1], ['DuctTape', 1], ['Flashlight', 1], ['Battery', 1], ['@tools', 1]] },
   'military.crate': { n: [2, 5], empty: 0.05, items: [['AssaultRifle', 2], ['Box556', 5], ['Pistol', 2], ['Box9mm', 3], ['MilitaryBag', 2], ['MilitaryJacket', 2], ['Holster', 1], ['Belt', 1], ['BulletVest', 2], ['CargoPants', 2], ['Boots', 2], ['@canned', 3], ['SterileBandage', 2], ['Antibiotics', 1], ['TireHD', 0.6], ['EngineParts', 1]] },
 };
 
