@@ -216,7 +216,17 @@ FIX (added) - VISIBILITY AROUND TREES (ESPECIALLY WHILE DRIVING) IS VERY
      to 5 tiles.
 
 FIX - THE GAME IS LACKING FOLIAGE
-  -> MEDIUM. Bushes, tall grass, weeds in lots and along roads. UNFINISHED
+  -> MEDIUM. DONE (000.021.000.137): tall grass (meadow clumps, dry verge
+     grass), weeds and wildflowers (goldenrod, Queen Anne's lace, thistle,
+     chicory), cattails at the water's edge and wild shrubs (some with
+     berries), where nobody kept the grass: rural verges, empty town lots
+     away from buildings, field margins, fence lines, meadow patches; mowed
+     yards, the army base and the prison stay kept. A flat layer under it:
+     tufts, clover, dandelions, dry patches, leaf litter in the woods, weeds
+     in pavement cracks (cached with the ground: no cost per frame). All of
+     it follows the seasons and the snow; wheels press it flat; "Clear the
+     tall grass" by hand; building, digging and placing clear it. Left out
+     at the lowest world detail. New games (old saves keep their map).
 
 FIX - ADD ANIMATIONS AND ACTIONS FOR THINGS LIKE TALL FENCES, FAILING TO
       JUMP A TALL FENCE, JUMPING OVER A SHORT FENCE WHILE RUNNING, SITTING ON
@@ -226,7 +236,15 @@ FIX - ADD ANIMATIONS AND ACTIONS FOR THINGS LIKE TALL FENCES, FAILING TO
 MEDIUM - ADD BETTER GUN CONTROLS, AND MORE GUNS. UNFINISHED
 
 MEDIUM - ADD THE ABILITY TO PLACE 3D (OR 2D IF 3D ITEMS ARE UNAVAILABLE) ON
-      THE FLOOR. UNFINISHED
+      THE FLOOR.
+  -> DONE, 2D (000.021.000.137): items on the floor are drawn at their real
+     size (a can, a rifle a metre long), lying flat at their own angle, cans,
+     bottles, jerrycans and buckets standing, with a shadow, darkened at
+     night. Inventory > Place: the item follows the mouse (green/red where it
+     fits), R or the wheel turns it, click puts it down exactly there (the
+     survivor walks over first); right-click or Esc cancels. Right-click an
+     item on the floor to pick up just that one or turn it. Still possible:
+     3D models for the most common items, putting items on tables.
 
 LOW OR MEDIUM - NEW & BETTER AUDIO, WITH ACTUAL CLIPS (CAN BE SOURCED FROM
       INTERNET, OR SYNTHESIZED, IT JUST HAS TO SOUND OK.) UNFINISHED
@@ -268,6 +286,10 @@ Run 5 (000.020.000.133): vehicles - a believable size (1.45x, parking
 Fix (000.020.001.135), asked for: visibility around trees - a see-through
   window ahead of the car, wider on foot, windows over zombies in sight, a
   camera that leads the car.
-Next run, planned: the character and zombie models (and their textures);
+Run 6 (000.021.000.137), asked for: medium and low items first - foliage,
+  and items placed on the floor.
+Next runs, planned: actions and animations (fences, sitting, shouting,
+  racking and magazines) with gun controls and more guns; then audio and
+  music; then the character and zombie models (and their textures);
   the map's part 2 (a hospital, more shop types, the countryside) after
   that.

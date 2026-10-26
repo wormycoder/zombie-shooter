@@ -13,6 +13,16 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.021.000.137', date: '2026-10-26', title: 'Foliage and items on the floor',
+    notes: [
+      'Tall grass, weeds and wildflowers grow where nobody kept the grass: along the country roads, in the empty lots of town, round the fields, along fences and in meadow patches. Cattails stand at the water\'s edge and wild shrubs, some with berries, grow among it. Mowed yards stay mowed.',
+      'Under it, the ground has clover, dandelions, tufts and dry patches, leaf litter in the woods and weeds coming up through cracks in the pavement.',
+      'It all turns with the seasons: fresh green in spring, seed heads in summer, gold in autumn, dry straw and snow in winter. Wheels press it flat, you can clear it by hand, and building, digging or putting something down clears it too. New games only: a saved game keeps its map.',
+      'Items on the floor lie at their real size and at their own angle (a rifle a metre long, a can a hand high), cans and bottles standing, with a shadow, and darkened at night. Place, in an item\'s menu, puts it down exactly where you point: R or the mouse wheel turns it. Right-click an item on the floor to pick up just that one or turn it.',
+    ],
+    commits: ['ec8583a'], shots: ['v021000_1', 'v021000_2', 'v021000_3', 'v021000_4'],
+  },
+  {
     v: '000.020.001.135', date: '2026-10-25', title: 'Seeing through the trees',
     notes: [
       'Driving through the woods you can see the road. The see-through window in the tree crowns used to be a small circle round you, so in a car it showed little more than the car, and the road ahead stayed under the canopy. Now it runs ahead along the way the car is going, from a little way ahead when stopped to about eight tiles at speed, and trees open almost at once as you come up to them.',
