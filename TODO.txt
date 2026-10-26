@@ -264,11 +264,27 @@ MEDIUM - ADD THE ABILITY TO PLACE 3D (OR 2D IF 3D ITEMS ARE UNAVAILABLE) ON
      3D models for the most common items, putting items on tables.
 
 LOW OR MEDIUM - NEW & BETTER AUDIO, WITH ACTUAL CLIPS (CAN BE SOURCED FROM
-      INTERNET, OR SYNTHESIZED, IT JUST HAS TO SOUND OK.) UNFINISHED
+      INTERNET, OR SYNTHESIZED, IT JUST HAS TO SOUND OK.)
+  -> DONE, first pass, synthesized (000.023.000.141): the sound sites
+     (kenney.nl, opengameart.org, freesound.org) are blocked by this
+     environment's network policy, so the clips are rendered in the game:
+     25 sounds, 2-5 variations each, made once in the background when the
+     audio starts and played like samples (gunshots with crack, blast,
+     thump, tail and echoes, one voice per gun family; zombie moans and
+     snarls through mouth formants; footsteps by surface; hits, falls,
+     creaking doors, a door shut, glass). Checked by rendering each to WAV:
+     no clipping, no clicks, the decays and spectra as meant - but not by
+     ear: worth a listen, and any that sound off can be tuned or swapped
+     for recorded CC0 clips if the network is opened up.
 
 FIX OR LOW - MORE, AND BETTER MUSIC - YOU CAN USE PUBLIC RESOURCES FROM THE
       INTERNET FOR THIS.
-  -> LOW. UNFINISHED
+  -> LOW. DONE, first pass (000.023.000.141): a rendered piano and a soft
+     string pad instead of the plucked arpeggios; five pieces (title theme,
+     day, dusk, night, rain), each an eight-bar progression played twice
+     with a melody built from a motif; chosen by the hour and the weather,
+     one every 1-2.5 minutes, none while chased; the title theme on the
+     menus. (Synthesized for the same reason as the audio.)
 
 ALSO FIXED (found along the way)
   - Zombies in the dark were invisible beyond ~3 tiles even right in front
@@ -307,6 +323,7 @@ Run 6 (000.021.000.137), asked for: medium and low items first - foliage,
   and items placed on the floor.
 Run 7 (000.022.000.139): fences (hop at a run, climb tall ones, fail,
   trip), shouting, gun racking and magazines, jams, fire mode, five guns.
-Next runs, planned: audio and music; then the character and zombie models (and their textures);
+Run 8 (000.023.000.141): audio - rendered sound clips - and the music.
+Next runs, planned: the character and zombie models (and their textures);
   the map's part 2 (a hospital, more shop types, the countryside) after
   that.

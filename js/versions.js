@@ -13,6 +13,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.023.000.141', date: '2026-10-26', title: 'Sound and music',
+    notes: [
+      'New sounds, made in the game when the audio starts, with a few takes of each so they do not repeat exactly. Gunshots have a crack, a blast, a low thump and a rolling tail echoing off the houses, with a voice for each kind of gun. The dead moan and snarl in ragged, gurgling voices, male and female.',
+      'Footsteps sound different on pavement, grass, gravel, wooden floors, carpet and snow. Blows land with a thud, a slice or a crunch, bodies hit the floor, doors creak and bang shut, and glass shatters with the shards ringing down.',
+      'New music on a piano with soft strings under it: a title theme on the menus, and pieces for the day, dusk, night and rain that follow the hour and the weather, now and then, never while you are being chased.',
+    ],
+    commits: ['3d8f682'], shots: ['v023000_1', 'v023000_2', 'v023000_3'],
+  },
+  {
     v: '000.022.000.139', date: '2026-10-26', title: 'Fences and guns',
     notes: [
       'Running or sprinting into a low fence, you hop it without stopping. Sprint into it and you may trip and go down flat on your face.',
