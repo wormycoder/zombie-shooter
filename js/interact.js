@@ -118,7 +118,7 @@ const Interact = {
           if (depth > bestD) { bestD = depth; best = { edge: [x, y, d], tile: [x, y] }; }
         }
       }
-      const o = World.obj(x, y);
+      const o = World.objNoFol(x, y);
       if (o) {
         const h = Math.min(OBJ[o.t].h, o.t === 'tree' ? 3.5 : 2.2);
         const pts = [Render.toScreen(x, y, 0), Render.toScreen(x + 1, y, 0), Render.toScreen(x + 1, y + 1, 0), Render.toScreen(x, y + 1, 0), Render.toScreen(x, y, h), Render.toScreen(x + 1, y, h), Render.toScreen(x + 1, y + 1, h), Render.toScreen(x, y + 1, h)];
@@ -195,7 +195,7 @@ const Interact = {
     if (rm && World.hasPower(Math.floor(p.x), Math.floor(p.y))) add(rm.lights ? 'Turn off lights' : 'Turn on lights', () => { rm.lights = !rm.lights; Sfx.play('switch'); });
     // holding generator
     const prim = Player.primary();
-    if (prim && ITEMS[prim.id].generator && !t.obj && !World.tileSolid(tx, ty)) add('Place generator', () => this.goDo(tx + 0.5, ty + 0.5, () => { if (World.obj(tx, ty)) return; Player.removeItem(prim); const g = { t: 'generator', dir: 'S', fuel: prim.fuel || 0, on: false, x: tx, y: ty }; World.setObj(tx, ty, g); Wd.powerGens.push(g); Sfx.play('thud'); UI.refresh(); }));
+    if (prim && ITEMS[prim.id].generator && !t.obj && !World.tileSolid(tx, ty)) add('Place generator', () => this.goDo(tx + 0.5, ty + 0.5, () => { if (World.objNoFol(tx, ty)) return; Player.removeItem(prim); const g = { t: 'generator', dir: 'S', fuel: prim.fuel || 0, on: false, x: tx, y: ty }; World.setObj(tx, ty, g); Wd.powerGens.push(g); Sfx.play('thud'); UI.refresh(); }));
     if (!opts.length) return;
     UI.showContext(sx, sy, opts, t);
   },
@@ -450,11 +450,20 @@ const Interact = {
       for (const it of Player.findAll(i => ITEMS[i.id].fluid && i.fl < ITEMS[i.id].fluid - 0.01)) add('Fill ' + Items.name(it), () => go(() => Actions.queue(Actions.fill(it, src))));
       add('Fish', () => go(() => Actions.queue(Actions.fish(tx, ty))), { disabled: !Player.findTag('fishing') });
     }
-    if (outdoor && !water && !World.obj(tx, ty) && [FL.GRASS, FL.GRASS2, FL.FOREST, FL.DIRT].includes(fl)) {
+    const fol = World.obj(tx, ty), folOn = Foliage.isFol(fol);
+    if (outdoor && !water && !World.objNoFol(tx, ty) && [FL.GRASS, FL.GRASS2, FL.FOREST, FL.DIRT].includes(fl)) {
       add('Forage', () => this.goDo(tx + 0.5, ty + 0.5, () => Actions.queue(Actions.forage(tx, ty)), 1.6));
       add('Dig furrow', () => this.goDo(tx + 0.5, ty + 0.5, () => Actions.queue(Actions.dig(tx, ty)), 1.5), { disabled: !Player.findTag('dig') });
     }
-    if (!water && !World.obj(tx, ty) && !t.corpse && World.floorItems(tx, ty)) add('Pick up items here', () => this.goDo(tx + 0.5, ty + 0.5, () => UI.openLoot('floor'), 1.4));
+    // an item lying right under the mouse: pick it up, or turn it where it lies
+    const [mwx, mwy] = Render.mouseWorld(), one = !water && FloorItems.at(tx, ty, mwx, mwy);
+    if (one) {
+      const take = () => { const a = World.floorItems(tx, ty); if (!a || !a.includes(one)) return; if (!Cont.canFit(Cont.inv(), one)) { Player.say("I can't carry that.", '#ccc'); return; } World.removeFloorItem(tx, ty, one); Player.addItem(one); Sfx.play('pickup'); UI.refresh(); };
+      add('Pick up ' + Items.name(one), () => this.goDo(tx + one.fx, ty + one.fy, () => Actions.queue(Actions.mk('Picking up ' + Items.name(one), 0.4 + Items.weight(one) * 0.1, take, { anim: 'loot', lvl: 0, begin: () => Actions.face(tx, ty) })), 1.4));
+      add('Turn it', () => this.goDo(tx + one.fx, ty + one.fy, () => { one.rot = (one.rot || 0) + Math.PI / 4; }, 1.6));
+    }
+    if (folOn) add('Clear the ' + OBJ[fol.t].n.toLowerCase(), () => this.goDo(tx + 0.5, ty + 0.5, () => Actions.queue(Actions.clearFol(tx, ty)), 1.5));
+    if (!water && !World.objNoFol(tx, ty) && !t.corpse && World.floorItems(tx, ty)) add('Pick up items here', () => this.goDo(tx + 0.5, ty + 0.5, () => UI.openLoot('floor'), 1.4));
   },
   fireOptions(tx, ty, add) {
     if (!World.inb(tx, ty)) return;

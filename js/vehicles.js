@@ -1053,6 +1053,9 @@ const Vehicles = {
       const tx = Math.floor(wx), ty = Math.floor(wy);
       if (!World.inb(tx, ty)) continue;
       const fl = Wd.floor[ty * Wd.w + tx], out = Wd.room[ty * Wd.w + tx] < 0;
+      // tall grass and weeds the wheels go over stay pressed flat
+      const fo = Wd.obj[ty * Wd.w + tx];
+      if (fo && !fo.flat && OBJ[fo.t].fol) fo.flat = 1;
       const rear = i >= 2, driven = T.drv === '4' || (T.drv === 'r') === rear;
       const sliding = skidAll || (skidRear && rear) || (spinW && driven);
       let k = -1, a = 0;

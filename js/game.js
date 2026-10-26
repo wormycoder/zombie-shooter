@@ -690,11 +690,13 @@ const Save = {
     const w = Wd, p = G.player;
     // plain trees (most of the objects, and a big world has 100k+ of them) go as 4 numbers each: tile, species (index
     // into treeK, saved alongside), size x 100, variant; anything else about a tree (a stump, a burn) keeps it an object
-    const objs = [], trees = [], TI = this.treeI || (this.treeI = new Map(Object.keys(TREE_SP).map((k, j) => [k, j])));
+    // tall grass, weeds and reeds go as 2 numbers: tile, kind x 32 + pressed flat 16 + variant
+    const objs = [], trees = [], fol = [], TI = this.treeI || (this.treeI = new Map(Object.keys(TREE_SP).map((k, j) => [k, j])));
     for (let i = 0; i < w.obj.length; i++) {
       const o = w.obj[i];
       if (!o) continue;
       if (o.t === 'tree' && this.plainTree(o, TI)) trees.push(i, TI.get(o.kind), Math.round(o.sz * 100), o.v);
+      else if (this.plainFol(o)) fol.push(i, this.FOL.indexOf(o.t) * 32 + (o.flat ? 16 : 0) + o.v);
       else objs.push([i, o]);
     }
     const u8 = (a) => this.b64(a);
@@ -713,12 +715,18 @@ const Save = {
       uid: _uid, zid: _zid, cid: _carId, kills: p.kills,
       world: {
         w: w.w, h: w.h, gw: w.gw, stairs: w.stairs, floor: u8(w.floor), fvar: u8(w.fvar), deco: u8(w.deco), wallN: u8(w.wallN), wallW: u8(w.wallW), room: u8(w.room), seen: u8(w.seen),
-        objs, trees, treeK: [...TI.keys()], items: [...w.items.entries()], feat: [...w.feat.entries()], edgeHp: [...w.edgeHp.entries()],
+        objs, trees, treeK: [...TI.keys()], fol, items: [...w.items.entries()], feat: [...w.feat.entries()], edgeHp: [...w.edgeHp.entries()],
         fire: w.fire ? [...w.fire.entries()] : [], charred: w.charred ? [...w.charred] : [],
         buildings: w.buildings, rooms: w.rooms, decals: w.decals.slice(-200), forage: [...w.forage.entries()], labels: w.labels, zones: w.zones,
       },
       player: pl, zombies: zs, cars: G.cars,
     };
+  },
+  FOL: ['tallgrass', 'weeds', 'reeds'],
+  plainFol(o) {
+    if (this.FOL.indexOf(o.t) < 0 || o.dir !== 'S' || typeof o.v !== 'number' || o.v < 0 || o.v > 15) return false;
+    for (const k in o) if (k !== 't' && k !== 'dir' && k !== 'v' && k !== 'flat') return false;
+    return true;
   },
   plainTree(o, TI) {
     let n = 0;
@@ -785,6 +793,7 @@ const Save = {
     into(w.floor, sw.floor); into(w.fvar, sw.fvar); into(w.deco, sw.deco); into(w.wallN, sw.wallN); into(w.wallW, sw.wallW); into(w.room, sw.room); into(w.seen, sw.seen);
     for (const [i, o] of sw.objs) w.obj[i] = o;
     if (sw.trees) { const T = sw.trees, K = sw.treeK; for (let j = 0; j < T.length; j += 4) w.obj[T[j]] = { t: 'tree', dir: 'S', kind: K[T[j + 1]], sz: T[j + 2] / 100, v: T[j + 3] }; }
+    if (sw.fol) { const L = sw.fol; for (let j = 0; j < L.length; j += 2) { const c = L[j + 1], o = { t: this.FOL[c >> 5], dir: 'S', v: c & 15 }; if (c & 16) o.flat = 1; w.obj[L[j]] = o; } }
     w.items = new Map(sw.items); w.feat = new Map(sw.feat); w.edgeHp = new Map(sw.edgeHp);
     w.buildings = sw.buildings; w.rooms = sw.rooms; w.decals = sw.decals; w.forage = new Map(sw.forage); w.labels = sw.labels; w.zones = sw.zones;
     w.powerGens = [];
@@ -814,7 +823,7 @@ const Save = {
     for (const sk in SKILL_NAMES) if (!p.skills[sk]) p.skills[sk] = { lv: 0, xp: 0 };
     if (!p.att) Hotbar.migrate(p);
     G.player = p;
-    G.speed = 1; G.paused = false; G.corpse = false; G.build = null; G.hover = null;
+    G.speed = 1; G.paused = false; G.corpse = false; G.build = null; G.placing = null; G.hover = null;
     Combat.projs = []; Combat.sources = []; Combat.ejQ = []; Fx.parts = []; Fx.fires = []; Fx.floats = []; Fx.casings = [];
     Render.cam.x = vxOf(p.x); Render.cam.y = p.y; Render.cam.z = p.x >= LV.W0 && !p.inCar ? WALL_H : 0;
     Zombie.rebuildGrid();

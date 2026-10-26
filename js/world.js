@@ -105,6 +105,8 @@ const World = {
   isWater(x, y) { const f = this.floor(x, y); return f === FL.WATER || f === FL.DEEPWATER; },
   obj(x, y) { return this.inb(x, y) ? Wd.obj[y * Wd.w + x] : null; },
   setObj(x, y, o) { if (this.inb(x, y)) Wd.obj[y * Wd.w + x] = o; },
+  // the object on a tile, tall grass, weeds and reeds aside (they give way to anything built or put down there)
+  objNoFol(x, y) { const o = this.obj(x, y); return o && !OBJ[o.t].fol ? o : null; },
 
   // ------------------------------------------------------------------ blocking
   edgeBlocksMove(x, y, d) {
@@ -536,7 +538,7 @@ const World = {
     const i = (y | 0) * Wd.w + (x | 0);
     let a = Wd.items.get(i);
     if (!a) { a = []; Wd.items.set(i, a); }
-    it.fx = R.f(0.2, 0.8); it.fy = R.f(0.2, 0.8);
+    it.fx = R.f(0.2, 0.8); it.fy = R.f(0.2, 0.8); it.rot = R.f(0, 6.283);
     delete it.equipped; delete it.worn;
     a.push(it);
   },

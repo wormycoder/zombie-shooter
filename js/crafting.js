@@ -138,7 +138,7 @@ const Build = {
   validMove(it, x, y, dir) {
     const p = G.player;
     for (const [tx, ty] of this.moveTiles(it, x, y, dir)) {
-      if (!World.inb(tx, ty) || World.obj(tx, ty) || World.tileSolid(tx, ty) || World.isWater(tx, ty) || World.floor(tx, ty) === FL.VOID) return false;
+      if (!World.inb(tx, ty) || World.objNoFol(tx, ty) || World.tileSolid(tx, ty) || World.isWater(tx, ty) || World.floor(tx, ty) === FL.VOID) return false;
       if (Math.floor(p.x) === tx && Math.floor(p.y) === ty) return false;
       if (G.zombies.some(z => !z.dead && Math.floor(z.x) === tx && Math.floor(z.y) === ty)) return false;
     }
@@ -195,7 +195,7 @@ const Build = {
     if (!World.inb(x, y)) return false;
     if (rec.build === 'obj') {
       if (rec.obj === 'trap' && (World.room(x, y) >= 0 || ![FL.GRASS, FL.GRASS2, FL.FOREST, FL.DIRT, FL.SAND].includes(World.floor(x, y)))) return false;
-      return !World.obj(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && !G.zombies.some(z => !z.dead && Math.floor(z.x) === x && Math.floor(z.y) === y);
+      return !World.objNoFol(x, y) && !World.tileSolid(x, y) && !World.isWater(x, y) && !G.zombies.some(z => !z.dead && Math.floor(z.x) === x && Math.floor(z.y) === y);
     }
     if (World.wall(x, y, d)) return false;
     const [[ax, ay], [bx, by]] = World.edgeSides(x, y, d);

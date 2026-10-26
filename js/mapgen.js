@@ -58,6 +58,8 @@ const MapGen = {
     w.towns = [{ name: 'Hollow Creek', x0: RP[0] - 4, y0: RP[0] - 4, x1: RP[5] + 8, y1: RP[5] + 8 },
       { name: 'Millbrook', x0: RX[0] - 4, y0: RY[0] - 4, x1: RX[RX.length - 1] + 8, y1: RY[RY.length - 1] + 8 }];
     if (S > 400) for (const T of this.big.towns) w.towns.push({ name: T.name, x0: T.x0 - 6, y0: T.y0 - 6, x1: T.x1 + 6, y1: T.y1 + 6 });
+    // tall grass, weeds and reeds where nobody kept the grass (foliage.js)
+    if (this.foliagePass) this.foliagePass();
     // keep saves compact
     for (const o of w.obj) if (o && o.sz) o.sz = Math.round(o.sz * 100) / 100;
     return w;

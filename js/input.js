@@ -37,7 +37,9 @@ const Input = {
       if (e.button === 2 && this.rmb) {
         this.rmb = false;
         const dt = performance.now() - this.rmbT;
-        if (e.target === cv && dt < 220 && G.mode === 'play') Interact.contextMenu(e.clientX, e.clientY);
+        if (e.target === cv && dt < 220 && G.mode === 'play') {
+          if (G.placing) { FloorItems.cancel(); UI.hint('Placing cancelled', 2); } else Interact.contextMenu(e.clientX, e.clientY);
+        }
       }
     });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());

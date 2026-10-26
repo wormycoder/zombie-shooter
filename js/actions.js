@@ -501,6 +501,13 @@ const Actions = {
       Player.xp('Foraging', 3); UI.refresh();
     }, { anim: 'loot', lvl: 1, begin: () => Actions.face(x, y) });
   },
+  // pull up tall grass, weeds or reeds by hand
+  clearFol(x, y) {
+    return this.mk('Clearing', 3, () => {
+      if (Foliage.isFol(World.obj(x, y))) World.setObj(x, y, null);
+      Sfx.play('dig');
+    }, { anim: 'garden', kneel: true, check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2, begin: () => Actions.face(x, y) });
+  },
   fish(x, y) {
     const rod = Player.findTag('fishing');
     if (!rod) { Player.say('I need a fishing rod.', '#ccc'); return null; }
@@ -520,7 +527,7 @@ const Actions = {
     const tool = Player.findTag('dig');
     if (!tool) { Player.say('I need a shovel or trowel.', '#ccc'); return null; }
     return this.mk('Digging furrow', tool.id === 'Shovel' ? 5 : 8, () => {
-      if (World.obj(x, y)) return;
+      if (World.objNoFol(x, y)) return;
       Wd.floor[y * Wd.w + x] = FL.FURROW;
       World.setObj(x, y, { t: 'crop', dir: 'S', crop: null, stage: undefined, water: 0.3, grow: 0 });
       Player.xp('Farming', 2); Sfx.play('dig');

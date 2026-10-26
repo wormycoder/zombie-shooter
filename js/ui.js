@@ -657,6 +657,7 @@ const UI = {
       add(fav ? 'Unfavorite' : 'Favorite', () => { for (const x2 of (g ? g.items : [it])) { if (fav) delete x2.fav; else x2.fav = true; } this.refresh(); });
       for (const b of Player.bags()) if (b !== it && !b.items.includes(it)) add('Put in ' + Items.name(b), () => { for (const x2 of (g ? g.items : [it])) Actions.queue(Actions.transfer(x2, cont, Cont.bag(b))); });
       if (cont.kind === 'bag') add('Move to main inventory', () => { for (const x2 of (g ? g.items : [it])) Actions.queue(Actions.transfer(x2, cont, Cont.inv())); });
+      if (!it.worn) add('Place', () => FloorItems.start(it));
       add(n > 1 ? 'Drop one' : 'Drop', () => { Actions.queue(Actions.transfer(it, cont, Cont.floor(Math.floor(p.x), Math.floor(p.y)))); });
       if (n > 1) add('Drop all (' + n + ')', () => { for (const x2 of g.items) Actions.queue(Actions.transfer(x2, cont, Cont.floor(Math.floor(p.x), Math.floor(p.y)))); });
     }

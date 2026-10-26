@@ -9,6 +9,7 @@ Input.handleGameKeys = function () {
   if (Input.hit('Escape')) {
     if (UI.ctxOpen) UI.closeContext();
     else if (G.build) { G.build = null; UI.hint('Building cancelled', 2); }
+    else if (G.placing) { FloorItems.cancel(); UI.hint('Placing cancelled', 2); }
     else if (p.asleep) Player.wakeUp('I got up.');
     else if (document.querySelector('#menu .modal')) $('#menu').innerHTML = '';
     else if (UI.anyOpen()) UI.closeAll();
@@ -16,7 +17,7 @@ Input.handleGameKeys = function () {
     return;
   }
   if (document.querySelector('#menu .modal')) return;
-  if (Input.wheel) Render.cam.tz = U.clamp(Render.cam.tz * (Input.wheel > 0 ? 0.88 : 1.14), 0.55, 2.6);
+  if (Input.wheel && !G.placing) Render.cam.tz = U.clamp(Render.cam.tz * (Input.wheel > 0 ? 0.88 : 1.14), 0.55, 2.6);
   if (Input.hit('=') || Input.hit('+')) Render.cam.tz = Math.min(2.6, Render.cam.tz * 1.14);
   if (Input.hit('-')) Render.cam.tz = Math.max(0.55, Render.cam.tz * 0.88);
   if (Input.hit('i') || Input.hit('Tab')) UI.toggle('inv');

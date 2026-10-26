@@ -370,6 +370,7 @@ const Render = {
     // ---------------- overlays in world space
     Fx.draw(ctx);
     if (G.build) Build.drawGhost(ctx);
+    if (G.placing) FloorItems.drawGhost(ctx);
     if (G.hover) this.drawHover(ctx, G.hover);
     if (p && !p.dead) Player.drawOverlay(ctx);
     if (Debug.on) Debug.drawWorld(ctx, minX, minY, maxX, maxY);
@@ -421,7 +422,7 @@ const Render = {
     g.drawImage(rec.c, X - rec.ax, Y - rec.ay);
     if (!detail) return;
     const dc = w.deco[i];
-    if (dc) { const r2 = Spr.deco(dc); g.drawImage(r2.c, X - r2.ax, Y - r2.ay); }
+    if (dc) { const r2 = dc >= FD.TUFT && dc < FD.END ? Foliage.deco(dc, gs) : Spr.deco(dc); g.drawImage(r2.c, X - r2.ax, Y - r2.ay); }
     if (HARD_FLOORS[f] && w.room[i] < 0) {
       for (let dn = 0; dn < 4; dn++) {
         const nx = x + FR_DX[dn], ny = y + FR_DY[dn];
@@ -542,11 +543,8 @@ const Render = {
     ctx.drawImage(rec.c, X - rec.ax * s, Y - (rec.ay + 16) * s, rec.c.width * s, rec.c.height * s);
   },
   drawItems(ctx, x, y, arr, lv) {
-    const vx = lv ? x - LV.W0 : x, zo = lv ? WALL_H * ZU : 0;
-    for (const it of arr) {
-      const X = (vx + it.fx - y - it.fy) * HTW, Y = (vx + it.fx + y + it.fy) * HTH - zo;
-      ctx.drawImage(Icons.canvas(it), X - 9, Y - 12, 18, 18);
-    }
+    const vx = lv ? x - LV.W0 : x, zo = lv ? WALL_H * ZU : 0, s = this.shadeAt(x, y);
+    for (const it of arr) FloorItems.draw(ctx, it, vx + it.fx, y + it.fy, zo, s);
   },
   // The floor of the storey the player is on is composited (tiles, decals, items, light) on an
   // offscreen layer once per frame, then copied in one diagonal at a time during the painter sweep.
@@ -974,6 +972,8 @@ const Render = {
     // trees: own sprites, eased see-through fade, wind sway (trees.js)
     if (o.t === 'tree' || o.t === 'st_tree') return Trees.draw(o, x, y, X, Y, p, t, vx);
     const def = OBJ[o.t];
+    // tall grass and weeds are left out at the lowest world detail
+    if (def.fol && !Settings.v.detail) return;
     // the sprite (a key string built from a dozen fields) is looked up again every 8th frame, staggered by tile, and
     // every frame within reach of the player (what they switch on, open or fill shows at once)
     let m = this.omemo.get(o);

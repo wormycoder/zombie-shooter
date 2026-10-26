@@ -414,6 +414,7 @@ const Player = {
       if (!s.done && s.t >= (s.hit || (s.kind === 'shove' ? 0.4 : 0.48))) { s.done = true; Combat.resolveSwing(s); }
       if (s.t >= 1) p.swing = null;
     }
+    if (G.placing) { FloorItems.input(); return; }
     if (G.build) {
       if (Input.hit('r')) G.build.d = (G.build.d + 1) % (G.build.move ? 4 : 2);
       if (!Input.overUI && Input.takeClick()) Build.click();
