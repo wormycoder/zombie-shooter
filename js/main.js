@@ -42,8 +42,9 @@ Input.handleGameKeys = function () {
     if (fl) { if (fl.pow <= 0) Player.say('The batteries are dead.', '#ccc'); else { fl.on = !fl.on; Sfx.play('switch'); UI.refresh(); } }
     else Player.say("I don't have a flashlight.", '#ccc');
   }
-  if (Input.hit('q')) {
+  if (Input.hit('q') && !p.inCar) {
     Player.say(R.pick(['Hey!', 'Over here!', 'HEY!']), '#fff');
+    p.shoutT = 1.1;
     Noise.emit(p.x, p.y, 20, 'shout');
     Sfx.play('shout');
   }

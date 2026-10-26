@@ -123,11 +123,16 @@ Wp('Trowel', 'Garden Trowel', 0.4, ['trowel', '#3a8a3a', '#a0a8b0'], { sk: 'Shor
 
 // ----- FIREARMS ----------------------------------------------------------
 const Gn = (id, n, w, ic, gun, o) => idef(id, Object.assign({ n, cat: 'Weapon', w, ic, gun }, o));
-Gn('Pistol', '9mm Pistol', 1.0, ['pistol', '#2a2d30', '#555'], { ammo: 'Bullets9mm', cap: 15, dmg: [0.8, 1.4], range: 15, spread: 0.075, noise: 38, rof: 0.3, kick: 0.05, reload: 0.5, model: 'pistol', knock: 0.15, crit: 0.2, cond: 20, lower: 60 });
+Gn('Pistol', '9mm Pistol', 1.0, ['pistol', '#2a2d30', '#555'], { ammo: 'Bullets9mm', mag: 'Mag9mm', cap: 15, dmg: [0.8, 1.4], range: 15, spread: 0.075, noise: 38, rof: 0.3, kick: 0.05, reload: 0.5, model: 'pistol', knock: 0.15, crit: 0.2, cond: 20, lower: 60 });
 Gn('Revolver', '.38 Revolver', 1.0, ['revolver', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets38', cap: 6, dmg: [1.0, 1.7], range: 15, spread: 0.07, noise: 40, rof: 0.45, kick: 0.07, reload: 0.6, model: 'pistol', knock: 0.2, crit: 0.25, cond: 20, lower: 80 });
-Gn('Shotgun', 'Pump Shotgun', 4.0, ['shotgun', '#2a2d30', '#7a5030'], { ammo: 'ShotgunShells', cap: 6, dmg: [0.6, 1.1], pellets: 6, cone: 0.1, range: 10, spread: 0.1, noise: 55, rof: 0.85, kick: 0.1, reload: 0.7, model: 'shotgun', knock: 0.6, crit: 0.1, two: true, cond: 20, lower: 60 });
-Gn('HuntingRifle', 'Hunting Rifle', 4.0, ['rifle', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets308', cap: 5, dmg: [2.0, 3.5], range: 28, spread: 0.03, noise: 60, rof: 1.1, kick: 0.09, reload: 0.8, model: 'rifle', knock: 0.5, crit: 0.4, two: true, cond: 20, lower: 80 });
-Gn('AssaultRifle', 'Assault Rifle', 3.8, ['rifle', '#202224', '#202224'], { ammo: 'Bullets556', cap: 30, dmg: [1.1, 1.8], range: 22, spread: 0.055, noise: 52, rof: 0.09, kick: 0.035, reload: 0.4, model: 'rifle', knock: 0.25, crit: 0.25, two: true, auto: true, cond: 25, lower: 120 });
+Gn('Shotgun', 'Pump Shotgun', 4.0, ['shotgun', '#2a2d30', '#7a5030'], { ammo: 'ShotgunShells', cap: 6, dmg: [0.6, 1.1], pellets: 6, cone: 0.1, range: 10, spread: 0.1, noise: 55, rof: 0.85, kick: 0.1, reload: 0.7, model: 'shotgun', knock: 0.6, crit: 0.1, two: true, cond: 20, lower: 60, cycle: 'pump' });
+Gn('HuntingRifle', 'Hunting Rifle', 4.0, ['rifle', '#3a3d40', '#6a4a2a'], { ammo: 'Bullets308', cap: 5, dmg: [2.0, 3.5], range: 28, spread: 0.03, noise: 60, rof: 1.1, kick: 0.09, reload: 0.8, model: 'rifle', knock: 0.5, crit: 0.4, two: true, cond: 20, lower: 80, cycle: 'bolt' });
+Gn('AssaultRifle', 'Assault Rifle', 3.8, ['rifle', '#202224', '#202224'], { ammo: 'Bullets556', mag: 'Mag556', cap: 30, dmg: [1.1, 1.8], range: 22, spread: 0.055, noise: 52, rof: 0.09, kick: 0.035, reload: 0.4, model: 'rifle', knock: 0.25, crit: 0.25, two: true, auto: true, cond: 25, lower: 120 });
+Gn('Pistol45', 'M1911 Pistol', 1.1, ['pistol', '#3a3a38', '#6a5040'], { ammo: 'Bullets45', mag: 'Mag45', cap: 7, dmg: [1.1, 1.8], range: 15, spread: 0.08, noise: 42, rof: 0.36, kick: 0.07, reload: 0.5, model: 'pistol', knock: 0.25, crit: 0.25, cond: 20, lower: 60 });
+Gn('Magnum', '.357 Magnum', 1.2, ['revolver', '#b8bcc0', '#2a2420'], { ammo: 'Bullets357', cap: 6, dmg: [1.5, 2.4], range: 16, spread: 0.07, noise: 50, rof: 0.55, kick: 0.11, reload: 0.6, model: 'pistol', knock: 0.35, crit: 0.3, cond: 22, lower: 90 });
+Gn('DoubleBarrel', 'Double-Barrel Shotgun', 3.6, ['dbarrel', '#2a2d30', '#8a5a34'], { ammo: 'ShotgunShells', cap: 2, dmg: [0.65, 1.15], pellets: 7, cone: 0.12, range: 10, spread: 0.1, noise: 58, rof: 0.3, kick: 0.12, reload: 0.55, model: 'dbarrel', knock: 0.7, crit: 0.1, two: true, cond: 18, lower: 50, brk: true });
+Gn('SawedOff', 'Sawed-Off Shotgun', 2.2, ['sawnoff', '#2a2d30', '#8a5a34'], { ammo: 'ShotgunShells', cap: 2, dmg: [0.6, 1.1], pellets: 7, cone: 0.21, range: 6.5, spread: 0.14, noise: 62, rof: 0.3, kick: 0.16, reload: 0.5, model: 'sawn', knock: 0.85, crit: 0.08, cond: 15, lower: 45, brk: true });
+Gn('VarmintRifle', 'Varmint Rifle', 3.2, ['rifle', '#4a4a44', '#7a5a3a'], { ammo: 'Bullets223', mag: 'Mag223', cap: 5, dmg: [1.5, 2.6], range: 26, spread: 0.035, noise: 48, rof: 0.95, kick: 0.07, reload: 0.6, model: 'rifle', knock: 0.35, crit: 0.35, two: true, cond: 20, lower: 80, cycle: 'bolt' });
 // ammo
 const Am = (id, n, w, ic, o) => idef(id, Object.assign({ n, cat: 'Ammo', w, ic }, o));
 Am('Bullets9mm', '9mm Rounds', 0.02, ['ammo', '#c8a040', '#806020']);
@@ -135,11 +140,22 @@ Am('Bullets38', '.38 Special Rounds', 0.02, ['ammo', '#d0b050', '#806020']);
 Am('ShotgunShells', 'Shotgun Shells', 0.04, ['shell', '#c02020', '#c8a040']);
 Am('Bullets308', '.308 Rounds', 0.03, ['ammo', '#c8a040', '#605030']);
 Am('Bullets556', '5.56 Rounds', 0.025, ['ammo', '#b09040', '#405030']);
+Am('Bullets45', '.45 ACP Rounds', 0.025, ['ammo', '#c89a40', '#706030']);
+Am('Bullets357', '.357 Magnum Rounds', 0.025, ['ammo', '#d8b860', '#806020']);
+Am('Bullets223', '.223 Rounds', 0.02, ['ammo', '#c0a048', '#505030']);
 Am('Box9mm', 'Box of 9mm Rounds', 1.0, ['ammobox', '#3a5a8a', '#c8a040'], { boxOf: 'Bullets9mm', boxN: 50 });
 Am('Box38', 'Box of .38 Rounds', 1.0, ['ammobox', '#8a3a3a', '#c8a040'], { boxOf: 'Bullets38', boxN: 50 });
 Am('BoxShells', 'Box of Shotgun Shells', 1.0, ['ammobox', '#a02020', '#f0f0f0'], { boxOf: 'ShotgunShells', boxN: 24 });
 Am('Box308', 'Box of .308 Rounds', 1.0, ['ammobox', '#4a6a3a', '#c8a040'], { boxOf: 'Bullets308', boxN: 40 });
 Am('Box556', 'Box of 5.56 Rounds', 1.0, ['ammobox', '#5a5a3a', '#c8a040'], { boxOf: 'Bullets556', boxN: 60 });
+Am('Box45', 'Box of .45 Rounds', 1.0, ['ammobox', '#6a4a2a', '#c8a040'], { boxOf: 'Bullets45', boxN: 50 });
+Am('Box357', 'Box of .357 Rounds', 1.0, ['ammobox', '#2a2a2a', '#d8b860'], { boxOf: 'Bullets357', boxN: 50 });
+Am('Box223', 'Box of .223 Rounds', 1.0, ['ammobox', '#3a5a5a', '#c8a040'], { boxOf: 'Bullets223', boxN: 50 });
+// magazines: loaded round by round, swapped into the gun in one go
+Am('Mag9mm', '9mm Magazine', 0.15, ['mag', '#2a2d30', '#c8a040'], { magOf: 'Bullets9mm', magCap: 15 });
+Am('Mag45', 'M1911 Magazine', 0.15, ['mag', '#3a3a38', '#c89a40'], { magOf: 'Bullets45', magCap: 7 });
+Am('Mag556', '5.56 Magazine', 0.25, ['mag', '#2a2a28', '#b09040'], { magOf: 'Bullets556', magCap: 30 });
+Am('Mag223', 'Varmint Rifle Magazine', 0.12, ['mag', '#4a4a44', '#c0a048'], { magOf: 'Bullets223', magCap: 5 });
 
 // ----- TOOLS -------------------------------------------------------------
 const T = (id, n, w, ic, o) => idef(id, Object.assign({ n, cat: 'Tool', w, ic }, o));
@@ -290,7 +306,8 @@ const Items = {
     if (!d) { console.warn('Unknown item', id); return null; }
     const it = { id, uid: _uid++ };
     if (d.wpn) it.cond = d.wpn.cond;
-    if (d.gun) { it.cond = d.gun.cond; it.ammo = 0; }
+    if (d.gun) { it.cond = d.gun.cond; it.ammo = 0; if (d.gun.mag) it.magIn = true; if (d.gun.auto) it.fire = 'auto'; }
+    if (d.magOf) it.rounds = 0;
     if (d.uses) it.uses = d.uses;
     if (d.power !== undefined) it.pow = d.power * (opts && opts.loot ? R.f(0.3, 1) : 1);
     if (d.fluid) { it.fl = d.startFull ? d.fluid : 0; it.taint = false; }
@@ -322,6 +339,7 @@ const Items = {
     }
     if (d.gas !== undefined && it.fl <= 0.001) n = 'Empty Gas Can';
     if (d.carPart && it.pc !== undefined && it.id !== 'EngineParts') n += ' (' + Math.round(it.pc) + '%)';
+    if (d.magOf) n += ' (' + (it.rounds || 0) + '/' + d.magCap + ')';
     if (d.cook || d.raw) {
       if (it.burnt) n = 'Burnt ' + n;
       else if (it.cooked) n = 'Cooked ' + n;
@@ -365,6 +383,7 @@ const Items = {
     let k = it.id;
     if (d.fresh !== undefined) k += '|' + this.freshState(it) + (it.cooked ? 'c' : '') + (it.burnt ? 'b' : '') + (it.frozen ? 'f' : '');
     if (it.keyId !== undefined) k += '|k' + it.keyId;
+    if (d.magOf) k += '|r' + (it.rounds || 0);
     return k;
   },
   // the item's tooltip rows, as Zomboid shows them: { k, v } a label and its value, with bar (0..1) for anything
@@ -380,9 +399,16 @@ const Items = {
       row('Skill', SKILL_NAMES[d.wpn.sk] + (d.wpn.two ? ', two-handed' : ''));
     }
     if (d.gun) {
-      bar('Ammo', (it.ammo || 0) / d.gun.cap, (it.ammo || 0) + '/' + d.gun.cap);
-      row('Takes', ITEMS[d.gun.ammo].n);
-      bar('Condition', it.cond / d.gun.cond, Math.max(0, it.cond) + '/' + d.gun.cond);
+      const g = d.gun, noMag = g.mag && it.magIn === false;
+      bar(g.mag ? 'Magazine' : 'Ammo', noMag ? 0 : (it.ammo || 0) / g.cap, noMag ? 'none in' : (it.ammo || 0) + '/' + g.cap);
+      row('Takes', ITEMS[g.ammo].n + (g.mag ? ', ' + ITEMS[g.mag].n.toLowerCase() + 's' : ''));
+      row('Action', g.mag ? (g.auto ? 'Magazine, ' + (it.fire === 'semi' ? 'semi-auto' : 'full auto') : g.cycle === 'bolt' ? 'Bolt, magazine' : 'Magazine, semi-auto') : g.cycle === 'pump' ? 'Pump' : g.cycle === 'bolt' ? 'Bolt' : g.brk ? 'Break-action, two barrels' : 'Revolver');
+      if (it.jam) row('Jammed', 'R to clear it');
+      bar('Condition', it.cond / g.cond, Math.max(0, it.cond) + '/' + g.cond);
+    }
+    if (d.magOf) {
+      bar('Rounds', (it.rounds || 0) / d.magCap, (it.rounds || 0) + '/' + d.magCap);
+      row('Takes', ITEMS[d.magOf].n);
     }
     if (d.carPart && d.size) {
       row('Size', d.size === 'heavy' ? 'Heavy' : 'Regular');

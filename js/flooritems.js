@@ -13,7 +13,7 @@ const FloorItems = {
     bandage: 0.12, disinfect: 0.15, wipes: 0.16, pills: 0.09, needle: 0.1, tweezers: 0.1, bat: 0.84, spikedbat: 0.84, crowbar: 0.6,
     golfclub: 0.95, sledge: 0.85, pan: 0.42, hammer: 0.32, pipe: 0.6, wrench: 0.3, rollingpin: 0.4, knife: 0.26, screwdriver: 0.2,
     machete: 0.55, katana: 0.95, axe: 0.75, handaxe: 0.35, shovel: 1.0, spear: 1.3, plank: 1.1, trowel: 0.28, pistol: 0.2, revolver: 0.25,
-    shotgun: 0.95, rifle: 1.0, ammo: 0.05, shell: 0.06, ammobox: 0.12, saw: 0.55, canopener: 0.15, lighter: 0.07, matches: 0.06,
+    shotgun: 0.95, rifle: 1.0, dbarrel: 1.0, sawnoff: 0.55, mag: 0.14, ammo: 0.05, shell: 0.06, ammobox: 0.12, saw: 0.55, canopener: 0.15, lighter: 0.07, matches: 0.06,
     flashlight: 0.22, battery: 0.06, rod: 1.4, tape: 0.1, glue: 0.1, scissors: 0.18, generator: 0.7, key: 0.06, radio: 0.25, cig: 0.09,
     molotov: 0.26, alarmclock: 0.14, map: 0.3, log: 0.9, nails: 0.1, rag: 0.3, sheet: 0.9, branch: 0.8, stone: 0.12, garbagebag: 0.6,
     seeds: 0.1, tshirt: 0.55, shirt: 0.6, jacket: 0.7, vest: 0.55, pants: 0.85, shorts: 0.45, shoes: 0.28, hat: 0.3, cap: 0.26, helmet: 0.3,

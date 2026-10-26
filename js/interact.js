@@ -549,7 +549,17 @@ const Interact = {
     Sfx.play('window', e[0], e[1]);
     Noise.emit(e[0], e[1], 4, 'window');
   },
-  climb(e) {
+  // chance to slip back off a tall fence: the unfit, the worn out, the loaded down and the hurt in the arms fail more
+  climbFail() {
+    const p = G.player;
+    let f = 0.2 - Player.skill('Fitness') * 0.018 - Player.skill('Strength') * 0.014 - Player.skill('Nimble') * 0.02;
+    f += Math.max(0, Player.heavyRatio() - 0.6) * 0.55;
+    if (p.st.endurance < 0.35) f += (0.35 - p.st.endurance) * 0.9;
+    for (const pt of ['HandL', 'HandR', 'ForeArmL', 'ForeArmR', 'UpperArmL', 'UpperArmR']) { const w = p.body[pt] && p.body[pt].w; if (w && (w.deep || w.bite || w.fracture)) f += 0.12; else if (w && (w.cut || w.scratch)) f += 0.04; }
+    return U.clamp(f, 0.02, 0.85);
+  },
+  // over a fence or through a window. o.vault: running into a low fence, hopping it without stopping
+  climb(e, o) {
     const p = G.player;
     const [x, y, d] = e;
     const f = World.feat(x, y, d);
@@ -572,13 +582,28 @@ const Interact = {
     if (dist > 1.4) { this.goDo(mx, my, () => this.climb(e), 1.2); return; }
     const isWin = f && f.k === 'window';
     if (drop) { this.dropOut(e, f, from, to, mx, my); return; }
-    const dur = isWin ? 1.6 : (WALL_INFO[t].climb || 1.5) * (1 - Player.skill('Nimble') * 0.04);
+    // what kind of climb: a window, a low fence (hopped at a run), a tall one (which can beat you)
+    const wi = WALL_INFO[t], tall = !isWin && wi.h >= 1.6, vault = !isWin && !tall && !!(o && o.vault);
+    const sprint = vault && p.moveMode === 'sprint', fail = tall && R.chance(this.climbFail());
+    const kind = isWin ? 'win' : vault ? 'vault' : tall ? (fail ? 'fail' : 'tall') : 'low';
+    const dur = isWin ? 1.6 : vault ? (sprint ? 0.5 : 0.62) : fail ? 1.7 : (wi.climb || 1.5) * (1 - Player.skill('Nimble') * 0.04);
     const sx = p.x, sy = p.y;
     const ex = to[0] + 0.5 + (d ? 0 : (p.x - (from[0] + 0.5)) * 0.3), ey = to[1] + 0.5 + (d ? (p.y - (from[1] + 0.5)) * 0.3 : 0);
-    const tx = U.lerp(ex, mx, 0.35), ty = U.lerp(ey, my, 0.35);
+    const tx = U.lerp(ex, mx, vault ? 0.1 : 0.35), ty = U.lerp(ey, my, vault ? 0.1 : 0.35);
     p.angle = Math.atan2(ty - sy, tx - sx);
-    const a = Actions.mk(isWin ? 'Climbing through window' : 'Climbing', dur, () => {
-      p.x = tx; p.y = ty; p.climb = null;
+    const a = Actions.mk(isWin ? 'Climbing through window' : vault ? 'Vaulting' : 'Climbing', dur, () => {
+      p.climb = null;
+      if (fail) {
+        // slipped back down on this side
+        p.x = sx; p.y = sy; World.resolve(p, p.r);
+        p.st.endurance = Math.max(0, p.st.endurance - 0.1);
+        if (R.chance(0.25)) Player.addWound(R.pick(['HandL', 'HandR']), 'scratch', { isZombie: false });
+        Player.say(R.pick(["I can't get over!", 'Too high...', 'I slipped!']), '#ccc');
+        Sfx.play('thud'); Noise.emit(mx, my, 6, 'climb');
+        Player.xp('Nimble', 0.5);
+        return;
+      }
+      p.x = tx; p.y = ty;
       World.resolve(p, p.r);
       if (isWin && f.smashed && !f.glassOut && R.chance(0.6)) {
         const part = R.pick(['HandL', 'HandR', 'ForeArmL', 'ForeArmR', 'TorsoUpper', 'UpperLegL', 'UpperLegR']);
@@ -586,16 +611,24 @@ const Interact = {
         p.body[part].glass = R.chance(0.6);
         if (p.body[part].glass) Player.say('There is glass in my wound!', '#f99');
       }
-      if (!isWin && WALL_INFO[t].h > 1.2) p.st.endurance = Math.max(0, p.st.endurance - 0.08);
+      if (tall) p.st.endurance = Math.max(0, p.st.endurance - 0.08);
       Player.xp('Nimble', 1);
+      // a sprinting hop can end flat on your face
+      if (sprint && !Debug.god && R.chance(U.clamp(0.14 - Player.skill('Nimble') * 0.012 - Player.skill('Sprinting') * 0.01 + Math.max(0, Player.heavyRatio() - 0.5) * 0.3, 0.02, 0.5))) Player.trip();
     }, {
       anim: 'climb',
-      begin: () => { p.climb = { t: 0 }; },
-      tick: () => { const k = a.t / dur; p.climb.t = k; p.x = U.lerp(sx, tx, k); p.y = U.lerp(sy, ty, k); },
+      walkOk: vault,
+      begin: () => { p.climb = { t: 0, kind }; },
+      tick: () => {
+        const k = a.t / dur; p.climb.t = k;
+        // a failed climb goes up to the fence and back; the others across it
+        const q = fail ? Math.sin(Math.min(1, k * 1.15) * Math.PI) * 0.55 : vault ? U.smooth(k) : k;
+        p.x = U.lerp(sx, fail ? mx : tx, q); p.y = U.lerp(sy, fail ? my : ty, q);
+      },
       onCancel: () => { p.climb = null; p.x = sx; p.y = sy; },
     });
     Actions.cancel(); Actions.start(a);
-    Noise.emit(mx, my, 4, 'climb');
+    Noise.emit(mx, my, vault ? 3 : 4, 'climb');
     Sfx.play('climb');
   },
   smashWindow(e, byBullet) {

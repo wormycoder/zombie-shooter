@@ -20,6 +20,8 @@ const WEAPON_MODELS = {
   pistol: { len: 0.2, w0: 3, w1: 3, col: '#25282a', gun: true },
   shotgun: { len: 0.95, w0: 3.4, w1: 2.6, col: '#2a2d30', gun: true, stock: '#7a5030' },
   rifle: { len: 1.0, w0: 3.2, w1: 2.4, col: '#2a2d30', gun: true, stock: '#6a4a2a' },
+  dbarrel: { len: 0.95, w0: 3.4, w1: 2.6, col: '#2a2d30', gun: true, stock: '#8a5a34' },
+  sawn: { len: 0.52, w0: 3.4, w1: 2.6, col: '#2a2d30', gun: true, stock: '#8a5a34' },
   flashlight: { len: 0.2, w0: 3, w1: 3.6, col: '#2a2a30' },
   generic: { len: 0.3, w0: 3, w1: 3, col: '#888' },
 };

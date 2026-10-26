@@ -11,6 +11,7 @@ const RECIPES = [
   { id: 'planks', n: 'Saw Log into Planks', cat: 'Carpentry', in: [['Log', 1]], tools: ['saw'], out: [['Plank', 3]], time: 8, xp: { Carpentry: 3 } },
   { id: 'spear', n: 'Crafted Spear', cat: 'Weapons', in: [['@any:Plank|TreeBranch', 1]], tools: ['cut'], out: [['Spear', 1]], time: 6, xp: { Carpentry: 2, Spear: 2 } },
   { id: 'spikedbat', n: 'Spiked Baseball Bat', cat: 'Weapons', in: [['BaseballBat', 1], ['Nails', 5]], tools: ['hammer'], out: [['SpikedBat', 1]], time: 6, xp: { Carpentry: 2 } },
+  { id: 'sawnoff', n: 'Sawed-Off Shotgun', cat: 'Weapons', in: [['DoubleBarrel', 1]], tools: ['saw'], out: [['SawedOff', 1]], time: 12, keep: ['ammo', 'cond'] },
   { id: 'molotov', n: 'Molotov Cocktail', cat: 'Weapons', in: [['@emptybottle', 1], ['@gas:0.15', 1], ['RippedSheets', 1]], out: [['Molotov', 1]], time: 4 },
   { id: 'rod', n: 'Crafted Fishing Rod', cat: 'Survival', in: [['TreeBranch', 1], ['RippedSheets', 2], ['Nails', 1]], out: [['FishingRod', 1]], time: 6, xp: { Fishing: 3 } },
   { id: 'trapbox', n: 'Trap Box', cat: 'Survival', build: 'obj', obj: 'trap', trapKind: 'box', in: [['Plank', 2], ['Nails', 3]], tools: ['hammer'], time: 8, xp: { Carpentry: 2, Trapping: 3 } },
@@ -90,13 +91,16 @@ const Crafting = {
     }
     return false;
   },
+  // returns the items used up (the first of them gives its kept fields, rec.keep, to what is made)
   consume(rec) {
+    const used = [];
     for (const r of this.check(rec)) {
-      if (r.items) for (const it of r.items) Player.removeItem(it);
+      if (r.items) for (const it of r.items) { Player.removeItem(it); used.push(it); }
       if (r.uses) { r.uses.uses -= r.n; if (r.uses.uses <= 0) Player.removeItem(r.uses); }
       if (r.water) { r.water.fl -= r.amt; if (r.water.fl < 0.001) { r.water.fl = 0; r.water.taint = false; } }
       if (r.gas) r.gas.fl -= r.amt;
     }
+    return used;
   },
   craft(rec, times) {
     if (rec.build) { Build.start(rec); return; }
@@ -104,8 +108,13 @@ const Crafting = {
     for (let k = 0; k < times; k++) {
       Actions.queue(Actions.mk('Crafting ' + rec.n, rec.time * (1 - Player.skill(Object.keys(rec.xp || { Carpentry: 1 })[0]) * 0.03), () => {
         if (!this.has(rec)) { Player.say("I'm missing something.", '#ccc'); G.player.queue = []; return; }
-        this.consume(rec);
-        for (const [id, n] of rec.out) for (let i = 0; i < n; i++) Player.addItem(Items.make(id));
+        const used = this.consume(rec);
+        for (const [id, n] of rec.out) for (let i = 0; i < n; i++) {
+          const it = Items.make(id);
+          if (rec.keep && used[0]) for (const f of rec.keep) if (used[0][f] !== undefined) it[f] = used[0][f];
+          if (ITEMS[id].gun) it.cond = Math.min(it.cond, ITEMS[id].gun.cond);
+          Player.addItem(it);
+        }
         if (rec.xp) for (const sk in rec.xp) Player.xp(sk, rec.xp[sk]);
         Sfx.play('craft');
         UI.refresh();

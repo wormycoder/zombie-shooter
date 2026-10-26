@@ -319,40 +319,104 @@ const Actions = {
   equip(it, slot) {
     return this.mk('Equipping', 0.5, () => { if (Player.find(x => x === it)) { Player.equip(it, slot); UI.refresh(); } }, { walkOk: true });
   },
+  // R: clear a jam; swap in the fullest spare magazine; else fill the magazine in the gun from loose rounds and
+  // rack it. A tube, cylinder or break-action gun takes its rounds one by one.
   reload() {
     const p = G.player;
     const it = Player.primary();
     if (!it || !ITEMS[it.id].gun) return;
-    const g = ITEMS[it.id].gun;
+    const g = ITEMS[it.id].gun, k = 1 - Player.skill('Reloading') * 0.06;
+    if (it.jam) { this.queue(this.rack(it, true)); return; }
+    const rounds = () => Player.findAll(x => x.id === g.ammo);
+    const fromBox = () => { const box = Player.find(x => ITEMS[x.id].boxOf === g.ammo); if (box) { this.queue(this.openBox(box)); this.queue({ name: '', dur: 0, done: () => this.reload() }); } return !!box; };
+    if (g.mag) {
+      const inGun = it.magIn === false ? -1 : it.ammo || 0;
+      const spare = Player.findAll(x => x.id === g.mag && (x.rounds || 0) > Math.max(0, inGun)).sort((a, b) => b.rounds - a.rounds)[0];
+      if (spare) { this.queue(this.magSwap(it, spare)); return; }
+      if (inGun >= g.cap) { if (it.unracked) this.queue(this.rack(it)); else Player.say('Fully loaded.', '#ccc'); return; }
+      if (!rounds().length) {
+        if (fromBox()) return;
+        if (it.unracked && it.ammo) { this.queue(this.rack(it)); return; }
+        Player.say(inGun < 0 && !Player.find(x => x.id === g.mag) ? 'No magazine!' : 'No ammo!', '#f99'); return;
+      }
+      if (inGun < 0) {
+        // no magazine in it: fill a spare, then put it in
+        const empty = Player.find(x => x.id === g.mag);
+        if (!empty) { Player.say('No magazine!', '#f99'); return; }
+        this.queue(this.magLoad(empty)); this.queue({ name: '', dur: 0, done: () => this.reload() }); return;
+      }
+      // out with the magazine, thumb rounds into it, back in, rack
+      const n = Math.min(g.cap - it.ammo, rounds().length);
+      this.queue(this.mk('Loading magazine', (0.7 + n * 0.2) * k, () => {
+        if (Player.primary() !== it) return;
+        for (const r2 of rounds().slice(0, g.cap - it.ammo)) { Player.removeItem(r2); it.ammo++; }
+        Player.xp('Reloading', 2); Sfx.play('shellin'); UI.refresh();
+      }, { anim: 'magload', walkOk: true }));
+      this.queue(this.mk('Reloading', (it.unracked ? 1.15 : 0.8) * k, () => {
+        if (Player.primary() !== it) return;
+        it.magIn = true; it.unracked = false;
+        Player.xp('Reloading', 1); Sfx.play('reload'); UI.refresh();
+      }, { anim: 'magswap', walkOk: true, sub: it.unracked ? 'rack' : 'in' }));
+      return;
+    }
     if (it.ammo >= g.cap) { Player.say('Fully loaded.', '#ccc'); return; }
-    let rounds = Player.findAll(x => x.id === g.ammo);
-    if (!rounds.length) {
-      const box = Player.find(x => ITEMS[x.id].boxOf === g.ammo);
-      if (box) { this.queue(this.openBox(box)); this.queue({ name: '', dur: 0, done: () => this.reload() }); return; }
-      Player.say('No ammo!', '#f99'); return;
-    }
-    const mag = g.model === 'pistol' && it.id === 'Pistol' || it.id === 'AssaultRifle';
-    const rl = Player.skill('Reloading');
-    if (mag) {
-      this.queue(this.mk('Reloading', 2.4 * (1 - rl * 0.06), () => {
-        const need = g.cap - it.ammo;
-        const avail = Player.findAll(x => x.id === g.ammo).slice(0, need);
-        for (const r2 of avail) { Player.removeItem(r2); it.ammo++; }
-        Player.xp('Reloading', 3);
-        Sfx.play('reload'); UI.refresh();
-      }, { anim: 'reload', walkOk: true }));
-    } else {
-      const one = this.mk('Reloading', g.reload * (1 - rl * 0.06) + 0.25, () => {
-        const r2 = Player.find(x => x.id === g.ammo);
-        if (!r2 || it.ammo >= g.cap) return;
-        Player.removeItem(r2); it.ammo++;
-        Player.xp('Reloading', 1);
-        Sfx.play('shellin');
-        if (it.ammo < g.cap && Player.find(x => x.id === g.ammo)) p.queue.unshift(this.mk('Reloading', one.dur, one.done, { anim: 'reload', walkOk: true }));
-        UI.refresh();
-      }, { anim: 'reload', walkOk: true });
-      this.queue(one);
-    }
+    if (!rounds().length) { if (!fromBox()) Player.say('No ammo!', '#f99'); return; }
+    const one = this.mk('Reloading', g.reload * k + 0.25, () => {
+      const r2 = Player.find(x => x.id === g.ammo);
+      if (!r2 || it.ammo >= g.cap) return;
+      Player.removeItem(r2); it.ammo++;
+      Player.xp('Reloading', 1);
+      Sfx.play('shellin');
+      if (it.ammo < g.cap && Player.find(x => x.id === g.ammo)) p.queue.unshift(this.mk('Reloading', one.dur, one.done, { anim: 'reload', walkOk: true }));
+      UI.refresh();
+    }, { anim: 'reload', walkOk: true });
+    this.queue(one);
+  },
+  // a spare magazine into the gun; the one that was in it (and what is left in it) goes in the pocket
+  magSwap(it, mag) {
+    const g = ITEMS[it.id].gun, k = 1 - Player.skill('Reloading') * 0.06, rack = it.unracked || !it.ammo;
+    return this.mk('Changing magazine', (rack ? 1.45 : 1.1) * k, () => {
+      if (Player.primary() !== it || !Player.find(x => x === mag)) return;
+      if (it.magIn !== false) { const old = Items.make(g.mag); old.rounds = it.ammo || 0; Player.addItem(old); }
+      Player.removeItem(mag);
+      it.ammo = mag.rounds || 0; it.magIn = true; it.unracked = false;
+      Player.xp('Reloading', 3); Sfx.play('reload'); UI.refresh();
+    }, { anim: 'magswap', walkOk: true, sub: rack ? 'rack' : 'in' });
+  },
+  // work the slide, pump or bolt: chambers a round, and throws out a jammed one
+  rack(it, jam) {
+    const g = ITEMS[it.id].gun;
+    return this.mk(jam ? 'Clearing the jam' : 'Racking', jam ? 0.9 : 0.6, () => {
+      if (Player.primary() !== it) return;
+      if (it.jam && it.ammo) { it.ammo--; Combat.eject(g.ammo === 'ShotgunShells' ? 'shell' : g.model === 'rifle' ? 'rifle' : 'brass'); }
+      it.jam = false; it.unracked = false;
+      Sfx.play(g.cycle || (g.model === 'shotgun' ? 'pump' : 'bolt')); UI.refresh();
+    }, { anim: 'magswap', walkOk: true, sub: 'rack' });
+  },
+  // thumb loose rounds into a magazine (or take them out)
+  magLoad(mag) {
+    const d = ITEMS[mag.id], have = () => Player.findAll(x => x.id === d.magOf);
+    const n = Math.min(d.magCap - (mag.rounds || 0), have().length);
+    if (n <= 0) { Player.say(have().length ? "It's full." : 'No rounds for it.', '#ccc'); return null; }
+    return this.mk('Loading ' + d.n, (0.5 + n * 0.22) * (1 - Player.skill('Reloading') * 0.06), () => {
+      for (const r2 of have().slice(0, d.magCap - (mag.rounds || 0))) { Player.removeItem(r2); mag.rounds = (mag.rounds || 0) + 1; }
+      Player.xp('Reloading', 2); Sfx.play('shellin'); UI.refresh();
+    }, { anim: 'magload', walkOk: true });
+  },
+  magUnload(mag) {
+    const d = ITEMS[mag.id];
+    return this.mk('Unloading ' + d.n, 0.4 + (mag.rounds || 0) * 0.08, () => {
+      for (let k = 0; k < (mag.rounds || 0); k++) Player.addItem(Items.make(d.magOf));
+      mag.rounds = 0; Sfx.play('shellin'); UI.refresh();
+    }, { anim: 'magload' });
+  },
+  ejectMag(it) {
+    const g = ITEMS[it.id].gun;
+    return this.mk('Ejecting magazine', 0.5, () => {
+      if (it.magIn === false) return;
+      const m = Items.make(g.mag); m.rounds = it.ammo || 0; Player.addItem(m);
+      it.ammo = 0; it.magIn = false; Sfx.play('clunk'); UI.refresh();
+    }, { anim: 'magswap', walkOk: true, sub: 'out' });
   },
   unload(it) {
     const g = ITEMS[it.id].gun;

@@ -114,6 +114,16 @@ Object.assign(Char3D, {
       T[C3.JAW] = Math.max(bite * 0.9, chew * 0.35);
       T[C3.HP] += bite * 0.08;
     },
+    // ---- shouting: hands cupped round the mouth, chest out, head up, the jaw open on the call (a weapon in the
+    // right hand stays down at the side and only the left hand goes up)
+    shout(T, S, D, P) {
+      const k = P.k === undefined ? this.cyc(S.t, 1.1) : P.k, M = this.MOUTH;
+      const up = this.ease(k, 0, 0.18) * (1 - this.ease(k, 0.82, 1)), call = this.pulse(k, 0.2, 0.72, 0.08);
+      const armed = P.weapon && !(WEAPON_MODELS[P.weapon] || {}).prop;
+      for (const side of armed ? [-1] : [-1, 1]) this.hand(T, D, side, U.lerp(0.2, M[0] + 0.05, up), side * U.lerp(0.12, M[1] + 0.035, up), U.lerp(-0.3, M[2] + 0.01, up), 0.6);
+      if (armed) { this.hand(T, D, 1, 0.14, 0.06, -0.44, 0.35); this.wdir(T, 0.6, -0.1, -0.8); }
+      T[C3.HP] -= 0.22 * up; T[C3.SP] -= 0.08 * up; T[C3.JAW] = call * 0.85;
+    },
     // ---- drinking from a bottle, can or carton: up to the mouth, tipped back with the head, gulps, down
     drink(T, S, D, P) {
       const t = S.t + S.id * 0.3, c = this.cyc(t, 4.4), M = this.MOUTH;
@@ -209,6 +219,29 @@ Object.assign(Char3D, {
         this.hand(T, D, -1, U.lerp(0.18, 0.04, pocket), U.lerp(-0.05, -0.2, pocket), U.lerp(-0.3, -0.46, pocket), 0.5);
         T[C3.HP] += 0.4;
       }
+    },
+    // ---- a magazine change: the gun up at the chest, the left hand pulls the magazine, goes to the belt, pushes the
+    // new one home and (sub 'rack') works the slide or charging handle; 'out' only takes the magazine out
+    magswap(T, S, D, P) {
+      const k = P.k === undefined ? this.cyc(S.t, 1.4) : P.k, long = P.weapon && P.weapon !== 'pistol', sub = P.sub || 'in';
+      const up = this.ease(k, 0, 0.12) * (1 - this.ease(k, 0.9, 1));
+      if (long) { this.hand(T, D, 1, 0.16, 0.1, -0.34 + up * 0.06, 0.4); this.wdir(T, 0.8, -0.45, 0.32); }
+      else { this.hand(T, D, 1, 0.24 + up * 0.04, 0.05, -0.36 + up * 0.14, 0.4); this.wdir(T, 0.7, -0.25, -0.65 + up * 1.0); }
+      const pull = this.pulse(k, 0.04, 0.2, 0.05), belt = sub === 'rack' && !P.weapon ? 0 : this.pulse(k, 0.16, sub === 'out' ? 0.75 : 0.56, 0.12);
+      const rk = sub === 'rack' ? this.pulse(k, 0.68, 0.94, 0.06) : 0;
+      let f = long ? 0.2 : 0.22, lat = 0.0 - 0.04 * pull, z = (long ? -0.36 : -0.3) - 0.09 * pull;
+      f = U.lerp(f, 0.02, belt); lat = U.lerp(lat, -0.2, belt); z = U.lerp(z, -0.5, belt);
+      if (rk > 0) { const back = this.ease(k, 0.76, 0.86); f = U.lerp(f, (long ? 0.12 : 0.22) - back * 0.07, rk); z = U.lerp(z, long ? -0.24 : -0.17, rk); lat = U.lerp(lat, 0.05, rk); }
+      this.hand(T, D, -1, f, lat, z, 0.5);
+      T[C3.HP] += 0.3 + belt * 0.12;
+    },
+    // ---- thumbing rounds into a magazine held in the left hand, one push after another
+    magload(T, S, D, P) {
+      const t = S.t + S.id * 0.3, c = this.cyc(t, 0.45), push = this.pulse(c, 0.1, 0.6, 0.12);
+      this.hand(T, D, -1, 0.26, 0.02, -0.3, 0.6);
+      this.hand(T, D, 1, 0.27 - push * 0.02, push * 0.03, -0.27 - push * 0.03, 0.6);
+      T[C3.HP] += 0.42; T[C3.SP] += 0.06;
+      this.wdir(T, 0.5, -0.3, -0.8);
     },
     // ---- pouring from a can (fuel, water) forward and down, the left hand under it
     pour(T, S, D, P) {
@@ -382,11 +415,43 @@ Object.assign(Char3D, {
   // ===================================================================== whole-body moves
   // ---- climbing over a fence or through a window (prog 0..1; the entity crosses the line at about 0.36 and stops
   // at 0.71): hands on the top, a foot up, over head-first with the hips high, dropping down the far side
+  // pelvis x, z, pitch | spine | head | hands x, z (body, z x height) | right foot x, z | left foot x, z
+  CLIMB_KF: {
+    // a running hop over a low fence: hands on the top, knees tucked, over and down still moving
+    vault: [
+      [0, 0, 0, 0.2, 0.15, 0.0, 0.35, 0.55, 0.1, 0.075, -0.1, 0.075],
+      [0.22, 0.04, 0.06, 0.5, 0.35, -0.1, 0.3, 0.55, 0.22, 0.3, 0.02, 0.22],
+      [0.48, 0.18, 0.34, 0.3, 0.25, 0.1, 0.08, 0.55, 0.36, 0.55, 0.22, 0.5],
+      [0.74, 0.3, 0.1, 0.12, 0.12, 0.1, -0.06, 0.55, 0.32, 0.22, 0.1, 0.16],
+      [1, 0, 0, 0.18, 0.12, 0.0, 0.05, 0.3, 0.1, 0.075, -0.1, 0.075],
+    ],
+    // a tall fence: reach up, pull up with a foot on it, a leg over the top, let down the far side, drop
+    tall: [
+      [0, 0, 0, 0.1, 0.1, -0.2, 0.3, 1.18, 0.05, 0.075, -0.05, 0.075],
+      [0.18, -0.05, 0.22, 0.1, 0.22, -0.25, 0.22, 1.05, 0.25, 0.45, -0.05, 0.075],
+      [0.38, 0.0, 0.72, 0.4, 0.45, -0.1, 0.15, 1.05, 0.3, 0.9, 0.2, 0.7],
+      [0.54, 0.08, 0.95, 0.6, 0.45, 0.0, 0.0, 1.05, 0.2, 1.02, -0.2, 0.92],
+      [0.74, 0.1, 0.45, 0.2, 0.2, 0.2, -0.15, 1.0, 0.15, 0.5, -0.1, 0.3],
+      [0.9, 0.05, -0.05, 0.3, 0.25, 0.2, 0.2, 0.6, 0.12, 0.075, -0.08, 0.075],
+      [1, 0, 0, 0, 0, 0, 0.05, 0.3, 0.05, 0.075, -0.05, 0.075],
+    ],
+    // pulling up, straining at the top, slipping back down and staggering back
+    fail: [
+      [0, 0, 0, 0.1, 0.1, -0.2, 0.3, 1.18, 0.05, 0.075, -0.05, 0.075],
+      [0.22, -0.05, 0.22, 0.1, 0.22, -0.25, 0.22, 1.05, 0.25, 0.45, -0.05, 0.075],
+      [0.42, 0.0, 0.45, 0.3, 0.4, -0.15, 0.18, 1.05, 0.28, 0.62, 0.1, 0.4],
+      [0.56, -0.05, 0.3, 0.2, 0.3, -0.25, 0.2, 1.02, 0.2, 0.3, -0.05, 0.075],
+      [0.72, -0.15, -0.04, -0.15, 0.1, 0.15, 0.35, 0.7, 0.1, 0.075, -0.15, 0.075],
+      [1, 0, 0, 0, 0, 0, 0.1, 0.3, 0.05, 0.075, -0.05, 0.075],
+    ],
+  },
+  // hands come off the top at this point of the climb
+  CLIMB_LET: { vault: 0.66, tall: 0.8, fail: 0.62 },
   climb(T, S, D, P) {
     const p = U.clamp(P.prog === undefined ? (S.mt / 1.2) % 1 : P.prog, 0, 1), H = D.H;
     if (P.rope) return this.climbRope(T, S, D, P, p);
-    // pelvis x, z, pitch | spine | head | hands x, z (body) | right foot x, z | left foot x, z
-    const o = this.kf('climb', [
+    const kind = this.CLIMB_KF[P.climbKind] ? P.climbKind : null;
+    const o = kind ? this.kf('climb_' + kind, this.CLIMB_KF[kind], p) : this.kf('climb', [
       [0, 0, 0, 0, 0.15, 0.1, 0.42, 0.98, 0.05, 0.075, -0.05, 0.075],
       [0.16, -0.05, 0.12, 0.2, 0.45, 0.1, 0.36, 0.98, 0.32, 0.5, -0.08, 0.075],
       [0.34, 0.0, 0.48, 0.45, 0.6, -0.1, 0.12, 0.96, 0.38, 0.62, -0.38, 0.62],
@@ -400,7 +465,7 @@ Object.assign(Char3D, {
     this.foot(T, Pf, 1, o[7], 0.1, Math.max(D.ankH, o[8]), o[8] > 0.2 ? -0.3 : 0, 0.15);
     this.foot(T, Pf, -1, o[9], -0.1, Math.max(D.ankH, o[10]), o[10] > 0.2 ? -0.6 : 0, 0.15);
     // hands on the top until the body is over, then out for balance on landing, then down
-    const hands = 1 - this.ease(p, 0.86, 1);
+    const let0 = kind ? this.CLIMB_LET[kind] : 0.86, hands = 1 - this.ease(p, let0, Math.min(1, let0 + 0.14));
     for (const side of [-1, 1]) {
       if (hands > 0.01) this.reachB(T, D, side, o[5], side * (0.2 + 0.04 * Math.sin(p * 6)), o[6] * H, 0.85);
       else this.hang(T, side, D, 0.02, 0.05, 0.15);

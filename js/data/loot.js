@@ -29,8 +29,8 @@ const LOOT = {
   'bathroom.medcab': { n: [1, 4], empty: 0.2, items: [['@meds', 1]] },
   'bathroom.counter': { n: [1, 3], empty: 0.3, items: [['@meds', 3], ['RippedSheets', 2], ['Scissors', 1], ['Tweezers', 1]] },
   'bedroom.wardrobe': { n: [2, 5], empty: 0.1, items: [['@clothes', 20], ['@bags', 3], ['Sheet', 3], ['LeatherJacket', 1], ['MotoHelmet', 0.3], ['BaseballBat', 1], ['LeatherGloves', 1], ['Belt', 3]] },
-  'bedroom.dresser': { n: [1, 4], empty: 0.15, items: [['@clothes', 12], ['DigitalWatch', 2], ['@books', 3], ['Pistol', 0.6], ['Revolver', 0.5], ['Box9mm', 0.5], ['Box38', 0.5], ['Cigarettes', 2], ['Lighter', 1], ['Sheet', 3], ['Glasses', 1], ['Painkillers', 1], ['Belt', 2], ['Holster', 0.3]] },
-  'bedroom.nightstand': { n: [0, 2], empty: 0.35, items: [['@books', 6], ['DigitalWatch', 2], ['Flashlight', 2], ['Battery', 2], ['Painkillers', 1], ['SleepingPills', 1], ['Pistol', 0.4], ['Glasses', 1], ['NoiseMaker', 1.5]] },
+  'bedroom.dresser': { n: [1, 4], empty: 0.15, items: [['@clothes', 12], ['DigitalWatch', 2], ['@books', 3], ['Pistol', 0.6], ['Revolver', 0.5], ['Box9mm', 0.5], ['Box38', 0.5], ['Cigarettes', 2], ['Lighter', 1], ['Sheet', 3], ['Glasses', 1], ['Painkillers', 1], ['Belt', 2], ['Holster', 0.3], ['Pistol45', 0.3], ['Magnum', 0.25], ['Box45', 0.3], ['Box357', 0.25], ['Mag9mm', 0.3]] },
+  'bedroom.nightstand': { n: [0, 2], empty: 0.35, items: [['@books', 6], ['DigitalWatch', 2], ['Flashlight', 2], ['Battery', 2], ['Painkillers', 1], ['SleepingPills', 1], ['Pistol', 0.4], ['Glasses', 1], ['NoiseMaker', 1.5], ['Pistol45', 0.2], ['Magnum', 0.15]] },
   'living.bookshelf': { n: [1, 5], empty: 0.15, items: [['@books', 1]] },
   'living.dresser': { n: [1, 3], empty: 0.3, items: [['@books', 3], ['Battery', 2], ['Flashlight', 1], ['Radio', 1], ['Cigarettes', 1], ['Map', 1]] },
   'garage.toolcab': { n: [2, 5], empty: 0.1, items: [['@tools', 30], ['Axe', 1.2], ['WoodAxe', 0.6], ['Shovel', 2], ['Trowel', 2], ['GasCan', 3], ['Crowbar', 1.2], ['Plank', 3], ['GolfClub', 1], ['BaseballBat', 1.5], ['Sledgehammer', 0.4], ['FishingRod', 1], ['Toolbox', 1], ['@seeds', 2], ['WateringCan', 1], ['Bucket', 1], ['Generator', 0.25], ['LeadPipe', 1], ['HandAxe', 1], ['@carparts', 10], ['@cartools', 9]] },
@@ -57,9 +57,9 @@ const LOOT = {
   '*.trunk': { n: [0, 3], empty: 0.35, items: [['GasCan', 2], ['@tools', 3], ['@bags', 1], ['WaterBottle', 1], ['Sheet', 1], ['@junk', 2], ['BaseballBat', 0.5], ['Tire', 1.6], ['LugWrench', 1.4], ['CarJack', 1.2], ['Wrench', 0.6], ['EngineParts', 0.5]] },
   // trunks of special vehicles (car.loot) and cars abandoned in the evacuation jam
   'car_jam.trunk': { n: [2, 5], empty: 0.08, items: [['@bags', 6], ['@clothes', 6], ['@canned', 5], ['@snack', 3], ['WaterBottle', 4], ['@meds', 2], ['Sheet', 2], ['Flashlight', 1.5], ['Battery', 1.5], ['GasCan', 1.5], ['Tire', 1], ['Radio', 0.6], ['Pistol', 0.3], ['Map', 0.8]] },
-  'car_police.trunk': { n: [1, 3], empty: 0.15, items: [['Shotgun', 1.5], ['BoxShells', 2], ['Box9mm', 2], ['Nightstick', 1.2], ['Bandage', 1], ['Flashlight', 1.5], ['Tire', 0.8], ['LugWrench', 0.8]] },
+  'car_police.trunk': { n: [1, 3], empty: 0.15, items: [['Shotgun', 1.5], ['BoxShells', 2], ['Box9mm', 2], ['Nightstick', 1.2], ['Bandage', 1], ['Flashlight', 1.5], ['Tire', 0.8], ['LugWrench', 0.8], ['Mag9mm', 1]] },
   'car_ambulance.trunk': { n: [2, 5], empty: 0.05, items: [['@meds', 10], ['SterileBandage', 3], ['Disinfectant', 2], ['SutureNeedle', 1.5], ['Splint', 1.5], ['Painkillers', 1.5]] },
-  'car_army.trunk': { n: [2, 5], empty: 0.05, items: [['Box556', 2], ['@canned', 3], ['MilitaryBag', 1], ['WaterBottle', 2], ['@meds', 1], ['HikingBag', 1], ['TireHD', 0.6], ['GasCan', 1.5], ['AssaultRifle', 0.4]] },
+  'car_army.trunk': { n: [2, 5], empty: 0.05, items: [['Box556', 2], ['@canned', 3], ['MilitaryBag', 1], ['WaterBottle', 2], ['@meds', 1], ['HikingBag', 1], ['TireHD', 0.6], ['GasCan', 1.5], ['AssaultRifle', 0.4], ['Mag556', 1]] },
   'car_firetruck.trunk': { n: [1, 4], empty: 0.1, items: [['FireExtinguisher', 3], ['Axe', 2], ['Crowbar', 1.5], ['Bandage', 1]] },
   'car_bus.trunk': { n: [1, 4], empty: 0.15, items: [['SchoolBag', 4], ['@snack', 3], ['@books', 2], ['JuiceBox', 2], ['Bandage', 0.5]] },
   '*.campfire': { n: [0, 0], empty: 1, items: [] },
@@ -71,8 +71,8 @@ const LOOT = {
   'grocery.crate': { n: [2, 6], empty: 0.1, items: [['@canned', 6], ['@snack', 4], ['Apple', 2], ['Orange', 2], ['Potato', 2], ['Cabbage', 1]] },
   'hardware.shelf': { n: [2, 6], empty: 0.1, items: [['Hammer', 6], ['Saw', 5], ['Screwdriver', 5], ['NailsBox', 8], ['DuctTape', 4], ['Glue', 3], ['Crowbar', 2], ['Axe', 2], ['HandAxe', 2], ['Shovel', 3], ['Trowel', 3], ['@seeds', 6], ['WateringCan', 2], ['Bucket', 2], ['GasCan', 3], ['Flashlight', 3], ['Battery', 5], ['Sledgehammer', 1], ['PipeWrench', 2], ['GarbageBag', 2], ['Toolbox', 1.5], ['WoodAxe', 1], ['LeatherGloves', 2], ['Generator', 0.5], ['BookCarpentry1', 1], ['BookFarming1', 1], ['FireExtinguisher', 1.5]] },
   'hardware.crate': { n: [2, 5], empty: 0.15, items: [['Plank', 6], ['NailsBox', 5], ['Log', 2], ['GasCan', 1], ['Generator', 0.6], ['@cartools', 3], ['CarBattery', 1], ['EngineParts', 1]] },
-  'gunstore.shelf': { n: [1, 4], empty: 0.15, items: [['Pistol', 4], ['Revolver', 3], ['Shotgun', 3], ['HuntingRifle', 2], ['Box9mm', 6], ['Box38', 5], ['BoxShells', 6], ['Box308', 4], ['HuntingKnife', 3], ['Holster', 3], ['MilitaryBag', 1], ['MilitaryJacket', 1], ['CargoPants', 1], ['Boots', 1]] },
-  'gunstore.crate': { n: [1, 3], empty: 0.3, items: [['Box9mm', 3], ['BoxShells', 3], ['Box308', 2], ['Box556', 1], ['AssaultRifle', 0.6], ['BulletVest', 0.5]] },
+  'gunstore.shelf': { n: [1, 4], empty: 0.15, items: [['Pistol', 4], ['Revolver', 3], ['Shotgun', 3], ['HuntingRifle', 2], ['Box9mm', 6], ['Box38', 5], ['BoxShells', 6], ['Box308', 4], ['HuntingKnife', 3], ['Holster', 3], ['MilitaryBag', 1], ['MilitaryJacket', 1], ['CargoPants', 1], ['Boots', 1], ['Pistol45', 3], ['Magnum', 2], ['DoubleBarrel', 2], ['VarmintRifle', 2], ['Mag9mm', 3], ['Mag45', 2], ['Mag223', 2]] },
+  'gunstore.crate': { n: [1, 3], empty: 0.3, items: [['Box9mm', 3], ['BoxShells', 3], ['Box308', 2], ['Box556', 1], ['AssaultRifle', 0.6], ['BulletVest', 0.5], ['Box45', 3], ['Box357', 2], ['Box223', 3]] },
   'pharmacy.shelf': { n: [3, 7], empty: 0.05, items: [['Splint', 1], ['@meds', 25], ['@snack', 4], ['@drink', 3], ['FirstAidKit', 2], ['Magazine', 2], ['Glasses', 1]] },
   'pharmacy.crate': { n: [2, 5], empty: 0.1, items: [['@meds', 1], ['Antibiotics', 0.5]] },
   'clinic.medcab': { n: [1, 5], empty: 0.1, items: [['Splint', 2], ['@meds', 10], ['Antibiotics', 1.5], ['SterileBandage', 3], ['SutureNeedle', 2], ['FirstAidKit', 1]] },
@@ -81,7 +81,7 @@ const LOOT = {
   'clinic.desk': { n: [0, 3], empty: 0.3, items: [['Painkillers', 2], ['Newspaper', 2], ['Magazine', 2], ['Pop', 1], ['Antidepressants', 1]] },
   'restaurant.fridge': { n: [4, 8], empty: 0.05, items: [['Burger', 5], ['Fries', 4], ['GroundBeef', 4], ['Chicken', 2], ['Lettuce', 2], ['Tomato', 2], ['Cheese', 2], ['Pop', 3], ['Bread', 2]] },
   'restaurant.counter': { n: [1, 4], empty: 0.15, items: [['Burger', 3], ['Fries', 3], ['Pop', 3], ['KitchenKnife', 2], ['FryingPan', 2], ['Pot', 1], ['CanOpener', 1], ['@canned', 2]] },
-  'police.locker': { n: [1, 4], empty: 0.1, items: [['Pistol', 4], ['Shotgun', 2], ['Box9mm', 5], ['BoxShells', 3], ['Nightstick', 3], ['Holster', 3], ['Belt', 1], ['PoliceShirt', 2], ['PolicePants', 2], ['PoliceCap', 2], ['BulletVest', 1.5], ['Flashlight', 2], ['Bandage', 1], ['DuffelBag', 1], ['AssaultRifle', 0.4], ['Box556', 0.6]] },
+  'police.locker': { n: [1, 4], empty: 0.1, items: [['Pistol', 4], ['Shotgun', 2], ['Box9mm', 5], ['BoxShells', 3], ['Nightstick', 3], ['Holster', 3], ['Belt', 1], ['PoliceShirt', 2], ['PolicePants', 2], ['PoliceCap', 2], ['BulletVest', 1.5], ['Flashlight', 2], ['Bandage', 1], ['DuffelBag', 1], ['AssaultRifle', 0.4], ['Box556', 0.6], ['Mag9mm', 3]] },
   'police.desk': { n: [0, 3], empty: 0.3, items: [['Newspaper', 2], ['Box9mm', 1], ['Flashlight', 1], ['Battery', 1], ['Pop', 1], ['@snack', 1], ['Map', 1], ['CarKey', 0.5]] },
   'gasstation.shelf': { n: [2, 6], empty: 0.1, items: [['@snack', 20], ['@drink', 12], ['Cigarettes', 5], ['Lighter', 4], ['Battery', 3], ['Flashlight', 2], ['Map', 2], ['Magazine', 2], ['GasCan', 3], ['DuctTape', 1], ['@carparts', 5], ['@cartools', 2], ['EngineParts', 3]] },
   'gasstation.cooler': { n: [3, 7], empty: 0.05, items: [['@drink', 4], ['Beer', 2], ['Milk', 1]] },
@@ -108,22 +108,22 @@ const LOOT = {
   'autorepair.register': { n: [0, 2], empty: 0.4, items: [['@snack', 2], ['Pop', 1], ['Cigarettes', 1], ['Lighter', 1], ['Map', 1]] },
   'office.desk': { n: [0, 3], empty: 0.25, items: [['Newspaper', 3], ['Magazine', 2], ['@snack', 3], ['Pop', 2], ['Scissors', 1], ['Flashlight', 1], ['Painkillers', 1], ['Map', 0.5]] },
   'office.shelf': { n: [1, 3], empty: 0.3, items: [['@books', 3], ['Newspaper', 2]] },
-  'barn.crate': { n: [1, 4], empty: 0.2, items: [['@seeds', 6], ['Shovel', 2], ['Trowel', 2], ['WateringCan', 2], ['Bucket', 2], ['Axe', 1], ['WoodAxe', 0.8], ['Log', 2], ['Plank', 3], ['GasCan', 2], ['Potato', 2], ['Carrots', 2], ['Sledgehammer', 0.5], ['HuntingRifle', 0.4], ['Box308', 0.5], ['BookFarming1', 1], ['BookFarming2', 0.5]] },
+  'barn.crate': { n: [1, 4], empty: 0.2, items: [['@seeds', 6], ['Shovel', 2], ['Trowel', 2], ['WateringCan', 2], ['Bucket', 2], ['Axe', 1], ['WoodAxe', 0.8], ['Log', 2], ['Plank', 3], ['GasCan', 2], ['Potato', 2], ['Carrots', 2], ['Sledgehammer', 0.5], ['HuntingRifle', 0.4], ['Box308', 0.5], ['BookFarming1', 1], ['BookFarming2', 0.5], ['DoubleBarrel', 0.6], ['BoxShells', 0.6]] },
   'barn.toolcab': { n: [1, 4], empty: 0.15, items: [['@tools', 4], ['@seeds', 3], ['Shovel', 1], ['GasCan', 1], ['@cartools', 2], ['Tire', 1], ['EngineParts', 1]] },
-  'cabin.crate': { n: [1, 4], empty: 0.15, items: [['FishingRod', 3], ['Axe', 2], ['HuntingRifle', 1], ['Box308', 1.5], ['HuntingKnife', 2], ['@canned', 4], ['Log', 2], ['Matches', 2], ['Lighter', 1], ['HikingBag', 1.5], ['BookFishing1', 1], ['BookForaging1', 1], ['WaterBottle', 2], ['Worms', 1]] },
+  'cabin.crate': { n: [1, 4], empty: 0.15, items: [['FishingRod', 3], ['Axe', 2], ['HuntingRifle', 1], ['Box308', 1.5], ['HuntingKnife', 2], ['@canned', 4], ['Log', 2], ['Matches', 2], ['Lighter', 1], ['HikingBag', 1.5], ['BookFishing1', 1], ['BookForaging1', 1], ['WaterBottle', 2], ['Worms', 1], ['DoubleBarrel', 1], ['VarmintRifle', 0.8], ['Box223', 1], ['BoxShells', 0.6]] },
   'school.locker': { n: [0, 3], empty: 0.25, items: [['SchoolBag', 4], ['@books', 4], ['@snack', 3], ['@clothes', 2], ['BaseballBat', 1], ['JuiceBox', 2]] },
   'school.desk': { n: [0, 2], empty: 0.4, items: [['@books', 4], ['Scissors', 1], ['Newspaper', 1], ['@snack', 1]] },
   'church.shelf': { n: [0, 2], empty: 0.5, items: [['Novel', 2], ['Newspaper', 1], ['Matches', 1], ['WaterBottle', 1]] },
   'firestation.locker': { n: [1, 3], empty: 0.15, items: [['FireJacket', 3], ['FirePants', 3], ['FireHelmet', 2], ['Axe', 3], ['Boots', 2], ['Flashlight', 2], ['Bandage', 2], ['Crowbar', 1], ['FireExtinguisher', 3]] },
   'motel.dresser': { n: [0, 3], empty: 0.3, items: [['@clothes', 4], ['@books', 2], ['Cigarettes', 1], ['Pistol', 0.3], ['DuffelBag', 1], ['Whiskey', 1]] },
-  'military.locker': { n: [1, 4], empty: 0.1, items: [['MilitaryJacket', 3], ['CargoPants', 3], ['Boots', 2], ['Belt', 2], ['MilitaryBag', 1], ['@canned', 3], ['WaterBottle', 2], ['Bandage', 2], ['SterileBandage', 1], ['Cigarettes', 2], ['Lighter', 1], ['Flashlight', 1], ['Box556', 0.8], ['Box9mm', 0.8], ['Pistol', 0.4]] },
+  'military.locker': { n: [1, 4], empty: 0.1, items: [['MilitaryJacket', 3], ['CargoPants', 3], ['Boots', 2], ['Belt', 2], ['MilitaryBag', 1], ['@canned', 3], ['WaterBottle', 2], ['Bandage', 2], ['SterileBandage', 1], ['Cigarettes', 2], ['Lighter', 1], ['Flashlight', 1], ['Box556', 0.8], ['Box9mm', 0.8], ['Pistol', 0.4], ['Mag556', 1]] },
   'military.desk': { n: [0, 3], empty: 0.3, items: [['Map', 2], ['Flashlight', 1], ['Battery', 1], ['Radio', 1], ['@snack', 2], ['Box9mm', 0.5], ['Pistol', 0.3]] },
   'prison.desk': { n: [0, 2], empty: 0.4, items: [['Newspaper', 2], ['Cigarettes', 2], ['Magazine', 1], ['Nightstick', 0.5]] },
   'hangar.toolcab': { n: [2, 5], empty: 0.1, items: [['@tools', 10], ['@cartools', 4], ['@carparts', 4], ['GasCan', 3], ['DuctTape', 2], ['Flashlight', 1]] },
   'hangar.crate': { n: [1, 4], empty: 0.2, items: [['@carparts', 4], ['@tools', 3], ['GasCan', 2], ['Plank', 1], ['@junk', 2]] },
   // the supply dump outside the motor pool at Fort Hale
   'militarysupply.crate': { n: [1, 4], empty: 0.15, items: [['@canned', 6], ['WaterBottle', 4], ['SterileBandage', 2], ['Bandage', 2], ['Box556', 1], ['Box9mm', 1], ['MilitaryJacket', 1], ['CargoPants', 1], ['Boots', 1], ['DuctTape', 1], ['Flashlight', 1], ['Battery', 1], ['@tools', 1]] },
-  'military.crate': { n: [2, 5], empty: 0.05, items: [['AssaultRifle', 2], ['Box556', 5], ['Pistol', 2], ['Box9mm', 3], ['MilitaryBag', 2], ['MilitaryJacket', 2], ['Holster', 1], ['Belt', 1], ['BulletVest', 2], ['CargoPants', 2], ['Boots', 2], ['@canned', 3], ['SterileBandage', 2], ['Antibiotics', 1], ['TireHD', 0.6], ['EngineParts', 1]] },
+  'military.crate': { n: [2, 5], empty: 0.05, items: [['AssaultRifle', 2], ['Box556', 5], ['Pistol', 2], ['Box9mm', 3], ['MilitaryBag', 2], ['MilitaryJacket', 2], ['Holster', 1], ['Belt', 1], ['BulletVest', 2], ['CargoPants', 2], ['Boots', 2], ['@canned', 3], ['SterileBandage', 2], ['Antibiotics', 1], ['TireHD', 0.6], ['EngineParts', 1], ['Mag556', 4], ['Mag9mm', 2]] },
 };
 
 const Loot = {
@@ -155,7 +155,8 @@ const Loot = {
         const d = ITEMS[id];
         if (d.fresh !== undefined) it.age = R.f(0, d.fresh * 24 * 0.6);
         if (d.wpn) it.cond = R.int(Math.ceil(d.wpn.cond * 0.4), d.wpn.cond);
-        if (d.gun) { it.ammo = R.chance(0.3) ? R.int(0, d.gun.cap) : 0; }
+        if (d.gun) { it.ammo = R.chance(0.3) ? R.int(0, d.gun.cap) : 0; if (d.gun.mag && !it.ammo && R.chance(0.35)) it.magIn = false; }
+        if (d.magOf) it.rounds = R.chance(0.4) ? R.int(1, d.magCap) : 0;
         if (d.uses && d.cat !== 'Material') it.uses = R.int(Math.ceil(d.uses * 0.3), d.uses);
         if (d.fluid && id === 'WaterBottle') it.fl = R.chance(0.75) ? d.fluid : R.f(0, d.fluid);
         out.push(it);

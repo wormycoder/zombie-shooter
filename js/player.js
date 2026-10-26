@@ -83,6 +83,17 @@ const Player = {
   findTag(tag) { return this.find(it => Items.has(it, tag) && (it.cond === undefined || it.cond > 0 || ITEMS[it.id].cat === 'Clothing')); },
   findId(id) { return this.find(it => it.id === id); },
   count(id) { return this.findAll(it => it.id === id).length; },
+  // flat on your face (a sprinting hop gone wrong): down, then up again
+  FALL: 0.65,
+  trip() {
+    const p = G.player;
+    Actions.cancel();
+    p.fallT = 0; p.path = null; p.sitting = false;
+    p.hurtFlash = 0.6; p.st.endurance = Math.max(0, p.st.endurance - 0.05);
+    if (R.chance(0.4)) this.addWound(R.pick(['HandL', 'HandR', 'LowerLegL', 'LowerLegR']), 'scratch', { isZombie: false });
+    this.say(R.pick(['Ow!', 'Damn it!', 'Argh!']), '#f99');
+    Sfx.play('thud'); Noise.emit(p.x, p.y, 8, 'thud');
+  },
   removeItem(it) {
     for (const c of this.containers()) { const k = c.items.indexOf(it); if (k >= 0) { c.items.splice(k, 1); this.unflag(it); return true; } }
     return false;
@@ -220,6 +231,8 @@ const Player = {
     if (gn >= 3 && !Debug.god) { p.dragT = (p.dragT || 0) + dt; if (p.dragT > 2) { this.die('Dragged down by the dead'); Sfx.play('scream'); return; } }
     else p.dragT = Math.max(0, (p.dragT || 0) - dt);
     if (p.fireCd > 0) p.fireCd -= dt;
+    if (p.shoutT > 0) p.shoutT -= dt;
+    if (p.cycle) { p.cycle.t += dt; if (p.cycle.t >= p.cycle.dur) p.cycle = null; }
     // camera
     let cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
     // driving, the view leads the car by up to 5 tiles so more of the road ahead is on screen
@@ -229,6 +242,12 @@ const Player = {
     Render.cam.y += (cy - Render.cam.y) * Math.min(1, dt * 8);
     Render.cam.z += (cz - Render.cam.z) * Math.min(1, dt * 8);
     if (p.asleep) { this.sleepUpdate(dt, gh); this.updateStats(gh, dt); this.fov(dt); return; }
+    // tripped: down on the ground, then getting up
+    if (p.fallT !== undefined && p.fallT !== null) {
+      p.fallT += dt;
+      if (p.fallT >= this.FALL + Zombie.GETUP) p.fallT = null;
+      else { p.anim.amp = 0; this.updateStats(gh, dt); this.fov(dt); return; }
+    }
     p.sleepFade = Math.max(0, p.sleepFade - dt);
     if (p.inCar) { Vehicles.driveInput(p.inCar, dt); this.updateStats(gh, dt); this.fov(dt); return; }
     this.movement(dt);
@@ -361,6 +380,17 @@ const Player = {
     Vehicles.pushOut(p, p.r);
     this.pushZombies(p);
     const moved = U.dist(ox, oy, p.x, p.y);
+    // running into a low fence: hop it without stopping (the side the run is held up on)
+    if (!auto && (mode === 'run' || mode === 'sprint') && !p.action && !p.swing) {
+      const cx = Math.floor(p.x), cy = Math.floor(p.y);
+      for (const [d, n, m] of [[0, nx, p.x - ox], [1, ny, p.y - oy]]) {
+        if (Math.abs(n) < 0.3 || Math.abs(m) > Math.abs(n) * sp * dt * 0.3) continue;
+        const e = World.edgeBetween(cx, cy, cx + (d ? 0 : Math.sign(n)), cy + (d ? Math.sign(n) : 0));
+        if (!e || World.feat(e[0], e[1], e[2])) continue;
+        const w = World.wall(e[0], e[1], e[2]), wi = w && WALL_INFO[w];
+        if (wi && wi.climb && wi.h < 1.6 && Interact.nearEdge(e, 0.75)) { Interact.climb(e, { vault: true }); break; }
+      }
+    }
     p.anim.ph += moved * (mode === 'sprint' ? 3.2 : mode === 'run' ? 3.6 : 4.4);
     p.anim.amp = Math.min(1, p.anim.amp + dt * 6) * (moved > 0.0005 ? 1 : 0.9);
     if (auto && moved < sp * dt * 0.1) { p.stuckT = (p.stuckT || 0) + dt; if (p.stuckT > 1.2) { p.path = null; p.stuckT = 0; } } else p.stuckT = 0;
@@ -426,7 +456,7 @@ const Player = {
     if (Input.hit(' ')) { Combat.startShove(); return; }
     if (prim && ITEMS[prim.id].throwable) { if (Input.takeClick()) Combat.throwItem(prim); return; }
     if (wd && wd.gun) {
-      if (((Input.lmbClick && Input.takeClick()) || (Input.lmb && wd.gun.auto)) && p.fireCd <= 0 && (!p.swing || p.swing.kind === 'fire')) Combat.fire(prim);
+      if (((Input.lmbClick && Input.takeClick()) || (Input.lmb && wd.gun.auto && prim.fire !== 'semi')) && p.fireCd <= 0 && (!p.swing || p.swing.kind === 'fire')) Combat.fire(prim);
     } else if (Input.lmb && !p.swing) {
       Combat.startMelee();
     }
@@ -843,8 +873,11 @@ const Player = {
       if (an === 'shove') { pose.swingT = 0.42; }
       if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
     }
+    if (p.shoutT > 0 && !p.action && !p.swing && !p.aiming) { pose.arms = 'shout'; pose.k = 1 - p.shoutT / 1.1; }
+    // working the pump or the bolt between shots
+    if (p.cycle && p.cycle.t > 0 && (pose.arms === 'aim' || pose.arms === 'fire')) { pose.cycle = U.clamp(p.cycle.t / p.cycle.dur, 0, 1); pose.cycleKind = p.cycle.kind; }
     if (p.climb) {
-      pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = p.climb.rope === 'down' ? (p.climb.t * 5) % 1 : p.climb.t; pose.rope = !!p.climb.rope;
+      pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = p.climb.rope === 'down' ? (p.climb.t * 5) % 1 : p.climb.t; pose.rope = !!p.climb.rope; pose.climbKind = p.climb.kind;
       pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4;
     }
     // a flinch when hurt, struggling when grabbed
@@ -855,6 +888,12 @@ const Player = {
       if (lv > (pose.limp || 0)) { pose.limp = lv; pose.limpSide = pt.endsWith('L') ? -1 : 1; }
     }
     if (p.sitting) { pose.crouch = 0.8; pose.mode = 'sit'; }
+    if (p.fallT !== undefined && p.fallT !== null && !p.dead) {
+      const t = p.fallT;
+      pose.arms = 'idle'; pose.amp = 0; pose.lieDir = -1; pose.lieOff = 0;
+      if (t < this.FALL) { pose.mode = 'fall'; pose.prog = t / this.FALL; pose.lie = 1; }
+      else { pose.mode = 'getup'; pose.prog = U.clamp((t - this.FALL) / Zombie.GETUP, 0, 1); pose.lie = 1 - pose.prog; }
+    }
     if (p.asleep || p.dead) {
       pose.lie = p.dead ? Math.min(1, (p.deadT || 0) * 2) : 1;
       pose.lieDir = 1; pose.arms = 'idle'; pose.amp = 0; pose.weapon = null; pose.lieOff = p.asleep ? 0.85 : 0;

@@ -5,8 +5,10 @@
 // spent cases per round: kind, and a delay for guns that are worked by hand (with the sound of it)
 const EJECT = {
   Bullets9mm: { k: 'brass' },
+  Bullets45: { k: 'brass' },
   Bullets556: { k: 'rifle' },
   Bullets308: { k: 'rifle', t: 0.45, s: 'bolt' },
+  Bullets223: { k: 'rifle', t: 0.45, s: 'bolt' },
   ShotgunShells: { k: 'shell', t: 0.3, s: 'pump' },
 };
 const Combat = {
@@ -206,9 +208,16 @@ const Combat = {
     const p = G.player;
     const g = ITEMS[it.id].gun;
     if (it.cond <= 0) { Player.say('The gun is broken.', '#f99'); p.fireCd = 0.5; return; }
+    // a click: no magazine in it, a jam, or the slide locked back on an empty magazine
+    if (g.mag && it.magIn === false) { Sfx.play('dryfire'); Player.say('No magazine! (R to reload)', '#f99'); p.fireCd = 0.4; return; }
+    if (it.jam) { Sfx.play('dryfire'); Player.say('Jammed! (R to clear it)', '#f99'); p.fireCd = 0.4; return; }
     if (!it.ammo) { Sfx.play('dryfire'); Player.say('Out of ammo! (R to reload)', '#f99'); p.fireCd = 0.4; return; }
+    if (it.unracked) { Sfx.play('dryfire'); Player.say('It needs racking. (R)', '#f99'); p.fireCd = 0.4; return; }
     it.ammo--;
     p.fireCd = g.rof;
+    // a pump or bolt is worked between shots; a self-loader's slide locks back on the last round
+    if (g.cycle) p.cycle = { t: -0.12, dur: Math.max(0.35, g.rof * 0.75), kind: g.cycle };
+    if (g.mag && !it.ammo) it.unracked = true;
     p.swing = { t: 0, dur: Math.min(0.22, g.rof * 0.95), kind: 'fire', done: true };
     const [wx, wy] = Render.mouseWorld();
     const base = Math.atan2(wy - p.y, wx - p.x);
@@ -264,13 +273,15 @@ const Combat = {
     Player.xp('Aiming', anyHit ? 2.5 : 0.5);
     p.recoil = Math.min(0.3, (p.recoil || 0) + (g.kick || 0.06) * (1.1 - Player.skill('Aiming') * 0.05));
     Noise.emit(p.x, p.y, g.noise, 'gun');
-    Sfx.play(g.model === 'shotgun' ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol');
+    Sfx.play(g.pellets ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol');
     Fx.flash(mx, my, 7, 1.0, 0.07);
     p.st.panic = Math.max(0, p.st.panic - 2);
     // the spent case: out at once from a self-loader, when the pump or bolt is worked on the others; a revolver keeps it
-    const ej = EJECT[g.ammo];
+    const ej = !g.brk && EJECT[g.ammo];
     if (ej) { if (ej.t) this.ejQ.push({ t: ej.t, k: ej.k, s: ej.s }); else this.eject(ej.k); }
     if (R.chance(1 / g.lower)) { it.cond--; if (it.cond <= 0) Player.say('The gun jammed for good!', '#f99'); }
+    // a worn gun jams now and then (cleared by working the action: R)
+    else if (it.ammo && R.chance(0.003 + Math.max(0, 1 - it.cond / g.cond) * 0.035)) { it.jam = true; Player.say('It jammed!', '#f99'); }
   },
   throwItem(it) {
     const p = G.player;

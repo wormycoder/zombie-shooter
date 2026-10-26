@@ -203,7 +203,7 @@ const UI = {
       let bar = '';
       if (d.wpn || d.gun) bar = `<div class="cbar"><i style="width:${Math.max(0, it.cond / (d.wpn || d.gun).cond * 100)}%"></i></div>`;
       if (d.power !== undefined) bar = `<div class="cbar pw"><i style="width:${it.pow * 100}%"></i></div>`;
-      const ammo = d.gun ? `<span class="ammo">${it.ammo}/${d.gun.cap}${' · ' + Player.count(d.gun.ammo)}</span>` : (d.light ? `<span class="ammo">${it.on ? 'ON' : 'off'}</span>` : '');
+      const ammo = d.gun ? `<span class="ammo">${this.ammoText(it)}</span>` : (d.light ? `<span class="ammo">${it.on ? 'ON' : 'off'}</span>` : '');
       return `<div class="eslot" data-slot="${k}"><img src="${Icons.url(it)}">${bar}${ammo}<span class="lbl">${label}</span></div>`;
     };
     const pr = Player.primary(), se = Player.secondary();
@@ -636,7 +636,21 @@ const UI = {
         if (!two) add('Equip secondary', via(() => Actions.equip(it, 'secondary')));
       }
     }
-    if (d.gun && mine) { add('Reload', () => { Player.equip(it, 'primary'); Actions.reload(); }); if (it.ammo) add('Unload', () => Actions.queue(Actions.unload(it))); }
+    if (d.gun && mine) {
+      const g = d.gun, inHand = (fn) => () => { Player.equip(it, 'primary'); fn(); };
+      add(it.jam ? 'Clear the jam' : 'Reload', inHand(() => Actions.reload()));
+      if (g.mag) {
+        if (it.magIn !== false) add('Eject magazine (' + (it.ammo || 0) + '/' + g.cap + ')', inHand(() => Actions.queue(Actions.ejectMag(it))));
+        const seen = new Set();
+        for (const m of Player.findAll(x => x.id === g.mag).sort((a, b) => b.rounds - a.rounds)) { if (seen.has(m.rounds)) continue; seen.add(m.rounds); add('Insert magazine (' + (m.rounds || 0) + '/' + g.cap + ')', inHand(() => Actions.queue(Actions.magSwap(it, m)))); }
+      } else if (it.ammo) add('Unload', () => Actions.queue(Actions.unload(it)));
+      if (g.auto) add(it.fire === 'semi' ? 'Switch to full auto' : 'Switch to semi-auto', () => { it.fire = it.fire === 'semi' ? 'auto' : 'semi'; Sfx.play('switch'); Player.say(it.fire === 'semi' ? 'Semi-auto.' : 'Full auto.', '#ccc'); this.refresh(); });
+    }
+    if (d.magOf && mine) {
+      const have = Player.count(d.magOf);
+      add('Load rounds (' + have + ' in inventory)', () => Actions.queue(Actions.magLoad(it)), { disabled: !have || (it.rounds || 0) >= d.magCap });
+      if (it.rounds) add('Unload rounds', () => Actions.queue(Actions.magUnload(it)));
+    }
     if ((d.wpn || d.gun) && it.cond < (d.wpn || d.gun).cond && mine) {
       for (const tool of Player.findAll(x => ITEMS[x.id].repair)) add('Repair with ' + ITEMS[tool.id].n, () => Actions.queue(Actions.repair(it, tool)));
     }
@@ -663,6 +677,14 @@ const UI = {
     }
     if (it.keyName) add(it.keyName, null, { info: true });
     this.showContext(x, y, opts);
+  },
+  // a gun's rounds for the hand slots: in it / what it holds (JAM, no magazine), loose rounds, spare magazines
+  ammoText(it) {
+    const g = ITEMS[it.id].gun;
+    if (it.jam) return 'JAM';
+    const mags = g.mag ? Player.findAll(x => x.id === g.mag) : [];
+    const inGun = g.mag && it.magIn === false ? '–' : it.ammo;
+    return inGun + '/' + g.cap + ' · ' + Player.count(g.ammo) + (mags.length ? ' +' + mags.length + '▮' : '') + (it.fire === 'semi' ? ' S' : '');
   },
   // ---------------- context menu widget
   showContext(x, y, opts, target) {

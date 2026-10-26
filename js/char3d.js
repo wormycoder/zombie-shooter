@@ -1037,6 +1037,12 @@ const Char3D = {
       this.arm(T, 1, 0.0 + dx * 0.21 - k2 * 0.04, -0.07 + dy * 0.21, -0.05 + dz / dl * 0.21, 0.9);
       this.wdir(T, dx, dy, dz / dl);
       T[C3.GR] = 1; T[C3.GO] = 0.34; T[C3.LE] = 0.7; T[C3.HR] += 0.24; T[C3.HP] += 0.14;
+      // working the action between shots: the fore-end slid back and forward, or the bolt lifted, drawn and pushed home
+      if (P.cycle !== undefined) {
+        const c = P.cycle, s = Math.sin(U.clamp(c, 0, 1) * Math.PI);
+        if (P.cycleKind === 'pump') T[C3.LE] = 0.7 - 0.17 * s;
+        else { T[C3.RW + 2] += 0.035 * s; T[C3.RW] -= 0.045 * this.pulse(c, 0.2, 0.8, 0.15); T[C3.HP] -= 0.05 * s; }
+      }
     } else {
       T[C3.SP] += 0.05 - k2 * 0.04; T[C3.SW] += 0.05;
       const cy = -(T[C3.PW] + T[C3.SW]);
@@ -1896,7 +1902,14 @@ const Char3D = {
         e[3] = sx; e[4] = sy; e[5] = this.now;
       }
       if (key === 'pistol') { piece(BOX, -0.04, L, 0.016, 0.022, col, 0.02); piece(BOX, -0.035, 0.03, 0.014, 0.04, this.sc(col, 0.8), -0.03); }
-      else {
+      else if (key === 'dbarrel' || key === 'sawn') {
+        // two barrels one over the other on a break-action receiver; the sawed-off with a stub of a grip
+        const sawn = key === 'sawn';
+        piece(BOX, sawn ? -0.13 : -0.26, 0.0, 0.022, 0.04, this.rgb(W.stock), -0.025, sawn ? 1.1 : 0.8);
+        piece(BOX, -0.02, 0.14, 0.022, 0.034, col, 0.0);
+        piece(CY, 0.14, L, 0.011, 0.011, col, 0.026); piece(CY, 0.14, L, 0.011, 0.011, col, 0.003);
+        if (!sawn) piece(BOX, 0.15, 0.4, 0.018, 0.016, this.rgb(W.stock), -0.014);
+      } else {
         piece(BOX, -0.26, 0.0, 0.022, 0.04, this.rgb(W.stock), -0.02, 0.8);
         piece(BOX, -0.02, 0.3, 0.022, 0.032, col, 0.0);
         piece(CY, 0.3, L, 0.012, 0.012, col, 0.012);
