@@ -13,6 +13,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.022.000.139', date: '2026-10-26', title: 'Fences and guns',
+    notes: [
+      'Running or sprinting into a low fence, you hop it without stopping. Sprint into it and you may trip and go down flat on your face.',
+      'Tall fences have their own climb, and they can beat you: unfit, worn out, carrying a lot or hurt in the arms, you may slip back off on your side.',
+      'Shouting (Q) has its animation: hands cupped round the mouth.',
+      'Magazines: the 9mm, the M1911, the assault rifle and the varmint rifle take magazines you fill round by round. R swaps in your fullest spare (the old one goes in your pocket with what was left in it), or fills the one in the gun from loose rounds. Eject or insert magazines from the gun\'s menu, load or empty them from theirs.',
+      'The pump and the bolt are worked after every shot, and an empty self-loader is racked after it is reloaded. A worn gun can jam: it clicks until you clear it with R. The assault rifle switches between full auto and semi-auto from its menu. The hand slots show the rounds in the gun, the loose rounds and spare magazines.',
+      'Five more guns: the M1911 (.45), the .357 Magnum, a double-barrel shotgun (two quick shots), a sawed-off shotgun (saw down a double-barrel) and a varmint rifle (.223, bolt action), with their ammunition, in gun stores, police lockers, homes, cabins and barns.',
+    ],
+    commits: ['bcb4d43'], shots: ['v022000_1', 'v022000_2', 'v022000_3'],
+  },
+  {
     v: '000.021.000.137', date: '2026-10-26', title: 'Foliage and items on the floor',
     notes: [
       'Tall grass, weeds and wildflowers grow where nobody kept the grass: along the country roads, in the empty lots of town, round the fields, along fences and in meadow patches. Cattails stand at the water\'s edge and wild shrubs, some with berries, grow among it. Mowed yards stay mowed.',

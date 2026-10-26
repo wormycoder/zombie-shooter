@@ -231,9 +231,26 @@ FIX - THE GAME IS LACKING FOLIAGE
 FIX - ADD ANIMATIONS AND ACTIONS FOR THINGS LIKE TALL FENCES, FAILING TO
       JUMP A TALL FENCE, JUMPING OVER A SHORT FENCE WHILE RUNNING, SITTING ON
       THE FLOOR, SHOUTING, RACKING DIFFERENT GUNS, RELOADING MAGAZINES, ETC.
-  -> MEDIUM. UNFINISHED
+  -> MEDIUM. DONE, first pass (000.022.000.139):
+     - running or sprinting into a low fence hops it without stopping; a
+       sprinting hop can end flat on your face (down, then the get-up);
+     - tall fences have their own climb and can beat you (slipping back is
+       likelier unfit, weak, tired, loaded down or hurt in the arms);
+     - shouting (Q): hands cupped round the mouth;
+     - racking: the pump and the bolt worked after every shot, the slide /
+       charging handle racked after reloading an empty gun or clearing a
+       jam; magazines thumbed full round by round, swapped in and out;
+     - sitting on the floor was already there (Z) - kept.
+     Still possible: a crouch-walk under windows, sitting in chairs.
 
-MEDIUM - ADD BETTER GUN CONTROLS, AND MORE GUNS. UNFINISHED
+MEDIUM - ADD BETTER GUN CONTROLS, AND MORE GUNS.
+  -> DONE, first pass (000.022.000.139): magazines as items (R swaps in
+     the fullest spare, else fills the one in the gun; eject / insert /
+     load / unload from the menus), jams on worn guns (R clears them), the
+     assault rifle's full auto / semi-auto, the hand slots showing rounds
+     in, loose rounds, spare magazines and JAM. Five more guns: M1911,
+     .357 Magnum, double-barrel shotgun, sawed-off (saw a double-barrel),
+     varmint rifle; new ammo and boxes, in the loot.
 
 MEDIUM - ADD THE ABILITY TO PLACE 3D (OR 2D IF 3D ITEMS ARE UNAVAILABLE) ON
       THE FLOOR.
@@ -288,8 +305,8 @@ Fix (000.020.001.135), asked for: visibility around trees - a see-through
   camera that leads the car.
 Run 6 (000.021.000.137), asked for: medium and low items first - foliage,
   and items placed on the floor.
-Next runs, planned: actions and animations (fences, sitting, shouting,
-  racking and magazines) with gun controls and more guns; then audio and
-  music; then the character and zombie models (and their textures);
+Run 7 (000.022.000.139): fences (hop at a run, climb tall ones, fail,
+  trip), shouting, gun racking and magazines, jams, fire mode, five guns.
+Next runs, planned: audio and music; then the character and zombie models (and their textures);
   the map's part 2 (a hospital, more shop types, the countryside) after
   that.
