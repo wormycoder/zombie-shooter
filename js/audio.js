@@ -37,6 +37,8 @@ const Sfx = {
     this.flySrc = this.loopNoise(this.noise, 'bandpass', 520); this.flySrc.fl.Q.value = 9;
     this.on = true;
     Music.init();
+    // the rendered clips (sfxbank.js), made in the background
+    if (typeof SfxBank !== 'undefined') SfxBank.build(c);
   },
   setVol(k, v) { this.vol[k] = v; if (!this.ctx) return; if (k === 'master') this.master.gain.value = v; if (k === 'sfx') this.sfxG.gain.value = v; if (k === 'music') this.musG.gain.value = v; },
   loopNoise(buf, type, f) {
@@ -102,6 +104,7 @@ const Sfx = {
     const sp = this.spatial(x, y, name === 'alarm' || name === 'thunder' ? 80 : 36);
     const G_ = sp.g, pan = sp.pan;
     if (G_ < 0.01) return;
+    if (SfxBank.play(name, G_, pan)) return;
     const r = (a, b) => a + Math.random() * (b - a);
     switch (name) {
       case 'swing': this.nz(t, 0.2, 'bandpass', 1400, 1.5, 0.18 * G_, pan, { f1: 350, a: 0.05 }); break;
@@ -114,6 +117,7 @@ const Sfx = {
       case 'stomp': this.tn(t, 0.16, 'sine', 70, 35, 0.6 * G_, pan); this.nz(t, 0.12, 'lowpass', 1200, 1, 0.35 * G_, pan); break;
       case 'zdie': this.tn(t, 0.25, 'sine', 80, 35, 0.5 * G_, pan); this.groanAt(t + 0.05, 0.6, 70, 0.15 * G_, pan); break;
       case 'pistol': this.gun(t, G_, pan, 1); break;
+      case 'pistol45': case 'magnum': this.gun(t, G_, pan, 1.2); break;
       case 'rifle': this.gun(t, G_, pan, 1.4); break;
       case 'shotgun': this.gun(t, G_, pan, 1.8); break;
       case 'dryfire': this.tn(t, 0.02, 'square', 2200, 1800, 0.2, pan); break;
@@ -161,7 +165,7 @@ const Sfx = {
       case 'levelup': [523, 659, 784].forEach((f, k) => this.tn(t + k * 0.1, 0.35, 'sine', f, f, 0.12, 0, { verb: true })); break;
       case 'hurt': this.tn(t, 0.18, 'sawtooth', G.player && G.player.look.female ? 330 : 190, G.player && G.player.look.female ? 260 : 140, 0.15, 0, { lp: 1200 }); break;
       case 'zhit': this.nz(t, 0.18, 'bandpass', 1500, 1, 0.2, 0); this.groanAt(t, 0.4, 110, 0.2, pan); break;
-      case 'zattack': this.groanAt(t, 0.45, r(110, 150), 0.22 * G_, pan, true); break;
+      case 'zattack': if (!SfxBank.play(Math.random() < 0.5 ? 'snarlM' : 'snarlF', G_, pan)) this.groanAt(t, 0.45, r(110, 150), 0.22 * G_, pan, true); break;
       case 'scream': this.tn(t, 1.0, 'sawtooth', 700, 400, 0.15, 0, { lp: 2500, vib: 8 }); break;
       case 'shout': {
         const f0 = G.player && G.player.look.female ? 300 : 175;
@@ -238,12 +242,16 @@ const Sfx = {
     if (!this.on || G.speed > 8) return;
     const sp = this.spatial(z.x, z.y, 22);
     if (sp.g < 0.02) return;
+    if (SfxBank.play((aggressive && Math.random() < 0.5 ? 'snarl' : 'groan') + (z.female ? 'F' : 'M'), sp.g * (aggressive ? 1.15 : 0.9), sp.pan)) return;
     this.groanAt(this.ctx.currentTime, Math.random() * 0.8 + (aggressive ? 0.6 : 1.0), (z.female ? 110 : 75) + Math.random() * 25, (aggressive ? 0.28 : 0.16) * sp.g, sp.pan, aggressive && Math.random() < 0.5);
   },
   footstep(fl, mode, sneak) {
     if (!this.on || G.speed > 5) return;
     const t = this.ctx.currentTime;
     const loud = (mode === 'sprint' ? 0.22 : mode === 'run' ? 0.17 : 0.1) * (sneak ? 0.45 : 1);
+    const p = G.player, snow = Season.snow > 0.3 && p && World.room(Math.floor(p.x), Math.floor(p.y)) < 0;
+    const surf = snow ? 'snow' : fl === FL.GRASS || fl === FL.GRASS2 || fl === FL.FOREST || fl === FL.FURROW ? 'grass' : fl === FL.WOOD ? 'wood' : fl === FL.DIRT || fl === FL.SAND || fl === FL.GRAVEL ? 'gravel' : fl === FL.CARPET ? 'carpet' : 'hard';
+    if (SfxBank.play('st_' + surf, loud * 4.5, 0, mode === 'sprint' ? 1.06 : 1)) return;
     if (fl === FL.GRASS || fl === FL.GRASS2 || fl === FL.FOREST || fl === FL.FURROW) this.nz(t, 0.09, 'bandpass', 1800, 0.8, loud * 0.8, 0, { a: 0.01 });
     else if (fl === FL.WOOD) { this.nz(t, 0.06, 'lowpass', 900, 1, loud, 0); this.tn(t, 0.05, 'sine', 160, 90, loud * 0.8, 0); }
     else if (fl === FL.DIRT || fl === FL.SAND || fl === FL.GRAVEL) this.nz(t, 0.1, 'bandpass', 1200, 0.7, loud, 0);
@@ -381,11 +389,9 @@ const Sfx = {
 // Generative music & ambience
 // ---------------------------------------------------------------------------
 const Music = {
-  bufs: {}, t: 0, nextPhrase: 3, tension: 0, ambT: 0,
+  t: 0, nextPhrase: 3, tension: 0, ambT: 0, piano: {}, pianoBusy: {}, inFlight: 0, piece: null,
   init() {
     const c = Sfx.ctx;
-    const notes = { A2: 110, C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196, A3: 220, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392, A4: 440 };
-    for (const n in notes) this.bufs[n] = this.pluck(c, notes[n], 3.5);
     // tension drone
     const o1 = c.createOscillator(), o2 = c.createOscillator();
     o1.type = 'sawtooth'; o2.type = 'sawtooth'; o1.frequency.value = 55; o2.frequency.value = 55 * 1.06;
@@ -396,50 +402,132 @@ const Music = {
     o1.connect(fl); o2.connect(fl); fl.connect(g); g.connect(Sfx.musG); g.connect(Sfx.verb);
     o1.start(); o2.start(); trem.start();
     this.drone = { g, fl, tg };
+    // the first piece a little after the start; the piano warms up meanwhile
+    this.nextPhrase = this.t + 4;
+    for (const m of [45, 48, 52, 57, 60, 64, 69]) this.pianoNote(m);
   },
-  pluck(c, f, dur) {
-    const sr = c.sampleRate, n = Math.floor(sr * dur);
-    const buf = c.createBuffer(1, n, sr);
-    const d = buf.getChannelData(0);
-    const N = Math.round(sr / f);
-    const ring = new Float32Array(N);
-    for (let i = 0; i < N; i++) ring[i] = Math.random() * 2 - 1;
-    let idx = 0, prev = 0;
-    for (let i = 0; i < n; i++) {
-      const cur = ring[idx];
-      const nx = 0.5 * (cur + prev) * 0.9965;
-      prev = cur;
-      ring[idx] = nx;
-      d[i] = cur * 0.5;
-      idx = (idx + 1) % N;
+  // ------------------------------------------------------------------ instruments
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  // a piano note (midi m), rendered once in the background: partials a little sharp of harmonic, each dying away
+  // at its own rate (the high ones first, in two stages), a felt hammer knock at the start, the two strings of a
+  // note a hair apart left and right
+  pianoNote(m) {
+    if (this.piano[m] || this.pianoBusy[m] || typeof OfflineAudioContext === 'undefined') return this.piano[m] || null;
+    // three at a time: setting up a note's graph is main-thread work, and a piece asks for thirty at once
+    if (this.inFlight >= 3) return null;
+    this.pianoBusy[m] = true; this.inFlight++;
+    const sr = Sfx.ctx.sampleRate, f = this.hz(m), dur = U.clamp(5.5 - (m - 40) * 0.06, 2.5, 5.5);
+    const o = new OfflineAudioContext(2, Math.ceil(sr * dur), sr), out = o.createGain(); out.connect(o.destination);
+    const tau0 = U.clamp(2.6 * Math.pow(261.6 / f, 0.5), 0.6, 4.2), B = 0.00035, P = Math.max(3, Math.min(12, Math.floor(7000 / f)));
+    for (let k = 1; k <= P; k++) {
+      const fk = k * f * Math.sqrt(1 + B * k * k), amp = 0.5 / Math.pow(k, 1.25) * (k === 2 ? 1.2 : 1), tau = tau0 / (1 + 0.55 * (k - 1));
+      for (const [ch, det] of [[0, 0.9994], [1, 1.0006]]) {
+        const os = o.createOscillator(); os.frequency.value = fk * det;
+        const g = o.createGain(), gp = g.gain;
+        gp.setValueAtTime(0, 0); gp.linearRampToValueAtTime(amp, 0.004);
+        gp.setTargetAtTime(amp * 0.35, 0.004, tau * 0.12); gp.setTargetAtTime(0, 0.25, tau);
+        const mg = o.createChannelMerger(2);
+        os.connect(g); g.connect(mg, 0, ch); mg.connect(out);
+        os.start(0); os.stop(dur);
+      }
     }
-    // soften attack
-    for (let i = 0; i < 200; i++) d[i] *= i / 200;
-    return buf;
+    // the hammer
+    const nb = o.createBuffer(1, Math.ceil(sr * 0.03), sr), nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.006));
+    const ns = o.createBufferSource(); ns.buffer = nb; const nf = o.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = Math.min(4000, f * 6); const ng = o.createGain(); ng.gain.value = 0.18;
+    ns.connect(nf); nf.connect(ng); ng.connect(out); ns.start(0);
+    o.startRendering().then(buf => {
+      // fade the end of the buffer
+      for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch), F = Math.min(d.length, 2048); for (let i = 0; i < F; i++) d[d.length - 1 - i] *= i / F; }
+      this.piano[m] = buf;
+    }).catch(() => {}).finally(() => { this.pianoBusy[m] = false; this.inFlight--; });
+    return null;
   },
-  note(name, t, gain, pan) {
-    const c = Sfx.ctx;
-    const s = c.createBufferSource(); s.buffer = this.bufs[name];
+  // play midi note m at time t (gain, pan); a note not rendered yet asks for it and is left out this time
+  key(m, t, gain, pan) {
+    const buf = this.pianoNote(m);
+    if (!buf) return;
+    const c = Sfx.ctx, s = c.createBufferSource(); s.buffer = buf;
     const g = c.createGain(); g.gain.value = gain;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
-    s.connect(lp); lp.connect(g);
-    if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pan || 0; g.connect(p); p.connect(Sfx.musG); p.connect(Sfx.verb); }
-    else { g.connect(Sfx.musG); }
+    s.connect(g);
+    let o = g;
+    if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pan || 0; g.connect(p); o = p; }
+    o.connect(Sfx.musG); const vg = c.createGain(); vg.gain.value = 0.55; o.connect(vg); vg.connect(Sfx.verb);
     s.start(t);
   },
-  phrase() {
-    const c = Sfx.ctx;
-    const t = c.currentTime + 0.1;
-    const prog = [['A2', 'E3', 'A3', 'C4', 'E4'], ['F3', 'C4', 'F4', 'A4'], ['C3', 'G3', 'C4', 'E4', 'G4'], ['E3', 'B3', 'E4', 'G4'], ['D3', 'A3', 'D4', 'F4', 'A4'], ['G3', 'D4', 'G4', 'B3']];
-    const pick = R.pick([[0, 1, 2, 3], [0, 4, 1, 3], [4, 0, 5, 3], [0, 1, 4, 3]]);
-    let tt = t;
-    for (const ci of pick) {
-      const ch = prog[ci];
-      const arp = R.chance(0.5) ? ch : ch.slice().reverse();
-      for (let k = 0; k < arp.length; k++) this.note(arp[k], tt + k * R.f(0.22, 0.34), k === 0 ? 0.5 : 0.32, R.f(-0.4, 0.4));
-      tt += R.f(2.2, 3.2);
+  // a soft string pad under a chord: three detuned saws through a slow filter, swelling in and out
+  pad(ms, t, dur, gain) {
+    const c = Sfx.ctx, lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(500, t); lp.frequency.linearRampToValueAtTime(1100, t + dur * 0.5); lp.frequency.linearRampToValueAtTime(600, t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + Math.min(2.5, dur * 0.4)); g.gain.setValueAtTime(gain, t + dur * 0.7); g.gain.linearRampToValueAtTime(0, t + dur + 1.5);
+    lp.connect(g); g.connect(Sfx.musG); g.connect(Sfx.verb);
+    for (const m of ms) for (const det of [-0.006, 0, 0.006]) {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = this.hz(m) * (1 + det);
+      const og = c.createGain(); og.gain.value = 0.25 / ms.length;
+      o.connect(og); og.connect(lp); o.start(t); o.stop(t + dur + 1.6);
     }
-    return tt - t;
+  },
+  // ------------------------------------------------------------------ pieces
+  // key (tonic midi), scale, tempo, chords (scale degrees, from 0), the left hand's pattern (chord tone indices:
+  // 0 root, 1 third, 2 fifth, 3 octave; beats per note) and how busy the melody is
+  PIECES: {
+    title: { tonic: 57, minor: true, bpm: 70, prog: [0, 5, 2, 6, 0, 5, 3, 4], lh: [[0, 2, 3, 2], 1], mel: 0.75, pad: 0.05 },
+    day: { tonic: 60, minor: false, bpm: 66, prog: [0, 4, 5, 3, 0, 3, 4, 0], lh: [[0, 2, 3, 1], 1], mel: 0.6, pad: 0.035 },
+    dusk: { tonic: 57, minor: true, bpm: 62, prog: [0, 3, 6, 2, 5, 3, 4, 0], lh: [[0, 2, 3, 2, 1, 2], 2 / 3], mel: 0.5, pad: 0.04 },
+    night: { tonic: 50, minor: true, bpm: 52, prog: [0, 5, 3, 4, 0, 5, 6, 0], lh: [[0, 3], 2], mel: 0.3, pad: 0.06 },
+    rain: { tonic: 52, minor: true, bpm: 58, prog: [0, 3, 6, 2, 0, 3, 4, 0], lh: [[3, 2, 1, 0], 1], mel: 0.45, pad: 0.05 },
+  },
+  scale(P) { return P.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11]; },
+  // midi of scale degree d (any integer) in the piece's key, around octave o
+  deg(P, d, o) { const S = this.scale(P), q = Math.floor(d / 7); return P.tonic + (o || 0) * 12 + q * 12 + S[((d % 7) + 7) % 7]; },
+  // a whole piece, scheduled from t: the eight-bar progression twice, the left hand under a melody built from a
+  // motif (stated, answered, varied, brought home to the tonic; the second time round varied again and an octave
+  // up in its middle); returns its length in seconds
+  // every note a piece can use rendered yet (asks for those that are not)
+  ready(name) {
+    const P = this.PIECES[name];
+    let ok = true;
+    for (let d = 0; d <= 14; d++) if (!this.pianoNote(this.deg(P, d, -1))) ok = false;
+    for (let d = 7; d <= 25; d++) if (!this.pianoNote(this.deg(P, d, 0))) ok = false;
+    return ok;
+  },
+  play(name, t) {
+    const P = this.PIECES[name], beat = 60 / P.bpm, bar = beat * 4, rng = new RNG((Math.random() * 1e9) | 0);
+    // the motif: rhythm (beats) and scale steps from the chord root
+    const RH = [[1, 1, 2], [2, 1, 1], [1.5, 0.5, 2], [1, 1, 1, 1], [3, 1], [2, 2]];
+    const rhythm = rng.pick(RH), steps = rhythm.map((_, i) => i === 0 ? rng.pick([0, 2, 4]) : rng.pick([-1, 1, 2, -2, 0, 4]));
+    const N = P.prog.length;
+    for (let bb = 0; bb < N * 2; bb++) {
+      const b = bb % N, second = bb >= N, tb = t + bb * bar, d = P.prog[b], last = bb === N * 2 - 1;
+      const tones = [this.deg(P, d, -1), this.deg(P, d + 2, -1), this.deg(P, d + 4, -1), this.deg(P, d, 0)];
+      // left hand
+      const [pat, per] = P.lh;
+      let k = 0;
+      for (let x = 0; x < 4 - 1e-6; x += per, k++) this.key(tones[pat[k % pat.length]], tb + x * beat + rng.f(0, 0.015), (x === 0 ? 0.32 : 0.22) * (last && x > 0 ? 0.6 : 1), -0.25);
+      if (P.pad) this.pad([tones[0] + 12, tones[1] + 12, tones[2] + 12], tb, bar, P.pad);
+      // the melody: the motif on bars 0, 2, 4 (varied), an answer on 1, 3, 5; 6 rises, 7 comes home
+      if (last) { this.key(this.deg(P, 0, 1), tb, 0.3, 0.2); continue; }
+      if (b === N - 1) continue;
+      if (rng.next() > P.mel && b % 2) continue;
+      let x = 0, base = d + 7 + (second && b >= 2 && b <= 5 ? 7 : 0);
+      const vary = b >= 4 || second ? rng.pick([0, 1, -1]) : 0, answer = b % 2 === 1;
+      rhythm.forEach((len, i) => {
+        let st = steps[i] + vary;
+        if (answer) st = i === rhythm.length - 1 ? 0 : -steps[i] + 2;
+        if (b === 6 && i === rhythm.length - 1) st = 4;
+        this.key(this.deg(P, base + st, 0), tb + x * beat + rng.f(0, 0.02), (i === 0 ? 0.3 : 0.24), 0.2);
+        x += len;
+      });
+    }
+    return N * 2 * bar + 3;
+  },
+  // which piece suits the moment
+  choose() {
+    if (G.mode !== 'play') return 'title';
+    const h = (G.time / 60) % 24, rain = G.weather && G.weather.rain > 0.4;
+    if (rain) return 'rain';
+    if (h >= 21 || h < 5) return 'night';
+    if (h >= 18) return 'dusk';
+    return R.chance(0.5) ? 'day' : 'dusk';
   },
   update(dt) {
     if (!Sfx.on) return;
@@ -453,9 +541,12 @@ const Music = {
     this.drone.tg.gain.setTargetAtTime(this.tension * 0.04, c.currentTime, 0.3);
     this.drone.fl.frequency.setTargetAtTime(180 + this.tension * 500, c.currentTime, 0.3);
     if (this.t > this.nextPhrase) {
-      if (this.tension < 0.4 && !(p && p.asleep)) { const len = this.phrase(); this.nextPhrase = this.t + len + R.f(18, 45); }
-      else this.nextPhrase = this.t + 5;
+      const name = this.piece || (this.piece = this.choose());
+      if (this.tension >= 0.4 || (p && p.asleep)) this.nextPhrase = this.t + 5;
+      else if (!this.ready(name)) this.nextPhrase = this.t + 0.5;
+      else { const len = this.play(name, c.currentTime + 0.3); this.piece = null; this.nextPhrase = this.t + len + (G.mode === 'play' ? R.f(60, 150) : R.f(8, 15)); }
     }
+    if (G.mode !== 'play') return;
     // ambience follows the season: songbirds in spring and summer, cicadas on hot days,
     // crickets on warm nights, crows and owls through the cold months
     this.ambT -= dt;
@@ -479,8 +570,9 @@ const Music = {
   death() {
     if (!Sfx.on) return;
     const t = Sfx.ctx.currentTime + 0.5;
-    ['A2', 'E3', 'A3', 'C4'].forEach((n, k) => this.note(n, t + k * 0.5, 0.45));
-    ['F3', 'C4', 'A3'].forEach((n, k) => this.note(n, t + 3 + k * 0.6, 0.4));
-    this.nextPhrase = this.t + 20;
+    [45, 52, 57, 60].forEach((m, k) => this.key(m, t + k * 0.5, 0.4, 0));
+    [53, 60, 57].forEach((m, k) => this.key(m, t + 3 + k * 0.6, 0.35, 0));
+    this.pad([45, 52, 60], t, 6, 0.05);
+    this.nextPhrase = this.t + 40;
   },
 };

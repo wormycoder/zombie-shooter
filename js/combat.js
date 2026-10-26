@@ -273,7 +273,7 @@ const Combat = {
     Player.xp('Aiming', anyHit ? 2.5 : 0.5);
     p.recoil = Math.min(0.3, (p.recoil || 0) + (g.kick || 0.06) * (1.1 - Player.skill('Aiming') * 0.05));
     Noise.emit(p.x, p.y, g.noise, 'gun');
-    Sfx.play(g.pellets ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol');
+    Sfx.play(g.snd || (g.pellets ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol'));
     Fx.flash(mx, my, 7, 1.0, 0.07);
     p.st.panic = Math.max(0, p.st.panic - 2);
     // the spent case: out at once from a self-loader, when the pump or bolt is worked on the others; a revolver keeps it

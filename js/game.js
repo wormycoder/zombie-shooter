@@ -305,6 +305,7 @@ const Game = {
       Music.update(dt);
     } else if (G.mode === 'menu' || G.mode === 'create') {
       Menu.drawBackground(dt);
+      Music.update(dt);
     }
     Input.endFrame();
     Mem.tick(dt);
