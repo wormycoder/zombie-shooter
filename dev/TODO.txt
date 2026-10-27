@@ -409,5 +409,7 @@ Run 11 (000.026.000.153), asked for: gore chunks + the Gore detail setting,
   barricaded houses (above).
 Run 12 (000.027.000.159): the deaths, fight-offs, fence fails, suicide,
   dragging and heaving bodies, boarded-up houses.
+  (Test notes: t31 and t45 pick random open spots and now and then find
+  none - a fault in those test scripts, not the game.)
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).
