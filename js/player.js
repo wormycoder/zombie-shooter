@@ -824,6 +824,9 @@ const Player = {
     if (p.dead) return;
     if (Debug.god) { p.health = Math.max(p.health, 1); return; }
     p.dead = true; p.deathCause = cause; p.deadT = 0;
+    // how the body goes down (Char3D.DEATHS): a fall breaks bones or splats; burns end in the burned deaths
+    const burnt = Object.values(p.body || {}).some(b => b && b.w && b.w.burn);
+    p.death = /fall/i.test(cause) ? R.pick(['bones1', 'bones2', 'bones3', 'splat1', 'splat2']) : burnt && /wounds/i.test(cause) ? 'fire' + R.int(1, 3) : null;
     G.corpse = true;
     p.swing = null; p.action = null; p.queue = [];
     if (p.inCar) Vehicles.exit(p.inCar, true);
@@ -903,8 +906,9 @@ const Player = {
     }
     if (p.asleep || p.dead) {
       pose.lie = p.dead ? Math.min(1, (p.deadT || 0) * 2) : 1;
-      pose.lieDir = 1; pose.arms = 'idle'; pose.amp = 0; pose.weapon = null; pose.lieOff = p.asleep ? 0.85 : 0;
-      pose.mode = p.dead ? 'dead' : 'sleep'; pose.prog = p.dead ? Math.min(1, (p.deadT || 0) / 0.9) : 1;
+      const dr = p.dead && p.death && Char3D.DEATHS[p.death];
+      pose.lieDir = dr && dr.lie ? dr.lie : 1; pose.arms = 'idle'; pose.amp = 0; pose.weapon = null; pose.lieOff = p.asleep ? 0.85 : 0;
+      pose.mode = p.dead ? 'dead' : 'sleep'; pose.prog = p.dead ? Math.min(1, (p.deadT || 0) / (dr ? dr.dur : 0.9)) : 1; pose.death = dr ? p.death : null;
     }
     return pose;
   },

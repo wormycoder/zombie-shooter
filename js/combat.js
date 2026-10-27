@@ -169,7 +169,7 @@ const Combat = {
         // a blow driven down into a body on the ground carries the weight of the swing
         if (s.floor) dmg *= 1.2;
         const gk = Gore.kindOfWeapon(w, null);
-        Zombie.hit(z, dmg, a, { knock, push: s.floor ? 0.2 : 1.0 + str * 0.06, at, kind: gk, head: at ? !!at[3] : R.chance(0.2) });
+        Zombie.hit(z, dmg, a, { knock, push: s.floor ? 0.2 : 1.0 + str * 0.06, at, kind: gk, head: at ? !!at[3] : R.chance(0.2), two: !!w.two, fist: w === FISTS });
         Gore.splash(p, it, gk, U.dist(p.x, p.y, z.x, z.y));
         if (crit && !z.dead) Fx.text(z.x, z.y, 'Critical!', '#ffcc66', 0.8);
         Sfx.play(w.sk === 'ShortBlade' || w.sk === 'LongBlade' || w.sk === 'Axe' || w.sk === 'Spear' ? 'hitBlade' : 'hitBlunt', z.x, z.y);
@@ -260,7 +260,7 @@ const Combat = {
         if (bestT > g.range * 0.6) dmg *= 0.7;
         const crit = R.chance(g.crit + Player.skill('Aiming') * 0.015);
         if (crit) dmg *= 3;
-        Zombie.hit(best, dmg, a, { knock: R.chance(g.knock), push: 1.5, kind: Gore.kindOfWeapon(null, g), head: crit, at: [hx, hy] });
+        Zombie.hit(best, dmg, a, { knock: R.chance(g.knock), push: 1.5, kind: Gore.kindOfWeapon(null, g), head: crit, at: [hx, hy], big: /223|308|556/.test(g.ammo || '') });
         if (crit && !best.dead) Fx.text(best.x, best.y, 'Headshot!', '#ffcc66', 0.8);
         Sfx.play('hitFlesh', best.x, best.y);
       } else if (eh) {

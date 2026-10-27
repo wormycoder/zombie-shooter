@@ -158,7 +158,7 @@ const Fire = {
     for (const rid of b.rooms.slice()) if (w.rooms[rid].x0 >= W0) b.rooms.splice(b.rooms.indexOf(rid), 1);
     b.floors = 1;
     const fall = (e) => e.x >= W0 && e.x < b.x1 + 1 + W0 && e.x >= b.x0 + W0 && e.y >= b.y0 && e.y < b.y1 + 1;
-    for (const z of G.zombies) if (fall(z)) { z.x -= W0; if (!z.dead) { z.st = 'down'; z.downT = R.f(1, 2); Zombie.hit(z, R.f(0.5, 1.5)); } }
+    for (const z of G.zombies) if (fall(z)) { z.x -= W0; if (!z.dead) { z.st = 'down'; z.downT = R.f(1, 2); Zombie.hit(z, R.f(0.5, 1.5), undefined, { kind: 'fall' }); } }
     const p = G.player;
     if (p && !p.dead && fall(p)) {
       p.x -= W0; p.path = null;
@@ -192,7 +192,7 @@ const Fire = {
       if (z.burnT > 0.8) {
         z.burnT = 0;
         if (G.weather.rain > 0.5 && World.outdoor(z.x, z.y) && R.chance(0.3)) { z.fire = 0; continue; }
-        Zombie.hit(z, R.f(0.12, 0.22), undefined, { stag: 0.05, push: 0.05 });
+        Zombie.hit(z, R.f(0.12, 0.22), undefined, { stag: 0.05, push: 0.05, kind: 'fire' });
         if (R.chance(0.35)) this.ignite(Math.floor(z.x), Math.floor(z.y), 0.3);
       }
     }

@@ -1188,8 +1188,82 @@ const Char3D = {
     const ch = []; for (let i = 0; i < N; i++) ch.push(i);
     return (K[k] = { t: ts, v, ch });
   },
+  // ===================================================================== deaths
+  // Each death is a recipe (Char3D.DEATHS, filled in below the object) turned into a keyframe track from standing to
+  // the corpse's lying pose; Zombie.kill and Player.die pick one by name (P.death). lie: ends on the back (1), face
+  // down (-1) or as it lay (0); dur: seconds; push: thrown back (-) or pitched forward (+); side: knocked away from a
+  // blow on its left (+) or right (-); spin: a twist through the hips on the way down; knees: buckles first (0..1);
+  // head: snaps back (-) or drops (+); lift: off the ground (m); drop: falls from this high (m); arms: 'out' flung
+  // wide, 'up' thrown up, 'clutch' at the wound, 'flail' thrashing, 'limp'; kick: twitches once down (0..1);
+  // ground: dies where it lies; broken: 1-3 limbs left at wrong angles; splat: spread flat.
+  DEATHS: {},
+  armsOf(A, r, k, f) {
+    const s = r.arms || 'out';
+    if (s === 'up') { this.arm(A, -1, 0.12 * k, 0.22, 0.5 * k - 0.2, 0.2); this.arm(A, 1, 0.12 * k, 0.24, 0.48 * k - 0.2, 0.2); }
+    else if (s === 'clutch') { this.arm(A, -1, 0.22, -0.04, -0.12, 0.9); this.arm(A, 1, 0.25, -0.02, -0.06, 0.9); }
+    else if (s === 'flail') { const w = f ? 1 : -1; this.arm(A, -1, 0.2 * w, 0.32, 0.35 * w * k, 0.5); this.arm(A, 1, -0.15 * w, 0.34, -0.3 * w * k + 0.1, 0.6); }
+    else if (s === 'limp') { this.arm(A, -1, 0.04, 0.1, -0.48, 0.1); this.arm(A, 1, 0.03, 0.11, -0.47, 0.1); }
+    else { this.arm(A, -1, 0.05, 0.4 * k, 0.12 * k - 0.2, 0.3); this.arm(A, 1, 0.04, 0.42 * k, 0.1 * k - 0.2, 0.3); }
+  },
+  // what stays wrong with the body once it lies: broken limbs, a splat spread flat
+  post(A, r) {
+    const b = r.broken || 0;
+    if (b === 1 || b === 3) { A[C3.LA + 1] -= 0.22; A[C3.LK] = 1.3; A[C3.LF] = 0.9; }
+    if (b === 2 || b === 3) { A[C3.RW] -= 0.32; A[C3.RW + 2] += 0.12; A[C3.RE] = 1.7; }
+    if (b === 3) { A[C3.RA + 1] += 0.1; A[C3.RK] = -0.9; }
+    if (r.splat) { A[C3.LW + 1] -= 0.3; A[C3.RW + 1] += 0.3; A[C3.LW + 2] += 0.25; A[C3.RW + 2] += 0.2; A[C3.LA + 1] -= 0.14; A[C3.RA + 1] += 0.14; A[C3.HR] = 0.4 * r.splat; }
+  },
+  deathKeys(S, D, name, r, dir) {
+    const self = this, pu = r.push || 0, sd = r.side || 0, sp = r.spin || 0, kn = r.knees || 0, hd = r.head || 0, lf = r.lift || 0, dr = r.drop || 0, kk = r.kick || 0;
+    const lie = (A) => { self.liePose(A, D, dir, S.id, true); self.post(A, r); };
+    const feet = (A, z) => { const Pf = self.pelvisOf(A, self.T2); self.foot(A, Pf, -1, 0.06, -0.12, D.ankH + z, 0); self.foot(A, Pf, 1, -0.04, 0.13, D.ankH + z, -0.1); };
+    const jolt = (A, k, f) => { A[C3.HP] += (f ? 0.25 : -0.15) * k; A[C3.LW + 2] += 0.12 * k * (f ? 1 : -1); A[C3.RW] += 0.1 * k; A[C3.LA] += 0.14 * k * (f ? 1 : 0); A[C3.RA + 2] += 0.08 * k; A[C3.SR] += 0.1 * k * (f ? 1 : -1); };
+    if (r.ground) return this.bodyKeys(S, 'D:' + name + dir, D, [
+      (A) => lie(A), (A) => { lie(A); jolt(A, kk, true); }, (A) => { lie(A); jolt(A, kk * 0.6, false); }, (A) => { lie(A); jolt(A, kk * 0.3, true); }, (A) => lie(A),
+    ], [0, 0.2, 0.45, 0.7, 1]);
+    return this.bodyKeys(S, 'D:' + name + dir, D, [
+      (A) => { self.standPose(A, D); A[C3.PZ] += dr; if (dr) self.armsOf(A, r, 1, 0); },
+      // the blow lands: pushed, twisted, the head snapped, arms thrown
+      (A) => {
+        self.standPose(A, D);
+        A[C3.PX] += pu * 0.12; A[C3.PY] -= sd * 0.07; A[C3.PZ] += lf * 0.6 + dr * 0.55; A[C3.PR] = -sd * 0.22; A[C3.PW] = sp * 0.25;
+        A[C3.SP] = pu * 0.3 + kn * 0.15; A[C3.SR] = -sd * 0.3; A[C3.SW] = sd * 0.35; A[C3.HP] = hd; A[C3.HR] = -sd * 0.3;
+        feet(A, lf * 0.6 + dr * 0.55); self.armsOf(A, r, 1, 1);
+      },
+      // knees go or it staggers
+      (A) => {
+        self.standPose(A, D);
+        A[C3.PX] += pu * 0.22; A[C3.PY] -= sd * 0.14; A[C3.PZ] = D.hipH * (1 - 0.42 * kn) + lf + dr * 0.25; A[C3.PP] = 0.3 * kn + pu * 0.15; A[C3.PR] = -sd * 0.3; A[C3.PW] = sp * 0.5;
+        A[C3.SP] = 0.2 * kn + pu * 0.25; A[C3.SR] = -sd * 0.2; A[C3.HP] = hd * 0.8 + 0.2 * kn;
+        feet(A, lf + dr * 0.25); self.armsOf(A, r, 0.8, 0);
+      },
+      // going down
+      (A) => {
+        self.standPose(A, D);
+        A[C3.PX] = -0.1 * dir + pu * 0.3; A[C3.PY] = -sd * 0.18; A[C3.PZ] = D.hipH * 0.62 * (1 - 0.35 * kn) + lf * 0.7; A[C3.PP] = -0.45 * dir; A[C3.PW] = sp * 0.8;
+        A[C3.SP] = -0.1 * dir; A[C3.HP] = 0.3 * dir + hd * 0.4;
+        feet(A, lf * 0.7); self.armsOf(A, r, 0.9, 1);
+      },
+      // hits the ground
+      (A) => {
+        lie(A);
+        A[C3.PX] += pu * 0.3 - 0.2 * dir; A[C3.PZ] += 0.1 + lf * 0.25 + (dir < 0 ? 0.12 : 0); A[C3.PP] *= 0.85; A[C3.PW] = sp * 0.95; A[C3.HP] += dir > 0 ? -0.25 : 0.2;
+        self.armsOf(A, r, 0.5, 0); self.post(A, r);
+      },
+      (A) => { lie(A); jolt(A, 0.3 + kk, true); },
+      (A) => { lie(A); jolt(A, kk * 0.7, false); },
+      (A) => lie(A),
+    ], [0, 0.12, 0.34, 0.56, 0.74, 0.83, 0.92, 1]);
+  },
   lying(T, S, D, P, mode) {
+    const RD = mode === 'dead' && P.death ? this.DEATHS[P.death] : null;
     const dir = P.lieDir || 1, vary = mode === 'dead';
+    if (RD) {
+      const p = P.prog !== undefined ? P.prog : S.fresh ? 1 : U.clamp(S.mt / RD.dur, 0, 1);
+      if (p < 1) { c3track(this.deathKeys(S, D, P.death, RD, dir), p, T); return; }
+      this.liePose(T, D, dir, S.id, true); this.post(T, RD);
+      return;
+    }
     if (mode === 'sleep') {
       this.liePose(T, D, 1, S.id, false);
       T[C3.PX] = (P.lieOff ? 0.02 : -0.42) * D.H; T[C3.PZ] += P.lieOff ? 0.1 : 0; T[C3.HW] = 0.25;
@@ -2053,3 +2127,39 @@ const Char3D = {
     }
   },
 };
+
+// ---- the death library (see Char3D.deathKeys)
+(function () {
+  const D = Char3D.DEATHS;
+  // blow from the left / right (knocked away, twisting), the front (onto the back), behind (onto the face),
+  // an uppercut (head snapped back, arms up), from above (crumples to the knees, onto the face)
+  const dirs = { L: { side: 1, spin: 0.7, lie: 1 }, R: { side: -1, spin: -0.7, lie: 1 }, F: { push: -1, lie: 1, head: -0.35 }, B: { push: 1, lie: -1, head: 0.4 },
+    U: { push: -0.8, head: -0.9, arms: 'up', lie: 1, lift: 0.04 }, O: { knees: 1, head: 0.7, push: 0.3, lie: -1, arms: 'limp' } };
+  for (const w of ['blunt', 'sharp']) for (const h of [1, 2]) for (const d in dirs) {
+    const b = dirs[d], s = h === 2 ? 1.4 : 1, sharp = w === 'sharp';
+    D[w + h + d] = { lie: b.lie, dur: (h === 2 ? 0.85 : 1) * (sharp ? 1.12 : 1), push: (b.push || 0) * s * 0.5, side: (b.side || 0) * s * 0.5, spin: (b.spin || 0) * s,
+      knees: Math.max(b.knees || 0, sharp ? 0.35 : 0), head: b.head !== undefined ? b.head : 0.2 * (b.side || 0), lift: (b.lift || 0) * s, arms: b.arms || (sharp ? 'clutch' : 'out'), kick: sharp ? 0.35 : 0.1 };
+  }
+  // gunshots: small calibre - the legs go, it folds; large - thrown back and round, arms wide
+  for (const [c, big] of [['gunS', 0], ['gunL', 1]]) for (const d of 'LFRB') {
+    const b = dirs[d];
+    D[c + d] = { lie: b.lie, dur: big ? 0.75 : 1, push: (b.push || 0) * (big ? 0.9 : 0.25), side: (b.side || 0) * (big ? 0.8 : 0.3), spin: (b.spin || 0) * (big ? 1.3 : 0.4),
+      knees: big ? 0 : 0.85, head: big ? -0.5 : 0.4, lift: big ? 0.06 : 0, arms: big ? 'out' : 'limp', kick: 0.25 };
+  }
+  // cars by speed: 1-15 knocked down, 16-30 thrown, 31-50 thrown spinning, 51-75 launched, 76+ launched tumbling
+  [[0.9, 0.6, 0, 0.6, 'out'], [0.9, 1.1, 0.2, 1.2, 'out'], [1, 1.4, 0.45, 2.2, 'flail'], [1.15, 1.6, 0.75, 3.5, 'flail'], [1.3, 1.8, 1.1, 5, 'flail']]
+    .forEach(([dur, push, lift, spin, arms], i) => { D['car' + (i + 1)] = { lie: 1, dur, push: -push, spin, lift, arms, head: -0.5, kick: 0.25 }; });
+  // burned alive: staggering, thrashing, down and still moving
+  D.fire1 = { lie: -1, dur: 2.6, push: 0.3, spin: 1.2, knees: 0.9, head: 0.4, arms: 'flail', kick: 0.8 };
+  D.fire2 = { lie: 1, dur: 2.2, push: -0.3, spin: -0.8, knees: 0.6, head: -0.6, arms: 'up', kick: 0.9 };
+  D.fire3 = { lie: -1, dur: 3, push: 0.2, spin: 2.4, knees: 0.4, head: 0.3, arms: 'flail', kick: 0.7 };
+  // stomped on the ground: the last kicks
+  D.stomp1 = { lie: 0, ground: true, dur: 0.7, kick: 0.5 }; D.stomp2 = { lie: 0, ground: true, dur: 1, kick: 0.9 }; D.stomp3 = { lie: 0, ground: true, dur: 1.4, kick: 1.3 };
+  // punched: reels back onto its back; spins round and folds onto its face
+  D.punch1 = { lie: 1, dur: 1, push: -0.6, side: 0.2, spin: 0.4, knees: 0.3, head: -0.6, arms: 'out', kick: 0.1 };
+  D.punch2 = { lie: -1, dur: 1.1, push: 0.3, side: -0.4, spin: -1.2, knees: 0.7, head: 0.5, arms: 'limp', kick: 0.1 };
+  // falls: broken bones, and splatting flat
+  D.bones1 = { lie: 1, dur: 0.6, drop: 0.9, arms: 'out', broken: 1, kick: 0.5 }; D.bones2 = { lie: -1, dur: 0.6, drop: 0.9, arms: 'flail', broken: 2, kick: 0.4 };
+  D.bones3 = { lie: 1, dur: 0.65, drop: 1.1, arms: 'flail', broken: 3, kick: 0.6 };
+  D.splat1 = { lie: -1, dur: 0.45, drop: 1.6, arms: 'out', splat: 1 }; D.splat2 = { lie: 1, dur: 0.45, drop: 1.6, arms: 'out', splat: -1, kick: 0.2 };
+})();

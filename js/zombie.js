@@ -217,7 +217,12 @@ const Zombie = {
     const zs = G.zombies;
     for (let k = 0; k < zs.length; k++) {
       const z = zs[k];
-      if (z.dead) { if (z.lie < 1) z.lie = Math.min(1, z.lie + dt * 2.5); continue; }
+      if (z.dead) {
+        if (z.lie < 1) z.lie = Math.min(1, z.lie + dt * 2.5);
+        // thrown by a car: slides and rolls to a stop
+        if (z.slide) { World.move(z, z.slide[0] * dt, z.slide[1] * dt, z.r); z.slide[0] *= 1 - Math.min(1, dt * 2.4); z.slide[1] *= 1 - Math.min(1, dt * 2.4); if (Math.abs(z.slide[0]) + Math.abs(z.slide[1]) < 0.08) z.slide = null; }
+        continue;
+      }
       // World.lvDist inlined; frozen chunks (12+ away, so never within 32 tiles) skip even that
       const zl = z.x >= W0, zvx = zl ? z.x - W0 : z.x;
       const cd = Math.max(Math.abs(Math.floor(zvx / CHUNK) - pcx), Math.abs(Math.floor(z.y / CHUNK) - pcy));
@@ -615,6 +620,10 @@ const Zombie = {
     else if (!wasDown) z.lieDir = fromA !== undefined ? (Math.cos(U.angDiff(z.a, fromA)) < 0.3 ? 1 : -1) * (R.chance(0.85) ? 1 : -1) : R.chance(0.7) ? 1 : -1;
     if (z.lie < 0.01) z.lie = 0.05;
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
+    // how it dies (Char3D.DEATHS): which way it falls follows from the death; a car throws the body along the road
+    const dk = z.death = this.deathOf(z, fromA, o || {}, wasDown), dr = dk && Char3D.DEATHS[dk];
+    if (dr && dr.lie) z.lieDir = dr.lie;
+    if (dr && o && o.kind === 'car') { const v = Math.min(9, (o.spd || 20) * 0.06); z.slide = [Math.cos(pushA) * v, Math.sin(pushA) * v]; }
     World.move(z, Math.cos(pushA) * 0.3, Math.sin(pushA) * 0.3, z.r);
     z.loot = z.wear.concat(Loot.zombiePockets());
     for (const it of z.loot) { if (it.worn && ITEMS[it.id].cat === 'Clothing') delete it.worn; }
@@ -622,6 +631,23 @@ const Zombie = {
     if (o && !o.noKill) { G.player.kills++; }
     Gore.kill(z, fromA, o || {});
     Sfx.play('zdie', z.x, z.y);
+  },
+  // the death for a kill: fire, a fall, a stomp, a car by its speed, a gun by its calibre, a punch, or a blow by the
+  // weapon (blunt / sharp, one or two hands) and the side it came from (a blow to the head from the front: now and then
+  // an uppercut or from above); null: the plain fall
+  deathOf(z, fromA, o, wasDown) {
+    const k = o.kind;
+    if (z.fire > 0 || k === 'fire') return 'fire' + R.int(1, 3);
+    if (k === 'fall') return R.pick(['bones1', 'bones2', 'bones3', 'splat1', 'splat2']);
+    if (k === 'stomp' || wasDown || z.crawl) return k === 'stomp' || wasDown ? 'stomp' + R.int(1, 3) : null;
+    if (k === 'car') { const s = o.spd || 20; return 'car' + (s <= 15 ? 1 : s <= 30 ? 2 : s <= 50 ? 3 : s <= 75 ? 4 : 5); }
+    const rel = fromA === undefined ? 0 : U.angDiff(z.a, fromA + Math.PI), c = Math.cos(rel);
+    let d = c > 0.6 ? 'F' : c < -0.6 ? 'B' : rel > 0 ? 'L' : 'R';
+    if (k === 'gun' || k === 'shotgun') return (k === 'shotgun' || o.big ? 'gunL' : 'gunS') + d;
+    if (o.fist) return 'punch' + R.int(1, 2);
+    if (!k || k === 'gore') return null;
+    if (d === 'F' && o.head && R.chance(0.6)) d = R.chance(0.5) ? 'U' : 'O';
+    return (k === 'blade' || k === 'chop' || k === 'stab' ? 'sharp' : 'blunt') + (o.two ? 2 : 1) + d;
   },
   // 0 = fresh .. 1 = badly decomposed (game days since death)
   rot(z) { const days = (G.time - (z.diedAt === undefined ? G.time - 2880 : z.diedAt)) / 1440; return U.clamp((days - 0.6) / 4, 0, 1); },
@@ -664,7 +690,7 @@ const Zombie = {
     if (z.stag > 0) { pose.mode = 'stagger'; pose.prog = U.clamp(1 - z.stag / (z.stag0 || 0.6), 0, 1); pose.stagA = z.stagA || Math.PI; }
     if (z.st === 'climb') { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = U.clamp(z.climbT / z.climbDur, 0, 1); pose.crouch = Math.sin(pose.prog * Math.PI) * 0.5; }
     if (z.lie > 0 || z.dead) { pose.lie = z.lie; pose.lieDir = z.lieDir; pose.amp = z.crawl && !z.dead ? z.amp : 0; pose.arms = z.dead ? 'idle' : 'zombie'; pose.lieOff = 0; }
-    if (z.dead || z.fake) { pose.mode = 'dead'; pose.prog = z.fake ? 1 : U.clamp(since(z.fallAt) / 0.9, 0, 1); }
+    if (z.dead || z.fake) { const dr = z.death && Char3D.DEATHS[z.death]; pose.mode = 'dead'; pose.death = z.fake ? null : z.death; pose.prog = z.fake ? 1 : U.clamp(since(z.fallAt) / (dr ? dr.dur : 0.9), 0, 1); }
     else if (z.st === 'down') { pose.mode = z.crawl ? 'crawl' : 'fall'; pose.prog = U.clamp(since(z.downAt) / 0.7, 0, 1); }
     else if (z.st === 'getup') { pose.mode = 'getup'; pose.prog = U.clamp((z.getT || 0) / this.GETUP, 0, 1); }
     else if (z.crawl) pose.mode = 'crawl';
