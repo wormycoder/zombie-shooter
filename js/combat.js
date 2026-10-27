@@ -108,7 +108,7 @@ const Combat = {
         if (z.st === 'grab') {
           any = true;
           const front = Math.abs(U.angDiff(p.angle, a)) < 1.4, ch = (front ? 0.6 : 0.35) + str * 0.04;
-          if (R.chance(ch)) { Zombie.release(z, 1.2); if (R.chance(front ? 0.45 : 0.25)) { Zombie.knockDown(z, a, 2.0, R.f(1.4, 2.6)); Sfx.play('zfall', z.x, z.y); } else Zombie.stagger(z, a, 0.65, 2.6); }
+          if (R.chance(ch)) { Zombie.release(z, 1.2); Player.fightOff(z); if (R.chance(front ? 0.45 : 0.25)) { Zombie.knockDown(z, a, 2.0, R.f(1.4, 2.6)); Sfx.play('zfall', z.x, z.y); } else Zombie.stagger(z, a, 0.65, 2.6); }
           continue;
         }
         if (Math.abs(U.angDiff(p.angle, a)) > 1.0 || U.dist(p.x, p.y, z.x, z.y) > 1.15 + z.r) continue;

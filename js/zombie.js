@@ -603,7 +603,7 @@ const Zombie = {
     // pulling away
     if (p.moveMode && p.moveMode !== 'idle' && p.anim.amp > 0.2 && z.grabT > 0.35) {
       const n = Math.max(1, p.grabN || 1), k = (0.6 + Player.skill('Strength') * 0.04 + Player.skill('Fitness') * 0.03) / n;
-      if (R.chance(k * dt)) { this.release(z, 1.2); this.stagger(z, a + Math.PI, 0.5, 1.6); Player.say(R.pick(['Got loose!', 'Get off!']), '#ddd'); }
+      if (R.chance(k * dt)) { this.release(z, 1.2); this.stagger(z, a + Math.PI, 0.5, 1.6); Player.fightOff(z); Player.say(R.pick(['Got loose!', 'Get off!']), '#ddd'); }
     }
   },
   release(z, cd) {

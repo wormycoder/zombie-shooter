@@ -584,15 +584,27 @@ const Interact = {
     if (drop) { this.dropOut(e, f, from, to, mx, my); return; }
     // what kind of climb: a window, a low fence (hopped at a run), a tall one (which can beat you)
     const wi = WALL_INFO[t], tall = !isWin && wi.h >= 1.6, vault = !isWin && !tall && !!(o && o.vault);
-    const sprint = vault && p.moveMode === 'sprint', fail = tall && R.chance(this.climbFail());
-    const kind = isWin ? 'win' : vault ? 'vault' : tall ? (fail ? 'fail' : 'tall') : 'low';
-    const dur = isWin ? 1.6 : vault ? (sprint ? 0.5 : 0.62) : fail ? 1.7 : (wi.climb || 1.5) * (1 - Player.skill('Nimble') * 0.04);
+    // one of the dead right behind, reaching: it may drag you back down off the fence
+    const zd = !isWin && !vault && !Debug.god ? Zombie.near(p.x, p.y, 1.4).find(z => !z.dead && !z.crawl && (z.st === 'chase' || z.st === 'attack' || z.st === 'grab')) : null;
+    const drag = !!zd && R.chance((tall ? 0.4 : 0.25) - Player.skill('Nimble') * 0.02);
+    const sprint = vault && p.moveMode === 'sprint', fail = drag || (tall && R.chance(this.climbFail()));
+    const kind = isWin ? 'win' : vault ? 'vault' : drag ? (tall ? 'drag' : 'dragLow') : tall ? (fail ? (R.chance(0.5) ? 'fail' : 'fail2') : 'tall') : 'low';
+    const dur = isWin ? 1.6 : vault ? (sprint ? 0.5 : 0.62) : drag ? 1.3 : fail ? 1.7 : (wi.climb || 1.5) * (1 - Player.skill('Nimble') * 0.04);
     const sx = p.x, sy = p.y;
     const ex = to[0] + 0.5 + (d ? 0 : (p.x - (from[0] + 0.5)) * 0.3), ey = to[1] + 0.5 + (d ? (p.y - (from[1] + 0.5)) * 0.3 : 0);
     const tx = U.lerp(ex, mx, vault ? 0.1 : 0.35), ty = U.lerp(ey, my, vault ? 0.1 : 0.35);
     p.angle = Math.atan2(ty - sy, tx - sx);
     const a = Actions.mk(isWin ? 'Climbing through window' : vault ? 'Vaulting' : 'Climbing', dur, () => {
       p.climb = null;
+      if (drag) {
+        // pulled down: on the ground on this side, and it is on you
+        p.x = sx; p.y = sy; World.resolve(p, p.r);
+        Player.say(R.pick(['It pulled me down!', 'Let go!', 'No!']), '#f99');
+        Sfx.play('thud'); Noise.emit(mx, my, 8, 'climb');
+        Player.trip();
+        if (!zd.dead && zd.st !== 'grab') { zd.st = 'attack'; zd.atkT = zd.atk0 = 0.35; }
+        return;
+      }
       if (fail) {
         // slipped back down on this side
         p.x = sx; p.y = sy; World.resolve(p, p.r);

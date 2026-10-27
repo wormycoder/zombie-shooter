@@ -124,6 +124,28 @@ Object.assign(Char3D, {
       if (armed) { this.hand(T, D, 1, 0.14, 0.06, -0.44, 0.35); this.wdir(T, 0.6, -0.1, -0.8); }
       T[C3.HP] -= 0.22 * up; T[C3.SP] -= 0.08 * up; T[C3.JAW] = call * 0.85;
     },
+    // ---- fighting a zombie off (breaking its hold): turned toward where it holds you (P.foSide -1 left, 1 right,
+    // 0 in front, 2 behind), with bare hands, a one-handed weapon or a two-handed one (P.foKind 0 / 1 / 2), two ways
+    // each (P.foV): 1 a shove - palms, the weapon hand's forearm, the haft across the chest; 2 an elbow, a short
+    // swing, a jab with the butt
+    fightoff(T, S, D, P) {
+      const k = P.k || 0, sd = P.foSide || 0, kind = P.foKind || 0, v = P.foV || 1, L = U.lerp;
+      const wind = this.ease(k, 0, 0.28) * (1 - this.ease(k, 0.28, 0.42)), hit = this.ease(k, 0.28, 0.42) * (1 - this.ease(k, 0.72, 1));
+      const tw = sd === 2 ? 1.1 : sd * 0.75;
+      T[C3.SW] += tw * (wind * 0.6 + hit); T[C3.PW] += tw * 0.35 * (wind + hit);
+      T[C3.SP] += 0.15 * hit - 0.1 * wind; T[C3.HP] -= 0.1 * hit; T[C3.JAW] = 0.3 * hit;
+      if (kind === 0) {
+        if (v === 1) { this.hand(T, D, -1, L(0.15, 0.44, hit), -0.12, L(-0.12, 0.06, hit), 0.4); this.hand(T, D, 1, L(0.15, 0.44, hit), 0.12, L(-0.12, 0.06, hit), 0.4); }
+        else { this.hand(T, D, 1, L(0.12, 0.04, hit), L(0.16, 0.3, hit), L(-0.05, 0.16, hit), 1); this.hand(T, D, -1, 0.26, -0.06, 0.1, 0.8); }
+      } else if (kind === 1) {
+        if (v === 1) { this.hand(T, D, 1, L(0.12, 0.38, hit), 0.1, L(-0.2, 0.14, hit), 0.6); this.wdir(T, 0.1, 0.3, 1); this.hand(T, D, -1, L(0.1, 0.36, hit), -0.1, 0, 0.5); }
+        else { this.hand(T, D, 1, L(-0.05, 0.4, hit), L(0.26, -0.05, hit), L(0.35, 0, hit), 0.4); this.wdir(T, L(-0.3, 1, hit), L(0.5, -0.3, hit), L(0.8, -0.1, hit)); this.hand(T, D, -1, 0.24, -0.08, 0.05, 0.8); }
+      } else {
+        T[C3.GR] = 1;
+        if (v === 1) { this.hand(T, D, 1, L(0.15, 0.42, hit), 0.22, 0.05, 0.5); this.wdir(T, 0, -1, 0.1); T[C3.GO] = -0.44; }
+        else { this.hand(T, D, 1, L(0.02, 0.36, hit), 0.06, L(-0.12, 0.1, hit), 0.5); this.wdir(T, 1, -0.1, L(-0.4, 0.1, hit)); T[C3.GO] = -0.32; }
+      }
+    },
     // ---- drinking from a bottle, can or carton: up to the mouth, tipped back with the head, gulps, down
     drink(T, S, D, P) {
       const t = S.t + S.id * 0.3, c = this.cyc(t, 4.4), M = this.MOUTH;
@@ -444,9 +466,37 @@ Object.assign(Char3D, {
       [0.72, -0.15, -0.04, -0.15, 0.1, 0.15, 0.35, 0.7, 0.1, 0.075, -0.15, 0.075],
       [1, 0, 0, 0, 0, 0, 0.1, 0.3, 0.05, 0.075, -0.05, 0.075],
     ],
+    // nearly over, a foot on the top, hanging there shaking, then slipping and landing hard in a crouch
+    fail2: [
+      [0, 0, 0, 0.1, 0.1, -0.2, 0.3, 1.18, 0.05, 0.075, -0.05, 0.075],
+      [0.2, -0.05, 0.22, 0.1, 0.22, -0.25, 0.22, 1.05, 0.25, 0.45, -0.05, 0.075],
+      [0.4, 0.0, 0.72, 0.4, 0.45, -0.1, 0.15, 1.05, 0.3, 0.9, 0.2, 0.5],
+      [0.55, 0.0, 0.66, 0.35, 0.42, -0.1, 0.15, 1.06, 0.28, 0.85, 0.1, 0.3],
+      [0.68, -0.05, 0.5, 0.2, 0.3, -0.3, 0.2, 1.08, 0.2, 0.4, -0.05, 0.2],
+      [0.8, -0.12, -0.25, 0.35, 0.35, 0.2, 0.3, 0.7, 0.1, 0.075, -0.12, 0.075],
+      [1, 0, 0, 0, 0, 0, 0.1, 0.3, 0.05, 0.075, -0.05, 0.075],
+    ],
+    // dragged down off a tall fence: pulling up, yanked back by the legs, falling backward
+    drag: [
+      [0, 0, 0, 0.1, 0.1, -0.2, 0.3, 1.18, 0.05, 0.075, -0.05, 0.075],
+      [0.2, -0.05, 0.22, 0.1, 0.22, -0.25, 0.22, 1.05, 0.25, 0.45, -0.05, 0.075],
+      [0.38, 0.0, 0.5, 0.3, 0.4, -0.15, 0.18, 1.05, 0.28, 0.7, 0.1, 0.45],
+      [0.5, -0.12, 0.45, -0.35, -0.2, -0.4, 0.2, 1.1, 0.25, 0.5, -0.15, 0.2],
+      [0.68, -0.3, 0.15, -0.6, -0.3, -0.4, 0.4, 0.6, 0.3, 0.075, -0.1, 0.3],
+      [1, -0.35, -0.45, -0.8, -0.25, -0.3, 0.5, 0.2, 0.3, 0.075, 0.2, 0.075],
+    ],
+    // dragged back off a low fence half way over
+    dragLow: [
+      [0, 0, 0, 0, 0.15, 0.1, 0.42, 0.98, 0.05, 0.075, -0.05, 0.075],
+      [0.2, -0.05, 0.12, 0.2, 0.45, 0.1, 0.36, 0.98, 0.32, 0.5, -0.08, 0.075],
+      [0.38, 0.0, 0.4, 0.4, 0.55, -0.1, 0.15, 0.96, 0.36, 0.55, -0.3, 0.5],
+      [0.52, -0.15, 0.25, -0.3, -0.1, -0.4, 0.2, 0.98, 0.25, 0.2, -0.2, 0.3],
+      [0.75, -0.3, -0.1, -0.6, -0.25, -0.4, 0.45, 0.5, 0.25, 0.075, -0.1, 0.2],
+      [1, -0.35, -0.45, -0.8, -0.25, -0.3, 0.5, 0.2, 0.3, 0.075, 0.2, 0.075],
+    ],
   },
   // hands come off the top at this point of the climb
-  CLIMB_LET: { vault: 0.66, tall: 0.8, fail: 0.62 },
+  CLIMB_LET: { vault: 0.66, tall: 0.8, fail: 0.62, fail2: 0.7, drag: 0.5, dragLow: 0.45 },
   climb(T, S, D, P) {
     const p = U.clamp(P.prog === undefined ? (S.mt / 1.2) % 1 : P.prog, 0, 1), H = D.H;
     if (P.rope) return this.climbRope(T, S, D, P, p);

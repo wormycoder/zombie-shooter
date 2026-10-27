@@ -236,6 +236,7 @@ const Player = {
     else p.dragT = Math.max(0, (p.dragT || 0) - dt);
     if (p.fireCd > 0) p.fireCd -= dt;
     if (p.shoutT > 0) p.shoutT -= dt;
+    if (p.foT > 0) p.foT -= dt;
     if (p.cycle) { p.cycle.t += dt; if (p.cycle.t >= p.cycle.dur) p.cycle = null; }
     // camera
     let cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
@@ -490,6 +491,13 @@ const Player = {
     if (!(p.grabN > 0)) { this.say(R.pick(["It's got me!", 'Get off me!', 'No!']), '#f99'); if (!this.grabHinted) { this.grabHinted = true; UI.hint('Grabbed! Shove (Space) or pull away to break free', 5); } }
     this.wound(z, behind ? 0.6 : 0.35, false);
     return true;
+  },
+  // breaking a zombie's hold: the fight-off move for where it held you and what is in your hands (Char3D 'fightoff')
+  fightOff(z) {
+    const p = G.player, rel = U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x)), a = Math.abs(rel);
+    const w = this.primary(), d = w && ITEMS[w.id].wpn;
+    p.fo = { side: a < 0.8 ? 0 : a > 2.3 ? 2 : rel < 0 ? -1 : 1, kind: d ? (d.two ? 2 : 1) : 0, v: R.int(1, 2) };
+    p.foT = 0.6;
   },
   // a bite (or a clawing) while it holds on: from behind or with company it gets its teeth in more often
   grabBite(z) {
@@ -884,6 +892,7 @@ const Player = {
       if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
     }
     if (p.shoutT > 0 && !p.action && !p.swing && !p.aiming) { pose.arms = 'shout'; pose.k = 1 - p.shoutT / 1.1; }
+    if (p.foT > 0 && p.fo && !p.action && !p.aiming) { pose.arms = 'fightoff'; pose.k = 1 - p.foT / 0.6; pose.foSide = p.fo.side; pose.foKind = p.fo.kind; pose.foV = p.fo.v; }
     // working the pump or the bolt between shots
     if (p.cycle && p.cycle.t > 0 && (pose.arms === 'aim' || pose.arms === 'fire')) { pose.cycle = U.clamp(p.cycle.t / p.cycle.dur, 0, 1); pose.cycleKind = p.cycle.kind; }
     if (p.climb) {
