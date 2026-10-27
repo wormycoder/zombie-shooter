@@ -335,5 +335,10 @@ Run 7 (000.022.000.139): fences (hop at a run, climb tall ones, fail,
   trip), shouting, gun racking and magazines, jams, fire mode, five guns.
 Run 8 (000.023.000.141): audio - rendered sound clips - and the music.
 Run 9 (000.024.000.143): character and zombie textures, proportions.
+Polish (000.024.001.145), asked for: a more professional, publishable
+  game - player-facing version label and patch notes, debug mode for
+  development sessions only (?debug), this list and the release screenshots
+  moved to dev/ (left out of release zips), no references to other games,
+  beta labels, a player README. Dev notes: dev/DEVELOPMENT.md.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

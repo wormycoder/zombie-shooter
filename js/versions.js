@@ -8,6 +8,16 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.024.001.145', date: '2026-10-27', title: 'Release polish',
+    notes: [
+      'The title screen shows the version in a cleaner form, with a What\'s new link to these patch notes.',
+      'The debug tools are gone from the title screen and the pause menu; they are for development only.',
+      'Clearer labels for the beta options: the Expanded map and the Experimental settings tab.',
+      'A new README: getting started, features, controls and settings.',
+    ],
+    commits: ['dd1db65'], shots: ['v024001_1', 'v024001_2'],
+  },
+  {
     v: '000.024.000.143', date: '2026-10-27', title: 'Characters with textures',
     notes: [
       'The survivors and the dead are no longer plain plastic colours. Their clothes are painted with real cloth: faded denim with a seam down the leg, knitted sweaters, creased leather, quilted winter coats, fleece hoodies, twill work trousers.',
