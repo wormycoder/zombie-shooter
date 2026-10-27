@@ -187,7 +187,7 @@ const Interact = {
       add('Loot corpse', () => this.goDo(t.corpse.x, t.corpse.y, () => UI.openLoot(), 1.4));
       const cz = t.corpse;
       if (p.drag === cz) add('Let go of the body', () => { p.drag = null; });
-      else if (!p.drag) add('Drag corpse', () => this.goDo(cz.x, cz.y, () => { p.drag = cz; p.dragS = R.int(1, 4); Player.say(R.pick(['Heavy...', 'Come on.']), '#ccc'); }, 1.3));
+      else if (!p.drag) add('Drag corpse', () => this.goDo(cz.x, cz.y, () => { p.drag = cz; p.dragS = R.int(1, 4); Player.say(R.pick(['Heavy...', 'Come on.']), '#ccc'); if (!this.dragHinted) { this.dragHinted = true; UI.hint('Dragging a body: E lets go; right-click a fence or an open window to heave it over', 6); } }, 1.3));
       if (!p.inv.some(i => i.id === 'Corpse')) add('Pick up corpse', () => this.goDo(cz.x, cz.y, () => Actions.queue(Actions.mk('Lifting the body', 2.5, () => Interact.liftCorpse(cz), { anim: 'pickup', begin: () => Actions.face(cz.x - 0.5, cz.y - 0.5) })), 1.3));
     }
     if (t.obj) this.objOptions(t.obj, tx, ty, add);

@@ -559,6 +559,9 @@ const World = {
       let luck = 0;
       if (G.player) { if (Player.hasTrait('lucky')) luck = 1; if (Player.hasTrait('unlucky')) luck = -1; }
       c.items = Loot.roll(rt, c.type, luck);
+      // a boarded-up house: whoever holed up there laid in supplies
+      const bd = r && Wd.buildings[r.b] && Wd.buildings[r.b].boarded;
+      if (bd && R.chance(0.5)) for (const id of R.pick([['CannedBeans', 'WaterBottle'], ['CannedSoup', 'Bandage'], ['Nails', 'Plank'], ['WaterBottle', 'CannedTuna']])) { const it = Items.make(id); if (it) c.items.push(it); }
       // fridges/coolers in stores start with cold food
     }
     return c.items;

@@ -8,8 +8,8 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
-    v: '000.027.001.160', date: '2026-10-27', title: 'Small fixes',
-    notes: ['E lets go of a body you are dragging.', 'The README lists the newest features.'],
+    v: '000.027.002.161', date: '2026-10-27', title: 'Small fixes',
+    notes: ['E lets go of a body you are dragging, and a hint says so the first time.', 'Boarded-up houses often hold the supplies of whoever holed up there: canned food, water, bandages, nails and planks.', 'The README lists the newest features.'],
     commits: [], shots: [],
   },
   {

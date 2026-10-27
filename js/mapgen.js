@@ -234,7 +234,7 @@ const MapGen = {
       f.barricade = n; f.bhp = []; for (let i = 0; i < n; i++) f.bhp.push(r.int(80, 120));
       if (f.k === 'door') f.open = false;
     }
-    w.boarded = [...pick];
+    for (const b of w.buildings) if (pick.has(b.id)) b.boarded = true;
   },
   alarmP() { const v = G.sb && G.sb.alarms; return v === undefined ? 0.03 : v; },
   newBuilding(type, x0, y0, x1, y1, o) {
