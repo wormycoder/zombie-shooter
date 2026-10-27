@@ -8,6 +8,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.027.000.159', date: '2026-10-27', title: 'Deaths, fighting free, bodies',
+    notes: [
+      'How the dead go down now depends on what killed them: cars by speed (knocked down, thrown, spun, launched, sent tumbling and sliding down the road), blunt and sharp blows from either side, the front or behind, an uppercut or from above, with one hand or two; large and small calibre gunshots by side; burning, stomping, punching and falls that break bones or splat. Your own falls and burns end the same way.',
+      'Breaking a zombie\'s hold plays a fight-off move toward where it held you - bare-handed, with a one-handed or a two-handed weapon, two ways each.',
+      'Tall fences have a second way to beat you, and one of the dead right behind can drag you back down off a tall or a low fence.',
+      'Bodies can be dragged (four ways) and heaved over a fence or out of a window.',
+      'Some houses are found boarded up, their windows and doors planked over.',
+      'A loaded gun\'s menu has a Suicide option, confirmed first, with its own animation for pistols, rifles and shotguns.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.026.000.153', date: '2026-10-27', title: 'Gore chunks and the katana',
     notes: [
       'Blades, heavy blows, shotguns and cars can tear chunks out of the dead: a torn, dark hollow in the body that keeps bleeding for a while, drops running onto the floor.',

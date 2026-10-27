@@ -319,7 +319,15 @@ HIGH (added) - MORE DEATH ANIMATIONS, GORE CHUNKS, KATANA, BARRICADED HOUSES,
        they bleed for 4-22 s (drops run out of them, onto the floor).
      DONE: the Katana - very rare (bedroom wardrobes, about 1 in 3000
        rolls); two-handed long blade, the best melee weapon, takes chunks.
-     PLAN (next runs, in this order):
+     DONE, first pass (000.027.000.159): every death on the list (Char3D.DEATHS:
+       recipes turned into keyframe tracks, picked by Zombie.deathOf),
+       fight-off moves (24), the fence fails (exertion 2, dragged down off
+       tall and low fences), suicide by gun type, dragging bodies (4 ways)
+       and heaving them over fences and out of windows, boarded-up houses.
+     Still to do: carrying a body over the shoulder shown on the model;
+       twitching that goes on after the fall; checking every death and
+       fight-off in play and tuning them by eye.
+     THE PLAN as it was (for reference):
      1. Death animation framework: z.death = { kind, dir, v } picked in
         Zombie.kill from the blow (weapon class, 1h/2h, blunt/sharp, the
         side it came from: left/front/back/right, uppercut, from above),
@@ -399,5 +407,7 @@ Fix (000.025.003.151), asked for: the title background with no physics -
 Run 11 (000.026.000.153), asked for: gore chunks + the Gore detail setting,
   the Katana, and the plan for the death and player animations and
   barricaded houses (above).
+Run 12 (000.027.000.159): the deaths, fight-offs, fence fails, suicide,
+  dragging and heaving bodies, boarded-up houses.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).
