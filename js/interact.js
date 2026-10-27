@@ -186,6 +186,8 @@ const Interact = {
     if (t.corpse) {
       add('Loot corpse', () => this.goDo(t.corpse.x, t.corpse.y, () => UI.openLoot(), 1.4));
       const cz = t.corpse;
+      if (p.drag === cz) add('Let go of the body', () => { p.drag = null; });
+      else if (!p.drag) add('Drag corpse', () => this.goDo(cz.x, cz.y, () => { p.drag = cz; p.dragS = R.int(1, 4); Player.say(R.pick(['Heavy...', 'Come on.']), '#ccc'); }, 1.3));
       if (!p.inv.some(i => i.id === 'Corpse')) add('Pick up corpse', () => this.goDo(cz.x, cz.y, () => Actions.queue(Actions.mk('Lifting the body', 2.5, () => Interact.liftCorpse(cz), { anim: 'pickup', begin: () => Actions.face(cz.x - 0.5, cz.y - 0.5) })), 1.3));
     }
     if (t.obj) this.objOptions(t.obj, tx, ty, add);
@@ -221,6 +223,7 @@ const Interact = {
         add(f.open ? 'Close window' : 'Open window', () => go(() => this.toggleWindow(f, e)));
       }
       const upOut = this.upperOutside(e);
+      if ((f.open || f.smashed) && !f.barricade && this.bodyInHand()) add('Throw the body out of the window', () => go(() => this.heave(e)));
       if ((f.open || f.smashed) && !f.barricade) add(upOut ? (f.rope ? 'Climb down sheet rope' : 'Jump out of window') : 'Climb through window', () => go(() => this.climb(e)));
       if (upOut && !f.rope && !f.barricade) add('Tie sheet rope (rope + nail)', () => go(() => {
         const rope = Player.findId('SheetRope');
@@ -236,6 +239,7 @@ const Interact = {
       if (f.barricade) add('Remove barricade', () => go(() => Actions.queue(Actions.unbarricade(e))));
     } else if (t && WALL_INFO[t].climb) {
       add('Climb over ' + WALL_INFO[t].n.toLowerCase(), () => go(() => this.climb(e)));
+      if (this.bodyInHand()) add('Throw the body over', () => go(() => this.heave(e)));
     }
     // a sheet rope hanging from the window above
     if (x < LV.W0) {
@@ -302,6 +306,25 @@ const Interact = {
       if (o.kind === 'box') { Player.addItem(Items.make('Plank')); if (R.chance(0.6)) Player.addItem(Items.make('Nails')); } else Player.addItem(Items.make('Twigs'));
       Sfx.play('wood'); UI.refresh();
     }));
+  },
+  // a body being dragged, or one carried
+  bodyInHand() { const p = G.player; return !!(p.drag || p.inv.some(i => i.id === 'Corpse')); },
+  // heave the body over the fence or out of the window: it lands on the far side (out of an upstairs window, below)
+  heave(e) {
+    const p = G.player, [x, y, d] = e, sides = World.edgeSides(x, y, d);
+    const near = U.dist(p.x, p.y, sides[0][0] + 0.5, sides[0][1] + 0.5) < U.dist(p.x, p.y, sides[1][0] + 0.5, sides[1][1] + 0.5);
+    const to = near ? sides[1] : sides[0], [mx, my] = this.edgeMid(e);
+    Actions.queue(Actions.mk('Heaving the body over', 1.6, () => {
+      let z = p.drag;
+      if (z) p.drag = null;
+      else { const it = p.inv.find(i => i.id === 'Corpse'); if (!it) return; Player.removeItem(it); z = it.z; G.zombies.push(z); }
+      let tx = to[0], ty = to[1];
+      if (tx >= LV.W0 && Wd.floor[ty * Wd.w + tx] === FL.VOID) tx -= LV.W0;
+      z.x = tx + 0.5; z.y = ty + 0.5; z.lie = 1; z.dead = true; z.va = 1; z.slide = null;
+      Zombie.rebuildGrid();
+      Sfx.play('thud', z.x, z.y); Noise.emit(mx, my, 8, 'thud');
+      UI.refresh();
+    }, { anim: 'heave', check: () => this.nearEdge(e, 1.6) }));
   },
   liftCorpse(z) {
     const i = G.zombies.indexOf(z);

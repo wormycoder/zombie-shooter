@@ -459,6 +459,23 @@ const Actions = {
   },
 
   // ------------------------------------------------------------------ world
+  // a loaded gun turned on oneself (asked for in the gun's menu, confirmed first)
+  suicide(it) {
+    const p = G.player, g = ITEMS[it.id].gun;
+    if (!g || !(it.ammo > 0) || it.jam || it.magIn === false) { Player.say('It is not loaded.', '#ccc'); return; }
+    if (!confirm('End it here? This cannot be undone.')) return;
+    const kind = g.pellets ? 'shotgun' : g.cycle === 'bolt' ? 'bolt' : g.auto ? 'auto' : g.two ? 'rifle' : 'pistol', long = kind !== 'pistol';
+    this.cancel();
+    this.queue(this.mk('...', 3.2, () => {
+      if (p.dead || !(it.ammo > 0)) return;
+      it.ammo--;
+      Sfx.play(g.snd || (g.pellets ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol'));
+      Noise.emit(p.x, p.y, g.noise || 30, 'gun');
+      Gore.burst(p.x, p.y, long ? 1.25 : 1.6, 16, p.angle + (long ? Math.PI : Math.PI / 2), 0.6, 1, 3, 0.5, 2);
+      Player.die('Took their own life');
+      p.death = long ? 'suicideK' : 'suicideP';
+    }, { anim: 'suicide', sub: kind, kneel: long }));
+  },
   barricade(e) {
     const [x, y, d] = e;
     const f = World.feat(x, y, d);

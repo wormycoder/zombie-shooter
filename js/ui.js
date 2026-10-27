@@ -646,6 +646,7 @@ const UI = {
         const seen = new Set();
         for (const m of Player.findAll(x => x.id === g.mag).sort((a, b) => b.rounds - a.rounds)) { if (seen.has(m.rounds)) continue; seen.add(m.rounds); add('Insert magazine (' + (m.rounds || 0) + '/' + g.cap + ')', inHand(() => Actions.queue(Actions.magSwap(it, m)))); }
       } else if (it.ammo) add('Unload', () => Actions.queue(Actions.unload(it)));
+      if (it.ammo > 0 && !it.jam && it.magIn !== false) add('Suicide', inHand(() => Actions.suicide(it)));
       if (g.auto) add(it.fire === 'semi' ? 'Switch to full auto' : 'Switch to semi-auto', () => { it.fire = it.fire === 'semi' ? 'auto' : 'semi'; Sfx.play('switch'); Player.say(it.fire === 'semi' ? 'Semi-auto.' : 'Full auto.', '#ccc'); this.refresh(); });
     }
     if (d.magOf && mine) {

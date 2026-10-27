@@ -237,6 +237,16 @@ const Player = {
     if (p.fireCd > 0) p.fireCd -= dt;
     if (p.shoutT > 0) p.shoutT -= dt;
     if (p.foT > 0) p.foT -= dt;
+    // a body being dragged trails behind; let go of it if it is lost, too far, or we are busy elsewhere
+    if (p.drag) {
+      const z = p.drag;
+      if (!z.dead || p.inCar || p.dead || G.zombies.indexOf(z) < 0 || U.dist(p.x, p.y, z.x, z.y) > 2.4) p.drag = null;
+      else {
+        const dx = z.x - p.x, dy = z.y - p.y, d = Math.hypot(dx, dy) || 1;
+        if (d > 0.8) World.move(z, -dx / d * (d - 0.8), -dy / d * (d - 0.8), 0.2);
+        z.a = Math.atan2(-dy, -dx) + (p.dragS === 2 ? Math.PI : 0);
+      }
+    }
     if (p.cycle) { p.cycle.t += dt; if (p.cycle.t >= p.cycle.dur) p.cycle = null; }
     // camera
     let cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
@@ -369,6 +379,8 @@ const Player = {
     let mode = 'walk';
     if (sprint) { sp = 4.0 + this.skill('Sprinting') * 0.12; mode = 'sprint'; }
     else if (run) { sp = 3.0 + this.skill('Sprinting') * 0.05; mode = 'run'; }
+    // dragging a body: a slow walk at best
+    if (p.drag) { sp = 1.0; mode = 'walk'; }
     if (p.sneak && mode === 'walk') sp = 1.05 + this.skill('Sneaking') * 0.04;
     if (aiming) {
       sp = 1.0 + this.skill('Nimble') * 0.08;
@@ -889,9 +901,11 @@ const Player = {
       if (a.kneel) { pose.crouch = 0.7; pose.mode = 'kneel'; if (a.kneelSide) pose.kneeSide = a.kneelSide; }
       if (an === 'sit') { pose.crouch = 0.8; pose.mode = 'sit'; }
       if (an === 'shove') { pose.swingT = 0.42; }
+      if (an === 'heave') pose.crouch = 0.6 * (1 - U.clamp((pose.k - 0.2) / 0.35, 0, 1));
       if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
     }
     if (p.shoutT > 0 && !p.action && !p.swing && !p.aiming) { pose.arms = 'shout'; pose.k = 1 - p.shoutT / 1.1; }
+    if (p.drag && !p.action && !p.aiming) { pose.arms = 'dragc'; pose.sub = p.dragS || 1; pose.weapon = null; }
     if (p.foT > 0 && p.fo && !p.action && !p.aiming) { pose.arms = 'fightoff'; pose.k = 1 - p.foT / 0.6; pose.foSide = p.fo.side; pose.foKind = p.fo.kind; pose.foV = p.fo.v; }
     // working the pump or the bolt between shots
     if (p.cycle && p.cycle.t > 0 && (pose.arms === 'aim' || pose.arms === 'fire')) { pose.cycle = U.clamp(p.cycle.t / p.cycle.dur, 0, 1); pose.cycleKind = p.cycle.kind; }

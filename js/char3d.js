@@ -2161,5 +2161,8 @@ const Char3D = {
   // falls: broken bones, and splatting flat
   D.bones1 = { lie: 1, dur: 0.6, drop: 0.9, arms: 'out', broken: 1, kick: 0.5 }; D.bones2 = { lie: -1, dur: 0.6, drop: 0.9, arms: 'flail', broken: 2, kick: 0.4 };
   D.bones3 = { lie: 1, dur: 0.65, drop: 1.1, arms: 'flail', broken: 3, kick: 0.6 };
+  // a gun to oneself: from standing, folding sideways; from kneeling, falling back
+  D.suicideP = { lie: 1, dur: 1.1, side: -0.6, knees: 0.6, head: 0.6, arms: 'limp', kick: 0.1 };
+  D.suicideK = { lie: 1, dur: 1.2, push: -0.5, knees: 1, head: -0.6, arms: 'limp', kick: 0.1 };
   D.splat1 = { lie: -1, dur: 0.45, drop: 1.6, arms: 'out', splat: 1 }; D.splat2 = { lie: 1, dur: 0.45, drop: 1.6, arms: 'out', splat: -1, kick: 0.2 };
 })();

@@ -146,6 +146,40 @@ Object.assign(Char3D, {
         else { this.hand(T, D, 1, L(0.02, 0.36, hit), 0.06, L(-0.12, 0.1, hit), 0.5); this.wdir(T, 1, -0.1, L(-0.4, 0.1, hit)); T[C3.GO] = -0.32; }
       }
     },
+    // ---- suicide (P.sub: the gun): a pistol to the temple; a rifle or shotgun kneeling, the butt down, the muzzle
+    // under the chin and the hand down at the trigger. Raised slowly, held shaking, then the shot jerks the head.
+    suicide(T, S, D, P) {
+      const k = P.k || 0, up = this.ease(k, 0.05, 0.5), shake = (k > 0.5 && k < 0.96 ? 1 : 0) * Math.sin(S.t * 31) * 0.008, shot = this.ease(k, 0.96, 1), M = this.MOUTH;
+      if (P.sub === 'pistol') {
+        this.hand(T, D, 1, U.lerp(0.18, M[0] - 0.05, up), U.lerp(0.12, 0.12, up) + shake, U.lerp(-0.3, M[2] + 0.08, up) + shake, 0.9);
+        this.wdir(T, U.lerp(0.9, -0.1, up), U.lerp(0.1, -1, up), U.lerp(-0.3, 0.1, up));
+        this.hand(T, D, -1, 0.12, -0.12, -0.35, 0.3);
+        T[C3.HR] += 0.15 * up + 0.5 * shot; T[C3.HP] += 0.1 * up;
+      } else {
+        // long guns: the muzzle at the chin, the right hand down the stock to the trigger, the left steadying the barrel
+        const low = P.sub === 'shotgun' ? 0.08 : 0;
+        this.hand(T, D, 1, U.lerp(0.2, 0.3, up), 0.06 + shake, U.lerp(-0.3, M[2] - 0.62 - low, up), 0.4);
+        this.wdir(T, U.lerp(0.9, 0.15, up), 0, U.lerp(0.1, 1, up));
+        T[C3.GR] = 1; T[C3.GO] = U.lerp(0.3, 0.5, up);
+        T[C3.HP] -= 0.2 * up + 0.5 * shot; T[C3.SP] += 0.15 * up;
+      }
+    },
+    // ---- dragging a body (P.sub 1-4): by a wrist, by both ankles, by the collar leaning into it, by the clothes with
+    // the other arm out for balance; leaning forward into the pull
+    dragc(T, S, D, P) {
+      const st = P.sub || 1, w = Math.sin(S.t * 5) * 0.015;
+      if (st === 1) { this.hand(T, D, 1, -0.25, 0.18, -0.45 + w, 0.2); this.hand(T, D, -1, 0.05, -0.15, -0.42, 0.2); T[C3.SP] += 0.25; }
+      else if (st === 2) { this.hand(T, D, -1, -0.3, -0.15, -0.5 + w, 0.2); this.hand(T, D, 1, -0.3, 0.15, -0.5 - w, 0.2); T[C3.SP] += 0.35; }
+      else if (st === 3) { this.hand(T, D, -1, -0.2, -0.12, -0.3 + w, 0.3); this.hand(T, D, 1, -0.2, 0.12, -0.3 - w, 0.3); T[C3.SP] += 0.3; T[C3.HP] += 0.1; }
+      else { this.hand(T, D, -1, -0.22, -0.15, -0.25 + w, 0.3); this.hand(T, D, 1, 0.15, 0.32, -0.2, 0.4); T[C3.SP] += 0.2; }
+      T[C3.GR] = 0; T[C3.LH] = 1;
+    },
+    // ---- heaving a body over a fence or out of a window: down to grab it, up to the chest, shoved over
+    heave(T, S, D, P) {
+      const k = P.k || 0, lift = this.ease(k, 0.2, 0.55), push = this.ease(k, 0.65, 0.85) * (1 - this.ease(k, 0.9, 1));
+      for (const side of [-1, 1]) this.hand(T, D, side, U.lerp(0.3, 0.2, lift) + push * 0.25, side * 0.15, U.lerp(-0.55, 0.05, lift) + push * 0.2, 0.5);
+      T[C3.SP] += 0.5 * (1 - lift) - 0.1 * push; T[C3.HP] -= 0.15 * push; T[C3.LH] = 1;
+    },
     // ---- drinking from a bottle, can or carton: up to the mouth, tipped back with the head, gulps, down
     drink(T, S, D, P) {
       const t = S.t + S.id * 0.3, c = this.cyc(t, 4.4), M = this.MOUTH;

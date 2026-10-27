@@ -704,7 +704,7 @@ const Save = {
       else objs.push([i, o]);
     }
     const u8 = (a) => this.b64(a);
-    const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null });
+    const pl = Object.assign({}, p, { action: null, queue: [], path: null, onArrive: null, swing: null, climb: null, inCar: p.inCar ? p.inCar.id : null, lastFov: null, sleepBed: null, drag: null });
     const rd = (v) => Math.round(v * 100) / 100, SK = this.ZSKIP;
     // (copied field by field: assign-then-delete leaves slow dictionary objects for JSON.stringify)
     const zs = G.zombies.map(z => {
