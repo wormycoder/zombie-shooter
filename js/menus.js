@@ -11,20 +11,75 @@ const Menu = {
     this.bgWorld = MapGen.generate(seed);
     World.use(this.bgWorld);
     G.zombies = []; G.cars = []; G.events = { powerOff: false, waterOff: false }; G.alarms = [];
-    Zombie.spawnAll(-500, -500);
-    for (const z of G.zombies) { z.va = 1; if (Math.random() < 0.3) { z.st = 'wander'; } }
-    Zombie.rebuildGrid();
     Vehicles.spawnAll();
-    this.path = [[70, 70], [170, 160]];
     this.cam = { x: 95, y: 100 };
+    this.plan();
+  },
+  // The dead behind the menus follow routes worked out once: out along a few clear stretches and back the same way,
+  // round and round; a few just stand. Nothing is simulated - each position follows from the clock.
+  plan() {
+    const ok = (x, y) => !World.tileSolid(x | 0, y | 0) && !World.isWater(x | 0, y | 0) && World.room(x | 0, y | 0) < 0;
+    const W = this.walkers = [];
+    for (let tries = 0; W.length < 70 && tries < 6000; tries++) {
+      const x = 62 + Math.random() * 116, y = 88 + Math.random() * 70;
+      if (!ok(x, y)) continue;
+      const pts = [[x, y]];
+      let a = Math.random() * 6.283;
+      for (let k = 0; k < 6; k++) {
+        const [px, py] = pts[pts.length - 1];
+        let found = false;
+        for (let t = 0; t < 8 && !found; t++) {
+          const b = a + (Math.random() - 0.5) * 2.2, l = 2 + Math.random() * 5, qx = px + Math.cos(b) * l, qy = py + Math.sin(b) * l;
+          if (ok(qx, qy) && World.lineClear(px, py, qx, qy, 'move')) { pts.push([qx, qy]); a = b; found = true; }
+        }
+        if (!found) break;
+      }
+      const z = Zombie.create(x, y);
+      z.st = 'wander'; z.idleT = 1e9; z.va = 1; z.amp = 0;
+      if (pts.length > 1 && Math.random() < 0.85) {
+        // out and back: p0 .. pn .. p1, closing on p0
+        const P = pts.concat(pts.slice(1, -1).reverse()), cum = [0];
+        for (let i = 0; i < P.length; i++) { const A = P[i], B = P[(i + 1) % P.length]; cum.push(cum[i] + Math.hypot(B[0] - A[0], B[1] - A[1])); }
+        z.route = { P, cum, len: cum[P.length], sp: 0.28 + Math.random() * 0.2, off: Math.random() * cum[P.length] };
+      }
+      W.push(z);
+    }
+    G.zombies = W;
+  },
+  // everyone to where the clock puts them on their route, facing the way they walk
+  walk(dt) {
+    for (const z of this.walkers || []) {
+      const r = z.route;
+      if (!r) continue;
+      const d = (this.t * r.sp + r.off) % r.len, c = r.cum;
+      let i = 0; while (i < r.P.length - 1 && c[i + 1] <= d) i++;
+      const A = r.P[i], B = r.P[(i + 1) % r.P.length], f = (d - c[i]) / ((c[i + 1] - c[i]) || 1);
+      const x = A[0] + (B[0] - A[0]) * f, y = A[1] + (B[1] - A[1]) * f;
+      z.ph += Math.hypot(x - z.x, y - z.y) * 3.6; z.x = x; z.y = y; z.amp = 0.75;
+      z.a = U.normAng(z.a + U.clamp(U.angDiff(z.a, Math.atan2(B[1] - A[1], B[0] - A[0])), -dt * 4, dt * 4));
+    }
+  },
+  // Quality behind the menus: full resolution while it holds 30 frames a second; below that (or with little to
+  // spare) a tenth fewer pixels each second, down to half, and back up after 3 s with room to spare.
+  q: 1, qT: 0, qN: 0, qMs: 0, qUp: 0,
+  tune(ms, dt) {
+    if (!Perf.auto) return;
+    this.qT += dt; this.qN++; this.qMs += ms;
+    if (this.qT < 1) return;
+    const fps = this.qN / this.qT, avg = this.qMs / this.qN;
+    this.qT = this.qN = this.qMs = 0;
+    let q = this.q;
+    if (fps < 28 || avg > 26) { q = Math.max(0.5, q - 0.1); this.qUp = 0; }
+    else if (avg < 12 && ++this.qUp >= 3) { q = Math.min(1, q + 0.1); this.qUp = 0; }
+    q = Math.round(q * 10) / 10;
+    if (q !== this.q) { this.q = q; Render.resize(); }
   },
   prepareBg() {
     G.corpse = false;
     Sfx.engine(null); Sfx.heli(null);
     $('#hud').classList.add('hidden');
     UI.closeAll();
-    // (once the title loop is recorded the town is not needed again)
-    if (!this.reel || !this.reel.ready) this.buildBackground();
+    this.buildBackground();
     G.player = { x: this.cam.x, y: this.cam.y, dead: true, inCar: null, st: { panic: 0 }, look: { skin: '#ccc' }, angle: 0, halo: [], deadT: 0 };
     G.weather = { rain: 0, target: 0, fog: 0.15, temp: 20, next: 1e12, storm: false };
     G.events.heli = null; G.alarms = [];
@@ -34,7 +89,7 @@ const Menu = {
     G.mode = 'menu';
     Versions.mountHome();
     // first visit: put the menu up at once and build the background town right after
-    if (this.bgWorld || (this.reel && this.reel.ready)) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
+    if (this.bgWorld) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
     const meta = Save.meta();
     $('#menu').className = '';
     // title screen: the name at the top left, the menu as plain words down the left side
@@ -71,15 +126,7 @@ const Menu = {
       } catch (e) { console.error(e); alert('Failed to load save: ' + e.message); this.show(); }
     }, 30);
   },
-  // ------------------------------------------------------------------ title background
-  // The town behind the menus is recorded once: about ten seconds of the live scene (the camera drifting, the dead
-  // shambling) kept as JPEG frames, then played back as a loop - two pictures drawn a frame instead of a town, its
-  // zombies and their 3D models. The frames past the loop's end dissolve into its first ones, so it has no seam.
-  // n frames at fps make the loop, m more the dissolve; w: the width they are kept at
-  REEL: { fps: 12, n: 120, m: 12, w: 960 },
-  reel: null,
   drawBackground(dt) {
-    if (this.reel && this.reel.ready) { this.playReel(dt); return; }
     if (!this.bgWorld || Wd !== this.bgWorld) { Render.ctx.setTransform(1, 0, 0, 1, 0, 0); Render.ctx.fillStyle = '#000'; Render.ctx.fillRect(0, 0, Render.cv.width, Render.cv.height); return; }
     this.t += dt;
     const k = (Math.sin(this.t * 0.012) + 1) / 2;
@@ -87,80 +134,15 @@ const Menu = {
     Render.cam.x = this.cam.x; Render.cam.y = this.cam.y; Render.cam.z = 0;
     G.player.x = this.cam.x; G.player.y = this.cam.y;
     G.light.amb = 0.38; G.light.flash = 0; G.time = 20.6 * 60;
-    Zombie.updateAll(dt);
-    // keep the ones in view shambling about rather than standing about for long spells
-    for (const z of G.zombies) {
-      z.va = 1;
-      if (z.st === 'idle' && !z.dead && z.idleT > 0.5 && Math.abs(z.x - this.cam.x) < 30 && Math.abs(z.y - this.cam.y) < 30 && Math.random() < dt * 0.4) z.idleT = 0;
-    }
+    this.walk(dt);
+    const t0 = performance.now();
     Render.frame(dt);
-    this.recordReel(dt);
+    this.tune(performance.now() - t0, dt);
     this.shade();
   },
   shade() {
     Render.ctx.setTransform(Render.dpr, 0, 0, Render.dpr, 0, 0);
     Render.ctx.fillStyle = 'rgba(0,0,0,0.35)'; Render.ctx.fillRect(0, 0, Render.W, Render.H);
-  },
-  // one frame of the live scene into the loop, every 1/fps seconds
-  recordReel(dt) {
-    const RL = this.REEL;
-    let rl = this.reel;
-    if (!rl) {
-      const cv = Render.cv, w = Math.min(RL.w, cv.width), h = Math.max(1, Math.round(w * cv.height / cv.width));
-      const c = document.createElement('canvas'); c.width = w; c.height = h;
-      rl = this.reel = { c, g: c.getContext('2d'), w, h, k: 0, t: 0, next: 0.5, pend: 0, blobs: [], first: [], bm: [], pt: 0, ready: false };
-    }
-    rl.t += dt;
-    if (rl.k >= RL.n + RL.m || rl.t < rl.next) return;
-    rl.next += 1 / RL.fps;
-    const k = rl.k++, g = rl.g;
-    g.globalAlpha = 1;
-    g.drawImage(Render.cv, 0, 0, rl.w, rl.h);
-    let slot = k;
-    if (k < RL.m) {
-      // the loop's first frames wait for the ones that dissolve into them
-      const cc = document.createElement('canvas'); cc.width = rl.w; cc.height = rl.h; cc.getContext('2d').drawImage(rl.c, 0, 0);
-      rl.first[k] = cc;
-      return;
-    }
-    if (k >= RL.n) {
-      // past the end: this frame, then the loop's frame (k - n) over it, more of it each frame
-      slot = k - RL.n;
-      g.globalAlpha = slot / RL.m; g.drawImage(rl.first[slot], 0, 0); g.globalAlpha = 1;
-      rl.first[slot] = null;
-    }
-    rl.pend++;
-    rl.c.toBlob((b) => {
-      rl.pend--;
-      if (b) rl.blobs[slot] = b;
-      if (rl.k >= RL.n + RL.m && !rl.pend) rl.ready = rl.blobs.filter(Boolean).length === RL.n;
-    }, 'image/jpeg', 0.82);
-  },
-  // play the loop: the two frames either side of the play head, blended; a few frames ahead decoded, the rest let go
-  playReel(dt) {
-    const rl = this.reel, n = this.REEL.n, bm = rl.bm;
-    rl.pt = (rl.pt + dt * this.REEL.fps) % n;
-    const i0 = Math.floor(rl.pt), i1 = (i0 + 1) % n, a = rl.pt - i0;
-    for (let d = 0; d < 4; d++) {
-      const j = (i0 + d) % n;
-      if (!bm[j]) { bm[j] = 1; createImageBitmap(rl.blobs[j]).then((b) => { if (bm[j] === 1) bm[j] = b; else b.close(); }, () => { bm[j] = null; }); }
-    }
-    for (let j = 0; j < n; j++) {
-      const b = bm[j];
-      if (b && b !== 1 && (j - i0 + n) % n > 4 && j !== rl.last) { b.close(); bm[j] = null; }
-    }
-    const ctx = Render.ctx, cv = Render.cv, s = Math.max(cv.width / rl.w, cv.height / rl.h);
-    const dw = rl.w * s, dh = rl.h * s, dx = (cv.width - dw) / 2, dy = (cv.height - dh) / 2;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    let A = bm[i0];
-    if (!A || A === 1) A = bm[rl.last];
-    else rl.last = i0;
-    if (A && A !== 1) {
-      ctx.drawImage(A, dx, dy, dw, dh);
-      const B = bm[i1];
-      if (B && B !== 1 && a > 0.02 && A === bm[i0]) { ctx.globalAlpha = a; ctx.drawImage(B, dx, dy, dw, dh); ctx.globalAlpha = 1; }
-    }
-    this.shade();
   },
   // ------------------------------------------------------------------ sandbox settings
   sbSel: null, spawnSel: 'Random',

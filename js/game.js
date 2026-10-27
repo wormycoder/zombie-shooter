@@ -259,11 +259,11 @@ const Game = {
     requestAnimationFrame((t) => this.loop(t));
     // frame rate cap (settings): run on the display refresh nearest each due time, so a 144 Hz screen capped at 60
     // gets about 60 frames (skipping refreshes by a minimum gap gave it 48)
-    // menus, the pause screen and a paused game draw at 30 frames a second at most: nothing there needs more, and the
+    // menus, the pause screen and a paused game are locked to 30 frames a second: nothing there needs more, and the
     // processor and graphics card are left alone
     const idle = G.mode === 'menu' || G.mode === 'create' || (G.mode === 'play' && (G.paused || UI.modalPause()));
     // (the benchmark runs uncapped)
-    const cap = G.mode === 'bench' ? 0 : idle ? Math.min(Settings.v.fps || 30, 30) : Settings.v.fps;
+    const cap = G.mode === 'bench' ? 0 : idle ? 30 : Settings.v.fps;
     if (this.rLast) this.rIv += (Math.min(50, ts - this.rLast) - this.rIv) * 0.1;
     this.rLast = ts;
     if (cap && this.last) {

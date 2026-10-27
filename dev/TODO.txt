@@ -349,5 +349,10 @@ Fix (000.025.001.149), asked for: too easy to get grabbed and bitten -
   pulling free twice as fast.
 Fix (000.025.002.150), asked for: the frame rate counter moved to
   Settings > Experimental (with the Expanded map and debug mode).
+Fix (000.025.003.151), asked for: the title background with no physics -
+  70 zombies on routes planned once (position from the clock), only what
+  is on screen drawn, full quality, locked to 30 fps, resolution steps
+  down (to half) when under 30 and back up with headroom. Replaces the
+  recorded JPEG loop of 000.025.000.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

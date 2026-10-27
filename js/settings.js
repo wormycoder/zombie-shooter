@@ -70,7 +70,9 @@ const Settings = {
   apply() { for (const fn of this.listeners) { try { fn(this.v); } catch (e) { console.error(e); } } },
   // backing-store pixels per CSS pixel for the main canvas
   dpr() {
-    const d = Math.min(2, window.devicePixelRatio || 1), r = this.v.res, k = this.v.dynRes ? Perf.scale : 1;
+    // (behind the menus the menu's own quality scale stands in for the dynamic resolution)
+    const menu = typeof Menu !== 'undefined' && (G.mode === 'menu' || G.mode === 'create');
+    const d = Math.min(2, window.devicePixelRatio || 1), r = this.v.res, k = menu ? Menu.q : this.v.dynRes ? Perf.scale : 1;
     if (r === 'auto') return Math.max(0.5 * Math.min(d, 1.5), Math.min(d, 1.5) * k);
     return Math.max(0.5, d * r * k);
   },

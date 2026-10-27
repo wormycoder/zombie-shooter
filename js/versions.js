@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.025.003.151', date: '2026-10-27', title: 'A lighter title screen, live',
+    notes: [
+      'The town behind the menus is live again at full quality, but costs far less: its zombies walk routes planned once when the menu opens, with no thinking or collisions, and only what is on screen is drawn.',
+      'The menus are locked to 30 frames a second. If a computer cannot keep 30, the background drops its resolution a step at a time (down to half) and climbs back when there is room.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.025.002.150', date: '2026-10-27', title: 'Settings tidy-up',
     notes: [
       'The frame rate counter (FPS or detailed) moved to Settings > Experimental, next to the Expanded map and the debug mode.',

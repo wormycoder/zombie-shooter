@@ -19,8 +19,6 @@ const Bench = {
   start() {
     if (G.mode !== 'menu') return;
     const keep = { v: Object.assign({}, Settings.v), zombies: G.zombies, cars: G.cars, wd: Wd, weather: G.weather, time: G.time, player: G.player };
-    // (a title loop still being recorded starts over afterwards: this would break into it)
-    if (Menu.reel && !Menu.reel.ready) Menu.reel = null;
     const stages = [];
     for (const p of this.PRESETS) for (const l of this.LOADS) stages.push({ p, l, iv: [], work: [] });
     this.run = { keep, stages, i: -1, t: 0, hz: 1000 / (Game.rIv || 16.7) };

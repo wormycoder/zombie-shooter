@@ -124,6 +124,8 @@ const UI = {
     else if (k === 'pause') { g.fillRect(5, 7, 18, 3); g.fillRect(5, 13, 18, 3); g.fillRect(5, 19, 18, 3); }
   },
   startGame() {
+    // (leaving the menus: back to the game's own resolution)
+    if (Menu.q !== 1) Render.resize();
     this.hud.classList.remove('hidden');
     $('#menu').innerHTML = '';
     $('#menu').className = '';
