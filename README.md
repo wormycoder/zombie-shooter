@@ -31,7 +31,8 @@ Your game saves automatically. Death is permanent.
 **The dead**
 - Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead.
 - Sandbox options for their numbers, speed (shamblers to sprinters), toughness and how the infection spreads.
-- Gore with wounds, dismemberment and pooling blood, adjustable or switched off.
+- Gore with wounds, chunks torn out that keep bleeding, dismemberment and pooling blood; a Gore and a Gore detail setting, or switched off.
+- Deaths that follow from how they died: thrown by cars by their speed, blows from every side, gunshots by calibre, fire, stomps and falls.
 
 **Survival**
 - Hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, temperature and wetness.
@@ -40,9 +41,9 @@ Your game saves automatically. Death is permanent.
 - Cooking, farming, foraging, fishing, trapping, generators and rain barrels; the power and water fail some days after the outbreak.
 
 **Fighting back**
-- Melee weapons that wear out, shoving and stomping.
+- Melee weapons that wear out (and one very rare katana), shoving and stomping; fight your way free when they grab you.
 - Ten firearms with magazines to load and swap, pump and bolt actions, jams and fire modes. Aiming shows the cone of fire and your chance to hit.
-- Barricading, carpentry, moving furniture, crafting, molotovs and fires that spread through grass, forests and wooden houses.
+- Barricading (and houses found already boarded up), carpentry, moving furniture, dragging bodies and heaving them over fences, crafting, molotovs and fires that spread through grass, forests and wooden houses.
 
 **Getting around**
 - Over a dozen drivable vehicles, from sedans to school buses, with keys and hot-wiring, fuel, part damage and repairs, alarms and sirens.

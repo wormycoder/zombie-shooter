@@ -35,7 +35,7 @@ Input.handleGameKeys = function () {
   }
   if (p.inCar) return;
   for (let i = 0; i < 9; i++) if (Input.hit(String(i + 1))) UI.useHotbar(i);
-  if (Input.hit('e')) Interact.interactFront();
+  if (Input.hit('e')) { if (p.drag) { p.drag = null; Player.say('Let it go.', '#ccc'); } else Interact.interactFront(); }
   if (Input.hit('f')) {
     let fl = [Player.primary(), Player.secondary()].find(it => it && ITEMS[it.id].light);
     if (!fl) { fl = Player.find(it => ITEMS[it.id].light && it.pow > 0); if (fl) Player.equip(fl, 'secondary'); }

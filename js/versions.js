@@ -8,6 +8,11 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.027.001.160', date: '2026-10-27', title: 'Small fixes',
+    notes: ['E lets go of a body you are dragging.', 'The README lists the newest features.'],
+    commits: [], shots: [],
+  },
+  {
     v: '000.027.000.159', date: '2026-10-27', title: 'Deaths, fighting free, bodies',
     notes: [
       'How the dead go down now depends on what killed them: cars by speed (knocked down, thrown, spun, launched, sent tumbling and sliding down the road), blunt and sharp blows from either side, the front or behind, an uppercut or from above, with one hand or two; large and small calibre gunshots by side; burning, stomping, punching and falls that break bones or splat. Your own falls and burns end the same way.',
