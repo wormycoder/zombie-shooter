@@ -309,6 +309,48 @@ ALSO FIXED (found along the way)
     bedroom had no door, some narrow house bathrooms and upstairs rooms
     behind the stairwell had none. (000.019.001.130)
 
+HIGH (added) - MORE DEATH ANIMATIONS, GORE CHUNKS, KATANA, BARRICADED HOUSES,
+      PLAYER ANIMATIONS (the full list as asked, with the plan for each).
+  -> STARTED (000.026.000.153):
+     DONE: Gore detail setting (Display > Gore: Off / Very low / Low / Medium
+       / High): chunks torn out of the dead (blades, heavy blows, shotguns,
+       cars) - a soaked ring, torn rim and dark hollow, flesh tags from
+       Medium, a glimpse of rib at High; up to 1-4 per body by the setting;
+       they bleed for 4-22 s (drops run out of them, onto the floor).
+     DONE: the Katana - very rare (bedroom wardrobes, about 1 in 3000
+       rolls); two-handed long blade, the best melee weapon, takes chunks.
+     PLAN (next runs, in this order):
+     1. Death animation framework: z.death = { kind, dir, v } picked in
+        Zombie.kill from the blow (weapon class, 1h/2h, blunt/sharp, the
+        side it came from: left/front/back/right, uppercut, from above),
+        the gun's caliber, car speed band, fire, stomp, punch, fall.
+        Each death is a keyframe track (actanim kf rows) blended into the
+        corpse pose, so the body lands where the motion ends.
+     2. Deaths, as listed:
+        Car hit by speed: 1-15, 16-30, 31-50, 51-75, 76+ (knocked down ...
+          thrown over the hood ... launched and tumbling).
+        Blunt hit L / F / B / R / uppercut / from above, 2-handed and
+          1-handed (12).
+        Sharp hit L / F / B / R / uppercut / from above, 2-handed and
+          1-handed (12), with the new chunks.
+        Gunshot large caliber L / F / R / B, small caliber L / F / R / B.
+        Burned alive 1-3 (player and zombie).
+        Stomped 1-3. Punched to death 1-2.
+        Fall damage: broken bones 1-3, splat 1-2 (player and zombie).
+     3. Player animations:
+        High fence fail: exertion 1-2, dragged down by a zombie 1.
+        Low fence fail: dragged down by a zombie 1.
+        Suicide: pistol, bolt rifle, semi/auto rifle, shotgun, other guns
+          (a context option on a loaded gun, with a confirm).
+        Fight off a zombie (breaking a grab): bare hands, 1-handed weapon,
+          2-handed weapon x left / right / back / front x 2 each (24),
+          picked from where the grabber stands and what you hold.
+        Move corpse 1-4 (drag by the arms / legs, carry over the shoulder),
+          throw a corpse over a fence 1, out of a window 1.
+     4. Barricaded houses at random: some houses generated with planks
+        over windows and doors (a separate random stream so maps keep
+        their layout), more loot inside, sometimes a sign or a body.
+
 --------------------------------------------------------------------
 RUN LOG
 --------------------------------------------------------------------
@@ -354,5 +396,8 @@ Fix (000.025.003.151), asked for: the title background with no physics -
   is on screen drawn, full quality, locked to 30 fps, resolution steps
   down (to half) when under 30 and back up with headroom. Replaces the
   recorded JPEG loop of 000.025.000.
+Run 11 (000.026.000.153), asked for: gore chunks + the Gore detail setting,
+  the Katana, and the plan for the death and player animations and
+  barricaded houses (above).
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

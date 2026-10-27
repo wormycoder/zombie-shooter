@@ -28,7 +28,7 @@ const LOOT = {
   'kitchen.oven': { n: [0, 1], empty: 0.6, items: [['Pot', 3], ['FryingPan', 2], ['FrozenPizza', 1]] },
   'bathroom.medcab': { n: [1, 4], empty: 0.2, items: [['@meds', 1]] },
   'bathroom.counter': { n: [1, 3], empty: 0.3, items: [['@meds', 3], ['RippedSheets', 2], ['Scissors', 1], ['Tweezers', 1]] },
-  'bedroom.wardrobe': { n: [2, 5], empty: 0.1, items: [['@clothes', 20], ['@bags', 3], ['Sheet', 3], ['LeatherJacket', 1], ['MotoHelmet', 0.3], ['BaseballBat', 1], ['LeatherGloves', 1], ['Belt', 3]] },
+  'bedroom.wardrobe': { n: [2, 5], empty: 0.1, items: [['Katana', 0.03], ['@clothes', 20], ['@bags', 3], ['Sheet', 3], ['LeatherJacket', 1], ['MotoHelmet', 0.3], ['BaseballBat', 1], ['LeatherGloves', 1], ['Belt', 3]] },
   'bedroom.dresser': { n: [1, 4], empty: 0.15, items: [['@clothes', 12], ['DigitalWatch', 2], ['@books', 3], ['Pistol', 0.6], ['Revolver', 0.5], ['Box9mm', 0.5], ['Box38', 0.5], ['Cigarettes', 2], ['Lighter', 1], ['Sheet', 3], ['Glasses', 1], ['Painkillers', 1], ['Belt', 2], ['Holster', 0.3], ['Pistol45', 0.3], ['Magnum', 0.25], ['Box45', 0.3], ['Box357', 0.25], ['Mag9mm', 0.3]] },
   'bedroom.nightstand': { n: [0, 2], empty: 0.35, items: [['@books', 6], ['DigitalWatch', 2], ['Flashlight', 2], ['Battery', 2], ['Painkillers', 1], ['SleepingPills', 1], ['Pistol', 0.4], ['Glasses', 1], ['NoiseMaker', 1.5], ['Pistol45', 0.2], ['Magnum', 0.15]] },
   'living.bookshelf': { n: [1, 5], empty: 0.15, items: [['@books', 1]] },

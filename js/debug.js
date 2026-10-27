@@ -31,7 +31,7 @@ const DBG_OVERLAYS = [
 ];
 const DBG_TABS = [['cheats', 'Cheats'], ['items', 'Items'], ['zombies', 'Zombies'], ['cars', 'Vehicles'], ['world', 'World'], ['player', 'Player'], ['overlays', 'Overlays'], ['perf', 'Stats']];
 const DBG_KITS = [
-  ['Melee', ['BaseballBat', 'Crowbar', 'Axe', 'KitchenKnife', 'Machete', 'Sledgehammer']],
+  ['Melee', ['BaseballBat', 'Crowbar', 'Axe', 'KitchenKnife', 'Machete', 'Katana', 'Sledgehammer']],
   ['Guns', ['Pistol', 'Bullets9mm', 'Bullets9mm', 'Shotgun', 'ShotgunShells', 'ShotgunShells', 'HuntingRifle', 'Bullets308']],
   ['Medical', ['Bandage', 'Bandage', 'Bandage', 'Disinfectant', 'Painkillers', 'Antibiotics', 'SutureNeedle', 'Tweezers']],
   ['Food', ['CannedBeans', 'CannedBeans', 'CannedSoup', 'CanOpener', 'WaterBottle', 'WaterBottle', 'Chips', 'Apple']],

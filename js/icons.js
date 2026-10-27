@@ -84,6 +84,7 @@ const Icons = {
       case 'rollingpin': LO(5, 25, 27, 7, c1, 6); LO(2, 28, 5, 25, c2, 3); LO(27, 7, 30, 4, c2, 3); break;
       case 'knife': PL([[14, 18], [27, 4], [17, 20]], c1); LO(6, 27, 15, 19, c2, 4); break;
       case 'screwdriver': LO(6, 27, 14, 19, c1, 5); LO(14, 19, 26, 7, c2, 2); break;
+      case 'katana': LO(10, 22, 29, 3, c1, 2.4); LO(3, 29, 10, 22, c2, 3.4); LO(7, 21, 11, 25, '#a08040', 2); break;
       case 'machete': PL([[12, 18], [26, 2], [29, 6], [16, 21]], c1); LO(5, 27, 13, 19, c2, 4); break;
       case 'katana': LO(10, 22, 29, 3, c1, 3); LO(3, 29, 10, 22, c2, 4); L(7, 21, 11, 25, '#c0a040', 3); break;
       case 'axe': LO(8, 28, 20, 6, c1, 3); PL([[17, 4], [27, 6], [26, 16], [18, 12]], c2); break;

@@ -86,6 +86,8 @@ const c3a = c3v(), c3b = c3v(), c3c = c3v(), c3d = c3v(), c3e = c3v(), c3g = c3v
 // ---- body meshes: smooth lathes built once (profiles in metres for an average man; U = metres per mesh unit).
 // Rings for 'z' meshes: [z, back x, front x, half width, front exponent, back exponent] (face / chest toward +x).
 const C3U = {}, C3R = {};
+// the inside of a chunk torn out (gore)
+const C3HOLE = [0.1, 0.016, 0.013];
 // material kinds painted by GL3D's fragment shader
 const C3MAT = { cotton: 1, denim: 2, knit: 3, leather: 4, quilt: 5, plaid: 6, stripe: 7, camo: 8, skin: 9, face: 10, hair: 11, twill: 12, plastic: 13, splat: 14, rubber: 15, fleece: 16 };
 function c3mesh(name, U, rings, seg, axis) {
@@ -1590,6 +1592,26 @@ const Char3D = {
         this.surf(o, ch ? 'CHEST' : 'BELLY', w[1], w[2], sx, sx, H);
         this.patch(ch ? Cf : Lf, o, w[3] * 1.5, w[3] * 1.3, Pl.blood, 0.007);
         this.patch(ch ? Cf : Lf, o, w[3] * (w[4] ? 1.1 : 0.7), w[3] * (w[4] ? 0.32 : 0.6), Pl.wound, 0.009);
+      }
+    }
+    // chunks torn out (gore.js): a soaked ring, a torn rim and the dark hollow; from medium detail flesh tags round
+    // the rim, at high a glimpse of rib
+    if (gg && gg.c && gg.c.length && det > 0) {
+      const o = this.so || (this.so = new Float64Array(5)), sc = jk ? 1.08 : Pl.vest ? 1.1 : 1, q = Gore.q();
+      for (const c of gg.c) {
+        const ch = c[0] === 'chest', F = ch ? Cf : Lf, sx = (ch ? shS : waS) * sc, r = c[3];
+        this.surf(o, ch ? 'CHEST' : 'BELLY', c[1], c[2], sx, sx, H);
+        this.patch(F, o, r * 1.7, r * 1.5, Pl.blood, 0.006);
+        if (q >= 2) this.patch(F, o, r * 1.15, r * 1.05, Pl.wound, 0.008);
+        this.patch(F, o, r * 0.82, r * 0.72, C3HOLE, 0.01);
+        if (q >= 3) {
+          const nx = o[3], ny = o[4], n = q >= 4 ? 5 : 3;
+          for (let k = 0; k < n; k++) {
+            const t = k / n * 6.283 + c[2], u = Math.cos(t) * r * 0.95, v = Math.sin(t) * r * 0.85;
+            c3box(M.SPH, F, o[0] + nx * 0.012 - ny * u, o[1] + ny * 0.012 + nx * u, o[2] + v, 0.008, 0.011, 0.009, Pl.wound);
+          }
+          if (q >= 4) c3box(M.SPH, F, o[0] + nx * 0.008, o[1] + ny * 0.008, o[2] + r * 0.1, 0.004, r * 0.45, 0.006, Pl.bone);
+        }
       }
     }
     // backpack with straps

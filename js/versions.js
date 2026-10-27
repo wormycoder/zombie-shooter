@@ -8,6 +8,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.026.000.153', date: '2026-10-27', title: 'Gore chunks and the katana',
+    notes: [
+      'Blades, heavy blows, shotguns and cars can tear chunks out of the dead: a torn, dark hollow in the body that keeps bleeding for a while, drops running onto the floor.',
+      'A new Gore detail setting (Settings > Display: Off, Very low, Low, Medium, High) sets how many chunks a body can take, how finely they are modelled - torn flesh round the rim from Medium, a glimpse of rib at High - and how long they bleed.',
+      'The katana: a very rare two-handed blade, the best melee weapon in the county. Keep looking in wardrobes.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.025.003.151', date: '2026-10-27', title: 'A lighter title screen, live',
     notes: [
       'The town behind the menus is live again at full quality, but costs far less: its zombies walk routes planned once when the menu opens, with no thinking or collisions, and only what is on screen is drawn.',

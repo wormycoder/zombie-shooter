@@ -30,6 +30,7 @@ const SETTINGS_OPTS = {
   zAdapt: { tab: 'opt', grp: 'Simulation', n: 'Adaptive zombie physics', opts: [['Off', 0], ['On', 1]], tip: 'With more than 120 zombies close by, crowd zombies update at half rate to keep the frame rate up.' },
   chunkLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks (8x8 tiles) 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
   gore: { tab: 'display', grp: 'Gore', n: 'Gore', opts: [['Off', 0], ['Low', 1], ['Normal', 2], ['Extreme', 3]], tip: 'Blood sprays by weapon and lands as splatter, pools spread under the dead and dry over the days, wounded zombies leave trails. Off shows no blood at all; Extreme throws much more of it around.' },
+  goreQ: { tab: 'display', grp: 'Gore', n: 'Gore detail', opts: [['Off', 0], ['Very low', 1], ['Low', 2], ['Medium', 3], ['High', 4]], tip: 'Chunks torn out of the dead by blades, heavy blows, shotguns and cars, and the blood that runs from them. Higher levels allow more chunks on a body, model them in more detail (torn rims, flesh, bone) and let them bleed longer.' },
   dismember: { tab: 'display', grp: 'Gore', n: 'Dismemberment', opts: [['Off', 0], ['On', 1]], tip: 'Heavy blades can take limbs and heads off, stomps and heavy blows crush skulls, shotguns up close blow parts away; a zombie that loses a leg crawls on. Needs Gore to be on.' },
   memBudget: { tab: 'exp', grp: 'Memory', n: 'Memory budget', opts: [['512 MB', 512], ['1 GB', 1024], ['2 GB', 2048], ['4 GB', 4096], ['8 GB', 8192]], tip: 'How much memory the game lets itself use (an estimate: the pictures it keeps, its data, the tab). Past it, pictures not drawn lately are dropped and painted again when needed. 1 GB suits computers with 4-8 GB of memory; with 16 GB or more, 2-4 GB repaints less when you move about. 512 MB for very little free memory.' },
   // read when a new game's world is made (saves keep the size they were made with); not part of the presets
@@ -48,7 +49,7 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: Object.assign({ fpsShow: 0, debugMode: 0, worldSize: 400, gore: 2, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
+  v: Object.assign({ fpsShow: 0, debugMode: 0, worldSize: 400, gore: 2, goreQ: 3, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
   listeners: [],
   load() {
     try {

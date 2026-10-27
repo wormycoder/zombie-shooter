@@ -9,6 +9,7 @@ const WEAPON_MODELS = {
   axe: { len: 0.9, w0: 2.6, w1: 2.6, col: '#8a6a4a', head: 'axe' },
   handaxe: { len: 0.45, w0: 2.4, w1: 2.4, col: '#8a6a4a', head: 'axe' },
   knife: { len: 0.28, w0: 2.2, w1: 1.2, col: '#d8dee4', grip: '#202020', gripLen: 0.1 },
+  katana: { len: 1.0, w0: 2.2, w1: 1.7, col: '#d8dde2', grip: '#1a1a2a', gripLen: 0.27 },
   machete: { len: 0.62, w0: 3, w1: 2.6, col: '#c8d0d8', grip: '#202020', gripLen: 0.14 },
   katana: { len: 0.95, w0: 2.4, w1: 2, col: '#e0e8f0', grip: '#202020', gripLen: 0.22 },
   pan: { len: 0.32, w0: 2.2, w1: 2.2, col: '#303438', head: 'pan' },

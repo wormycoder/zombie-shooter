@@ -3,6 +3,8 @@
 // Gore: blood that sprays by weapon and lands as splatter, pools spreading under the dead and drying over days,
 // drips, streaks and crawl smears; wounds, crushed heads and severed limbs on zombies, severed parts on the ground.
 // Settings.v.gore: 0 off, 1 low, 2 normal, 3 extreme. Settings.v.dismember: limbs and heads come off (needs gore on).
+// Settings.v.goreQ (gore detail): 0 off .. 4 high - chunks torn out of bodies (z.gore.c: [part, height, angle, size]),
+// how many a body takes, how finely they are modelled and how long they bleed.
 // Floor marks are decals { k: 'g', t, x, y, a, s, v, b } (Wd.decals): t the kind, a the angle on the floor, s the
 // size in tiles, v the variant, b the game minute it was spilt (drying). They are painted top-down once per kind,
 // variant and drying stage and drawn through the floor's iso projection, turned to their angle.
@@ -43,6 +45,7 @@ const Gore = {
   gibs(x, y, z, n, a) { for (let i = 0; i < n; i++) { const b = a + R.f(-1.2, 1.2), v = R.f(0.8, 2.6); this.spawn(2, x, y, z, Math.cos(b) * v, Math.sin(b) * v, R.f(1, 3), R.f(1.6, 3), 2); } },
   update(dt) {
     this.budget = Math.min(40, this.budget + dt * 30);
+    this.bleed(dt);
     const P = this.parts;
     for (let i = P.length - 1; i >= 0; i--) {
       const p = P[i];
@@ -216,12 +219,43 @@ const Gore = {
       if (g.w.length > 6) g.w.shift();
       this.touch(z);
     }
+    // a chunk torn out: blades and heavy blows, shotguns, cars
+    if (z.look && z.look.zombie && this.q()) {
+      const ch = kind === 'shotgun' ? 0.35 : kind === 'chop' || kind === 'blade' ? U.clamp((dmg - 1) * 0.3, 0, 0.35) : kind === 'car' ? U.clamp(dmg * 0.1, 0, 0.3) : kind === 'gun' && o.big ? 0.15 : 0;
+      if (ch && R.chance(ch)) this.chunk(z, A, kind);
+    }
     // limbs can come off before it dies (heavy blades; a shotgun up close)
     const c = this.cut();
     if (c && !z.dead) {
       const close = U.dist(G.player.x, G.player.y, z.x, z.y) < 2.6;
       const ch = kind === 'chop' || kind === 'blade' ? U.clamp((dmg - 1.1) * 0.22, 0, 0.3) : kind === 'shotgun' && close ? 0.12 : kind === 'car' ? U.clamp(dmg * 0.08, 0, 0.25) : 0;
       if (ch && R.chance(ch * c)) this.sever(z, this.pickLimb(z, down), A);
+    }
+  },
+  // ---------------------------------------------------------------- chunks
+  q() { const v = Settings.v.goreQ; return this.lv() ? (v === undefined ? 3 : v) : 0; },
+  bleeders: new Set(),
+  // a chunk out of the body on the side the blow came from: flesh thrown off, and it bleeds for a while
+  chunk(z, A, kind) {
+    const q = this.q(), g = this.st(z), c = g.c || (g.c = []);
+    if (!q || c.length >= q) return;
+    const rd = (v) => Math.round(v * 100) / 100;
+    c.push([R.chance(0.55) ? 'chest' : 'belly', rd(R.f(0.3, 0.8)), rd(U.angDiff(z.a, A + Math.PI)), Math.round(R.f(0.045, 0.075) * (kind === 'shotgun' || kind === 'car' ? 1.25 : 1) * 1000) / 1000]);
+    g.bleed = Math.max(g.bleed || 0, [0, 4, 8, 14, 22][q]);
+    this.bleeders.add(z);
+    this.gibs(z.x, z.y, z.lie > 0.5 ? 0.2 : 1.1, [0, 1, 2, 3, 5][q], A);
+    this.touch(z);
+  },
+  // the chunks keep bleeding: drops run out of them, fewer as it slows, low down once the body is on the ground
+  bleed(dt) {
+    const q = this.q();
+    for (const z of this.bleeders) {
+      const g = z.gore;
+      if (!q || !g || !g.c || !(g.bleed > 0)) { this.bleeders.delete(z); continue; }
+      g.bleed -= dt;
+      if (!R.chance([0, 2, 4, 6, 9][q] * Math.min(1, g.bleed / 6) * dt)) continue;
+      const c = R.pick(g.c), a = z.a + c[2], down = z.dead || z.lie > 0.5;
+      this.spawn(0, z.x + Math.cos(a) * 0.14, z.y + Math.sin(a) * 0.14, down ? 0.15 : 0.75 + c[1] * 0.55, Math.cos(a) * R.f(0.1, 0.5), Math.sin(a) * R.f(0.1, 0.5), R.f(-0.2, 0.3), R.f(1.2, 2.2), 1.6);
     }
   },
   // which part comes off: arms mostly; legs when it is on the ground (or one in four times)
