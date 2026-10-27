@@ -13,6 +13,16 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.024.000.143', date: '2026-10-27', title: 'Characters with textures',
+    notes: [
+      'The survivors and the dead are no longer plain plastic colours. Their clothes are painted with real cloth: faded denim with a seam down the leg, knitted sweaters, creased leather, quilted winter coats, fleece hoodies, twill work trousers.',
+      'Some shirts are flannel plaid or striped, some sweaters striped, some cargo pants camouflage, and the military jacket is woodland camo. Patterned clothes have their own names (Flannel Shirt, Striped T-Shirt, Camo Cargo Pants).',
+      'The dead look dead: grey skin with bruises, rot and veins, dark sunken eyes, blood run down from the mouth, grime worst toward the ground, and blood soaked into their clothes in patches instead of round dots. Stains and wounds have ragged edges. Your own face grows stubble over the first days.',
+      'Better proportions: a slightly bigger head, hands and feet, a shorter, thicker neck and thicker arms. Hair no longer pokes through caps.',
+    ],
+    commits: ['1cbcc45'], shots: ['v024000_1', 'v024000_2', 'v024000_3'],
+  },
+  {
     v: '000.023.000.141', date: '2026-10-26', title: 'Sound and music',
     notes: [
       'New sounds, made in the game when the audio starts, with a few takes of each so they do not repeat exactly. Gunshots have a crack, a blast, a low thump and a rolling tail echoing off the houses, with a voice for each kind of gun. The dead moan and snarl in ragged, gurgling voices, male and female.',

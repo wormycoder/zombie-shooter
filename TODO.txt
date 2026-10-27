@@ -182,10 +182,20 @@ HIGH (added) - MAKE SURE THE UI SCALES WITH THE RESOLUTION OF THE SCREEN,
      map window were cut off on laptop screens before).
 
 HIGH - ADD MORE 3D MODELS, AND MAKE ACTUAL TEXTURES FOR SAID MODELS,
-      INCLUDING ACTUAL TEXTURES FOR THE PLAYER. UNFINISHED
+      INCLUDING ACTUAL TEXTURES FOR THE PLAYER.
+  -> TEXTURES DONE, first pass (000.024.000.143): every part of the
+     survivor and the dead is painted on the graphics card with its
+     material - denim, knit, leather, quilting, plaid, stripes, camo,
+     twill, fleece, skin (bruised and rotting on the dead), faces (eye
+     sockets, stubble, blood from the mouth), hair - with grime and blood
+     soaked in. Still to do: more models (hoods, long coats, dresses,
+     skirts, ties, hi-vis vests, beards, more hair styles).
 
 FIX - THE CHARACTER AND ZOMBIE MODELS LOOK ODD, ALMOST OUT OF STYLE.
-  -> HIGH. Goes with the 3D models / textures item. UNFINISHED
+  -> HIGH. First pass DONE (000.024.000.143): the flat plastic look was
+     most of it - the textures above fix that; heads, hands and feet a
+     little bigger, necks shorter, arms thicker, hair no longer through
+     caps. Worth another look in game: say what still looks off.
 
 FIX - FIX WHEELS NOT VISUALLY SPINNING.
   -> HIGH. DONE (000.020.000.133): the rim (hub cap slots, spokes, lug nuts)
@@ -324,6 +334,6 @@ Run 6 (000.021.000.137), asked for: medium and low items first - foliage,
 Run 7 (000.022.000.139): fences (hop at a run, climb tall ones, fail,
   trip), shouting, gun racking and magazines, jams, fire mode, five guns.
 Run 8 (000.023.000.141): audio - rendered sound clips - and the music.
-Next runs, planned: the character and zombie models (and their textures);
-  the map's part 2 (a hospital, more shop types, the countryside) after
-  that.
+Run 9 (000.024.000.143): character and zombie textures, proportions.
+Next runs, planned: more character models (clothes, hair, beards); the
+  map's part 2 (a hospital, more shop types, the countryside).
