@@ -378,7 +378,7 @@ const Player = {
     if (p.swing) sp *= p.swing.kind === 'stomp' || p.swing.floor ? 0.12 : 0.5;
     sp *= this.speedMult() * Debug.speed;
     if (p.st.drunk > 0.3) { const wob = Math.sin(performance.now() / 300) * p.st.drunk * 0.5; const c = Math.cos(wob), s = Math.sin(wob); const tx = nx * c - ny * s; ny = nx * s + ny * c; nx = tx; }
-    p.moveMode = mode;
+    p.moveMode = mode; p.mdir = Math.atan2(ny, nx);
     const ox = p.x, oy = p.y;
     if (Debug.ghost) { p.x += nx * sp * dt; p.y += ny * sp * dt; } else World.move(p, nx * sp * dt, ny * sp * dt, p.r);
     Vehicles.pushOut(p, p.r);
@@ -475,17 +475,20 @@ const Player = {
     if (p.dead || Debug.god) return false;
     const ang = Math.atan2(z.y - p.y, z.x - p.x);
     const behind = Math.abs(U.angDiff(p.angle, ang)) > 1.7;
-    let chance = 0.72;
-    if (!behind) chance -= 0.12;
+    // (a lunge that lands takes hold about half the time from behind, a third from the front; less while you swing,
+    // back off or run, and less the more nimble you are)
+    let chance = 0.5;
+    if (!behind) chance -= 0.15;
     if (p.swing) chance -= 0.1;
-    if (p.moveMode === 'sprint' || p.moveMode === 'run') chance -= 0.15;
-    chance -= this.skill('Nimble') * 0.015;
+    if (p.moveMode === 'sprint' || p.moveMode === 'run') chance -= 0.18;
+    else if (p.moveMode && p.moveMode !== 'idle' && p.mdir !== undefined && Math.cos(U.angDiff(p.mdir, ang)) < -0.3) chance -= 0.08;
+    chance -= this.skill('Nimble') * 0.02;
     if (p.inCar) chance = 0.35;
     if (!R.chance(chance)) { if (R.chance(0.3)) this.say(R.pick(['Close call!', 'Missed me!']), '#ddd'); return false; }
     // (through a car window it only claws: no hold)
     if (p.inCar) { this.wound(z, 1, false); return false; }
     if (!(p.grabN > 0)) { this.say(R.pick(["It's got me!", 'Get off me!', 'No!']), '#f99'); if (!this.grabHinted) { this.grabHinted = true; UI.hint('Grabbed! Shove (Space) or pull away to break free', 5); } }
-    this.wound(z, behind ? 0.75 : 0.5, false);
+    this.wound(z, behind ? 0.6 : 0.35, false);
     return true;
   },
   // a bite (or a clawing) while it holds on: from behind or with company it gets its teeth in more often
@@ -494,7 +497,7 @@ const Player = {
     if (p.dead || Debug.god) return;
     const behind = Math.abs(U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x))) > 1.7;
     Sfx.play('zattack', z.x, z.y);
-    if (!R.chance((behind ? 0.7 : 0.45) + Math.min(0.2, ((p.grabN || 1) - 1) * 0.08) - this.skill('Nimble') * 0.01)) return;
+    if (!R.chance((behind ? 0.55 : 0.3) + Math.min(0.2, ((p.grabN || 1) - 1) * 0.08) - this.skill('Nimble') * 0.01)) return;
     this.wound(z, 1, true);
   },
   // the blow itself: where, what (biting more likely while held), what the clothes stop. k: chance it breaks skin
@@ -503,7 +506,7 @@ const Player = {
     const part = R.weighted(ATTACK_W);
     let type;
     const r = R.next();
-    if (r < (held ? 0.32 : 0.15)) type = 'bite'; else if (r < 0.45) type = 'cut'; else type = 'scratch';
+    if (r < (held ? 0.25 : 0.12)) type = 'bite'; else if (r < 0.45) type = 'cut'; else type = 'scratch';
     let skin = 1;
     if (this.hasTrait('thickskinned')) skin = 0.75;
     if (this.hasTrait('thinskinned')) skin = 1.3;

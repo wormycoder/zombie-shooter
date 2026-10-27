@@ -337,16 +337,17 @@ const Zombie = {
       z.atkT -= dt;
       z.a = U.normAng(z.a + U.clamp(U.angDiff(z.a, Math.atan2(py - z.y, px - z.x)), -dt * 5, dt * 5));
       z.amp = Math.max(0, z.amp - dt * 3);
-      // it keeps coming through the lunge, faster than a walk: walking away does not get you clear (running does)
+      // it keeps coming through the lunge, about as fast as a brisk walk: backing off straight away gets you clear
       if (!p.inCar && !z.crawl && d > 0.55) {
-        const st = Math.min(d - 0.55, Math.max(1.9, z.speed * 1.4 + 0.5) * dt), a = Math.atan2(py - z.y, px - z.x);
+        const st = Math.min(d - 0.55, Math.max(1.4, z.speed * 1.2 + 0.4) * dt), a = Math.atan2(py - z.y, px - z.x);
         World.move(z, Math.cos(a) * st, Math.sin(a) * st, z.r);
       }
       if (z.atkT <= 0) {
         let held = false;
         if (p.inCar) { if (d < 2.2) Vehicles.zombieHit(p.inCar, z); }
-        else if (d < 1.15 && World.lineClear(z.x, z.y, px, py, 'move') && !p.dead) held = Player.zombieAttack(z);
-        if (held) { z.st = 'grab'; z.grabT = 0; z.biteIn = R.f(0.9, 1.4); return; }
+        else if (d < 1.0 && World.lineClear(z.x, z.y, px, py, 'move') && !p.dead) held = Player.zombieAttack(z);
+        // (time to shove it off or pull free before the first bite)
+        if (held) { z.st = 'grab'; z.grabT = 0; z.biteIn = R.f(1.4, 2.0); return; }
         z.cd = R.f(0.9, 1.4);
         z.st = 'chase'; z.biteT = 0.4;
       }
@@ -593,10 +594,10 @@ const Zombie = {
     if (z.biteT > 0) z.biteT -= dt;
     if (!(z.biteIn > -9)) z.biteIn = 1;
     z.biteIn -= dt;
-    if (z.biteIn <= 0) { z.biteIn = R.f(1.3, 2.0); z.biteT = 0.4; Player.grabBite(z); if (p.dead) return; }
+    if (z.biteIn <= 0) { z.biteIn = R.f(1.7, 2.5); z.biteT = 0.4; Player.grabBite(z); if (p.dead) return; }
     // pulling away
-    if (p.moveMode && p.moveMode !== 'idle' && p.anim.amp > 0.2 && z.grabT > 0.5) {
-      const n = Math.max(1, p.grabN || 1), k = (0.3 + Player.skill('Strength') * 0.03 + Player.skill('Fitness') * 0.02) / n;
+    if (p.moveMode && p.moveMode !== 'idle' && p.anim.amp > 0.2 && z.grabT > 0.35) {
+      const n = Math.max(1, p.grabN || 1), k = (0.6 + Player.skill('Strength') * 0.04 + Player.skill('Fitness') * 0.03) / n;
       if (R.chance(k * dt)) { this.release(z, 1.2); this.stagger(z, a + Math.PI, 0.5, 1.6); Player.say(R.pick(['Got loose!', 'Get off!']), '#ddd'); }
     }
   },
