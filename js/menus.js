@@ -23,7 +23,8 @@ const Menu = {
     Sfx.engine(null); Sfx.heli(null);
     $('#hud').classList.add('hidden');
     UI.closeAll();
-    this.buildBackground();
+    // (once the title loop is recorded the town is not needed again)
+    if (!this.reel || !this.reel.ready) this.buildBackground();
     G.player = { x: this.cam.x, y: this.cam.y, dead: true, inCar: null, st: { panic: 0 }, look: { skin: '#ccc' }, angle: 0, halo: [], deadT: 0 };
     G.weather = { rain: 0, target: 0, fog: 0.15, temp: 20, next: 1e12, storm: false };
     G.events.heli = null; G.alarms = [];
@@ -33,7 +34,7 @@ const Menu = {
     G.mode = 'menu';
     Versions.mountHome();
     // first visit: put the menu up at once and build the background town right after
-    if (this.bgWorld) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
+    if (this.bgWorld || (this.reel && this.reel.ready)) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
     const meta = Save.meta();
     $('#menu').className = '';
     // title screen: the name at the top left, the menu as plain words down the left side
@@ -70,7 +71,15 @@ const Menu = {
       } catch (e) { console.error(e); alert('Failed to load save: ' + e.message); this.show(); }
     }, 30);
   },
+  // ------------------------------------------------------------------ title background
+  // The town behind the menus is recorded once: about ten seconds of the live scene (the camera drifting, the dead
+  // shambling) kept as JPEG frames, then played back as a loop - two pictures drawn a frame instead of a town, its
+  // zombies and their 3D models. The frames past the loop's end dissolve into its first ones, so it has no seam.
+  // n frames at fps make the loop, m more the dissolve; w: the width they are kept at
+  REEL: { fps: 12, n: 120, m: 12, w: 960 },
+  reel: null,
   drawBackground(dt) {
+    if (this.reel && this.reel.ready) { this.playReel(dt); return; }
     if (!this.bgWorld || Wd !== this.bgWorld) { Render.ctx.setTransform(1, 0, 0, 1, 0, 0); Render.ctx.fillStyle = '#000'; Render.ctx.fillRect(0, 0, Render.cv.width, Render.cv.height); return; }
     this.t += dt;
     const k = (Math.sin(this.t * 0.012) + 1) / 2;
@@ -85,8 +94,73 @@ const Menu = {
       if (z.st === 'idle' && !z.dead && z.idleT > 0.5 && Math.abs(z.x - this.cam.x) < 30 && Math.abs(z.y - this.cam.y) < 30 && Math.random() < dt * 0.4) z.idleT = 0;
     }
     Render.frame(dt);
+    this.recordReel(dt);
+    this.shade();
+  },
+  shade() {
     Render.ctx.setTransform(Render.dpr, 0, 0, Render.dpr, 0, 0);
     Render.ctx.fillStyle = 'rgba(0,0,0,0.35)'; Render.ctx.fillRect(0, 0, Render.W, Render.H);
+  },
+  // one frame of the live scene into the loop, every 1/fps seconds
+  recordReel(dt) {
+    const RL = this.REEL;
+    let rl = this.reel;
+    if (!rl) {
+      const cv = Render.cv, w = Math.min(RL.w, cv.width), h = Math.max(1, Math.round(w * cv.height / cv.width));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      rl = this.reel = { c, g: c.getContext('2d'), w, h, k: 0, t: 0, next: 0.5, pend: 0, blobs: [], first: [], bm: [], pt: 0, ready: false };
+    }
+    rl.t += dt;
+    if (rl.k >= RL.n + RL.m || rl.t < rl.next) return;
+    rl.next += 1 / RL.fps;
+    const k = rl.k++, g = rl.g;
+    g.globalAlpha = 1;
+    g.drawImage(Render.cv, 0, 0, rl.w, rl.h);
+    let slot = k;
+    if (k < RL.m) {
+      // the loop's first frames wait for the ones that dissolve into them
+      const cc = document.createElement('canvas'); cc.width = rl.w; cc.height = rl.h; cc.getContext('2d').drawImage(rl.c, 0, 0);
+      rl.first[k] = cc;
+      return;
+    }
+    if (k >= RL.n) {
+      // past the end: this frame, then the loop's frame (k - n) over it, more of it each frame
+      slot = k - RL.n;
+      g.globalAlpha = slot / RL.m; g.drawImage(rl.first[slot], 0, 0); g.globalAlpha = 1;
+      rl.first[slot] = null;
+    }
+    rl.pend++;
+    rl.c.toBlob((b) => {
+      rl.pend--;
+      if (b) rl.blobs[slot] = b;
+      if (rl.k >= RL.n + RL.m && !rl.pend) rl.ready = rl.blobs.filter(Boolean).length === RL.n;
+    }, 'image/jpeg', 0.82);
+  },
+  // play the loop: the two frames either side of the play head, blended; a few frames ahead decoded, the rest let go
+  playReel(dt) {
+    const rl = this.reel, n = this.REEL.n, bm = rl.bm;
+    rl.pt = (rl.pt + dt * this.REEL.fps) % n;
+    const i0 = Math.floor(rl.pt), i1 = (i0 + 1) % n, a = rl.pt - i0;
+    for (let d = 0; d < 4; d++) {
+      const j = (i0 + d) % n;
+      if (!bm[j]) { bm[j] = 1; createImageBitmap(rl.blobs[j]).then((b) => { if (bm[j] === 1) bm[j] = b; else b.close(); }, () => { bm[j] = null; }); }
+    }
+    for (let j = 0; j < n; j++) {
+      const b = bm[j];
+      if (b && b !== 1 && (j - i0 + n) % n > 4 && j !== rl.last) { b.close(); bm[j] = null; }
+    }
+    const ctx = Render.ctx, cv = Render.cv, s = Math.max(cv.width / rl.w, cv.height / rl.h);
+    const dw = rl.w * s, dh = rl.h * s, dx = (cv.width - dw) / 2, dy = (cv.height - dh) / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    let A = bm[i0];
+    if (!A || A === 1) A = bm[rl.last];
+    else rl.last = i0;
+    if (A && A !== 1) {
+      ctx.drawImage(A, dx, dy, dw, dh);
+      const B = bm[i1];
+      if (B && B !== 1 && a > 0.02 && A === bm[i0]) { ctx.globalAlpha = a; ctx.drawImage(B, dx, dy, dw, dh); ctx.globalAlpha = 1; }
+    }
+    this.shade();
   },
   // ------------------------------------------------------------------ sandbox settings
   sbSel: null, spawnSel: 'Random',
@@ -295,7 +369,7 @@ const Menu = {
       <textarea id="perfRep" readonly spellcheck="false" style="width:100%;height:300px;box-sizing:border-box;background:rgba(0,0,0,0.35);color:var(--text);border:1px solid rgba(255,255,255,0.12);font:11px/1.45 Consolas,monospace;padding:6px;resize:vertical">${U.esc(Perf.report())}</textarea>
       <div style="margin-top:6px"><span class="btn sm" data-prep="copy">Copy to clipboard</span><span class="btn sm" data-prep="again">Refresh</span><span class="sml" id="perfRepMsg" style="margin-left:8px;color:#9be08a"></span></div>`;
     else if (tab === 'opt') body = presets
-      + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:var(--text)">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
+      + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:var(--text)">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span><span class="btn sm" data-bench="1" data-tip="Runs each quality preset from a light to an ultra heavy load (about a minute) and recommends a preset for this computer.${inGame ? ' From the title screen only.' : ''}">Benchmark</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
       + `<div style="max-height:360px;overflow-y:auto;padding-right:6px">${rows('opt')}</div><div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
     else if (tab === 'display') body = presets + rows('display') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
     else if (tab === 'exp') body = `<div class="sml" style="margin:2px 0 4px;color:#d8b070">Beta: these options are still being worked on. They may change, run slower or not carry over to later versions.</div>` + rows('exp') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
@@ -327,6 +401,7 @@ const Menu = {
         try { navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); document.execCommand('copy'); done(); }); } catch (er) { ta.select(); document.execCommand('copy'); done(); }
         return;
       }
+      if (e.target.closest('[data-bench]')) { if (inGame) { const el = $('#optMsg'); if (el) el.textContent = 'The benchmark runs from the title screen: save and quit first.'; } else { clearInterval(this.liveT); Bench.start(); } return; }
       if (e.target.closest('[data-opick]')) { const msg = this.pickPreset(); this.options(inGame); const el = $('#optMsg'); if (el) el.textContent = msg; return; }
       const gp = e.target.closest('[data-gpre]');
       if (gp) { Settings.usePreset(gp.dataset.gpre); this.options(inGame); return; }

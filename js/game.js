@@ -262,7 +262,8 @@ const Game = {
     // menus, the pause screen and a paused game draw at 30 frames a second at most: nothing there needs more, and the
     // processor and graphics card are left alone
     const idle = G.mode === 'menu' || G.mode === 'create' || (G.mode === 'play' && (G.paused || UI.modalPause()));
-    const cap = idle ? Math.min(Settings.v.fps || 30, 30) : Settings.v.fps;
+    // (the benchmark runs uncapped)
+    const cap = G.mode === 'bench' ? 0 : idle ? Math.min(Settings.v.fps || 30, 30) : Settings.v.fps;
     if (this.rLast) this.rIv += (Math.min(50, ts - this.rLast) - this.rIv) * 0.1;
     this.rLast = ts;
     if (cap && this.last) {
@@ -306,6 +307,8 @@ const Game = {
     } else if (G.mode === 'menu' || G.mode === 'create') {
       Menu.drawBackground(dt);
       Music.update(dt);
+    } else if (G.mode === 'bench') {
+      Bench.frame(dt, iv);
     }
     Input.endFrame();
     Mem.tick(dt);

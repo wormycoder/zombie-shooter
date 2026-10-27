@@ -441,13 +441,13 @@ const Versions = {
     const el = document.createElement('div');
     el.id = 'verwin';
     const dev = this.dev();
-    const shot = (s, k, e) => `<img class="ver-shot" src="dev/versions/${s}.jpg" loading="lazy" data-v="${k}" data-i="${e}" alt="">`;
+    const shot = (s, k, e) => `<img class="ver-shot" src="versions/${s}.jpg" loading="lazy" data-v="${k}" data-i="${e}" alt="">`;
     el.innerHTML = `<div class="ver-box"><div class="ver-head"><div><div class="ver-title">What's new</div>
       <div class="ver-sub">Hollow Creek ${this.label(VERSION)} · build ${this.build(VERSION)}</div></div>
       <span class="ver-x" title="Close (Esc)">×</span></div><div class="ver-list">`
       + VERSION_LOG.map((r, k) => `<div class="ver-item ${k ? '' : 'cur'}"><div class="ver-line"><span class="ver-v">${this.label(r.v)}</span><span class="ver-name">${U.esc(r.title)}</span><span class="ver-date">${this.date(r.date)}</span></div>
         <ul>${r.notes.map(n => `<li>${U.esc(n)}</li>`).join('')}</ul>
-        ${dev && r.shots.length ? `<div class="ver-shots">${r.shots.map((s, i) => shot(s, k, i)).join('')}</div>` : ''}
+        ${r.shots.length ? `<div class="ver-shots">${r.shots.map((s, i) => shot(s, k, i)).join('')}</div>` : ''}
         ${dev ? `<div class="ver-commits"><span>${r.v}</span>${r.commits.map(c => `<code>${c}</code>`).join('')}</div>` : ''}</div>`).join('')
       + '</div></div>';
     ($('#ui') || document.body).appendChild(el);
@@ -473,7 +473,7 @@ const Versions = {
     if (!lb) { lb = document.createElement('div'); lb.className = 'ver-lb'; el.appendChild(lb); }
     const r = VERSION_LOG[k];
     this.cur = [k, i];
-    lb.innerHTML = `<span class="ver-nav prev" data-d="-1">‹</span><figure><img src="dev/versions/${r.shots[i]}.jpg" alt=""><figcaption><b>${this.label(r.v)}</b> ${U.esc(r.title)} · ${i + 1} / ${r.shots.length}</figcaption></figure><span class="ver-nav next" data-d="1">›</span>`;
+    lb.innerHTML = `<span class="ver-nav prev" data-d="-1">‹</span><figure><img src="versions/${r.shots[i]}.jpg" alt=""><figcaption><b>${this.label(r.v)}</b> ${U.esc(r.title)} · ${i + 1} / ${r.shots.length}</figcaption></figure><span class="ver-nav next" data-d="1">›</span>`;
   },
   step(el, d) {
     let [k, i] = this.cur || [0, 0];

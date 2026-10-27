@@ -34,6 +34,7 @@ const SETTINGS_OPTS = {
   dismember: { tab: 'display', grp: 'Gore', n: 'Dismemberment', opts: [['Off', 0], ['On', 1]], tip: 'Heavy blades can take limbs and heads off, stomps and heavy blows crush skulls, shotguns up close blow parts away; a zombie that loses a leg crawls on. Needs Gore to be on.' },
   memBudget: { tab: 'exp', grp: 'Memory', n: 'Memory budget', opts: [['512 MB', 512], ['1 GB', 1024], ['2 GB', 2048], ['4 GB', 4096], ['8 GB', 8192]], tip: 'How much memory the game lets itself use (an estimate: the pictures it keeps, its data, the tab). Past it, pictures not drawn lately are dropped and painted again when needed. 1 GB suits computers with 4-8 GB of memory; with 16 GB or more, 2-4 GB repaints less when you move about. 512 MB for very little free memory.' },
   // read when a new game's world is made (saves keep the size they were made with); not part of the presets
+  debugMode: { tab: 'exp', grp: 'Development', n: 'Debug mode', opts: [['Off', 0], ['On', 1]], tip: 'Testing tools: cheats, item, zombie and car spawners, time and weather controls, teleport and world overlays. F2 or ` shows or hides the debug window.' },
   worldSize: { tab: 'exp', grp: 'World', n: 'Map (new games)', opts: [['Stable (400 x 400)', 400], ['Expanded, beta (896 x 896)', 896]], tip: 'Stable is the county as it stands, finished: Hollow Creek, Millbrook and the farms round them. Expanded is the same county with the land round it - Fairfield, Riverton, Kingsbury, Fort Hale, the prison, the airfield and the interstate - built, and still being finished. Expanded takes longer to make and gives bigger save files. Also on the New Game screen. Games already started keep their map.' },
 };
 // Auto (the default) is High plus the automatic helpers: dynamic resolution, adaptive character detail and car detail
@@ -47,7 +48,7 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: Object.assign({ fpsShow: 0, worldSize: 400, gore: 2, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
+  v: Object.assign({ fpsShow: 0, debugMode: 0, worldSize: 400, gore: 2, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
   listeners: [],
   load() {
     try {

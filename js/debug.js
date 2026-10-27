@@ -2,7 +2,8 @@
 // ---------------------------------------------------------------------------
 // Debug mode: cheats, item/zombie/vehicle spawners, world and player
 // editors, overlays and performance graphs in one draggable window.
-// Development builds only: start the game with ?debug in the address, then F2 or the ` key shows or hides it.
+// Off for players: switch it on in Settings > Experimental > Debug mode (or start with ?debug in the address);
+// then F2 or the ` key shows or hides the debug window.
 // While it is off nothing here runs except two input listeners; turning it off clears every cheat.
 // Gameplay code checks the cheat flags below (god, invisible, ghost, instant, build, noTire, speed).
 // ---------------------------------------------------------------------------
@@ -53,13 +54,19 @@ const Debug = {
 
   // ------------------------------------------------------------------ boot & persistence
   init() {
-    // (a player's build never has it: no keys, no window, no cheats)
-    this.dev = /[?&]debug\b/.test(location.search);
-    if (!this.dev) return;
-    try { const s = JSON.parse(localStorage.getItem('hc_debug') || 'null'); if (s) { this.shown = !!s.shown; this.tab = s.tab || 'cheats'; this.pos = s.pos || null; Object.assign(this.ov, s.ov || {}); } } catch (e) { /* ignore */ }
-    this.on = true; this.shown = true;
+    // (switched off: no keys, no window, no cheats)
+    this.url = /[?&]debug\b/.test(location.search);
     window.addEventListener('keydown', (e) => this.key(e), true);
     window.addEventListener('mousedown', (e) => this.mouse(e), true);
+    Settings.onChange((v) => { const want = this.url || !!v.debugMode; if (want !== !!this.dev) this.activate(want); });
+    this.activate(this.url || !!Settings.v.debugMode);
+  },
+  // the setting (or ?debug) turns the whole debug mode on or off
+  activate(v) {
+    this.dev = v;
+    if (!v) { if (this.on) this.enable(false); return; }
+    try { const s = JSON.parse(localStorage.getItem('hc_debug') || 'null'); if (s) { this.tab = s.tab || 'cheats'; this.pos = s.pos || null; Object.assign(this.ov, s.ov || {}); } } catch (e) { /* ignore */ }
+    this.on = true; this.shown = true;
     this.hook();
     this.render();
   },
@@ -99,6 +106,7 @@ const Debug = {
 
   // ------------------------------------------------------------------ input
   key(e) {
+    if (!this.dev) return;
     const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
     if (e.key === 'F2' || (e.code === 'Backquote' && !typing)) {
       e.preventDefault(); e.stopImmediatePropagation();
