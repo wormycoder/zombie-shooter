@@ -60,6 +60,8 @@ const MapGen = {
     if (S > 400) for (const T of this.big.towns) w.towns.push({ name: T.name, x0: T.x0 - 6, y0: T.y0 - 6, x1: T.x1 + 6, y1: T.y1 + 6 });
     // tall grass, weeds and reeds where nobody kept the grass (foliage.js)
     if (this.foliagePass) this.foliagePass();
+    // some houses were boarded up by people who did not make it
+    this.boardUp(seed);
     // keep saves compact
     for (const o of w.obj) if (o && o.sz) o.sz = Math.round(o.sz * 100) / 100;
     return w;
@@ -212,6 +214,28 @@ const MapGen = {
 
   // ---------------------------------------------------------------- buildings
   // chance that a house has a burglar alarm (sandbox option; stores are a few times likelier)
+  // Boarded-up houses: about one house in fourteen (homes, farmhouses, cabins, trailers) has planks over its outside
+  // windows and doors, 1-3 each - someone holed up there. Its own random stream, so the maps keep their layouts.
+  boardUp(seed) {
+    const w = this.w, r = new RNG((seed ^ 0x5bd1e995) >>> 0), W = w.w;
+    const homes = new Set(['house', 'farmhouse', 'cabin', 'trailer']);
+    const pick = new Set();
+    for (const b of w.buildings) if (homes.has(b.type) && r.chance(0.07)) pick.add(b.id);
+    if (!pick.size) return;
+    const roomB = (x, y) => { if (x < 0 || y < 0 || x >= W || y >= w.h) return -1; const k = w.room[y * W + x]; return k >= 0 ? w.rooms[k].b : -1; };
+    for (const [key, f] of w.feat) {
+      if (f.k !== 'window' && f.k !== 'door') continue;
+      const d = key & 1, t = key >> 1, x = t % W, y = (t - x) / W;
+      // the two tiles either side of the edge: north / south of a d=0 edge, west / east of a d=1 edge
+      const a = roomB(x, y), o = d ? roomB(x - 1, y) : roomB(x, y - 1);
+      const bid = a >= 0 && o < 0 ? a : o >= 0 && a < 0 ? o : -1;
+      if (bid < 0 || !pick.has(bid)) continue;
+      const n = f.k === 'door' ? r.int(2, 3) : r.int(1, 3);
+      f.barricade = n; f.bhp = []; for (let i = 0; i < n; i++) f.bhp.push(r.int(80, 120));
+      if (f.k === 'door') f.open = false;
+    }
+    w.boarded = [...pick];
+  },
   alarmP() { const v = G.sb && G.sb.alarms; return v === undefined ? 0.03 : v; },
   newBuilding(type, x0, y0, x1, y1, o) {
     const r = this.rng;
