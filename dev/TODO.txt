@@ -340,5 +340,8 @@ Polish (000.024.001.145), asked for: a more professional, publishable
   development sessions only (?debug), this list and the release screenshots
   moved to dev/ (left out of release zips), no references to other games,
   beta labels, a player README. Dev notes: dev/DEVELOPMENT.md.
+Run 10 (000.025.000.147), asked for: the title screen as a recorded loop
+  (performance), a Benchmark button (Settings > Optimization), Debug mode
+  in Settings > Experimental, release screenshots public again (versions/).
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

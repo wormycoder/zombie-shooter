@@ -3,10 +3,20 @@
 // Versions: the version shown on the title screen and the patch notes behind its "What's new" link.
 //
 // Internal version strings are xxx.xxx.xxx.xxx (major, minor, patch, build); players see "v0.24.1" and the build.
-// Development builds (?debug) also show each release's screenshots (dev/versions/<shot>.jpg) and commits.
+// Each release's screenshots are versions/<shot>.jpg; a debug session also shows its commits.
 // To release: put a new entry at the top of VERSION_LOG (VERSION follows it); see dev/DEVELOPMENT.md.
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
+  {
+    v: '000.025.000.147', date: '2026-10-27', title: 'Benchmark and a lighter title screen',
+    notes: [
+      'The town behind the title screen is now a recorded loop: the game films about ten seconds of it once, then plays that back, so the menus cost the computer almost nothing.',
+      'Benchmark (Settings > Optimization, from the title screen): every quality preset, Low to Ultra, from a light load of 25 zombies on a clear day to an ultra heavy one of 900 in a night storm. It shows the frame rate, the slowest frames and the work per frame, and recommends a preset you can apply at once.',
+      'Debug mode is back as an option: Settings > Experimental > Debug mode.',
+      'Screenshots are back in the patch notes.',
+    ],
+    commits: ['3723ff8'], shots: ['v025000_1', 'v025000_2', 'v025000_3'],
+  },
   {
     v: '000.024.001.145', date: '2026-10-27', title: 'Release polish',
     notes: [

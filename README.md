@@ -72,7 +72,7 @@ All controls are also listed in the game under **How to Play**.
 
 ## Settings
 
-The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. The Experimental tab holds beta options such as the Expanded map and the memory budget.
+The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as the Expanded map, the memory budget and a debug mode for testing.
 
 ## Version
 
