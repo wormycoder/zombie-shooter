@@ -254,7 +254,7 @@ const UI = {
     el.className = 'panel hidden';
     el.style.left = Math.max(0, Math.min(this.vw() - d.w - 10, d.x)) + 'px'; el.style.top = Math.max(0, Math.min(this.vh() - d.h - 10, d.y)) + 'px';
     el.style.width = d.w + 'px'; el.style.height = d.h + 'px';
-    // Zomboid's window chrome: close at the left, the title in the middle, collapse to the title bar at the right
+    // window chrome: close at the left, the title in the middle, collapse to the title bar at the right
     el.innerHTML = `<div class="ph"><span class="px" title="Close">✕</span><span class="pt">${d.title}</span><span class="pc" title="Collapse">▾</span></div><div class="pb"></div>`;
     $('#windows').appendChild(el);
     const P = { k, el, body: el.querySelector('.pb'), open: false, tab: null };
@@ -281,7 +281,7 @@ const UI = {
     const P = this.ensurePanel(k); P.open = true; P.el.classList.remove('hidden'); this.front(P.el); this.renderPanel(k); this.fitPanel(P.el); },
   close(k) { const P = this.panels[k]; if (!P) return; P.open = false; P.el.classList.add('hidden'); this.hideTip(); if (k === 'map') MapView.dragging = false; },
   toggle(k) {
-    // Health (H) and Character (K) are tabs of one window, as in Zomboid
+    // Health (H) and Character (K) are tabs of one window
     if (k === 'health' || k === 'skills') { this.openChar(k === 'health' ? 'health' : 'info', true); return; }
     if (k === 'inv') {
       const o = this.panels.inv && this.panels.inv.open;

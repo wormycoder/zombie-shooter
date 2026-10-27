@@ -36,7 +36,7 @@ const Menu = {
     if (this.bgWorld) this.prepareBg(); else requestAnimationFrame(() => requestAnimationFrame(() => { if (G.mode === 'menu' && !this.bgWorld) this.prepareBg(); }));
     const meta = Save.meta();
     $('#menu').className = '';
-    // Zomboid's title screen: the name at the top left, the menu as plain words down the left side
+    // title screen: the name at the top left, the menu as plain words down the left side
     $('#menu').innerHTML = `<div class="modal title"><div class="tlogo">
       <div class="logo">HOLLOW CREEK</div>
       <div class="tag">There is no cure. There is no rescue.<br>There is only how long you last.</div></div>
@@ -298,7 +298,7 @@ const Menu = {
       + `<div class="opt" style="align-items:center"><span id="optLive" style="font:12px Consolas,monospace;color:var(--text)">${this.liveText()}</span><span><span class="btn sm" data-opick="1" data-tip="Measures how the game has been running on this machine (play a little first, ideally somewhere busy) and picks the preset that keeps it smooth.">Pick for me</span><span class="btn sm" data-tab="report" data-tip="A plain-text summary of frame times, graphics card, screen and settings to copy and send.">Performance report</span></span></div><div class="sml" id="optMsg" style="color:#9be08a;min-height:14px"></div>`
       + `<div style="max-height:360px;overflow-y:auto;padding-right:6px">${rows('opt')}</div><div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
     else if (tab === 'display') body = presets + rows('display') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
-    else if (tab === 'exp') body = `<div class="sml" style="margin:2px 0 4px;color:#d8b070">Work in progress: these may change, be slow or break saves made with them.</div>` + rows('exp') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
+    else if (tab === 'exp') body = `<div class="sml" style="margin:2px 0 4px;color:#d8b070">Beta: these options are still being worked on. They may change, run slower or not carry over to later versions.</div>` + rows('exp') + `<div class="sml" id="setTip" style="min-height:42px;margin-top:8px;color:var(--dim)"></div>`;
     else if (tab === 'audio') body = `<div class="opt"><span>Master volume</span><input type="range" min="0" max="1" step="0.05" value="${v.master}" data-v="master"></div>
       <div class="opt"><span>Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-v="sfx"></div>
       <div class="opt"><span>Music</span><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-v="music"></div>`;
@@ -369,7 +369,7 @@ const Menu = {
     const rows = this.controlRows();
     m.innerHTML = `<div class="modal ${inGame ? 'pausing' : ''}"><div class="mbox wide"><h2>How to play</h2>
       <div class="ctrls">${rows.map(r => `<div><kbd>${r[0]}</kbd><span>${r[1]}</span></div>`).join('')}</div>
-      <div class="sml" style="margin:10px 0">Survive as long as you can. Watch your moodles (right side). Eat, drink and sleep. Zombies hunt by sight and sound — noise travels, light gives you away at night. Bites are fatal. Barricade, scavenge, and keep moving. The power and water will not last.</div>
+      <div class="sml" style="margin:10px 0">Survive as long as you can. Watch your status icons (right side). Eat, drink and sleep. Zombies hunt by sight and sound — noise travels, light gives you away at night. Bites are fatal. Barricade, scavenge, and keep moving. The power and water will not last.</div>
       <div class="sml" style="margin:0 0 10px">Survival tips: upstairs rooms are safer — smash the stairs with a sledgehammer and come and go by a sheet rope tied to a window (or jump, and hurt your legs). Fire spreads: keep water or an extinguisher handy, and never leave food burning on the stove. Winter is cold in a house without power — find a coat, light a fire. Baited traps in the woods catch small game while you're away.</div>
       <div class="btn big" data-m="back">Back</div></div></div>`;
     m.onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; if (inGame) { m.innerHTML = ''; UI.togglePause(); } else this.show(); };

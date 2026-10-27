@@ -1,9 +1,9 @@
-/* version tracker: title-screen label + "?" button, history window and screenshot lightbox */
+/* versions: the title-screen version label and "What's new" link, the patch notes window and (development builds) the screenshot lightbox */
 .ver-bar { position: absolute; right: 14px; bottom: 12px; display: flex; align-items: center; gap: 8px; pointer-events: auto; }
 .ver-label { font: 10px/1 'Courier New', monospace; letter-spacing: 1.5px; color: rgba(232, 220, 192, 0.6); text-shadow: 0 1px 2px #000; }
-.ver-help { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-  font: bold 12px Verdana, sans-serif; color: #e8dcc0; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(232, 220, 192, 0.45); transition: background 0.12s, border-color 0.12s; }
-.ver-help:hover { background: rgba(150, 40, 30, 0.75); border-color: #f0c8a0; color: #fff; }
+.ver-help { cursor: pointer; font: 11px/1 Verdana, sans-serif; letter-spacing: 0.5px; color: rgba(232, 220, 192, 0.8); text-shadow: 0 1px 2px #000;
+  padding: 4px 9px; border: 1px solid rgba(232, 220, 192, 0.3); border-radius: 2px; background: rgba(0, 0, 0, 0.35); transition: background 0.12s, color 0.12s; }
+.ver-help:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 
 #verwin { position: fixed; inset: 0; z-index: 950; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.62); pointer-events: auto; }
 #verwin .ver-box { width: min(860px, calc(100vw / var(--uis) - 32px)); height: min(760px, calc(100vh / var(--uis) - 40px)); display: flex; flex-direction: column;

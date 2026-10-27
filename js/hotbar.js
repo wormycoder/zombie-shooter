@@ -1,6 +1,6 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Hotbar: attachment slots that come from worn gear, as in Project Zomboid. A long weapon can
+// Hotbar: attachment slots that come from worn gear. A long weapon can
 // always be slung on the back; a belt adds two hip slots, a holster a pistol slot. Attached
 // items stay in the main inventory; the number keys draw them and put them back.
 // p.att maps slot id -> item uid.

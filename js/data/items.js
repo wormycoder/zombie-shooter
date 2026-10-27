@@ -395,7 +395,7 @@ const Items = {
     if (d.magOf) k += '|r' + (it.rounds || 0);
     return k;
   },
-  // the item's tooltip rows, as Zomboid shows them: { k, v } a label and its value, with bar (0..1) for anything
+  // the item's tooltip rows: { k, v } a label and its value, with bar (0..1) for anything
   // that runs down (condition, contents, charge, uses, freshness); { t } a note in plain words
   tipRows(it) {
     const d = ITEMS[it.id], R = [];

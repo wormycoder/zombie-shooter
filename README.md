@@ -1,45 +1,83 @@
 # Hollow Creek
 
-An isometric zombie survival sandbox in the spirit of Project Zomboid, written in plain JavaScript + Canvas.
-All graphics and audio are generated procedurally at runtime — there are no asset files.
+**An isometric zombie survival sandbox.** The dead have risen in a quiet rural county. There is no cure and no rescue — only how long you last.
 
-**Play:** open `index.html` in a modern browser (or serve the folder with any static server).
+Scavenge the houses and stores of Hollow Creek and its neighbouring towns, fortify a safe house, drive, farm, cook and craft, and keep yourself fed, rested and sane while the dead hunt by sight and sound.
+
+Every graphic, model and sound in the game is generated procedurally at runtime; there are no asset files.
+
+---
+
+## Getting started
+
+Hollow Creek runs in a web browser — no installation needed.
+
+1. Unzip the game folder.
+2. Open `index.html` in a current version of Chrome, Edge or Firefox.
+   If your browser blocks local files, serve the folder with any static web server (for example `npx http-server`) and open the address it prints.
+
+**Recommended:** a graphics card with WebGL for the animated 3D characters. Without one the game falls back to 2D figures. A laptop runs it comfortably on the Medium preset.
+
+Your game saves automatically. Death is permanent.
 
 ## Features
-- Procedurally generated county, two maps picked on the New Game screen: Stable (400×400 tiles, finished) and Expanded (896×896, a work in progress: three more towns — Fairfield, Riverton and the county seat Kingsbury — Fort Hale army base, Rock Creek prison, Hawk Field, farms, a quarry, a reservoir campground, a truck stop and homesteads along the county roads and the interstate); towns thin out from a tight middle to roomy lots and empty ones at the edge: the town of Hollow Creek and the village of Millbrook joined by highway and back roads, a starting location to pick (Random, any town, or the countryside), houses with real floor plans (some with an upstairs), stores (many on the main streets with a flat upstairs), apartment blocks, post offices, libraries and auto repair shops (Expanded), clinic, police and fire stations, school, churches, motel, gas stations, warehouses, a trailer park, two farms, remote cabins, a lake, forests and military roadblocks
-- Two-storey houses with stairs: zombies follow you up, you can smash the stairs, tie a sheet rope to a window or jump out, and shoot or throw from upstairs windows
-- Isometric renderer with wall cut-aways, roofs, vision cone & line-of-sight fog, day/night cycle, street lights, flashlights, headlights, rain, fog and storms; trees go see-through around you, over the zombies you can see and, when driving, along the road ahead (the view leads the car as it speeds up)
-- Animated 3D survivors and zombies (simple box-built models drawn with WebGL): walk and run cycles, melee swings, aiming, shoving, crawling, falling and lying bodies, clothes, hair, hats, bags and held weapons; flat 2D figures when WebGL or a GPU is not available
-- Gore (Settings > Display: Off / Low / Normal / Extreme, Dismemberment on or off): blood that sprays by weapon and lands as drops, pools that spread and dry, wounds on the bodies, crushed heads, severed heads and limbs left lying, crawlers with no legs, bloody weapons and clothes
-- Action animations: hopping low fences at a run (a sprinting hop can trip you), climbing tall fences (or slipping back off them), shouting, eating, drinking, pills, smoking, reading, bandaging the hurt part, reloading, pouring, chopping, digging, fishing, sawing, hammering, sledgehammer swings, foraging, gardening, searching, lifting, dressing; idle fidgets, flinching; zombies pound doors and kneel over bodies to feed
-- Spreading fire: molotovs, gasoline, stoves and campfires start fires that spread through grass, forests and wooden houses, burn down roofs and collapse upper floors; zombies catch fire; fight it with water or extinguishers
-- Foliage: tall grass, weeds and wildflowers, wild shrubs and cattails grow where nobody kept the grass — verges, empty lots, field margins, fence lines, the water's edge — with clover, dandelions, dry patches and weeds in the pavement cracks; all of it turns with the seasons, wheels press it flat and you can clear it by hand
-- Seasons: pick a start month — autumn foliage, bare winter trees, snow cover and snowfall, shorter winter days, cold unheated houses, frost that kills crops
-- Zombies that see and hear, shamble, lunge and grab hold of you (biting until you shove them off or pull free; three holding on drag you down), thump doors, smash and climb through windows, climb fences, get knocked down, crawl, and play dead
-- Moodles (hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, wetness, temperature...), body-part injuries incl. fractures & splints, infection and reanimation; a Zomboid-style interface: the hands at the top of the left bar, a wristwatch clock, and one Character window with Info, Skills, Health (a body figure showing every wound) and Protection (what your clothes stop, per body part) tabs; item tooltips with stats and condition bars
-- Project Zomboid-style inventory: player and loot windows with container buttons down the side, sortable Type / Category / Weight columns, collapsible stacks, multi-select (Ctrl / Shift + click), markers for held, worn, hotbar and favorite items, Loot all / Transfer all, drag & drop between containers, onto the hotbar or onto the world to drop; Place puts an item down exactly where you point (R or the wheel turns it), and items on the floor lie at their own size and angle, cans and bottles standing; weight, bags, timed actions; loot tables per room/store type
-- Hotbar built from what you wear: a long weapon slung on your back, two belt slots for small weapons, tools and a flashlight, a holster for a pistol; number keys draw and put away, and the gear shows on your 3D character
-- Melee & firearms, shoving & stomping, weapon durability, skills & XP, skill books, occupations & traits; aiming a gun shows the cone of fire on the ground, the zombie the shot would hit and the chance to hit it; spent casings fly from the gun and lie on the floor (shells when the shotgun is pumped, none from a revolver); ten guns (9mm, M1911, .38 revolver, .357 Magnum, pump, double-barrel and sawed-off shotguns, hunting and varmint rifles, assault rifle) with magazines you load and swap, the pump and bolt worked between shots, jams on worn guns and semi / full auto
-- Barricading, carpentry & building, moving furniture (pick up beds, shelves, fridges... and place them with rotation), crafting, cooking, farming, foraging, fishing, trapping (trap boxes & snares), generators, rain barrels
-- Detailed towns: house facades (clapboard, vinyl, brick, stucco, log, metal siding, trim, shutters, window boxes, porch lanterns, house numbers), shingled and metal roofs with chimneys, antennas and snow, store fronts with awnings and neon signs; streets with power lines, traffic lights, stop and street-name signs, hydrants, bus stops, payphones, newspaper boxes, gas station canopies, striped parking lots with cars in the stalls, abandoned traffic jams and roadblocks
-- Lived-in yards shaped by who lived there (tidy, family, elderly, gardener, handyman, messy, rural): porches with rocking chairs, flower beds, hedges, garden lights, mowing stripes, patios and decks with umbrella tables, barbecues, fire pits, vegetable rows you can harvest, sheds to loot, back-yard fences with gates, swing sets, trampolines, kiddie pools, clotheslines, doghouses, woodpiles, compost bins, rain barrels, lawn ornaments, junk piles; cabins with outhouses and farms with chicken coops; everything changes with the seasons
-- Drivable cars (sedans, hatchbacks, wagons, sports cars, SUVs, pickups, vans, taxis, police cars, ambulances, fire trucks, school buses, military trucks) with detailed models at a believable size beside the people, wheels that turn as they roll (a blur when fast), damage states, working head/tail/brake lights and light bars; keys, hotwiring, fuel, trunks, alarms, crash damage; sirens that lure every zombie for miles
-- Driving model with tire grip and traction: skids, wet roads, snow, grass and gravel, gears, engine quality that varies car to car, part damage (engine, tires, brakes, suspension, battery...) with mechanics repairs, and a dashboard HUD (speedometer, tachometer, gear, fuel, engine and battery gauges, warning lights)
-- Radial menu (V): vehicle controls inside or next to a car, quick actions on foot
-- Sound rendered in the game at start-up, a few takes of each: gunshots (one voice per gun family), zombie moans and snarls, footsteps by surface, hits, doors, glass; ambience by season and weather; piano and string music - a title theme and pieces for day, dusk, night and rain
-- Power & water shut-off, helicopter event, distant meta events, TV & radio broadcasts
-- Sandbox settings: zombie population, shamblers / fast shamblers / sprinters, day length, loot rarity, utility shutoff, start time, start month, fire spread, infection transmission, zombie toughness, door-opening zombies, house and car alarm frequency
-- Settings screen with Display / Performance / Audio / Controls tabs and Low / Medium / High / Ultra presets: UI scale (Auto fits the interface to the screen, laptops included), memory budget (Experimental, 1 GB by default), render resolution, frame-rate cap, world detail, particles, rain & snow, 3D characters, frame-rate counter (FPS or detailed timings), lighting updates per second (5-60), UI refresh rate (10-60), zombie animation rate (10-30 per second or unlimited) and lazy zombie animation (idle zombies at 1/2 to 1/4 rate by distance), texture size limit and half-resolution world textures, lazy zombie updates and adaptive zombie physics for big crowds, lazy chunk updates (8x8-tile chunks 6+ away run at half speed, 12+ away pause); cached ground chunks and trimmed sprites keep frames light
-- Save/load (permadeath)
-- Debug mode in the spirit of Project Zomboid's (`?debug`, F2 or `` ` `` in game, or the switch on the title screen / pause menu): cheats, item / zombie / vehicle spawners, time, weather, utilities, fires and teleport (Ctrl+click the world or the map), player health / stats / skills / traits, world overlays (chunk tiers, tile info, rooms, collision, zombie AI, noise, light, vision) and frame-time graphs
+
+**A living county**
+- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns, an army base, a prison, an airfield, a quarry and a truck stop.
+- Houses with real floor plans and upstairs rooms, shops with flats above, apartment blocks, police and fire stations, a clinic, a school, churches, a motel, gas stations, warehouses and a trailer park — each with loot to match.
+- Yards shaped by the people who lived there, foliage that grows wild along verges and empty lots, and four seasons with autumn colour, bare winter trees and snow.
+- A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.
+
+**The dead**
+- Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead.
+- Sandbox options for their numbers, speed (shamblers to sprinters), toughness and how the infection spreads.
+- Gore with wounds, dismemberment and pooling blood, adjustable or switched off.
+
+**Survival**
+- Hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, temperature and wetness.
+- Injuries to each body part, including fractures and infection, treated with bandages, splints and disinfectant.
+- Occupations, traits, skills and skill books.
+- Cooking, farming, foraging, fishing, trapping, generators and rain barrels; the power and water fail some days after the outbreak.
+
+**Fighting back**
+- Melee weapons that wear out, shoving and stomping.
+- Ten firearms with magazines to load and swap, pump and bolt actions, jams and fire modes. Aiming shows the cone of fire and your chance to hit.
+- Barricading, carpentry, moving furniture, crafting, molotovs and fires that spread through grass, forests and wooden houses.
+
+**Getting around**
+- Over a dozen drivable vehicles, from sedans to school buses, with keys and hot-wiring, fuel, part damage and repairs, alarms and sirens.
+- A driving model with grip and skids on wet roads, snow and gravel.
+
+**Interface**
+- Inventory and loot windows with sorting, stacks, drag and drop and item tooltips.
+- A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, and a map.
+- Animated 3D characters in textured clothes, with your gear visible on your character.
 
 ## Controls
-WASD move · Shift run · Alt/X sprint · C sneak · hold Right mouse aim · Left click attack · Space shove/stomp · R reload · 1-4 hotbar ·
-Right-click (tap) context menu · E interact · F flashlight · Q shout · V radial menu · I inventory · H health · B crafting · K skills · M map · Esc menu
 
-## Version history
-The title screen shows the build as `VERSION : xxx.xxx.xxx.xxx` in the bottom-right corner, next to a **?** button that opens the full version history with notes and screenshots taken during development.
+| Action | Key |
+| --- | --- |
+| Move / run / sprint / sneak | WASD · Shift · Alt or X · C |
+| Aim / attack | hold Right mouse · Left click |
+| Shove or stomp | Space |
+| Reload | R |
+| Hotbar | 1–4 |
+| Context menu / interact | Right-click · E |
+| Flashlight / shout | F · Q |
+| Radial menu | V |
+| Inventory / health / crafting / skills / map | I · H · B · K · M |
+| Pause menu | Esc |
 
-- Four three-digit fields: **major** (000 for the development builds) · **minor** (feature updates) · **patch** (fixes, polish, internal work) · **build** number, the count of commits on the development branch up to that build
-- The history lives in `js/versions.js` (`VERSION_LOG`, newest first; `VERSION` follows the newest entry) and its screenshots in `versions/`
-- 000.001 first playable town · 000.002 two-storey houses, fire, seasons, the county · 000.003 trapping, soundscape, fractures, moveable furniture, rotting corpses, sirens · 000.004 detailed houses, cars and streets · 000.005 radial menu and alarm options · 000.006 graphics and performance settings · 000.007 vehicle handling and mechanics · 000.008 3D characters, Zomboid-style inventory and hotbar, lived-in yards · 000.009 8x8 chunks, debug mode, version tracker · 000.010 Optimization tab, LOD and new trees · 000.011 bigger worlds (experimental) and better culling · 000.012 the bigger county laid out · 000.013 the countryside built · 000.014 gore and a lot more animation · 000.015 the towns built and spread out · 000.016 faster cars, better guns and aiming, two maps and starting towns, zombie animation and texture settings · 000.017 zombies that grab, UI scaling, memory budget · 000.018 a Zomboid-style interface · 000.019 flats, apartments and new places in town · 000.019.001 clean-up and polish · 000.020 vehicles at full size, wheels that turn · 000.020.001 seeing through the trees · 000.021 foliage and items on the floor · 000.022 fences and guns · 000.023 sound and music · 000.024 characters with textures
+All controls are also listed in the game under **How to Play**.
+
+## Settings
+
+The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. The Experimental tab holds beta options such as the Expanded map and the memory budget.
+
+## Version
+
+The current version and the full patch notes are shown on the title screen under **What's new**.
+
+---
+
+© 2026 Hollow Creek. All rights reserved.

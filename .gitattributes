@@ -1,0 +1,3 @@
+dev/ export-ignore
+.claude/ export-ignore
+.gitattributes export-ignore

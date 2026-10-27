@@ -1,8 +1,8 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Debug mode in the spirit of Project Zomboid's: cheats, item/zombie/vehicle spawners, world and player
+// Debug mode: cheats, item/zombie/vehicle spawners, world and player
 // editors, overlays and performance graphs in one draggable window.
-// Switch it on with ?debug, F2 or the ` key, or the switch on the title screen and in the pause menu.
+// Development builds only: start the game with ?debug in the address, then F2 or the ` key shows or hides it.
 // While it is off nothing here runs except two input listeners; turning it off clears every cheat.
 // Gameplay code checks the cheat flags below (god, invisible, ghost, instant, build, noTire, speed).
 // ---------------------------------------------------------------------------
@@ -53,15 +53,14 @@ const Debug = {
 
   // ------------------------------------------------------------------ boot & persistence
   init() {
-    try { const s = JSON.parse(localStorage.getItem('hc_debug') || 'null'); if (s) { this.on = !!s.on; this.shown = !!s.shown; this.tab = s.tab || 'cheats'; this.pos = s.pos || null; Object.assign(this.ov, s.ov || {}); } } catch (e) { /* ignore */ }
-    if (/[?&]debug\b/.test(location.search)) { this.on = true; this.shown = true; }
+    // (a player's build never has it: no keys, no window, no cheats)
+    this.dev = /[?&]debug\b/.test(location.search);
+    if (!this.dev) return;
+    try { const s = JSON.parse(localStorage.getItem('hc_debug') || 'null'); if (s) { this.shown = !!s.shown; this.tab = s.tab || 'cheats'; this.pos = s.pos || null; Object.assign(this.ov, s.ov || {}); } } catch (e) { /* ignore */ }
+    this.on = true; this.shown = true;
     window.addEventListener('keydown', (e) => this.key(e), true);
     window.addEventListener('mousedown', (e) => this.mouse(e), true);
-    // switches on the title screen and in the pause menu
-    const show = Menu.show, pause = UI.togglePause;
-    Menu.show = function () { const r = show.apply(this, arguments); Debug.mountTitle(); return r; };
-    UI.togglePause = function () { const r = pause.apply(this, arguments); Debug.mountPause(); return r; };
-    if (this.on) this.hook();
+    this.hook();
     this.render();
   },
   save() { try { localStorage.setItem('hc_debug', JSON.stringify({ on: this.on, shown: this.shown, tab: this.tab, pos: this.pos, ov: this.ov })); } catch (e) { /* ignore */ } },
@@ -69,7 +68,7 @@ const Debug = {
     this.on = v;
     if (v) { this.hook(); this.shown = true; }
     else { this.unhook(); for (const [k] of DBG_FLAGS) this[k] = false; this.speed = 1; this.place = null; this.shown = false; }
-    this.save(); this.render(); this.mountTitle(); this.mountPause();
+    this.save(); this.render();
   },
   // timing and cheat hooks, installed only while debug mode is on
   hook() {
@@ -484,23 +483,6 @@ const Debug = {
       for (const [v, c] of [[e[2], '#60d070'], [e[1], '#ffa040'], [e[3], '#60a8ff']]) { const hh = v * sc; g.fillStyle = c; g.fillRect(x, y - hh, bw + 0.3, hh); y -= hh; }
       g.fillStyle = '#e8e8e8'; g.fillRect(x, H - Math.min(H, e[0] * sc) - 1, bw + 0.3, 1.5);
     }
-  },
-
-  // ------------------------------------------------------------------ title screen & pause menu switches
-  mountTitle() {
-    const m = document.getElementById('menu');
-    const box = m && m.querySelector('.modal.title');
-    if (!box) return;
-    let s = box.querySelector('.dbg-titlesw');
-    if (!s) { s = document.createElement('div'); s.className = 'dbg-titlesw'; s.title = 'Debug mode: cheats, spawners and overlays (F2 in game)'; s.addEventListener('click', (e) => { e.stopPropagation(); this.enable(!this.on); }); box.appendChild(s); }
-    s.innerHTML = `<span class="dbg-knob ${this.on ? 'on' : ''}"></span>Debug mode ${this.on ? 'ON' : 'OFF'}`;
-  },
-  mountPause() {
-    const box = document.querySelector('#menu .pausing .mbox');
-    if (!box) return;
-    let b = box.querySelector('.dbg-pausebtn');
-    if (!b) { b = document.createElement('div'); b.className = 'btn big dbg-pausebtn'; b.addEventListener('click', (e) => { e.stopPropagation(); if (!this.on) this.enable(true); else { this.shown = true; this.save(); this.render(); } this.mountPause(); }); box.appendChild(b); }
-    b.textContent = this.on ? 'Debug window' : 'Enable debug mode';
   },
 
   // ------------------------------------------------------------------ overlays (render hooks)

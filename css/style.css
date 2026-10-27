@@ -1,5 +1,5 @@
 :root {
-  /* Zomboid's look: black glass panels, thin light-grey frames, white text, grey highlights */
+  /* the look: black glass panels, thin light-grey frames, white text, grey highlights */
   --panel: rgba(0, 0, 0, 0.74);
   --panel2: rgba(22, 22, 22, 0.9);
   --line: rgba(255, 255, 255, 0.3);
@@ -28,7 +28,7 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 13px;
 .warn { color: #e0a040; }
 .sml { font-size: 11px; color: var(--dim); }
 
-/* ---------------- left bar: the hands (what is held) above the window buttons, as in Zomboid */
+/* ---------------- left bar: the hands (what is held) above the window buttons */
 #leftbar { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; }
 #sidebar { display: flex; flex-direction: column; gap: 4px; }
 .sbtn { width: 44px; height: 44px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; }
@@ -169,7 +169,7 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 13px;
 .ci .sub { display: none; position: absolute; left: 100%; top: -2px; background: rgba(8, 8, 8, 0.94); border: 1px solid rgba(255, 255, 255, 0.25); min-width: 90px; }
 .ci.hassub:hover .sub { display: block; }
 #tooltip { position: fixed; background: rgba(8, 8, 8, 0.97); border: 1px solid rgba(255, 255, 255, 0.25); padding: 6px 9px; border-radius: 3px; z-index: 1001; pointer-events: none !important; max-width: 300px; line-height: 1.45; }
-/* item tooltips, as in Zomboid: name, kind, label / value rows with bars for what runs down, notes */
+/* item tooltips: name, kind, label / value rows with bars for what runs down, notes */
 .itip { min-width: 200px; }
 .itip .ith { font-weight: bold; color: #fff; }
 .itip .itc { color: var(--dim); font-size: 11px; margin: 0 0 4px; padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.14); }

@@ -1,15 +1,10 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Version tracker: the build string shown on the title screen and the release history behind its "?" button.
+// Versions: the version shown on the title screen and the patch notes behind its "What's new" link.
 //
-// Version scheme xxx.xxx.xxx.xxx — four fields of three digits each:
-//   major  000 for the development builds
-//   minor  feature updates
-//   patch  fixes, polish and internal work on top of a minor
-//   build  number of commits on the development branch up to and including that build
-// Every commit was pushed; a version covers the commits since the previous one.
-// To release: put a new entry at the top of VERSION_LOG (VERSION follows it) and its screenshots in versions/
-// named <shot>.jpg (about 720 px wide).
+// Internal version strings are xxx.xxx.xxx.xxx (major, minor, patch, build); players see "v0.24.1" and the build.
+// Development builds (?debug) also show each release's screenshots (dev/versions/<shot>.jpg) and commits.
+// To release: put a new entry at the top of VERSION_LOG (VERSION follows it); see dev/DEVELOPMENT.md.
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
@@ -75,7 +70,7 @@ const VERSION_LOG = [
     v: '000.019.001.130', date: '2026-10-25', title: 'Clean-up and polish',
     notes: [
       'Fixed buildings you could not walk into: schools, barracks, the armory and the prison blocks had no outside doors (the armory could not be entered at all), no trailer bedroom had a door, and some narrow bathrooms and upstairs rooms behind the stairs had none. Every room of every building can now be reached through a door (checked room by room on five maps).',
-      'Item tooltips as in Zomboid: the item\'s kind, then rows of stats, with a coloured bar for anything that runs down (condition, ammo, contents, fuel, battery, uses left, freshness, clothing protection). The hand slots on the left bar show the same tooltip.',
+      'Item tooltips: the item\'s kind, then rows of stats, with a coloured bar for anything that runs down (condition, ammo, contents, fuel, battery, uses left, freshness, clothing protection). The hand slots on the left bar show the same tooltip.',
       'Fort Hale has lawns and trees, a tree-lined road in from the gate, an obstacle course across the parade ground, sandbagged posts in the corners and a supply dump by the motor pool. The prison\'s exercise yard is a running track round a lawn with picnic tables.',
       'Clean-up: the settings menu\'s tabs and presets follow the grey look, prisons and army buildings no longer have shop awnings, Hollow Creek\'s second office is Creekside Realty (there were two Valley Insurances), the Expanded map is no longer described as still being built, and unused code is gone.',
     ],
@@ -94,13 +89,13 @@ const VERSION_LOG = [
     commits: ['1f3ac34', 'ceba02c'], shots: ['v019000_1', 'v019000_2', 'v019000_3', 'v019000_4'],
   },
   {
-    v: '000.018.000.122', date: '2026-10-25', title: 'A Zomboid-style interface',
+    v: '000.018.000.122', date: '2026-10-25', title: 'A new interface',
     notes: [
-      'The interface is restyled after Project Zomboid: black glass panels with thin light frames, white text and grey highlights in place of the brown and gold, text a step bigger, and the windows with Zomboid\'s title bar (close at the left, the title in the middle, a collapse button at the right that folds the window to its title bar).',
-      'What you hold sits at the top of the left bar, above the window buttons, as in Zomboid. The clock is your wristwatch\'s display (date, time, temperature); without a watch you only have a rough idea of the time of day. The game speed buttons sit under it.',
+      'The interface is restyled: black glass panels with thin light frames, white text and grey highlights in place of the brown and gold, text a step bigger, and the windows with a new title bar (close at the left, the title in the middle, a collapse button at the right that folds the window to its title bar).',
+      'What you hold sits at the top of the left bar, above the window buttons. The clock is your wristwatch\'s display (date, time, temperature); without a watch you only have a rough idea of the time of day. The game speed buttons sit under it.',
       'Health and character are one Character window with four tabs: Info (your survivor, carrying weight, hunger, thirst, fatigue, exercise), Skills, Health and a new Protection tab that shows, for every part of the body, how likely your clothes stop a bite or a scratch and what you have on there. H opens it on Health, K on Info.',
       'The Health tab has a proper body figure: wounds tint the part they are on, bandages wrap round it, fractures crack it and bleeding drips.',
-      'The title screen, the pause menu and the death screen are plain words down the side or in the middle, as in Zomboid. Objects under the mouse are outlined in white.',
+      'The title screen, the pause menu and the death screen are plain words down the side or in the middle. Objects under the mouse are outlined in white.',
       'Auto UI scale is a little larger on big screens (125% at 1920 x 1080), still fitting laptops.',
     ],
     commits: ['7b5f7d1'], shots: ['v018000_1', 'v018000_2', 'v018000_3', 'v018000_4'],
@@ -237,7 +232,7 @@ const VERSION_LOG = [
     notes: [
       'Simulation chunks are now 8x8 tiles, with the same distances in chunks: the world runs at half speed from 6 chunks away and pauses from 12; distant zombies think less often from 3 chunks out.',
       'Zombie neighbour lookups and pathfinding allocate nothing per step. A* returns the same paths about 22% faster, and memory churn during play dropped by about 40%.',
-      'Debug mode in the spirit of Project Zomboid\'s, from ?debug, F2 or ` in game, or the switch on the title screen and pause menu.',
+      'A debug mode for development: cheats, spawners, time and weather controls and world overlays.',
       'Cheats: god mode, invisible, no-clip, endless endurance, no needs, infinite ammo, instant actions, free building, full bright, frozen zombies, move and time speed.',
       'Spawners: item search with starter kits, zombie hordes placed with the mouse, vehicles of any type, colour and condition.',
       'World tools: time and weather, power and water, the helicopter, noise, fires, cleanup, and teleport by Ctrl+click on the world or the map. Player tools: wounds, stats, skills and traits.',
@@ -264,7 +259,7 @@ const VERSION_LOG = [
     commits: ['d8632fa'], shots: ['v082_1', 'v082_2', 'v082_3', 'v082_4'],
   },
   {
-    v: '000.008.001.034', date: '2026-10-06', title: 'Zomboid-style inventory and hotbar',
+    v: '000.008.001.034', date: '2026-10-06', title: 'New inventory and hotbar',
     notes: [
       'Hotbar slots come from worn gear: back for long weapons, belt left and right, and a holster. Attached gear shows on the character.',
       'Inventory windows have container buttons, sortable columns, stacks, multi-select, drag and drop, Loot all / Transfer all and a weight bar.',
@@ -311,7 +306,7 @@ const VERSION_LOG = [
   {
     v: '000.005.000.029', date: '2026-10-06', title: 'Radial menu and alarm options',
     notes: [
-      'Project Zomboid-style radial menu on V: car controls inside and beside a car, plus quick actions on foot.',
+      'A radial menu on V: car controls inside and beside a car, plus quick actions on foot.',
       'Sandbox options for how often houses and cars have alarms (rare by default).',
       'A slot for the shared WebGL renderer.',
     ],
@@ -406,7 +401,7 @@ const VERSION_LOG = [
     notes: [
       'A procedural town drawn isometrically, with cutaway walls, a vision cone and dynamic lighting.',
       'Zombies that see, hear, thump on doors and climb through windows.',
-      'Moodles, body-part health and infection, inventory and containers, melee and firearms, crafting, building, farming, fishing and foraging.',
+      'Status effects, body-part health and infection, inventory and containers, melee and firearms, crafting, building, farming, fishing and foraging.',
       'Vehicles, weather, power and water shutoff, the helicopter event, procedural audio and music, character creation and saves.',
     ],
     commits: ['d53e6df', '2780def'], shots: ['v010_1', 'v010_2', 'v010_3', 'v010_4'],
@@ -417,28 +412,33 @@ const VERSION = VERSION_LOG[0].v;
 const Versions = {
   // title screen: called by Menu.show before it writes the screen, so mount right after
   mountHome() { Promise.resolve().then(() => this.mount()); },
+  // "000.024.001.145" -> "v0.24.1"; the build number on its own
+  label(v) { return 'v' + v.split('.').slice(0, 3).map(Number).join('.'); },
+  build(v) { return Number(v.split('.')[3]); },
+  dev() { return typeof Debug !== 'undefined' && Debug.dev; },
   mount() {
     const box = document.querySelector('#menu .modal.title');
     if (!box || box.querySelector('.ver-bar')) return;
     const bar = document.createElement('div');
     bar.className = 'ver-bar';
-    bar.innerHTML = `<span class="ver-label">VERSION : ${VERSION}</span><span class="ver-help" id="vhelp" title="Version history">?</span>`;
+    bar.innerHTML = `<span class="ver-help" id="vhelp">What's new</span><span class="ver-label">${this.label(VERSION)} · build ${this.build(VERSION)}</span>`;
     bar.addEventListener('click', (e) => { e.stopPropagation(); if (e.target.closest('.ver-help')) this.open(); });
     box.appendChild(bar);
   },
-  // version history window
+  // patch notes window (development builds add the screenshots and commits)
   open() {
     if (document.getElementById('verwin')) return;
     const el = document.createElement('div');
     el.id = 'verwin';
-    const shot = (s, k, e) => `<img class="ver-shot" src="versions/${s}.jpg" loading="lazy" data-v="${k}" data-i="${e}" alt="">`;
-    el.innerHTML = `<div class="ver-box"><div class="ver-head"><div><div class="ver-title">Version history</div>
-      <div class="ver-sub">Current build <b>${VERSION}</b> · ${VERSION_LOG.length} versions · scheme xxx.xxx.xxx.xxx: major · minor (features) · patch (fixes, polish) · build (commit count)</div></div>
+    const dev = this.dev();
+    const shot = (s, k, e) => `<img class="ver-shot" src="dev/versions/${s}.jpg" loading="lazy" data-v="${k}" data-i="${e}" alt="">`;
+    el.innerHTML = `<div class="ver-box"><div class="ver-head"><div><div class="ver-title">What's new</div>
+      <div class="ver-sub">Hollow Creek ${this.label(VERSION)} · build ${this.build(VERSION)}</div></div>
       <span class="ver-x" title="Close (Esc)">×</span></div><div class="ver-list">`
-      + VERSION_LOG.map((r, k) => `<div class="ver-item ${k ? '' : 'cur'}"><div class="ver-line"><span class="ver-v">${r.v}</span><span class="ver-name">${U.esc(r.title)}</span><span class="ver-date">${this.date(r.date)}</span></div>
+      + VERSION_LOG.map((r, k) => `<div class="ver-item ${k ? '' : 'cur'}"><div class="ver-line"><span class="ver-v">${this.label(r.v)}</span><span class="ver-name">${U.esc(r.title)}</span><span class="ver-date">${this.date(r.date)}</span></div>
         <ul>${r.notes.map(n => `<li>${U.esc(n)}</li>`).join('')}</ul>
-        ${r.shots.length ? `<div class="ver-shots">${r.shots.map((s, i) => shot(s, k, i)).join('')}</div>` : ''}
-        <div class="ver-commits">${r.commits.length ? r.commits.map(c => `<code>${c}</code>`).join('') : '<span>this build</span>'}</div></div>`).join('')
+        ${dev && r.shots.length ? `<div class="ver-shots">${r.shots.map((s, i) => shot(s, k, i)).join('')}</div>` : ''}
+        ${dev ? `<div class="ver-commits"><span>${r.v}</span>${r.commits.map(c => `<code>${c}</code>`).join('')}</div>` : ''}</div>`).join('')
       + '</div></div>';
     ($('#ui') || document.body).appendChild(el);
     const close = () => { el.remove(); window.removeEventListener('keydown', key, true); };
@@ -463,7 +463,7 @@ const Versions = {
     if (!lb) { lb = document.createElement('div'); lb.className = 'ver-lb'; el.appendChild(lb); }
     const r = VERSION_LOG[k];
     this.cur = [k, i];
-    lb.innerHTML = `<span class="ver-nav prev" data-d="-1">‹</span><figure><img src="versions/${r.shots[i]}.jpg" alt=""><figcaption><b>${r.v}</b> ${U.esc(r.title)} · ${i + 1} / ${r.shots.length}</figcaption></figure><span class="ver-nav next" data-d="1">›</span>`;
+    lb.innerHTML = `<span class="ver-nav prev" data-d="-1">‹</span><figure><img src="dev/versions/${r.shots[i]}.jpg" alt=""><figcaption><b>${this.label(r.v)}</b> ${U.esc(r.title)} · ${i + 1} / ${r.shots.length}</figcaption></figure><span class="ver-nav next" data-d="1">›</span>`;
   },
   step(el, d) {
     let [k, i] = this.cur || [0, 0];

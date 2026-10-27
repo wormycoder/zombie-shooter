@@ -1,8 +1,8 @@
 'use strict';
 // ---------------------------------------------------------------------------
 // Items on the floor: drawn at their own size, lying flat at their own angle (cans, bottles, jerrycans and
-// buckets stand up), shadowed and darkened with the light; and placing an item where you want it, Zomboid
-// style (inventory: Place - the item follows the mouse, R or the wheel turns it, click puts it down).
+// buckets stand up), shadowed and darkened with the light; and placing an item where you want it
+// (inventory: Place - the item follows the mouse, R or the wheel turns it, click puts it down).
 // ---------------------------------------------------------------------------
 const FloorItems = {
   // real size in metres (= tiles): length of what lies flat, height of what stands
