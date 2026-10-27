@@ -343,5 +343,9 @@ Polish (000.024.001.145), asked for: a more professional, publishable
 Run 10 (000.025.000.147), asked for: the title screen as a recorded loop
   (performance), a Benchmark button (Settings > Optimization), Debug mode
   in Settings > Experimental, release screenshots public again (versions/).
+Fix (000.025.001.149), asked for: too easy to get grabbed and bitten -
+  grab chance about halved (front 58% -> 34%, behind 71% -> 47%, backing
+  off 25%), the lunge no longer outpaces a walk, later and rarer bites,
+  pulling free twice as fast.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

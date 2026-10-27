@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.025.001.149', date: '2026-10-27', title: 'Fairer grabs',
+    notes: [
+      'The dead take hold of you far less often: about a third of the time from the front and under half from behind, even less while you swing, back away or run. Backing off as one lunges now gets you clear.',
+      'Once held you have longer before the first bite, bites come less often and get through less, and pulling away breaks the hold about twice as fast.',
+    ],
+    commits: ['f9c81e3'], shots: [],
+  },
+  {
     v: '000.025.000.147', date: '2026-10-27', title: 'Benchmark and a lighter title screen',
     notes: [
       'The town behind the title screen is now a recorded loop: the game films about ten seconds of it once, then plays that back, so the menus cost the computer almost nothing.',
