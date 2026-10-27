@@ -1,6 +1,6 @@
 # Development notes
 
-This folder is for development only. It is left out of release builds (`git archive` skips it, see `.gitattributes`).
+This folder holds the development notes: the request list and how releases are made. It ships in the zip so the list travels with the game.
 
 - `TODO.txt` — the request and priority list, with the status of each item and the log of each run of updates.
 
