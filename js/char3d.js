@@ -40,7 +40,7 @@ function c3body(d, ang) { d.fill(0); d[3] = Math.cos(ang); d[4] = Math.sin(ang);
 // projected bounds of everything emitted for the current model (world px relative to the feet)
 const C3B = { x0: 0, x1: 0, y0: 0, y1: 0 };
 function c3emit(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, col, t0, t1) {
-  GL3D.prim(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, col[0], col[1], col[2], t0, t1);
+  GL3D.prim(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, col[0], col[1], col[2], t0, t1, col.m);
   const px = (cx - cy) * HTW, py = (cx + cy) * HTH - cz * ZU;
   const ex = (Math.abs(xx - xy) + Math.abs(yx - yy) + Math.abs(zx - zy)) * HTW;
   const ey = Math.abs((xx + xy) * HTH - xz * ZU) + Math.abs((yx + yy) * HTH - yz * ZU) + Math.abs((zx + zy) * HTH - zz * ZU);
@@ -86,6 +86,8 @@ const c3a = c3v(), c3b = c3v(), c3c = c3v(), c3d = c3v(), c3e = c3v(), c3g = c3v
 // ---- body meshes: smooth lathes built once (profiles in metres for an average man; U = metres per mesh unit).
 // Rings for 'z' meshes: [z, back x, front x, half width, front exponent, back exponent] (face / chest toward +x).
 const C3U = {}, C3R = {};
+// material kinds painted by GL3D's fragment shader
+const C3MAT = { cotton: 1, denim: 2, knit: 3, leather: 4, quilt: 5, plaid: 6, stripe: 7, camo: 8, skin: 9, face: 10, hair: 11, twill: 12, plastic: 13, splat: 14, rubber: 15, fleece: 16 };
 function c3mesh(name, U, rings, seg, axis) {
   C3U[name] = U; C3R[name] = rings;
   const mk = (rs, sg) => () => GL3D.lathe(rs.map(r => axis === 'x' ? [r[0] / U, 0, r[1] / U, (r[2] + r[3]) / 2 / U, (r[3] - r[2]) / 2 / U, r[4] || 2.6]
@@ -428,9 +430,9 @@ const Char3D = {
     // some are heavier set: a fuller belly and hips
     const heavy = r(5) < 0.22 ? 1 + r(6) * 0.16 : 1;
     const D = { H, bw, fem, zomb: !!look.zombie, thigh: 0.435 * H, shin: 0.425 * H, ankH: 0.075, hipW: (fem ? 0.092 : 0.088) * (0.5 + 0.5 * H), ua: 0.3 * H, fa: 0.265 * H,
-      shW: (fem ? 0.158 : 0.176) * bw, sp0: 0.09 * H, sp1: 0.18 * H, shZ: 0.25 * H, neck: 0.125 * H,
+      shW: (fem ? 0.158 : 0.176) * bw, sp0: 0.09 * H, sp1: 0.18 * H, shZ: 0.25 * H, neck: 0.11 * H,
       belly: bw * heavy * (0.5 + 0.5 * H), hips: (0.97 + r(7) * 0.06) * (1 + (heavy - 1) * 0.5) * (0.5 + 0.5 * H), arm: (fem ? 0.88 : 1) * (0.94 + r(8) * 0.1) * (heavy > 1 ? 1.06 : 1),
-      hand: fem ? 0.9 : 1, head: (fem ? 0.94 : 0.97) * (0.98 + r(9) * 0.04), foot: fem ? 0.86 : 0.92 + r(10) * 0.05 };
+      hand: fem ? 1.04 : 1.14, head: (fem ? 1.0 : 1.04) * (0.98 + r(9) * 0.04), foot: fem ? 0.93 : 1.0 + r(10) * 0.05 };
     // standing, the knees are all but straight (an IK knee bends fast as the hip lowers: 0.998 is about 7 degrees)
     D.hipH = D.ankH + (D.thigh + D.shin) * 0.998;
     D.L = (D.thigh + D.shin) * 0.995;
@@ -1291,7 +1293,27 @@ const Char3D = {
   },
   // ===================================================================== model
   // colours for a look; the player's look object is rebuilt every frame, so it is cached by content
-  lookStr(L) { return [L.skin, L.shirt, L.jacket, L.pants, L.shoes, L.hair, L.hairStyle, L.hat && L.hat.type, L.hat && L.hat.col, L.bag, L.vest, L.gloves, L.sleeves, L.shorts, L.glasses, L.blood].join('|'); },
+  lookStr(L) { return [L.skin, L.shirt, L.jacket, L.pants, L.shoes, L.hair, L.hairStyle, L.hat && L.hat.type, L.hat && L.hat.col, L.bag, L.vest, L.gloves, L.sleeves, L.shorts, L.glasses, L.blood, L.texK, L.stubble, L.dirt].join('|'); },
+  // the material of a worn item: [kind, variant] - its pattern if it has one, else its cloth
+  texOf(it) {
+    const p = it.pat, d = ITEMS[it.id];
+    if (p) return [C3MAT[p.replace(/2$/, '')] || C3MAT.cotton, p.endsWith('2') ? 1 : 0];
+    return [C3MAT[d && d.tex] || C3MAT.cotton, 0];
+  },
+  // a look's materials and blood from what is worn (get(slot): the item there); texK keys the palette cache
+  dress(L, get, bloody) {
+    const t = L.tex = {}, b = L.bld = {};
+    let k = '';
+    for (const sl of ['shirt', 'jacket', 'pants', 'shoes', 'hat', 'gloves', 'vest', 'back']) {
+      const it = get(sl);
+      if (!it) continue;
+      const m = t[sl === 'back' ? 'bag' : sl] = this.texOf(it);
+      if (it.bloody) b[sl] = bloody;
+      k += m[0] + '.' + m[1] + (it.bloody ? 'b' : '') + ',';
+    }
+    L.texK = k;
+    return L;
+  },
   pal(look, D) {
     const key = look.zombie ? null : this.lookStr(look);
     let Pl = key ? this.palK.get(key) : this.pals.get(look);
@@ -1318,12 +1340,42 @@ const Char3D = {
       blood: [0.4, 0.05, 0.035], bloodD: [0.22, 0.05, 0.035], wound: [0.36, 0.08, 0.07], glass: [0.08, 0.08, 0.09], bone: [0.78, 0.74, 0.62],
     };
     Pl.b0 = look.blood; Pl.bl = blood;
-    Pl.top = jacket || shirt;
+    this.paint(Pl, look, zomb, blood);
+    Pl.top = Pl.jacket || Pl.shirt;
     // sleeves: long sleeves or a jacket cover the arm, short ones the upper arm, a vest top none
-    Pl.sleeve = look.jacket || look.sleeves === 'long' ? Pl.top : skin;
-    Pl.upper = (look.sleeves === 'none' || Pl.bareTop) && !look.jacket ? skin : Pl.top;
+    Pl.sleeve = look.jacket || look.sleeves === 'long' ? Pl.top : Pl.skin;
+    Pl.upper = (look.sleeves === 'none' || Pl.bareTop) && !look.jacket ? Pl.skin : Pl.top;
     if (key) { if (this.palK.size > 40) this.palK.clear(); this.palK.set(key, Pl); } else this.pals.set(look, Pl);
     return Pl;
+  },
+  // Textures: each colour the model uses gets the material painted on it (GL3D's fragment shader) - [kind, variant,
+  // grime, blood]. Copies, so the shared colour cache stays untouched; the bare skin stands in for missing clothes.
+  paint(Pl, look, zomb, blood) {
+    const tx = look.tex || {}, gr = look.dirt !== undefined ? look.dirt : zomb ? 0.6 : 0.06, bd = look.bld || {};
+    const T = (c, m) => { if (!c) return c; const a = [c[0], c[1], c[2]]; a.m = m; return a; };
+    const wear = (slot, def, bl) => { const t = tx[slot] || def; return [t[0], t[1] || 0, gr, Math.min(1, (bd[slot] || 0) + bl)]; };
+    const decay = zomb ? (look.decay !== undefined ? look.decay : 0.7) : 0;
+    const sk = Pl.skin, skinM = [C3MAT.skin, decay, gr * 0.7, zomb ? blood * 0.35 : 0];
+    Pl.skin = T(sk, skinM);
+    Pl.skinD = T(Pl.skinD, skinM);
+    // the head: the face painted (eye sockets, stubble, blood from the mouth)
+    const fv = zomb ? decay : -(look.stubble || 0);
+    Pl.face = T(sk, [C3MAT.face, fv, gr * 0.5, 0]);
+    Pl.faceB = T(sk, [C3MAT.face, fv, gr * 0.5, Math.max(0.5, blood)]);
+    Pl.shirt = Pl.bareTop ? Pl.skin : T(Pl.shirt, wear('shirt', [C3MAT.cotton], blood));
+    Pl.shirtD = Pl.bareTop ? Pl.skinD : T(Pl.shirtD, Pl.shirt.m);
+    if (Pl.jacket) { Pl.jacket = T(Pl.jacket, wear('jacket', [C3MAT.cotton], blood * 0.9)); Pl.jacketD = T(Pl.jacketD, Pl.jacket.m); }
+    Pl.pants = T(Pl.pants, Pl.bareLegs ? [C3MAT.cotton, 0, gr, blood * 0.3] : wear('pants', [C3MAT.twill], blood * 0.55));
+    Pl.pantsD = T(Pl.pantsD, Pl.pants.m);
+    Pl.shoes = Pl.barefoot ? Pl.skin : T(Pl.shoes, wear('shoes', [C3MAT.leather], blood * 0.3));
+    Pl.sole = T(Pl.sole, [C3MAT.rubber, 0, Math.min(1, gr + 0.3), 0]);
+    Pl.hand = look.gloves ? T(Pl.hand, wear('gloves', [C3MAT.knit], blood * 0.5)) : T(Pl.hand, [C3MAT.skin, decay, gr * 0.8, zomb ? blood * 0.8 : 0]);
+    if (Pl.vest) Pl.vest = T(Pl.vest, wear('vest', [C3MAT.twill], blood * 0.6));
+    if (Pl.bag) { Pl.bag = T(Pl.bag, wear('bag', [C3MAT.twill], 0)); Pl.bagD = T(Pl.bagD, Pl.bag.m); }
+    if (Pl.hat) Pl.hat = T(Pl.hat, wear('hat', [C3MAT.cotton], 0));
+    Pl.hair = T(Pl.hair, [C3MAT.hair, 0, gr * 0.5, 0]);
+    Pl.belt = T(Pl.belt, [C3MAT.leather, 0, gr, 0]);
+    Pl.wound = T(Pl.wound, [C3MAT.skin, 0, 0, 0.6]);
   },
   // pose -> joints -> primitives into a new atlas cell (with room for the shadow, which bake() draws into it)
   render(S, ang, look, P, light, flash, lod) {
@@ -1404,6 +1456,9 @@ const Char3D = {
   // a flat patch (blood, rip) on a body surface in frame F
   patch(F, o, w, h, col, lift) {
     const nx = o[3], ny = o[4], l = lift || 0.006;
+    // (painted as a splat: a ragged edge)
+    if (!col.sp) { col.sp = [col[0], col[1], col[2]]; col.sp.m = [C3MAT.splat, 0, 0, 0]; }
+    col = col.sp;
     const cx = o[0] + nx * l, cy = o[1] + ny * l;
     c3emit(this.M.SPH, F[0] + F[3] * cx + F[6] * cy + F[9] * o[2], F[1] + F[4] * cx + F[7] * cy + F[10] * o[2], F[2] + F[5] * cx + F[8] * cy + F[11] * o[2],
       (F[3] * nx + F[6] * ny) * 0.008, (F[4] * nx + F[7] * ny) * 0.008, (F[5] * nx + F[8] * ny) * 0.008,
@@ -1431,6 +1486,7 @@ const Char3D = {
     const gg = look.gore, gm = gg ? gg.m : 0;
     // ---- skeleton
     this.rig(S, ang);
+    const sd0 = GL3D.sd = (S.id % 89) * 0.731;
     const jk = !!look.jacket, sl = look.sleeves, shorts = !!look.shorts && !Pl.bareLegs, legBare = Pl.bareLegs;
     // torso widths: shoulders, waist and hips differ between builds and sexes
     const shS = (fem ? 0.92 : 1) * bw * (0.5 + 0.5 * H), waS = (fem ? 0.88 : 1) * D.belly, hiS = (fem ? 1.07 : 1) * D.hips;
@@ -1439,6 +1495,7 @@ const Char3D = {
     const thR = 0.086 * D.hips, pantR = legBare || shorts ? 0 : 0.01;
     for (const side of [-1, 1]) {
       const i = side < 0 ? C3.LA : C3.RA;
+      GL3D.sd = sd0 + side * 2.3;
       const hip = c3pt(c3a, Pf, 0, side * D.hipW, 0), tg = c3pt(c3b, Pf, T[i], T[i + 1], T[i + 2]);
       // knee bends toward the pelvis' front, twisted outward by the leg twist
       const tw = T[i + 3] * side, pole = c3dir(c3c, Pf, Math.cos(tw), Math.sin(tw), 0);
@@ -1478,6 +1535,7 @@ const Char3D = {
       const ak = side < 0 ? c3AL : c3AR; ak[0] = an[0]; ak[1] = an[1]; ak[2] = an[2];
     }
     // ---- pelvis, belly, rib cage
+    GL3D.sd = sd0;
     const top = Pl.top, under = jk ? Pl.shirt : Pl.top, jx = jk ? 1.07 : 1;
     c3box(M.PELVIS, Pf, 0, 0, 0, UP * hiS, UP * hiS, UP * H, Pl.pants);
     // the shirt hangs over the belt unless tucked in
@@ -1543,7 +1601,7 @@ const Char3D = {
       if (det > 0) for (const side of [-1, 1]) { c3pt(c3a, Cf, 0.1 * shS * jx, side * 0.095, 0.0); c3pt(c3b, Cf, 0.03, side * 0.105, 0.285); c3seg(BOX, c3a, c3b, 0.007, 0.018, Pl.bagD, 1, 1, Cf[3], Cf[4], Cf[5]); }
     }
     // ---- neck and head
-    const nr = 0.05 * (fem ? 0.88 : 1) * (0.94 + bw * 0.06);
+    const nr = 0.056 * (fem ? 0.88 : 1) * (0.94 + bw * 0.06);
     if (gm & GM.HEAD) {
       // taken off: a short neck ending in the wound
       c3pt(c3a, NB, -0.004, 0, -0.04); c3pt(c3b, NB, -0.006, 0, 0.03); c3pt(c3g, NB, -0.006, 0, 0.3);
@@ -1562,9 +1620,10 @@ const Char3D = {
     // ---- arms
     const ua = D.ua, fa = D.fa, Wm = Pose.weapon ? WEAPON_MODELS[Pose.weapon] || WEAPON_MODELS.generic : null;
     let handR = null, wd = null;
-    const armR = 0.047 * D.arm;
+    const armR = 0.051 * D.arm;
     for (const side of [1, -1]) {
       const i = side < 0 ? C3.LW : C3.RW;
+      GL3D.sd = sd0 + side * 4.1;
       const S0 = c3pt(c3S0, Cf, -0.012, side * D.shW, D.shZ);
       const tg = c3TG;
       if (side < 0 && T[C3.GR] > 0.01 && handR && wd) {
@@ -1649,6 +1708,7 @@ const Char3D = {
         this.weapon('flashlight', hc, od, Cf, false, Pose.light, Pl);
       }
     }
+    GL3D.sd = sd0;
     if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = S.line && det > 0; this.propCol = Pose.propCol; this.ejS = S; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; this.ejS = null; }
     // ---- gear on the hotbar: a long weapon slung across the back, tools on the belt, a pistol in the holster
     if (look.att && det > 0) for (const [slot, model] of look.att) {
@@ -1732,7 +1792,7 @@ const Char3D = {
     if (Pl.bag) c3box(BOX, Cf, -0.105 * shS * jx - 0.06, 0, 0.1, 0.065, 0.125, 0.16, Pl.bag);
     // ---- neck and head: hair and hats as blocks (gone or crushed: gore.js)
     c3pt(c3a, NB, -0.004, 0, -0.04); c3pt(c3b, Hf, -0.012, 0, 0.0);
-    const nr = 0.05 * (fem ? 0.88 : 1) * (0.94 + bw * 0.06);
+    const nr = 0.056 * (fem ? 0.88 : 1) * (0.94 + bw * 0.06);
     const hs = D.head, hw = hs * (fem ? 0.95 : 1);
     const hsty = look.hairStyle || 'short', hat = look.hat, full = hat && hat.type === 'fullhelmet', noHead = (gm & GM.HEAD) || (gg && gg.cr);
     if (gm & GM.HEAD) { c3pt(c3b, NB, -0.006, 0, 0.03); c3pt(c3g, NB, -0.006, 0, 0.3); c3seg(BOX, c3a, c3b, nr, nr, Pl.skin, 1, 1, NB[3], NB[4], NB[5]); this.stump(c3b, c3g, nr * 1.08, Pl, 0); }
@@ -1756,7 +1816,7 @@ const Char3D = {
       else { c3box(BOX, Hf, -0.002, 0, 0.165 * hs, 0.108 * hs, 0.088 * hw, 0.048 * hs, hcol); c3box(BOX, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92)); }
     }
     // ---- arms (the left hand on the weapon as in the full model), held items
-    const ua = D.ua, fa = D.fa, Wm = Pose.weapon ? WEAPON_MODELS[Pose.weapon] || WEAPON_MODELS.generic : null, armR = 0.047 * D.arm;
+    const ua = D.ua, fa = D.fa, Wm = Pose.weapon ? WEAPON_MODELS[Pose.weapon] || WEAPON_MODELS.generic : null, armR = 0.051 * D.arm;
     let handR = null, wd = null;
     for (const side of [1, -1]) {
       const i = side < 0 ? C3.LW : C3.RW;
@@ -1826,7 +1886,7 @@ const Char3D = {
   head(Hf, look, Pl, D, S, T, det, ex) {
     const M = this.M, SP = M.SPH, RB = M.RB, BOX = M.BOX, CY = M.CYL, fem = D.fem, zomb = D.zomb;
     const hs = D.head, hw = hs * (fem ? 0.95 : 1), U = C3U.HEAD;
-    c3box(M.HEAD, Hf, 0, 0, 0, U * hs, U * hw, U * hs, Pl.skin);
+    c3box(M.HEAD, Hf, 0, 0, 0, U * hs, U * hw, U * hs, ex.face ? Pl.faceB : Pl.face);
     const jaw = T[C3.JAW] || 0;
     if (det > 0) {
       // nose, eyes, brows, mouth, ears
@@ -1841,14 +1901,14 @@ const Char3D = {
       // mouth: a slit, dark and open on the dead
       const mo = zomb ? 0.006 + jaw * 0.012 : 0.0035;
       c3box(BOX, Hf, 0.094 * hs, 0, 0.006 * hs - mo * 0.5, 0.008, zomb ? 0.02 : 0.019, mo, zomb ? [0.12, 0.03, 0.03] : Pl.lip);
-      if (ex.face) c3box(SP, Hf, 0.09 * hs, 0.008, -0.026 * hs, 0.012, 0.03, 0.022, Pl.bloodD);
     }
     // hair or hat
     const hsty = look.hairStyle || 'short', hat = look.hat;
     const fullHelm = hat && hat.type === 'fullhelmet', UH = C3U.HAIR * hs;
     if (hsty !== 'bald' && !fullHelm) {
       const hc = hsty === 'buzz' ? this.mix(Pl.hair, Pl.skin, 0.45) : Pl.hair;
-      const big = hsty === 'messy' ? 1.05 : hsty === 'buzz' ? 0.985 : hsty === 'long' || fem ? 1.025 : 1;
+      // (under a hat a little smaller, so it shows below the brim without poking through the crown)
+      const big = (hsty === 'messy' ? 1.05 : hsty === 'buzz' ? 0.985 : hsty === 'long' || fem ? 1.025 : 1) * (hat ? 0.97 : 1);
       c3box(M.HAIR, Hf, -0.002, 0, 0, UH * big, UH * big * (fem ? 0.97 : 1), UH * (big > 1 ? 1 + (big - 1) * 0.6 : big), hc);
       if (hsty === 'long') {
         // hangs down the back to the shoulders, and past the ears at the sides
@@ -1858,7 +1918,7 @@ const Char3D = {
         c3box(SP, Hf, -0.103 * hs, 0, 0.1 * hs, 0.026, 0.026, 0.026, this.sc(hc, 0.85));
         c3pt(c3a, Hf, -0.115 * hs, 0, 0.095 * hs); c3pt(c3b, Hf, -0.135 * hs, 0, -0.03);
         c3seg(RB, c3a, c3b, 0.022, 0.024, hc, 1, 0.55, Hf[3], Hf[4], Hf[5]);
-      } else if (hsty === 'messy' && det > 0) {
+      } else if (hsty === 'messy' && det > 0 && !hat) {
         c3box(SP, Hf, 0.045 * hs, 0.03, 0.17 * hs, 0.04, 0.034, 0.028, hc); c3box(SP, Hf, -0.03 * hs, -0.04, 0.18 * hs, 0.042, 0.036, 0.03, hc);
         c3box(SP, Hf, 0.07 * hs, -0.035, 0.145 * hs, 0.03, 0.03, 0.022, hc);
       } else if (fem && hsty === 'short' && det > 0) for (const sd of [-1, 1]) c3box(RB, Hf, -0.01, sd * 0.073 * hw, 0.05, 0.05, 0.016, 0.07, hc, 0.8, 1);

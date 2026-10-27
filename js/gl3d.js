@@ -6,9 +6,10 @@
 // blits a model's cell when the painter's algorithm reaches it.
 //   GL3D.ok()                     WebGL usable?
 //   GL3D.begin(scale)             start a frame (scale = screen px per world px)
-//   GL3D.prim(m, cx,cy,cz, X.., Y.., Z.., r,g,b, t0, t1)
+//   GL3D.prim(m, cx,cy,cz, X.., Y.., Z.., r,g,b, t0, t1, mat)
 //                                 queue mesh m (GL3D.BOX/RBOX/CYL/SPH or one added with def) centred at c with
-//                                 orthogonal half-axes X, Y, Z; the cross-section scales from t0 (z=-1 end) to t1 (z=+1 end)
+//                                 orthogonal half-axes X, Y, Z; the cross-section scales from t0 (z=-1 end) to t1 (z=+1 end);
+//                                 mat: [material, variant, grime, blood] painted on it (see the fragment shader), or none
 //   GL3D.def(name, build)         add a mesh type before first use (build returns { v, i }); GL3D[name] is its index
 //   GL3D.lathe(rings, seg, axis)  a smooth closed mesh through superelliptic rings (see below)
 //   GL3D.mark(a) / GL3D.seal(cell, a, light, flash)
@@ -26,7 +27,8 @@ const GL3D = {
   // software WebGL (no GPU) is far too slow to redraw models every frame; ?soft3d forces it on for testing
   soft: false, allowSoft: /[?&]soft3d/.test(location.search), renderer: '',
   cells: [], cx: 0, cy: 0, rowH: 0, scale: 1, AW: 0, AH: 0,
-  FL: 22,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, taper 2
+  FL: 26,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, seed 1, taper 2, material 4
+  sd: 0,    // seed stamped on the parts queued next (decorrelates their textures)
   ok() {
     if (this.failed) return false;
     if (this.gl) return !this.gl.isContextLost();
@@ -51,9 +53,9 @@ const GL3D = {
       this.drawInst = v2 ? (m, n, t, o, k) => gl.drawElementsInstanced(m, n, t, o, k) : (m, n, t, o, k) => ext.drawElementsInstancedANGLE(m, n, t, o, k);
       const vs = `
         attribute vec3 aP; attribute vec3 aN;
-        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT;
+        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT; attribute float iS; attribute vec4 iM;
         uniform vec2 uAtlas; uniform float uScale;
-        varying vec3 vCol;
+        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ;
         void main() {
           // taper: the cross-section scales linearly along local z; the normal follows the slanted surface
           float s = mix(iT.x, iT.y, aP.z * 0.5 + 0.5), sd = (iT.y - iT.x) * 0.5;
@@ -62,29 +64,186 @@ const GL3D = {
           vec3 w = iC + iX * lp.x + iY * lp.y + iZ * lp.z;
           // half-axes are orthogonal, so the inverse transpose only divides by their squared lengths
           vec3 n = normalize(iX * (ln.x / dot(iX, iX)) + iY * (ln.y / dot(iY, iY)) + iZ * (ln.z / dot(iZ, iZ)));
-          // tops brightest, then +y, then +x; a soft wrap keeps undersides from going black
-          float b = 0.64 + 0.13 * n.x + 0.24 * n.y + 0.34 * n.z;
-          b = clamp(b, 0.36, 1.06);
-          b = b * 0.92 + 0.08 * b * b;
-          vec3 c = mix(iCol * b, vec3(1.0, 0.25, 0.2), iL.y) * iL.x;
-          // dim light shifts slightly blue, like the 2D shade() helper
-          if (iL.x < 0.6) c.b *= 1.08;
-          // rim: faces turned toward the camera get a faint lift so silhouettes read at night
-          c += vec3(0.05, 0.06, 0.08) * clamp(n.x + n.y, 0.0, 1.0) * (1.0 - iL.x);
-          if (iCol.r > 1.0) c = iCol - 1.0;
-          vCol = c;
+          float lx = length(iX), ly = length(iY), lz = length(iZ);
+          // colour and flash; the surface point in the part's own metres (textures stay put on the part as it moves)
+          // with a per-part seed; the unit position and the part's mean radius; normal and light; material
+          vA = vec4(iCol, iL.y);
+          // (the seed also takes the part's size, so the upper arm and forearm get different patterns)
+          vB = vec4(lp * vec3(lx, ly, lz), iS + lx * 31.0 + ly * 17.0 + lz * 11.0);
+          vC = vec4(lp, (lx + ly) * 0.5 * s);
+          vD = vec4(n, iL.x);
+          vM = iM; vZ = w.z;
           vec2 sc = vec2((w.x - w.y) * 32.0, (w.x + w.y) * 16.0 - w.z * 32.0) * uScale + iL.zw;
           gl_Position = vec4(sc.x / uAtlas.x * 2.0 - 1.0, 1.0 - sc.y / uAtlas.y * 2.0, -(w.x + w.y + w.z) / 16.0, 1.0);
         }`;
-      const fs = `precision mediump float; varying vec3 vCol; void main() { gl_FragColor = vec4(vCol, 1.0); }`;
+      // Materials (iM.x; iM.y a variant, iM.z grime 0..1, iM.w blood 0..1), painted procedurally on the surface:
+      // 1 cotton, 2 denim, 3 knit, 4 leather, 5 quilted (puffer), 6 plaid (y: 0 flannel, 1 buffalo check), 7 stripes
+      // (y: 0 light, 1 dark), 8 camouflage, 9 skin (y: decay of the dead), 10 face (y: decay, or minus stubble),
+      // 11 hair, 12 twill / canvas, 13 plastic, 14 a blood splat (ragged edge), 15 rubber / sneaker, 16 fleece.
+      // Features too small to see at the current zoom fade to their average instead of shimmering.
+      const fs = `
+        #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+        #else
+        precision mediump float;
+        #endif
+        uniform float uPx;
+        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ;
+        float hsh(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
+        float vn(vec3 x) {
+          vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(hsh(i), hsh(i + vec3(1.0, 0.0, 0.0)), f.x), mix(hsh(i + vec3(0.0, 1.0, 0.0)), hsh(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+                     mix(mix(hsh(i + vec3(0.0, 0.0, 1.0)), hsh(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hsh(i + vec3(0.0, 1.0, 1.0)), hsh(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+        }
+        float fbm(vec3 p) { return vn(p) * 0.57 + vn(p * 2.03 + 11.3) * 0.29 + vn(p * 4.1 + 23.7) * 0.14; }
+        // how much of a feature f metres across shows at this zoom: none under ~1.3 px, all over ~3 px
+        float vis(float f) { return smoothstep(1.3, 3.0, f * uPx); }
+        void main() {
+          vec3 c = vA.rgb, n = normalize(vD.xyz);
+          float t = floor(vM.x + 0.5), spec = 0.0, cloth = 0.0;
+          vec3 P = vB.xyz + vB.w * 1.37, Q = vC.xyz;
+          float R = vC.w, ar = atan(Q.y, Q.x), U = ar * R;
+          if (c.r <= 1.0 && t > 0.5) {
+            float mot = fbm(P * 13.0), vm = vis(0.03), vf = vis(0.012);
+            if (t < 8.5 || t > 11.5) {
+              cloth = 1.0;
+              // weave mottling and soft folds across the part
+              c *= 1.0 + (mot - 0.5) * 0.16 * vm + (vn(P * 85.0) - 0.5) * 0.08 * vf;
+              c *= 1.0 + sin(P.z * 34.0 + vn(P * 5.0) * 7.0) * 0.045 * vm;
+            }
+            if (t < 1.5) {
+            } else if (t < 2.5) {
+              // denim: streaky indigo, worn lighter in patches, a darker seam down the outside
+              float st = vn(vec3(P.x * 60.0, P.y * 60.0, P.z * 5.0));
+              c *= 0.9 + st * 0.2 * vf;
+              c = mix(c, c * 1.32 + 0.035, smoothstep(0.5, 0.85, mot) * 0.45 * vm);
+              float sm = abs(abs(ar) - 1.5708) * R;
+              c = mix(c, c * 0.62, (1.0 - smoothstep(0.004, 0.009, sm)) * vis(0.01));
+            } else if (t < 3.5) {
+              // knit: ribs running down the part
+              c *= 1.0 + sin(U * 250.0) * 0.08 * vis(0.013) + (vn(P * 120.0) - 0.5) * 0.06 * vf;
+            } else if (t < 4.5) {
+              // leather: a network of creases, and a sheen
+              float cr = abs(vn(P * 26.0) - 0.5);
+              c *= 0.88 + mot * 0.2 * vm;
+              c *= 1.0 - (1.0 - smoothstep(0.0, 0.035, cr)) * 0.1 * vis(0.01);
+              spec = 0.22;
+            } else if (t < 5.5) {
+              // quilted: puffed bands with stitched seams between them
+              float q = fract(P.z / 0.085 + 0.5);
+              c *= mix(0.9, 0.74 + 0.3 * sin(q * 3.1416), vis(0.04));
+              spec = 0.1;
+            } else if (t < 6.5) {
+              // plaid: wide dark bands both ways, darker where they cross, thin light lines between
+              float u = fract(U / 0.095), v = fract(P.z / 0.095);
+              float bu = smoothstep(0.52, 0.56, u) * (1.0 - smoothstep(0.9, 0.94, u)), bv = smoothstep(0.52, 0.56, v) * (1.0 - smoothstep(0.9, 0.94, v));
+              float lu = 1.0 - smoothstep(0.015, 0.03, abs(u - 0.25)), lv = 1.0 - smoothstep(0.015, 0.03, abs(v - 0.25));
+              vec3 dk = vM.y > 0.5 ? vec3(0.07, 0.06, 0.06) : c * 0.42;
+              vec3 pc = mix(c, dk, max(bu, bv) * 0.75);
+              pc = mix(pc, dk * 0.8, bu * bv * 0.6);
+              pc = mix(pc, mix(c, vec3(0.92, 0.88, 0.78), 0.55), max(lu, lv) * vis(0.006));
+              c = mix(c * mix(0.7, 0.62, vM.y), pc, vis(0.04));
+            } else if (t < 7.5) {
+              // stripes round the body
+              vec3 sc2 = vM.y > 0.5 ? vec3(0.1, 0.12, 0.2) : vec3(0.92, 0.9, 0.86);
+              float v = smoothstep(0.45, 0.5, fract(P.z / 0.06)) * (1.0 - smoothstep(0.95, 1.0, fract(P.z / 0.06)));
+              c = mix(mix(c, sc2, 0.45), mix(c, sc2, v), vis(0.025));
+            } else if (t < 8.5) {
+              // woodland camouflage: blotches of green, brown, khaki and black
+              float a = fbm(P * 5.0 + 7.0), b = fbm(P * 5.5 + 19.0), k = fbm(P * 9.0 + 31.0);
+              vec3 cc = c;
+              cc = mix(cc, vec3(0.5, 0.47, 0.33), smoothstep(0.36, 0.33, a));
+              cc = mix(cc, c * vec3(0.52, 0.6, 0.46), smoothstep(0.56, 0.6, a));
+              cc = mix(cc, vec3(0.3, 0.23, 0.15), smoothstep(0.6, 0.64, b));
+              cc = mix(cc, vec3(0.11, 0.11, 0.09), smoothstep(0.7, 0.73, k));
+              c = mix(c * 0.86, cc, vis(0.05));
+            } else if (t < 10.5) {
+              // skin: faint mottling; the dead bruised, veined and rotting in patches
+              float z = max(vM.y, 0.0);
+              c *= 1.0 + (mot - 0.5) * 0.1 * vm;
+              float r = fbm(P * 8.0 + 40.0);
+              c = mix(c, c * vec3(0.74, 0.66, 0.8), smoothstep(0.55, 0.72, r) * 0.75 * z * vm);
+              c = mix(c, vec3(0.22, 0.19, 0.13), smoothstep(0.66, 0.8, fbm(P * 15.0 + 5.0)) * 0.55 * z * vm);
+              // veins in a few places (where a broad noise runs high), thin and bluish
+              float vv = abs(vn(P * 26.0) - 0.5), vz = smoothstep(0.58, 0.68, fbm(P * 3.0 + 60.0));
+              c = mix(c, c * vec3(0.62, 0.64, 0.76), (1.0 - smoothstep(0.0, 0.025, vv)) * 0.45 * z * vz * vis(0.008));
+              if (t > 9.5) {
+                // the face (head mesh units: eyes at x .48, y +-.16, z .41; the mouth at z .03; chin at -.25)
+                float e = min(length((Q - vec3(0.44, 0.165, 0.41)) * vec3(0.7, 1.0, 1.25)), length((Q - vec3(0.44, -0.165, 0.41)) * vec3(0.7, 1.0, 1.25)));
+                float so = 1.0 - smoothstep(0.05, 0.17, e);
+                c = mix(c, c * mix(vec3(0.84, 0.8, 0.8), vec3(0.42, 0.33, 0.4), z), so * (0.5 + z * 0.5) * vis(0.02));
+                float front = smoothstep(0.1, 0.35, Q.x);
+                float cheek = 1.0 - smoothstep(0.04, 0.16, min(length(Q - vec3(0.42, 0.26, 0.2)), length(Q - vec3(0.42, -0.26, 0.2))));
+                c = mix(c, c * vec3(1.08, 0.9, 0.86), cheek * front * 0.5 * (1.0 - z) * vis(0.03));
+                float stb = max(-vM.y, 0.0), jaw = (1.0 - smoothstep(0.05, 0.16, Q.z)) * smoothstep(-0.3, -0.2, Q.z) * smoothstep(-0.1, 0.25, Q.x);
+                c = mix(c, c * vec3(0.66, 0.64, 0.66), jaw * stb * (0.75 + vn(P * 400.0) * 0.25 * vf) * vis(0.02));
+                // the dead: blood round the mouth and run down the chin in streaks
+                float mo = length(Q.yz * vec2(1.0, 0.8)) + (vn(P * 40.0) - 0.5) * 0.12;
+                float dr = smoothstep(0.5, 0.68, vn(vec3(Q.y * 14.0, Q.z * 1.5, vB.w))) * (1.0 - smoothstep(0.16, 0.24, abs(Q.y))) * smoothstep(-0.34, -0.2, Q.z) * step(Q.z, 0.03);
+                float bm = max(1.0 - smoothstep(0.12, 0.2, mo), dr * 0.85) * front * vM.w;
+                c = mix(c, vec3(0.32, 0.04, 0.03), bm * 0.85 * vis(0.015));
+              }
+            } else if (t < 11.5) {
+              // hair: strands down from the crown, darker underneath, a soft sheen
+              float st = vn(vec3(ar * 26.0, Q.z * 1.6, vB.w));
+              c *= mix(1.0, 0.78 + st * 0.4, vis(0.006)) * (0.86 + 0.14 * smoothstep(-0.2, 0.8, Q.z));
+              c *= 1.0 + (mot - 0.5) * 0.12 * vm;
+              spec = 0.12;
+            } else if (t < 12.5) {
+              // twill / canvas: a fine diagonal grain and a seam down the outside
+              c *= 1.0 + sin((P.x + P.y + P.z) * 500.0) * 0.05 * vis(0.006);
+              float sm = abs(abs(ar) - 1.5708) * R;
+              c = mix(c, c * 0.72, (1.0 - smoothstep(0.003, 0.008, sm)) * vis(0.01));
+            } else if (t < 13.5) {
+              // plastic: smooth, a strong highlight, scuffs
+              c *= 1.0 + (step(0.82, vn(P * 70.0)) * 0.12 - 0.02) * vf;
+              spec = 0.42;
+            } else if (t < 14.5) {
+              // a splat of blood: a ragged edge (the patch is flat along x)
+              float r = length(Q.yz), ed = 0.58 + 0.42 * fbm(vec3(Q.yz * 2.4, vB.w * 3.1));
+              if (r > ed) discard;
+              c *= 0.82 + 0.3 * vn(P * 70.0) * vf + 0.12 * smoothstep(0.0, ed, r);
+              spec = 0.12;
+            } else if (t < 15.5) {
+              // rubber / sneakers: a little texture, a scuffed toe
+              c *= 1.0 - smoothstep(0.6, 0.95, Q.x) * 0.1;
+            } else {
+              // fleece: soft, fuzzy, bigger folds
+              c *= 1.0 + (vn(P * 150.0) - 0.5) * 0.08 * vf + sin(P.z * 22.0 + mot * 5.0) * 0.04 * vm;
+            }
+            // grime, worst toward the ground, then blood soaked in (more on the front)
+            float g = fbm(P * 6.0 + 50.0) + (0.35 - vZ) * 0.7;
+            float gm = smoothstep(0.78 - vM.z * 0.5, 1.02 - vM.z * 0.4, g) * vM.z;
+            c = mix(c, c * vec3(0.56, 0.5, 0.42) + vec3(0.035, 0.028, 0.018), gm * 0.85 * vm + gm * 0.25 * (1.0 - vm));
+            if (vM.w > 0.0 && t != 14.0 && t != 10.0) {
+              // (coverage: about 5% at 0.2, 12% at 0.4, a third at 1 - less on the legs)
+              float bl = fbm(P * 7.0 + 80.0) + max(Q.x, 0.0) * 0.06 + (vn(P * 30.0) - 0.5) * 0.08, th = 0.735 - vM.w * 0.18 + clamp(1.15 - vZ, 0.0, 1.0) * 0.09;
+              float bmk = smoothstep(th, th + 0.03, bl);
+              vec3 bc = mix(vec3(0.34, 0.045, 0.035), vec3(0.17, 0.03, 0.022), vn(P * 18.0)) * (0.8 + cloth * 0.1);
+              c = mix(c, bc, bmk * mix(0.45, 0.9, vm));
+            }
+          }
+          // light: tops brightest, then +y, then +x; a soft wrap keeps undersides from going black
+          float b = 0.64 + 0.13 * n.x + 0.24 * n.y + 0.34 * n.z;
+          b = clamp(b, 0.36, 1.06);
+          b = b * 0.92 + 0.08 * b * b;
+          vec3 o = mix(c * b, vec3(1.0, 0.25, 0.2), vA.w) * vD.w;
+          // dim light shifts slightly blue, like the 2D shade() helper
+          if (vD.w < 0.6) o.b *= 1.08;
+          // rim: faces turned toward the camera get a faint lift so silhouettes read at night
+          o += vec3(0.05, 0.06, 0.08) * clamp(n.x + n.y, 0.0, 1.0) * (1.0 - vD.w);
+          if (spec > 0.0) o += spec * pow(max(dot(n, vec3(0.45, 0.58, 0.68)), 0.0), 14.0) * vD.w;
+          if (c.r > 1.0) o = c - 1.0;
+          gl_FragColor = vec4(o, 1.0);
+        }`;
       const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
       const p = gl.createProgram();
       gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
       gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
       this.prog = p;
-      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT']) this.loc[a] = gl.getAttribLocation(p, a);
-      this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale');
+      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM']) this.loc[a] = gl.getAttribLocation(p, a);
+      this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale'); this.uPx = gl.getUniformLocation(p, 'uPx');
       const buf = (data, T) => { const b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, data, gl.STATIC_DRAW); return b; };
       for (const m of this.buildMeshes().concat(this.defs.map(d => d.build()))) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
       for (let k = 0; k < this.NM; k++) { this.n[k] = 0; this.grow(k, 512); }
@@ -228,7 +387,7 @@ const GL3D = {
     this.cells.push(c);
     return c;
   },
-  prim(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, r, g, b, t0, t1) {
+  prim(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, r, g, b, t0, t1, mat) {
     if (this.n[m] >= this.cap[m]) this.grow(m, this.cap[m] * 2);
     const a = this.inst[m], o = this.n[m]++ * this.FL;
     a[o] = cx; a[o + 1] = cy; a[o + 2] = cz;
@@ -236,7 +395,8 @@ const GL3D = {
     a[o + 6] = yx; a[o + 7] = yy; a[o + 8] = yz;
     a[o + 9] = zx; a[o + 10] = zy; a[o + 11] = zz;
     a[o + 12] = r; a[o + 13] = g; a[o + 14] = b;
-    a[o + 20] = t0; a[o + 21] = t1;
+    a[o + 19] = this.sd; a[o + 20] = t0; a[o + 21] = t1;
+    if (mat) { a[o + 22] = mat[0]; a[o + 23] = mat[1]; a[o + 24] = mat[2]; a[o + 25] = mat[3]; } else a[o + 22] = a[o + 23] = a[o + 24] = a[o + 25] = 0;
   },
   mark(out) { for (let k = 0; k < this.NM; k++) out[k] = this.n[k]; return out; },
   // drop everything queued since mark (no cell could be found)
@@ -270,7 +430,7 @@ const GL3D = {
     gl.disable(gl.CULL_FACE);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(this.prog);
-    gl.uniform2f(this.uAtlas, AW, AH); gl.uniform1f(this.uScale, this.scale);
+    gl.uniform2f(this.uAtlas, AW, AH); gl.uniform1f(this.uScale, this.scale); gl.uniform1f(this.uPx, this.scale * 34);
     const L = this.loc, st = this.FL * 4;
     const at = (name, size, off) => { const l = L[name]; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, st, off * 4); this.divisor(l, 1); };
     for (let k = 0; k < this.NM; k++) {
@@ -281,7 +441,7 @@ const GL3D = {
       gl.enableVertexAttribArray(L.aN); gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 24, 12); this.divisor(L.aN, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, M.ibuf);
       gl.bufferData(gl.ARRAY_BUFFER, this.inst[k].subarray(0, n * this.FL), gl.DYNAMIC_DRAW);
-      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iT', 2, 20);
+      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iS', 1, 19); at('iT', 2, 20); at('iM', 4, 22);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ib);
       this.drawInst(gl.TRIANGLES, M.ni, gl.UNSIGNED_SHORT, 0, n);
     }

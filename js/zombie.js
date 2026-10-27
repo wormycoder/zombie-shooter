@@ -66,6 +66,11 @@ const Zombie = {
     L.bag = back ? (back.col || '#444') : null;
     L.vest = vest ? vest.col : null;
     L.gore = z.gore;
+    // textures: cloth and blood from what they wear; grime, how far gone the skin is, stubble on some of the men
+    Char3D.dress(L, get, 0.25);
+    const h = (k) => Char3D.rnd(z.id, k);
+    L.dirt = 0.4 + h(201) * 0.5; L.decay = 0.45 + h(202) * 0.55;
+    L.stubble = z.female || h(203) < 0.5 ? 0 : 0.4 + h(204) * 0.6;
     return L;
   },
   // ------------------------------------------------------------------ feeding

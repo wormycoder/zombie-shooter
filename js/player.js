@@ -210,6 +210,10 @@ const Player = {
     L.gloves = gloves ? gloves.col : null;
     L.glasses = !!w('eyes');
     L.att = Hotbar.visual();
+    // textures: the cloth of each thing worn, blood soaked into bloody clothes; a man's stubble grows over three days
+    Char3D.dress(L, w, 0.5);
+    L.stubble = L.female ? 0 : Math.round(U.clamp(0.15 + p.minutesAlive / 4320, 0, 1) * 10) / 10;
+    L.dirt = 0.06;
     return L;
   },
 

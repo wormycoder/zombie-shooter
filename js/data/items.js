@@ -229,39 +229,39 @@ Sd('CabbageSeeds', 'Cabbage Seeds', 'cabbage', '#9ad06a');
 // slot, cover (body regions), sc scratch protection %, bi bite protection %, ins insulation 0..1, colors
 const Cl = (id, n, w, ic, o) => idef(id, Object.assign({ n, cat: 'Clothing', w, ic }, o));
 const TSHIRT_COLS = ['#d8d8d8', '#2a4a8a', '#8a2a2a', '#3a6a3a', '#202020', '#c8a040', '#7a4a8a', '#e07030', '#5a8ab0', '#f0f0f0'];
-Cl('TShirt', 'T-Shirt', 0.2, ['tshirt', '#ccc'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 8, bi: 0, ins: 0.1, cols: TSHIRT_COLS });
-Cl('Shirt', 'Long Sleeve Shirt', 0.3, ['shirt', '#ccc'], { slot: 'shirt', cover: ['torso', 'uarms', 'farms'], sc: 10, bi: 2, ins: 0.15, cols: ['#e8e8f0', '#a0c0e0', '#c0a080', '#5a6a8a', '#8a3a3a', '#e0d0a0'] });
-Cl('TankTop', 'Tank Top', 0.1, ['tshirt', '#ccc'], { slot: 'shirt', cover: ['torso'], sc: 5, bi: 0, ins: 0.05, cols: ['#f0f0f0', '#202020', '#8a2a2a', '#2a4a8a'] });
-Cl('PoliceShirt', 'Police Shirt', 0.3, ['shirt', '#3a4a6a'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 12, bi: 3, ins: 0.15, cols: ['#3a4a6a'] });
-Cl('Sweater', 'Sweater', 0.5, ['shirt', '#ccc'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 15, bi: 5, ins: 0.35, cols: ['#8a3a3a', '#3a5a3a', '#5a5a7a', '#c0a070', '#404040'] });
-Cl('Hoodie', 'Hoodie', 0.6, ['jacket', '#ccc'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 18, bi: 6, ins: 0.35, cols: ['#505860', '#2a2a2a', '#8a2a2a', '#2a4a7a', '#3a6a4a', '#c0c0c0'] });
-Cl('DenimJacket', 'Denim Jacket', 0.8, ['jacket', '#4a6a9a'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 30, bi: 12, ins: 0.3, cols: ['#4a6a9a', '#3a4a6a'] });
-Cl('LeatherJacket', 'Leather Jacket', 1.2, ['jacket', '#2a2220'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 55, bi: 30, ins: 0.4, cols: ['#2a2220', '#4a3020'] });
-Cl('WinterCoat', 'Winter Coat', 1.5, ['jacket', '#3a4a5a'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms', 'groin'], sc: 40, bi: 18, ins: 0.85, cols: ['#3a4a5a', '#8a2a2a', '#2a2a2a', '#4a5a3a'] });
-Cl('FireJacket', 'Firefighter Jacket', 2.0, ['jacket', '#a08030'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 70, bi: 45, ins: 0.6, cols: ['#a08030'] });
-Cl('MilitaryJacket', 'Military Jacket', 1.2, ['jacket', '#4a5a3a'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 45, bi: 22, ins: 0.45, cols: ['#4a5a3a', '#5a5a40'] });
-Cl('BulletVest', 'Bulletproof Vest', 2.5, ['vest', '#2a2a30'], { slot: 'vest', cover: ['torso'], sc: 80, bi: 70, ins: 0.15, bullet: true, cols: ['#2a2a30', '#3a4a3a'] });
-Cl('Jeans', 'Jeans', 0.6, ['pants', '#3a5a8a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 20, bi: 8, ins: 0.2, cols: ['#3a5a8a', '#2a3a5a', '#506a90', '#202530'] });
-Cl('Trousers', 'Trousers', 0.5, ['pants', '#3a3a3a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 12, bi: 4, ins: 0.2, cols: ['#3a3a3a', '#5a4a3a', '#2a2a40', '#7a6a50'] });
-Cl('Scrubs', 'Scrubs Top', 0.2, ['tshirt', '#4a9a9a'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 6, bi: 0, ins: 0.08, cols: ['#4a9a9a', '#5a7ab0', '#7aa0c0'] });
-Cl('ScrubPants', 'Scrubs Trousers', 0.3, ['pants', '#4a9a9a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 8, bi: 2, ins: 0.1, cols: ['#4a9a9a', '#5a7ab0', '#7aa0c0'] });
-Cl('LabCoat', 'Lab Coat', 0.6, ['jacket', '#f0f0f0'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms', 'groin'], sc: 15, bi: 4, ins: 0.15, cols: ['#f0f0f0'] });
-Cl('Shorts', 'Shorts', 0.3, ['shorts', '#7a6a50'], { slot: 'pants', cover: ['groin', 'ulegs'], sc: 8, bi: 2, ins: 0.05, cols: ['#7a6a50', '#3a5a8a', '#202020', '#8a2a2a'] });
-Cl('CargoPants', 'Cargo Pants', 0.7, ['pants', '#5a5a40'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 25, bi: 10, ins: 0.25, cols: ['#5a5a40', '#4a5a3a', '#3a3a3a'] });
-Cl('FirePants', 'Firefighter Pants', 1.5, ['pants', '#a08030'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 60, bi: 40, ins: 0.4, cols: ['#a08030'] });
-Cl('PolicePants', 'Police Trousers', 0.5, ['pants', '#2a3040'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 15, bi: 5, ins: 0.2, cols: ['#2a3040'] });
-Cl('Sneakers', 'Sneakers', 0.5, ['shoes', '#e0e0e0'], { slot: 'shoes', cover: ['feet'], sc: 10, bi: 5, ins: 0.1, cols: ['#e0e0e0', '#2a2a2a', '#3a5a9a', '#c03030'] });
-Cl('Boots', 'Work Boots', 1.0, ['shoes', '#5a3a20'], { slot: 'shoes', cover: ['feet', 'llegs'], sc: 30, bi: 20, ins: 0.25, cols: ['#5a3a20', '#2a2a2a'] });
-Cl('DressShoes', 'Dress Shoes', 0.6, ['shoes', '#1a1a1a'], { slot: 'shoes', cover: ['feet'], sc: 10, bi: 5, ins: 0.1, cols: ['#1a1a1a', '#4a2a1a'] });
-Cl('Beanie', 'Beanie', 0.1, ['hat', '#3a3a3a'], { slot: 'hat', cover: ['head'], sc: 5, bi: 0, ins: 0.2, cols: ['#3a3a3a', '#8a2a2a', '#2a4a7a', '#c0a040'], hatType: 'beanie' });
-Cl('BaseballCap', 'Baseball Cap', 0.1, ['cap', '#2a4a8a'], { slot: 'hat', cover: ['head'], sc: 3, bi: 0, ins: 0.05, cols: ['#2a4a8a', '#c02020', '#202020', '#3a6a3a', '#e0e0e0'], hatType: 'cap' });
-Cl('HardHat', 'Hard Hat', 0.5, ['helmet', '#f0c020'], { slot: 'hat', cover: ['head'], sc: 60, bi: 30, ins: 0.05, cols: ['#f0c020', '#f08020'], hatType: 'helmet' });
-Cl('MotoHelmet', 'Motorcycle Helmet', 1.2, ['helmet', '#202020'], { slot: 'hat', cover: ['head'], sc: 100, bi: 100, ins: 0.2, cols: ['#202020', '#c02020', '#f0f0f0'], hatType: 'fullhelmet' });
-Cl('FireHelmet', 'Firefighter Helmet', 1.0, ['helmet', '#c8a020'], { slot: 'hat', cover: ['head'], sc: 80, bi: 50, ins: 0.1, cols: ['#c8a020'], hatType: 'helmet' });
-Cl('PoliceCap', 'Police Cap', 0.1, ['cap', '#2a3040'], { slot: 'hat', cover: ['head'], sc: 3, bi: 0, ins: 0.05, cols: ['#2a3040'], hatType: 'cap' });
-Cl('Gloves', 'Winter Gloves', 0.1, ['gloves', '#3a3a3a'], { slot: 'gloves', cover: ['hands'], sc: 20, bi: 5, ins: 0.3, cols: ['#3a3a3a', '#5a3a3a'] });
-Cl('LeatherGloves', 'Leather Gloves', 0.2, ['gloves', '#4a3020'], { slot: 'gloves', cover: ['hands'], sc: 45, bi: 20, ins: 0.2, cols: ['#4a3020', '#202020'] });
-Cl('Scarf', 'Scarf', 0.1, ['scarf', '#8a2a2a'], { slot: 'neck', cover: ['neck'], sc: 25, bi: 10, ins: 0.2, cols: ['#8a2a2a', '#2a4a7a', '#c0a040', '#3a6a3a'] });
+Cl('TShirt', 'T-Shirt', 0.2, ['tshirt', '#ccc'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 8, bi: 0, ins: 0.1, cols: TSHIRT_COLS, tex: 'cotton', pats: [['stripe', 0.08], ['stripe2', 0.06]] });
+Cl('Shirt', 'Long Sleeve Shirt', 0.3, ['shirt', '#ccc'], { slot: 'shirt', cover: ['torso', 'uarms', 'farms'], sc: 10, bi: 2, ins: 0.15, cols: ['#e8e8f0', '#a0c0e0', '#c0a080', '#5a6a8a', '#8a3a3a', '#e0d0a0'], tex: 'cotton', pats: [['plaid', 0.28], ['plaid2', 0.12], ['stripe', 0.08]] });
+Cl('TankTop', 'Tank Top', 0.1, ['tshirt', '#ccc'], { slot: 'shirt', cover: ['torso'], sc: 5, bi: 0, ins: 0.05, cols: ['#f0f0f0', '#202020', '#8a2a2a', '#2a4a8a'], tex: 'cotton' });
+Cl('PoliceShirt', 'Police Shirt', 0.3, ['shirt', '#3a4a6a'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 12, bi: 3, ins: 0.15, cols: ['#3a4a6a'], tex: 'twill' });
+Cl('Sweater', 'Sweater', 0.5, ['shirt', '#ccc'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 15, bi: 5, ins: 0.35, cols: ['#8a3a3a', '#3a5a3a', '#5a5a7a', '#c0a070', '#404040'], tex: 'knit', pats: [['stripe', 0.12]] });
+Cl('Hoodie', 'Hoodie', 0.6, ['jacket', '#ccc'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 18, bi: 6, ins: 0.35, cols: ['#505860', '#2a2a2a', '#8a2a2a', '#2a4a7a', '#3a6a4a', '#c0c0c0'], tex: 'fleece' });
+Cl('DenimJacket', 'Denim Jacket', 0.8, ['jacket', '#4a6a9a'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 30, bi: 12, ins: 0.3, cols: ['#4a6a9a', '#3a4a6a'], tex: 'denim' });
+Cl('LeatherJacket', 'Leather Jacket', 1.2, ['jacket', '#2a2220'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 55, bi: 30, ins: 0.4, cols: ['#2a2220', '#4a3020'], tex: 'leather' });
+Cl('WinterCoat', 'Winter Coat', 1.5, ['jacket', '#3a4a5a'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms', 'groin'], sc: 40, bi: 18, ins: 0.85, cols: ['#3a4a5a', '#8a2a2a', '#2a2a2a', '#4a5a3a'], tex: 'quilt' });
+Cl('FireJacket', 'Firefighter Jacket', 2.0, ['jacket', '#a08030'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 70, bi: 45, ins: 0.6, cols: ['#a08030'], tex: 'twill' });
+Cl('MilitaryJacket', 'Military Jacket', 1.2, ['jacket', '#4a5a3a'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms'], sc: 45, bi: 22, ins: 0.45, cols: ['#4a5a3a', '#5a5a40'], tex: 'camo' });
+Cl('BulletVest', 'Bulletproof Vest', 2.5, ['vest', '#2a2a30'], { slot: 'vest', cover: ['torso'], sc: 80, bi: 70, ins: 0.15, bullet: true, cols: ['#2a2a30', '#3a4a3a'], tex: 'twill' });
+Cl('Jeans', 'Jeans', 0.6, ['pants', '#3a5a8a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 20, bi: 8, ins: 0.2, cols: ['#3a5a8a', '#2a3a5a', '#506a90', '#202530'], tex: 'denim' });
+Cl('Trousers', 'Trousers', 0.5, ['pants', '#3a3a3a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 12, bi: 4, ins: 0.2, cols: ['#3a3a3a', '#5a4a3a', '#2a2a40', '#7a6a50'], tex: 'twill' });
+Cl('Scrubs', 'Scrubs Top', 0.2, ['tshirt', '#4a9a9a'], { slot: 'shirt', cover: ['torso', 'uarms'], sc: 6, bi: 0, ins: 0.08, cols: ['#4a9a9a', '#5a7ab0', '#7aa0c0'], tex: 'cotton' });
+Cl('ScrubPants', 'Scrubs Trousers', 0.3, ['pants', '#4a9a9a'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 8, bi: 2, ins: 0.1, cols: ['#4a9a9a', '#5a7ab0', '#7aa0c0'], tex: 'cotton' });
+Cl('LabCoat', 'Lab Coat', 0.6, ['jacket', '#f0f0f0'], { slot: 'jacket', cover: ['torso', 'uarms', 'farms', 'groin'], sc: 15, bi: 4, ins: 0.15, cols: ['#f0f0f0'], tex: 'cotton' });
+Cl('Shorts', 'Shorts', 0.3, ['shorts', '#7a6a50'], { slot: 'pants', cover: ['groin', 'ulegs'], sc: 8, bi: 2, ins: 0.05, cols: ['#7a6a50', '#3a5a8a', '#202020', '#8a2a2a'], tex: 'twill' });
+Cl('CargoPants', 'Cargo Pants', 0.7, ['pants', '#5a5a40'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 25, bi: 10, ins: 0.25, cols: ['#5a5a40', '#4a5a3a', '#3a3a3a'], tex: 'twill', pats: [['camo', 0.25]] });
+Cl('FirePants', 'Firefighter Pants', 1.5, ['pants', '#a08030'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 60, bi: 40, ins: 0.4, cols: ['#a08030'], tex: 'twill' });
+Cl('PolicePants', 'Police Trousers', 0.5, ['pants', '#2a3040'], { slot: 'pants', cover: ['groin', 'ulegs', 'llegs'], sc: 15, bi: 5, ins: 0.2, cols: ['#2a3040'], tex: 'twill' });
+Cl('Sneakers', 'Sneakers', 0.5, ['shoes', '#e0e0e0'], { slot: 'shoes', cover: ['feet'], sc: 10, bi: 5, ins: 0.1, cols: ['#e0e0e0', '#2a2a2a', '#3a5a9a', '#c03030'], tex: 'rubber' });
+Cl('Boots', 'Work Boots', 1.0, ['shoes', '#5a3a20'], { slot: 'shoes', cover: ['feet', 'llegs'], sc: 30, bi: 20, ins: 0.25, cols: ['#5a3a20', '#2a2a2a'], tex: 'leather' });
+Cl('DressShoes', 'Dress Shoes', 0.6, ['shoes', '#1a1a1a'], { slot: 'shoes', cover: ['feet'], sc: 10, bi: 5, ins: 0.1, cols: ['#1a1a1a', '#4a2a1a'], tex: 'leather' });
+Cl('Beanie', 'Beanie', 0.1, ['hat', '#3a3a3a'], { slot: 'hat', cover: ['head'], sc: 5, bi: 0, ins: 0.2, cols: ['#3a3a3a', '#8a2a2a', '#2a4a7a', '#c0a040'], hatType: 'beanie', tex: 'knit' });
+Cl('BaseballCap', 'Baseball Cap', 0.1, ['cap', '#2a4a8a'], { slot: 'hat', cover: ['head'], sc: 3, bi: 0, ins: 0.05, cols: ['#2a4a8a', '#c02020', '#202020', '#3a6a3a', '#e0e0e0'], hatType: 'cap', tex: 'cotton' });
+Cl('HardHat', 'Hard Hat', 0.5, ['helmet', '#f0c020'], { slot: 'hat', cover: ['head'], sc: 60, bi: 30, ins: 0.05, cols: ['#f0c020', '#f08020'], hatType: 'helmet', tex: 'plastic' });
+Cl('MotoHelmet', 'Motorcycle Helmet', 1.2, ['helmet', '#202020'], { slot: 'hat', cover: ['head'], sc: 100, bi: 100, ins: 0.2, cols: ['#202020', '#c02020', '#f0f0f0'], hatType: 'fullhelmet', tex: 'plastic' });
+Cl('FireHelmet', 'Firefighter Helmet', 1.0, ['helmet', '#c8a020'], { slot: 'hat', cover: ['head'], sc: 80, bi: 50, ins: 0.1, cols: ['#c8a020'], hatType: 'helmet', tex: 'plastic' });
+Cl('PoliceCap', 'Police Cap', 0.1, ['cap', '#2a3040'], { slot: 'hat', cover: ['head'], sc: 3, bi: 0, ins: 0.05, cols: ['#2a3040'], hatType: 'cap', tex: 'twill' });
+Cl('Gloves', 'Winter Gloves', 0.1, ['gloves', '#3a3a3a'], { slot: 'gloves', cover: ['hands'], sc: 20, bi: 5, ins: 0.3, cols: ['#3a3a3a', '#5a3a3a'], tex: 'knit' });
+Cl('LeatherGloves', 'Leather Gloves', 0.2, ['gloves', '#4a3020'], { slot: 'gloves', cover: ['hands'], sc: 45, bi: 20, ins: 0.2, cols: ['#4a3020', '#202020'], tex: 'leather' });
+Cl('Scarf', 'Scarf', 0.1, ['scarf', '#8a2a2a'], { slot: 'neck', cover: ['neck'], sc: 25, bi: 10, ins: 0.2, cols: ['#8a2a2a', '#2a4a7a', '#c0a040', '#3a6a3a'], tex: 'knit' });
 Cl('Glasses', 'Glasses', 0.05, ['glasses', '#303030'], { slot: 'eyes', cover: [], sc: 0, bi: 0, ins: 0, cols: ['#303030'] });
 Cl('Belt', 'Belt', 0.2, ['belt', '#5a3a20', '#c8b060'], { slot: 'waist', cover: [], sc: 0, bi: 0, ins: 0, attach: ['beltL', 'beltR'], cols: ['#5a3a20', '#2a2420', '#7a5a3a'], desc: 'Two hotbar slots on the hips for small weapons, tools and a flashlight.' });
 Cl('Holster', 'Belt Holster', 0.3, ['holster', '#2a2220', '#8a7a5a'], { slot: 'holster', cover: [], sc: 0, bi: 0, ins: 0, attach: ['holster'], cols: ['#2a2220', '#4a3020'], desc: 'A hotbar slot for a pistol or revolver.' });
@@ -300,6 +300,11 @@ for (const [sk, col] of SKILL_BOOKS) {
 // ---------------------------------------------------------------------------
 let _uid = 1;
 const Items = {
+  // names of patterned clothes
+  PATN: {
+    plaid: (n) => n === 'Long Sleeve Shirt' ? 'Flannel Shirt' : 'Plaid ' + n, plaid2: (n) => n === 'Long Sleeve Shirt' ? 'Check Flannel Shirt' : 'Check ' + n,
+    stripe: (n) => 'Striped ' + n, stripe2: (n) => 'Striped ' + n, camo: (n) => 'Camo ' + n,
+  },
   def(id) { return ITEMS[id]; },
   make(id, opts) {
     const d = ITEMS[id];
@@ -314,6 +319,9 @@ const Items = {
     if (d.gas) it.fl = (opts && opts.loot) ? (R.chance(0.4) ? 0 : R.f(0.3, 1)) * d.gas : d.gas;
     if (d.fresh !== undefined) it.age = 0;
     if (d.cols) it.col = d.cols[Math.floor(R.next() * d.cols.length)];
+    // a pattern on some clothes (plaid, stripes, camouflage): [pattern, chance] in turn (from the uid: the world's
+    // random sequence stays as it was)
+    if (d.pats) { let q = Math.sin(it.uid * 12.9898 + 4.1) * 43758.5453; q -= Math.floor(q); for (const [pt, ch] of d.pats) { if (q < ch) { it.pat = pt; break; } q -= ch; } }
     if (d.bag) it.items = [];
     if (d.cat === 'Clothing') it.cond = 1;
     if (d.carPart && id !== 'EngineParts') it.pc = opts && opts.loot ? (R.chance(0.5) ? R.int(35, 100) : 100) : 100;
@@ -349,6 +357,7 @@ const Items = {
     else if (fs === 1) n = 'Stale ' + n;
     if (it.frozen) n = 'Frozen ' + n;
     if ((d.wpn || d.gun) && it.cond <= 0) n = 'Broken ' + n;
+    if (it.pat && Items.PATN[it.pat]) n = Items.PATN[it.pat](n);
     if (d.cat === 'Clothing' && it.bloody) n = 'Bloody ' + n;
     return n;
   },
