@@ -8,6 +8,13 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.025.002.150', date: '2026-10-27', title: 'Settings tidy-up',
+    notes: [
+      'The frame rate counter (FPS or detailed) moved to Settings > Experimental, next to the Expanded map and the debug mode.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.025.001.149', date: '2026-10-27', title: 'Fairer grabs',
     notes: [
       'The dead take hold of you far less often: about a third of the time from the front and under half from behind, even less while you swing, back away or run. Backing off as one lunges now gets you clear.',

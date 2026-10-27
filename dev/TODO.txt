@@ -347,5 +347,7 @@ Fix (000.025.001.149), asked for: too easy to get grabbed and bitten -
   grab chance about halved (front 58% -> 34%, behind 71% -> 47%, backing
   off 25%), the lunge no longer outpaces a walk, later and rarer bites,
   pulling free twice as fast.
+Fix (000.025.002.150), asked for: the frame rate counter moved to
+  Settings > Experimental (with the Expanded map and debug mode).
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).
