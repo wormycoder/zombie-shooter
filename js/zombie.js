@@ -224,6 +224,8 @@ const Zombie = {
     if (G.zombies.length < 800 || !((this.tick || 0) & 1) || this.gN !== G.zombies.length) { this.rebuildGrid(); this.gN = G.zombies.length; }
     // path searches this step: a crowd turning to chase spreads its searches over the next few steps
     World.pathBudget = 10;
+    // (active ragdolls: the tiles with a body on them, for tripping over - worked out once a second)
+    if (Settings.v.ragdoll && (!this.corpseT || Render.tnow - this.corpseT > 1)) { this.corpseT = Render.tnow; const c = this.corpses || (this.corpses = new Set()); c.clear(); for (const z of G.zombies) if (z.dead) c.add((z.y | 0) * Wd.w + (z.x | 0)); }
     const p = G.player;
     const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
     const lazy = Settings.v.zLazy, crowd = Settings.v.zAdapt && (this.nearN || 0) > 120;
@@ -315,6 +317,8 @@ const Zombie = {
     return r;
   },
   update(z, dt, px, py, d) {
+    if (z.daze > 0) z.daze -= dt;
+    if (z.tripCd > 0) z.tripCd -= dt;
     const p = G.player;
     z.ph += 0; // keep
     if (z.cd > 0) z.cd -= dt;
@@ -501,7 +505,17 @@ const Zombie = {
     const ta = Math.atan2(my, mx);
     z.a = U.normAng(z.a + U.clamp(U.angDiff(z.a, ta), -dt * 4, dt * 4));
     const ox = z.x, oy = z.y;
+    if (z.daze > 0) speed *= 0.5;
     World.move(z, mx * speed * dt, my * speed * dt, z.r);
+    // stepping over a body at a walk or more: now and then it trips - stumbles on, or goes down
+    if (this.corpses && !(z.tripCd > 0) && !z.crawl && speed > 0.6 && this.corpses.has((z.y | 0) * Wd.w + (z.x | 0))) {
+      z.tripCd = 2.5;
+      if (R.chance(0.45)) {
+        const a = Math.atan2(my, mx);
+        z.rdN = (z.rdN || 0) + 1; z.rdA = U.angDiff(z.a, a); z.rdF = 0.8; z.rdCar = 0;
+        if (R.chance(0.2)) { this.knockDown(z, a, 0.6, R.f(1.2, 2), -1); Sfx.play('zfall', z.x, z.y); }
+      }
+    }
     Vehicles.pushOut(z, z.r);
     this.separate(z);
     const moved = U.dist(ox, oy, z.x, z.y);
@@ -568,7 +582,11 @@ const Zombie = {
   // ------------------------------------------------------------------ damage
   hit(z, dmg, fromA, o) {
     o = o || {};
-    if (z.dead) return;
+    if (z.dead) {
+      // a blow, a shot or a kick on a body: it jolts (active ragdolls)
+      if (Settings.v.ragdoll) { z.rdN = (z.rdN || 0) + 1; z.rdA = U.angDiff(z.a, fromA !== undefined ? fromA : z.a + Math.PI); z.rdF = U.clamp(0.3 + dmg / 50, 0.3, 1.2); z.rdCar = o.kind === 'car' ? U.clamp((o.spd || 20) / 45, 0.2, 1.4) : 0; }
+      return;
+    }
     if (z.fake) { z.fake = false; z.downT = R.f(0.8, 1.6); }
     if (z.st === 'down') dmg *= 1.5;
     z.hp -= dmg;
@@ -584,6 +602,22 @@ const Zombie = {
     const p = G.player;
     if (z.st !== 'down' && z.st !== 'climb' && z.st !== 'getup') { z.st = 'chase'; z.mem = 10; z.tx = p.x; z.ty = p.y; z.canSee = true; }
     if (z.hp <= 0) { o.dmg = dmg; this.kill(z, fromA, o); return; }
+    // with active ragdolls, where the blow landed matters: the legs (a limp, then crawling once they are wrecked), an
+    // arm (left hanging), the head (dazed - swaying, staggering, slow for a few seconds)
+    if (Settings.v.ragdoll) {
+      const k = o.kind;
+      if (o.head && k !== 'stomp') z.daze = Math.max(z.daze || 0, R.f(2, 4));
+      else if (k !== 'stomp' && k !== 'car' && k !== 'fire') {
+        const q = R.next();
+        if (q < (k === 'gun' || k === 'shotgun' ? 0.3 : 0.22)) {
+          z.legDmg = (z.legDmg || 0) + dmg;
+          const lim = (z.maxhp || 2) * 0.45, l0 = z.limp || 0;
+          z.limp = Math.max(l0, U.clamp(z.legDmg / lim, 0, 0.9)); if (!z.limpSide) z.limpSide = R.chance(0.5) ? 1 : -1;
+          if (z.limp > l0) z.speed *= 1 - (z.limp - l0) * 0.25;
+          if (z.legDmg >= lim && !z.crawl) { z.crawl = true; z.legsGone = true; o.knock = true; }
+        } else if (q < 0.36 && !z.armLimp && (k === 'blade' || k === 'chop' || k === 'blunt' || k === 'gun')) z.armLimp = R.chance(0.5) ? 1 : -1;
+      }
+    }
     // with active ragdolls a heavy blow can take it off its feet (it cannot catch itself)
     if (Settings.v.ragdoll && z.rdF > 1.1 && !o.knock && o.stag !== 0 && R.chance(0.35)) o.knock = true;
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
@@ -651,6 +685,7 @@ const Zombie = {
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
     // how it dies (Char3D.DEATHS): which way it falls follows from the death; a car throws the body along the road
     const dk = z.death = this.deathOf(z, fromA, o || {}, wasDown), dr = dk && Char3D.DEATHS[dk];
+    z.rdStyle = this.rdStyleOf(z, fromA, o || {}, wasDown);
     if (dr && dr.lie) z.lieDir = dr.lie;
     if (dr && o && o.kind === 'car') { const v = Math.min(9, (o.spd || 20) * 0.06); z.slide = [Math.cos(pushA) * v, Math.sin(pushA) * v]; }
     World.move(z, Math.cos(pushA) * 0.3, Math.sin(pushA) * 0.3, z.r);
@@ -678,6 +713,26 @@ const Zombie = {
     if (d === 'F' && o.head && R.chance(0.6)) d = R.chance(0.5) ? 'U' : 'O';
     return (k === 'blade' || k === 'chop' || k === 'stab' ? 'sharp' : 'blunt') + (o.two ? 2 : 1) + d;
   },
+  // how the body goes down with active ragdolls (Char3D.phys, no death animation): 'stumble' (shot in the body: a few
+  // steps as it goes), 'stagger' (a shotgun or a rifle round: thrown back several steps), 'rigid' (a headshot or a
+  // blow to the head: stiff as a plank, toppling), 'crumple' (straight down), 'spin' (round as it falls), 'knees'
+  // (the legs go first), 'thrown' (a car), 'flail' (burning), 'slump' (already down, or trodden on)
+  rdStyleOf(z, fromA, o, wasDown) {
+    const k = o.kind;
+    if (z.fire > 0 || k === 'fire') return 'flail';
+    if (k === 'car') return 'thrown';
+    if (k === 'fall') return 'crumple';
+    if (wasDown || k === 'stomp' || z.crawl) return 'slump';
+    const rel = fromA === undefined ? 0 : U.angDiff(z.a, fromA + Math.PI), c = Math.cos(rel), side = Math.abs(Math.sin(rel)) > 0.7;
+    if (o.head && (k === 'gun' || k === 'shotgun' || k === 'blunt' || !k) && !o.fist) return 'rigid';
+    if (k === 'shotgun' || (k === 'gun' && o.big)) return 'stagger';
+    if (k === 'gun') return R.chance(0.75) ? 'stumble' : 'crumple';
+    if (o.fist) return R.chance(0.5) ? 'stumble' : 'spin';
+    if (k === 'stab') return c < -0.3 ? 'knees' : R.pick(['crumple', 'knees', 'stumble']);
+    if (side) return R.chance(0.7) ? 'spin' : 'stumble';
+    if (c < -0.3) return 'knees';
+    return R.pick(['crumple', 'stumble', o.two ? 'spin' : 'crumple']);
+  },
   // 0 = fresh .. 1 = badly decomposed (game days since death)
   rot(z) { const days = (G.time - (z.diedAt === undefined ? G.time - 2880 : z.diedAt)) / 1440; return U.clamp((days - 0.6) / 4, 0, 1); },
   // ------------------------------------------------------------------ draw
@@ -701,7 +756,12 @@ const Zombie = {
     if (rot > 0) s *= 1 - rot * 0.35;
     // a settled body keeps its pose and result objects: only light and decay change
     const D0 = m && m.dead;
-    if (D0 && z.dead && !z.fake && D0.pose.lieDir === z.lieDir) { D0.s = s; D0.rot = rot; return D0; }
+    if (D0 && z.dead && !z.fake && D0.pose.lieDir === z.lieDir) {
+      D0.s = s; D0.rot = rot;
+      // (active ragdolls: what has happened to the body since - a blow, being dragged)
+      if (Settings.v.ragdoll) { const q = D0.pose, pl = G.player; q.rdN = z.rdN; q.rdA = z.rdA; q.rdF = z.rdF; q.rdCar = z.rdCar; if (pl && pl.drag === z) { q.dragBy = pl.dragS || 1; q.dragX = pl.x; q.dragY = pl.y; } else q.dragBy = 0; }
+      return D0;
+    }
     // animation state for Char3D (mode, prog 0..1 through it) plus the simpler fields the 2D painter reads
     const pose = { walk: z.ph, amp: z.amp, t: Render.tnow + z.id, arms: 'zombie', lean: 0.12, headF: 0.03, headS: Math.sin(z.id) * 0.03, limp: z.limp || 0, limpSide: z.limpSide || 1,
       mode: 'loco', gait: z.speed > 2 ? 'run' : 'shamble' };
@@ -717,6 +777,12 @@ const Zombie = {
     if (z.st === 'feed' && z.feeding) { pose.mode = 'feed'; pose.crouch = 0.75; pose.amp = 0; }
     if (z.st === 'thump') { pose.arms = 'thump'; pose.reach = 1; pose.lean = 0.3; pose.prog = U.clamp(1 - z.thumpT / (z.thump0 || 1), 0, 1); }
     if (z.rdN) { pose.rdN = z.rdN; pose.rdA = z.rdA; pose.rdF = z.rdF; pose.rdCar = z.rdCar; }
+    if (z.rdStyle) pose.rdStyle = z.rdStyle;
+    if (z.daze > 0) pose.daze = z.daze;
+    if (z.armLimp) pose.armLimp = z.armLimp;
+    if (z.legsGone) pose.legsGone = true;
+    // dragged by the survivor: by a wrist (1), the ankles (2), the collar (3), the clothes (4)
+    { const pl = G.player; if (pl && pl.drag === z) { pose.dragBy = pl.dragS || 1; pose.dragX = pl.x; pose.dragY = pl.y; } }
     if (z.stag > 0) { pose.mode = 'stagger'; pose.prog = U.clamp(1 - z.stag / (z.stag0 || 0.6), 0, 1); pose.stagA = z.stagA || Math.PI; }
     if (z.st === 'climb') { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = U.clamp(z.climbT / z.climbDur, 0, 1); pose.crouch = Math.sin(pose.prog * Math.PI) * 0.5; }
     if (z.lie > 0 || z.dead) { pose.lie = z.lie; pose.lieDir = z.lieDir; pose.amp = z.crawl && !z.dead ? z.amp : 0; pose.arms = z.dead ? 'idle' : 'zombie'; pose.lieOff = 0; }

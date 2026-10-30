@@ -454,6 +454,27 @@ TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
      hands go out to the ground ahead; body points cannot pass through
      walls or into furniture (pulled back to the body's side).
      Next: tune by eye in play; bodies against each other.
+     v4 (asked for: corpses ragdoll ~5 s then sleep until touched; the
+     player's body firmer; deaths fully dynamic - no death poses - by how
+     they died; crawling when the legs are wrecked; lots of features):
+     - deaths are physics only from the pose they died in, by style
+       (Zombie.rdStyleOf / Char3D.DSTY): stumble (body shots: steps as it
+       goes), stagger (shotgun / rifle: thrown back several steps), rigid
+       (headshots, blows to the head: a plank that topples, limp on
+       impact), crumple, spin (blows from the side), knees (stabbed from
+       behind: legs fold, then forward), thrown (cars), flail (burning:
+       lurching, arms thrashing), slump (already down); twitching after
+       some deaths.
+     - corpses stay simulated ~5 s, then sleep as a still sprite; a blow,
+       a shot, a kick, being moved or dragged wakes them.
+     - dragging pulls the held limb (a wrist, the ankles, the collar) at
+       hand height, the rest of the body trailing.
+     - where blows land on the living: legs (a limp that slows it, then
+       crawling with the legs dragging once they are wrecked), an arm
+       (hangs dead), the head (dazed: swaying, lurching steps, half speed).
+     - zombies trip over bodies (stumble on, or now and then go down).
+     - the player's body is held 1.6x firmer, takes blows at 70%, and
+       needs a bigger push before it steps.
 
 --------------------------------------------------------------------
 RUN LOG

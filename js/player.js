@@ -878,6 +878,8 @@ const Player = {
     // how the body goes down (Char3D.DEATHS): a fall breaks bones or splats; burns end in the burned deaths
     const burnt = Object.values(p.body || {}).some(b => b && b.w && b.w.burn);
     p.death = /fall/i.test(cause) ? R.pick(['bones1', 'bones2', 'bones3', 'splat1', 'splat2']) : burnt && /wounds/i.test(cause) ? 'fire' + R.int(1, 3) : null;
+    // (with active ragdolls: how the body goes, see Zombie.rdStyleOf)
+    p.rdStyle = burnt && /wounds/i.test(cause) ? 'flail' : /fall/i.test(cause) ? 'crumple' : /shot|gun/i.test(cause) ? 'rigid' : p.grabN > 0 ? 'slump' : R.pick(['stumble', 'crumple', 'knees']);
     G.corpse = true;
     p.swing = null; p.action = null; p.queue = [];
     if (p.inCar) Vehicles.exit(p.inCar, true);
@@ -901,7 +903,7 @@ const Player = {
     const model = pd ? (pd.wpn ? pd.wpn.model : pd.gun ? pd.gun.model : (pd.light ? 'flashlight' : 'generic')) : null;
     const mm = p.moveMode;
     const pose = { walk: p.anim.ph, amp: p.anim.amp * (mm === 'sprint' ? 1.25 : mm === 'run' ? 1.1 : 0.85), t: performance.now() / 1000, weapon: model, crouch: p.sneak ? 0.55 : 0,
-      mode: 'loco', gait: mm === 'sprint' ? 'sprint' : mm === 'run' ? 'run' : p.sneak ? 'sneak' : 'walk', rdN: p.rdN, rdA: p.rdA, rdF: p.rdF };
+      mode: 'loco', gait: mm === 'sprint' ? 'sprint' : mm === 'run' ? 'run' : p.sneak ? 'sneak' : 'walk', rdN: p.rdN, rdA: p.rdA, rdF: p.rdF, me: true, rdStyle: p.rdStyle || 'crumple' };
     if (mm === 'sprint') pose.lean = 0.25; else if (mm === 'run') pose.lean = 0.12;
     if (pd && (pd.wpn || pd.gun) && (pd.wpn || pd.gun).two) pose.two = true;
     if (sec && ITEMS[sec.id].light) { pose.offhand = 'flashlight'; pose.light = sec.on && sec.pow > 0; }
