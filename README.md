@@ -23,7 +23,7 @@ Your game saves automatically. Death is permanent.
 ## Features
 
 **A living county**
-- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns (with a hospital, a hotel, a car dealer, a mall and two factories), an army base, a prison, an airfield, a quarry, a truck stop, and camps, wrecks and old farms out in the country.
+- A procedurally generated county (896 x 896 tiles): the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests, and the land round them: three more towns (with a hospital, a hotel, a car dealer, a mall and two factories), an army base, a prison, an airfield, a quarry, a truck stop, a drive-in, a cemetery, a sawmill, an interstate rest area, a salvage yard, and camps, wrecks and old farms out in the country.
 - Houses with real floor plans and upstairs rooms, shops with flats above, apartment blocks, police and fire stations, a clinic, a school, churches, a motel, gas stations, warehouses and a trailer park — each with loot to match.
 - Yards shaped by the people who lived there, foliage that grows wild along verges and empty lots, and four seasons with autumn colour, bare winter trees and snow.
 - A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.
@@ -31,6 +31,7 @@ Your game saves automatically. Death is permanent.
 **The dead**
 - Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead. Crouch to stay below the window sills.
 - Sandbox options for their numbers, speed (shamblers to sprinters), toughness and how the infection spreads.
+- Active ragdolls (Settings > Experimental): a body hit, shot, shoved or run down is thrown with real momentum, stumbles to catch itself, and the dead go down by how they died and pile on one another; the rest of the time, the animation.
 - Gore with wounds, real holes torn out of bodies that keep bleeding, dismemberment, blood that pools, sprays onto walls and leaves footprints; a Gore and a Gore detail setting, or switched off.
 - Deaths that follow from how they died: thrown by cars by their speed, blows from every side, gunshots by calibre, fire, stomps and falls.
 
@@ -83,7 +84,7 @@ Save a recording over a file with the same name and the game plays it instead (a
 
 ## Settings
 
-The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as the Expanded map, the memory budget, the frame rate counter (FPS or detailed) and a debug mode for testing.
+The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as active ragdolls, the memory budget, the frame rate counter (FPS or detailed) and a debug mode for testing.
 
 ## Version
 

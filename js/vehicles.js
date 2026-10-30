@@ -363,7 +363,16 @@ const Vehicles = {
       return;
     }
     const special = sp.kind && ['ambulance', 'bus', 'army', 'police', 'firetruck'].includes(sp.kind);
-    if (sp.crashed) {
+    if (sp.junk) {
+      // in a salvage yard: rusted, dented and stripped for parts (wheels, glass, the battery often gone), dry
+      spread(R.f(10, 35), -10, 10);
+      c.col = Col.mix(c.col, '#6a4a32', 0.45);
+      for (const k of PART_KEYS) if (R.chance(0.3)) P[k] = -1;
+      c.gas = R.f(0, 0.05); c.charge = R.f(0, 0.2); c.locked = false; c.keyIn = false; c.alarm = false;
+      c.dmg = { front: R.f(0, 0.5), rear: R.f(0, 0.4), left: R.f(0, 0.4), right: R.f(0, 0.4) };
+      if (R.chance(0.4)) c.hoodOpen = true;
+      if (R.chance(0.3)) c.doorOpen = 1;
+    } else if (sp.crashed) {
       spread(R.f(30, 60), -15, 10);
       const zone = R.chance(0.7) ? 'front' : R.pick(['rear', 'left', 'right']);
       this.damageZone(c, zone, R.f(35, 75));

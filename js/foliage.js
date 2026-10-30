@@ -237,8 +237,8 @@ Foliage.place = function (m) {
     return d;
   };
   const dR = dist(i => road(F[i])), dW = dist(i => water(F[i])), dB = dist(i => RM[i] >= 0);
-  // kept grounds: the towns' building plots near buildings, the army base, the prison
-  const kept = (zs => (x, y) => zs.some(z => x >= z.x0 && x <= z.x1 && y >= z.y0 && y <= z.y1))(w.zones.filter(z => z.outfit === 'military' || z.outfit === 'prisoner' || z.outfit === 'police'));
+  // kept grounds: the towns' building plots near buildings, the army base, the prison, grounds someone mowed (kept)
+  const kept = (zs => (x, y) => zs.some(z => x >= z.x0 && x <= z.x1 && y >= z.y0 && y <= z.y1))(w.zones.filter(z => z.outfit === 'military' || z.outfit === 'prisoner' || z.outfit === 'police' || z.kept));
   const inTown = (x, y) => (w.towns || []).some(t => x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1);
   const fence = (x, y) => World.wall(x, y, 0) || World.wall(x, y, 1) || World.wall(x + 1, y, 1) || World.wall(x, y + 1, 0);
   const field = (i) => F[i - 1] === FL.FURROW || F[i + 1] === FL.FURROW || F[i - W] === FL.FURROW || F[i + W] === FL.FURROW;

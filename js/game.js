@@ -72,6 +72,9 @@ const Game = {
   // ------------------------------------------------------------------ new game
   // where a game can start: each town's homes (by w.towns), and the farmhouses and homes out of town
   SPAWN_ORDER: ['Hollow Creek', 'Millbrook', 'Fairfield', 'Riverton', 'Kingsbury', 'Countryside'],
+  // the map a new game is made on: the county and the land round it (the old 400 x 400 county alone is still made
+  // for the title screen's backdrop and the benchmark, and loads from old saves)
+  WORLD_SIZE: 896,
   spawnRegions(w) {
     const out = new Map();
     for (const id of w.spawnHouses) {
@@ -107,7 +110,7 @@ const Game = {
     G.time = 0; G.weather = { rain: 0, snow: 0, temp: 20 };
     Season.update();
     // a world pre-generated while the player was on the character screen saves the wait
-    const w = cfg.world || MapGen.generate(G.seed, cfg.size || Settings.v.worldSize);
+    const w = cfg.world || MapGen.generate(G.seed, cfg.size || this.WORLD_SIZE);
     delete cfg.world;
     World.use(w);
     G.conts = new Set();

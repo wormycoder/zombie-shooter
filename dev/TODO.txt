@@ -149,6 +149,8 @@ VERY HIGH - CONTINUE UPDATING THE MAP, AND FINISH ON ALL BUILDINGS.
      (see ALSO FIXED).
      Next for the map: a hospital for Kingsbury, more shop types (a hotel,
      a car dealer, a factory), and the empty stretches of countryside.
+     ALL DONE since (the last of the countryside 000.036.000.190): the
+     Expanded map is finished and is the only map for new games.
 
 HIGH - ZOMBIES AREN'T MUCH OF A THREAT, AND IN SOME INSTANCES, YOU CAN WALK
       IN THE MIDDLE OF A HORDE AND GET OUT JUST FINE. ZOMBIES FOR WHATEVER
@@ -436,6 +438,8 @@ HIGH (added) - IMPROVE THE SFX MORE, AND ADD MORE MUSIC, THEN WORK ON WHATEVER.
      Next: a mall (DONE 000.031.000.172); the factory in Kingsbury too
        (DONE 000.031.000.172); tune the deaths / fight-offs / clothes by eye.
 TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
+  -> MERGED into the main line as 000.036.000.190 (still an Experimental
+     option, off by default). The branch's history:
   -> v1 (spring layer on the pose) judged not active enough - no stumbling,
      no physics. v2: Settings > Experimental > Animation > Active ragdolls.
      A point-mass body (pelvis, chest, head, wrists, ankles; Jakobsen-style
@@ -528,6 +532,38 @@ TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
        after a 3 s daze, ~5.5 s after being shoved down (up again).
      Next: elbows and knees as points, getting up from the physics pose.
 
+HIGH (added) - FINISH OFF THE MAP, THEN MOVE IT FROM EXPERIMENTAL TO MAIN.
+      (THEN: REMOVE THE 400X400 OPTION, THE 800X IS STABLE NOW.)
+      ALSO MOVE THE EXPERIMENTAL (RAGDOLL) BRANCH TO THE MAIN BRANCH AS A
+      NEW UPDATE.
+  -> DONE (000.036.000.190). Audit of the Expanded map first: every building
+     furnished and reachable (the only empty rooms are 2-wide corridors), so
+     what was left was the land - long empty stretches between the towns.
+     Filled (js/landmarks.js; each place from a random stream of its own and
+     only where its ground is clear, so the rest of the map is unchanged):
+     - the Starlite Drive-In south of Riverton: the screen, rows of speaker
+       posts, the cars of the last show, the snack bar and projection booth,
+       the ticket booth at the gate on County Rd 14;
+     - Riverton Cemetery across the road: rows of graves, a picket fence,
+       old trees, benches, the groundskeeper's shed (the grass kept short:
+       zones can now be marked kept for the foliage pass);
+     - Wildwood Lumber Co. on Route 9: the mill (saws, office, lockers, break
+       room), the log yard, sawn lumber, a road in;
+     - an I-71 rest area: restrooms, vending machines, picnic tables, a lot
+       on the southbound lanes;
+     - Pruitt Salvage down County Rd 14: rows of rusting, stripped cars (a new
+       parked-car state, junk: low condition, parts and wheels gone, dry,
+       unlocked), a few burnt shells, tyres and parts, the yard office.
+     Checked on 4 seeds: all five built every time, no errors.
+     Then (asked for: remove the 400 x 400 option, the 896 map is stable):
+     the map setting and the New Game screen's map row are gone - every new
+     game is made on the 896 x 896 map (Game.WORLD_SIZE), all six starting
+     places offered. The 400 x 400 county is still made for the title
+     screen's backdrop and the benchmark (so scores stay comparable), and old
+     saves on it load as before.
+     The ragdoll branch merged into the main line (Settings > Experimental >
+     Active ragdolls stays a beta option, off by default).
+
 --------------------------------------------------------------------
 RUN LOG
 --------------------------------------------------------------------
@@ -606,5 +642,9 @@ Run 19 (000.034.000.177): markers on the map (right-click); a duplicate
   bed is now skipped instead of crashing the script.)
 Run 20 (000.035.000.178): things left out on tables, desks, counters and
   nightstands in homes and other buildings (own random stream).
-Next runs, planned: more character models (clothes, hair, beards); the
-  map's part 2 (a hospital, more shop types, the countryside).
+Run 21 (000.036.000.190), asked for: finish the map and move it out of
+  Experimental; the ragdoll branch into the main line as an update.
+  Drive-in, cemetery, sawmill, rest area, salvage yard; then the 400 x 400
+  option removed (the 896 map is the map).
+Next runs, planned: more character models (clothes, hair, beards); ragdoll
+  elbows and knees, getting up from the physics pose.

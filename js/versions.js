@@ -8,6 +8,17 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.000.190', date: '2026-10-30', title: 'Active ragdolls, and one big map',
+    notes: [
+      'Active ragdolls (Settings > Experimental): physics takes a body over when something acts on it - a blow, a shot, a shove, a car, a fall, a daze, a wrecked limb, being dragged - and hands it back to the animation once it has recovered. Hit, it is thrown with real momentum, the head snaps back from a headshot, and it stumbles a step or two to catch itself; muscles and joint limits keep it in one piece, so a shove bends the body instead of tearing it out of shape.',
+      'With ragdolls on the dead go down by how they died instead of in a set pose: a body shot stumbles on before it falls, a shotgun or rifle round throws it back, a headshot drops it stiff as a plank, a blow from the side spins it, stabbed from behind its knees fold; the burning thrash; some twitch once down.',
+      'With ragdolls on bodies land on one another and pile up, land with a thud, settle and lie still until something disturbs them - and are saved as they lie. Shot legs make the dead limp and then crawl, dragging them; a shot arm hangs; a blow to the head leaves one dazed and lurching. Zombies stumble over bodies in their way.',
+      'The Expanded map is finished, and it is now the map: every new game is made on the whole 896 x 896 county - Hollow Creek and Millbrook with Fairfield, Riverton, Kingsbury, Fort Hale, the prison, the airfield and the interstate round them - and the small 400 x 400 option is gone (games already started keep their map). Any of the six starting places can be picked on the New Game screen.',
+      'The empty country between the towns now has the Starlite Drive-In (rows of speaker posts, the cars of the last show, the snack bar and projection booth), Riverton Cemetery, the Wildwood Lumber Co. sawmill on Route 9, a rest area on Interstate 71 and Pruitt Salvage - a yard of rusting, stripped cars.',
+    ],
+    commits: [], shots: ['v036000_1', 'v036000_2', 'v036000_3'],
+  },
+  {
     v: '000.035.000.178', date: '2026-10-30', title: 'Lived-in homes',
     notes: [
       'Homes, offices, diners, motels and the like have the odd thing left out on their furniture: a can or a packet of crisps on the kitchen table, a newspaper on a desk, a novel or painkillers on a nightstand, a soda on the counter. Pick them up like anything else on the floor.',

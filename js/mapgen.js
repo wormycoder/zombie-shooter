@@ -46,7 +46,7 @@ const MapGen = {
     this.outskirts();
     this.outskirts2();
     // a bigger world's new land: the towns and sites, the countryside round them
-    if (S > 400) { this.bigSites(); this.bigOutskirts(); }
+    if (S > 400) { this.bigSites(); this.bigOutskirts(); if (this.bigLandmarks) this.bigLandmarks(); }
     // detail passes (street furniture, yards) - defined in street.js / yard.js
     if (this.streetPass) this.streetPass();
     if (this.yardPass) this.yardPass();

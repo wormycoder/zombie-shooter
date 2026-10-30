@@ -37,7 +37,6 @@ const SETTINGS_OPTS = {
   fpsShow: { tab: 'exp', grp: 'Development', n: 'Frame rate counter', opts: [['Off', 0], ['FPS', 1], ['Detailed', 2]], tip: 'An overlay with the frames per second; Detailed adds frame time, simulation time, lighting and zombie counts.' },
   ragdoll: { tab: 'exp', grp: 'Animation', n: 'Active ragdolls (beta)', opts: [['Off', 0], ['On', 1]], tip: 'Physics takes over a body only when something acts on it - a blow, a shot, a shove, a car, a fall, a daze, a wrecked limb, being dragged - and lets go again once it has recovered: it is thrown with real momentum, stumbles to catch itself, and the dead go down by how they died, piling on one another. Otherwise the plain animation.' },
   debugMode: { tab: 'exp', grp: 'Development', n: 'Debug mode', opts: [['Off', 0], ['On', 1]], tip: 'Testing tools: cheats, item, zombie and car spawners, time and weather controls, teleport and world overlays. F2 or ` shows or hides the debug window.' },
-  worldSize: { tab: 'exp', grp: 'World', n: 'Map (new games)', opts: [['Stable (400 x 400)', 400], ['Expanded, beta (896 x 896)', 896]], tip: 'Stable is the county as it stands, finished: Hollow Creek, Millbrook and the farms round them. Expanded is the same county with the land round it - Fairfield, Riverton, Kingsbury, Fort Hale, the prison, the airfield and the interstate - built, and still being finished. Expanded takes longer to make and gives bigger save files. Also on the New Game screen. Games already started keep their map.' },
 };
 // Auto (the default) is High plus the automatic helpers: dynamic resolution, adaptive character detail and car detail
 // by zoom - full quality whenever the machine keeps up
@@ -50,13 +49,11 @@ const SETTINGS_PRESETS = {
 };
 const Settings = {
   KEY: 'hc_settings',
-  v: Object.assign({ fpsShow: 0, ragdoll: 0, debugMode: 0, worldSize: 400, gore: 2, goreQ: 3, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
+  v: Object.assign({ fpsShow: 0, ragdoll: 0, debugMode: 0, gore: 2, goreQ: 3, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
   listeners: [],
   load() {
     try {
       const s = JSON.parse(localStorage.getItem(this.KEY) || 'null');
-      // (the old Large and Huge world sizes are the Expanded map now)
-      if (s && s.worldSize > 400) s.worldSize = 896;
       if (s) for (const k in this.v) if (SETTINGS_OPTS[k].opts.some(o => o[1] === s[k])) this.v[k] = s[k];
     } catch (e) { /* storage blocked */ }
   },
