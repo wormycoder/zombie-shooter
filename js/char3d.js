@@ -619,7 +619,7 @@ const Char3D = {
     const tw = this.ragTargets(cur, D, this.rgT), W = R ? R.tg : new Float64Array(21);
     for (let k = 0; k < NP; k++) { const bx = tw[k * 3], by = tw[k * 3 + 1]; W[k * 3] = ex + bx * ca - by * sa; W[k * 3 + 1] = ey + bx * sa + by * ca; W[k * 3 + 2] = tw[k * 3 + 2]; }
     if (!R || fresh || Math.hypot(ex - R.ex, ey - R.ey) > 1.5) {
-      R = S.rg = { x: Float64Array.from(W), v: new Float64Array(21), tg: W, tp: Float64Array.from(W), A: new Float32Array(C3.N), foot: new Float64Array(4), step: null, bal: 0, ox: 0, oy: 0, leg: 0, wasUp: true, rdN: P.rdN, ex, ey, str: P.mode === 'dead' || P.mode === 'fall' ? 0.1 : 1, t: this.now };
+      R = S.rg = { x: Float64Array.from(W), v: new Float64Array(21), tg: W, tp: Float64Array.from(W), A: new Float32Array(C3.N), foot: new Float64Array(4), step: null, bal: 0, ox: 0, oy: 0, leg: 0, wasUp: true, rdN: P.rdN, ex, ey, str: P.mode === 'dead' || P.mode === 'fall' ? 0.1 : 1, t: this.now, w: P.mode === 'dead' || P.mode === 'fall' ? 1 : 0, act: 0, dev: 0 };
       if (P.mode === 'dead' && !(P.prog < 1)) {
         R.deadT = 10; R.style = this.DSTY[P.rdStyle] ? P.rdStyle : 'crumple'; R.A0 = Float32Array.from(cur); R.upT = 0; R.legSet = 1; R.cv0 = 0; R.wake = 0; R.pitched = 1;
         const Q = P.rdPose && P.rdPose.p;
@@ -646,6 +646,22 @@ const Char3D = {
     R.down = P.mode === 'dead' || P.mode === 'fall' || P.mode === 'lie' || P.mode === 'crawl';
     this.ragReg(R);
     const mode = P.mode, down = mode === 'dead' || mode === 'fall' || mode === 'lie' || mode === 'sleep' || mode === 'crawl';
+    // ---- only when something acts on the body: a blow (a hit, a shot, a shove, a car), a stagger, a fall, dying,
+    // being dragged, a daze, a wrecked limb - and until it has got over it (on its feet, steady, back where the
+    // animation has it), then eased back into the animation (R.w). The rest of the time the animation alone, the
+    // points only following it, ready for the next blow
+    const hit = P.rdN !== undefined && P.rdN !== R.rdN;
+    const need = mode === 'dead' || mode === 'fall' || mode === 'stagger' || P.dragBy || P.daze > 0 || P.armLimp || P.legsGone || ((down || mode === 'getup') && R.w > 0);
+    if (hit) R.act = 1.5; else if (need) R.act = Math.max(R.act, 0.4);
+    R.act -= dt;
+    const calm = !R.step && R.bal < 0.05 && Math.hypot(R.foot[0], R.foot[1]) < 0.05 && Math.hypot(R.foot[2], R.foot[3]) < 0.05 && R.dev < 0.08;
+    R.w = R.act > 0 || !calm ? 1 : Math.max(0, R.w - dt * 3);
+    if (R.w <= 0) {
+      // (the animation's own speed, but not its jumps: a cut from one state to another is not a throw)
+      for (let i = 0; i < 21; i++) { v[i] = U.clamp((W[i] - tp[i]) / dt, -7, 7); x[i] = W[i]; }
+      tp.set(W); R.foot.fill(0); R.ox = R.oy = 0; R.bal = 0; R.step = null; R.leg = 0; R.dev = 0; R.wasUp = !down; R.str = down ? 0.35 : 1;
+      return;
+    }
     // muscle strength: full on the feet; dead or knocked down they let go (a little tone left, so the body settles near
     // the pose the game thinks it lies in); getting up they come back
     const me = !!P.me;
@@ -861,6 +877,10 @@ const Char3D = {
         }
       }
     } else { R.bal = 0; R.step = null; for (let i = 0; i < 4; i++) ft[i] *= 0.9; }
+    // (how far the body is from where its muscles want it: back near it, it may go back to the animation)
+    let dv = 0;
+    for (let k = 0; k < NP; k++) dv = Math.max(dv, Math.hypot(x[k * 3] - TW[k * 3], x[k * 3 + 1] - TW[k * 3 + 1], x[k * 3 + 2] - TW[k * 3 + 2]));
+    R.dev = dv;
     // ---- back to channels: the points into the body frame, then the pose adjusted to match them
     const B = this.rgB || (this.rgB = new Float64Array(21));
     for (let k = 0; k < NP; k++) { const dx = x[k * 3] - ex, dy = x[k * 3 + 1] - ey; B[k * 3] = dx * ca + dy * sa; B[k * 3 + 1] = -dx * sa + dy * ca; B[k * 3 + 2] = x[k * 3 + 2]; }
@@ -883,6 +903,8 @@ const Char3D = {
       cur[j] = o[0]; cur[j + 1] = o[1]; cur[j + 2] = o[2];
       cur[j + 4] = A[j + 4] + asinA - Math.asin(U.clamp(Pn[5], -1, 1));
     }
+    // (easing back into the animation)
+    if (R.w < 1) for (let i = 0; i < C3.N; i++) cur[i] = A[i] + (cur[i] - A[i]) * R.w;
     R.ang = ang;
     // a body still moving is not settled yet (it would be frozen into its resting sprite mid-fall)
     if (mode === 'dead' && !R.asleep && S.offD) S.offT = Math.min(S.offT, S.offD * 0.999);

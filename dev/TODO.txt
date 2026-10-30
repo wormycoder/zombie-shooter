@@ -513,6 +513,19 @@ TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
      proportions): shoved down 0.77 -> 0.44 m, staggered 0.60 -> 0.50 m
      (fling 21-33 m/s -> 7), heavy blow 0.56 -> 0.30 m; still steps when
      pushed (stagger 5 steps, blow 3, dazed 5).
+     v7 (asked for: only apply the ragdoll when a force is applied or the
+     state calls for it):
+     - physics takes a body only when something acts on it: a blow (hit,
+       shot, shove, car), a stagger, a fall, dying, being dragged, a daze,
+       a wrecked arm or legs; lying or getting up after it stays physical.
+       It lets go once the body has recovered (on its feet, no step under
+       way, feet back under it, every point within 8 cm of where the
+       muscles want it), easing back into the animation over 1/3 s
+       (R.w). Otherwise the plain animation; the points only follow it
+       (speeds capped), so the next blow starts from the right place.
+     - measured (fixed 60 fps): walking / chasing / idle 0 physics frames;
+       back to animation 1.8 s after a blow, ~2 s after a stagger, 3.7 s
+       after a 3 s daze, ~5.5 s after being shoved down (up again).
      Next: elbows and knees as points, getting up from the physics pose.
 
 --------------------------------------------------------------------
