@@ -277,17 +277,19 @@ const World = {
     let tmx = dx > 0 ? (cx + 1 - x0) / dx : dx < 0 ? (x0 - cx) / -dx : Infinity;
     let tmy = dy > 0 ? (cy + 1 - y0) / dy : dy < 0 ? (y0 - cy) / -dy : Infinity;
     let n = Math.abs(ex - cx) + Math.abs(ey - cy);
-    const sight = mode !== 'move';
+    // ('low': sight at a crouch - below the sills, so windows block it too)
+    const sight = mode !== 'move', low = mode === 'low';
+    const win = (x, y, d) => { const f = this.feat(x, y, d); return !!(f && f.k === 'window'); };
     while (n-- > 0) {
       if (tmx < tmy) {
         const nx = cx + sx;
         const wx = sx > 0 ? nx : cx;
-        if (sight ? this.edgeBlocksSight(wx, cy, 1) : this.edgeBlocksMove(wx, cy, 1)) return false;
+        if (sight ? this.edgeBlocksSight(wx, cy, 1) || low && win(wx, cy, 1) : this.edgeBlocksMove(wx, cy, 1)) return false;
         cx = nx; tmx += tdx;
       } else {
         const ny = cy + sy;
         const wy = sy > 0 ? ny : cy;
-        if (sight ? this.edgeBlocksSight(cx, wy, 0) : this.edgeBlocksMove(cx, wy, 0)) return false;
+        if (sight ? this.edgeBlocksSight(cx, wy, 0) || low && win(cx, wy, 0) : this.edgeBlocksMove(cx, wy, 0)) return false;
         cy = ny; tmy += tdy;
       }
       if (!sight && this.tileSolid(cx, cy)) return false;

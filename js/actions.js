@@ -8,6 +8,7 @@ const Actions = {
     if (!a) return;
     p.action = a; a.t = 0;
     p.sitting = false;
+    if (p.seat) Player.standUp();
     if (a.begin) a.begin();
   },
   queue(a) {

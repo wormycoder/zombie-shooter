@@ -1133,7 +1133,14 @@ const Char3D = {
   // ---- sitting on the ground and kneeling
   seated(T, S, D, P, mode) {
     const t = S.t;
-    if (mode === 'sit') {
+    if (mode === 'sit' && P.seatH) {
+      // on a seat: the hips at its height, thighs level, the feet on the floor in front, upright, hands on the knees
+      const h = P.seatH;
+      T[C3.PX] = -0.06; T[C3.PZ] = h + 0.06; T[C3.PP] = -0.08; T[C3.SP] = 0.12 + 0.01 * Math.sin(t * 1.6); T[C3.HP] = 0.08;
+      const Pf = this.pelvisOf(T, this.T1);
+      this.foot(T, Pf, -1, 0.42, -0.12, D.ankH, 0, 0.12); this.foot(T, Pf, 1, 0.4, 0.13, D.ankH, 0, 0.15);
+      this.arm(T, -1, 0.36, -0.02, -0.36, 0.7); this.arm(T, 1, 0.36, -0.02, -0.36, 0.7);
+    } else if (mode === 'sit') {
       T[C3.PX] = -0.12; T[C3.PZ] = 0.13; T[C3.PP] = -0.3; T[C3.SP] = 0.42 + 0.01 * Math.sin(t * 1.6); T[C3.HP] = 0.05;
       const Pf = this.pelvisOf(T, this.T1);
       this.foot(T, Pf, -1, 0.36, -0.15, D.ankH, 0.05, 0.25); this.foot(T, Pf, 1, 0.3, 0.16, D.ankH, 0.05, 0.3);

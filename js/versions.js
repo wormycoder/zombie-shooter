@@ -8,6 +8,16 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.033.000.174', date: '2026-10-30', title: 'A paper map, seats and crouching under windows',
+    notes: [
+      'The map is drawn like a paper road map: cream paper, white roads edged in grey, buildings in tan, green fields and woods, blue water, place names printed in ink; what you have not seen yet is faded.',
+      'Sit / Rest on a chair, sofa, armchair, bench or pew now sits you on it, at its height and facing the way it faces; walk to stand up.',
+      'Crouching (sneaking) keeps you below the window sills: the dead outside see you through a window only from close by.',
+      'The crafting window shows what a recipe makes (with its picture and description), the time it takes, the skill it needs and the experience it gives, and marks what you can make now - with a count on each tab.',
+    ],
+    commits: [], shots: ['v033000_1', 'v033000_2'],
+  },
+  {
     v: '000.032.000.173', date: '2026-10-30', title: 'Ties, hi-vis and things on tables',
     notes: [
       'New clothes on the 3D characters: neckties (down the shirt front; under a jacket only the knot shows), scarves now shown wrapped round the neck, and hi-vis vests in yellow or orange with reflective bands. Some of the dead wear them: office workers in ties, road crews and builders in hi-vis and hard hats. Ties turn up in office desks and wardrobes, hi-vis vests in hardware stores and factory lockers.',

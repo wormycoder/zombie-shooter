@@ -415,7 +415,7 @@ const Interact = {
       add('Fuel: ' + Math.round(o.fuel || 0) + ' min', null, { info: true });
     }
     if (def.sleep) add('Sleep', () => go(() => { p.x = x + 0.5; p.y = y + 0.5; p.sleepAng = { S: -Math.PI / 2 - Math.PI / 4, N: Math.PI / 4, E: Math.PI - Math.PI / 4, W: -Math.PI / 4 }[o.dir] || 0; Player.sleep(def.sleep, o); }, 1.6));
-    if (def.sit) add('Sit / Rest', () => go(() => { p.sitting = true; }));
+    if (def.sit) add('Sit / Rest', () => go(() => Player.sitOn(o, x, y)));
     if (def.tv) add(o.on ? 'Turn off TV' : 'Turn on TV', () => go(() => { if (!World.hasPower(x, y)) { Player.say('No power.', '#ccc'); return; } o.on = !o.on; Sfx.play('switch'); }));
     if (o.t === 'lamp') { const rm = World.roomObj(x, y); if (rm) add(rm.lights ? 'Turn off lamp' : 'Turn on lamp', () => go(() => { if (!World.hasPower(x, y)) { Player.say('No power.', '#ccc'); return; } rm.lights = !rm.lights; Sfx.play('switch'); })); }
     if (o.t === 'tree') add('Chop down tree', () => go(() => Actions.queue(Actions.chop(x, y)), 1.4), { disabled: !Player.findTag('chop') });

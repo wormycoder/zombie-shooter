@@ -424,7 +424,8 @@ const Zombie = {
     if (d < sr && (z.x >= LV.W0) === (px >= LV.W0)) {
       const ad = Math.abs(U.angDiff(z.a, Math.atan2(py - z.y, px - z.x)));
       const fov = (z.st === 'chase') ? Math.PI : 1.25;
-      if ((ad < fov || d < 1.6) && World.lineClear(z.x, z.y, px, py, 'sight')) see = true;
+      // a survivor crouching (sneaking) is below the window sills: seen through a window only from close by
+      if ((ad < fov || d < 1.6) && World.lineClear(z.x, z.y, px, py, p.sneak && !p.inCar && d > 2.5 ? 'low' : 'sight')) see = true;
       if (d < 1.2) see = true;
     }
     if (p.asleep && d > 2.5 && z.st !== 'chase') see = see && d < 4;

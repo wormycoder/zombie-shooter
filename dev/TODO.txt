@@ -184,7 +184,9 @@ HIGH TO VERY HIGH - BETTER UI - MORE ZOMBOID ESQUE, COULD RE-WRITE WHOLE UI
      step bigger, and Auto UI scale 125% on 1920 x 1080. Item tooltips
      like Zomboid's (stat rows, condition / contents / battery / freshness
      bars) DONE (000.019.001.130). Still to do: the crafting window's
-     layout, the world map's look.
+     layout, the world map's look. DONE (000.033.000.174): a paper road
+     map; the crafting window's details (picture, time, skill, XP, what
+     can be made now).
 
 HIGH (added) - MAKE SURE THE UI SCALES WITH THE RESOLUTION OF THE SCREEN,
       SOMETIMES STUFF GETS CUT OFF ON LOWER RESOLUTIONS (LIKE ON MY LAPTOP)
@@ -268,6 +270,9 @@ FIX - ADD ANIMATIONS AND ACTIONS FOR THINGS LIKE TALL FENCES, FAILING TO
        jam; magazines thumbed full round by round, swapped in and out;
      - sitting on the floor was already there (Z) - kept.
      Still possible: a crouch-walk under windows, sitting in chairs.
+     DONE (000.033.000.174): crouched (sneaking) you are below the sills -
+     seen through a window only from close by; sitting on chairs, sofas,
+     armchairs, benches and pews at their height.
 
 MEDIUM - ADD BETTER GUN CONTROLS, AND MORE GUNS.
   -> DONE, first pass (000.022.000.139): magazines as items (R swaps in
@@ -499,5 +504,7 @@ Test branch (claude/active-ragdolls-test), asked for: active ragdolls as
   an option - v2 a simulated body with balance and stumbling.
 Run 17 (000.032.000.173): ties, scarves, hi-vis vests; items on tables;
   half-res roofs.
+Run 18 (000.033.000.174): the paper map, the crafting window, sitting on
+  seats, crouching under windows.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

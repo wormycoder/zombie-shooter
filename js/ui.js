@@ -938,13 +938,21 @@ const UI = {
     P.cat = P.cat || 'Medical';
     const list = RECIPES.filter(r => r.cat === P.cat);
     if (!P.rec || !list.includes(P.rec)) P.rec = list[0];
-    const tabs = cats.map(c => `<span class="ctab ${c === P.cat ? 'on' : ''}" data-cc="${c}">${c}</span>`).join('');
-    const rows = list.map(r => `<div class="crow ${r === P.rec ? 'on' : ''} ${Crafting.has(r) ? 'ok' : ''}" data-cr="${r.id}"><img src="${Icons.url({ id: r.out ? r.out[0][0] : (r.obj === 'campfire' ? 'TreeBranch' : r.obj === 'barrel' ? 'Bucket' : 'Plank') })}">${U.esc(r.n)}</div>`).join('');
+    // the tabs show how many of their recipes can be made now; the list marks those, the details give the time, the
+    // skill needed, the experience it brings and what the result is
+    const ready = (c) => RECIPES.filter(r => r.cat === c && Crafting.has(r)).length;
+    const tabs = cats.map(c => { const n = ready(c); return `<span class="ctab ${c === P.cat ? 'on' : ''}" data-cc="${c}">${c}${n ? ' <b class="cn">' + n + '</b>' : ''}</span>`; }).join('');
+    const icon = (r) => Icons.url({ id: r.out ? r.out[0][0] : (r.obj === 'campfire' ? 'TreeBranch' : r.obj === 'barrel' ? 'Bucket' : 'Plank') });
+    const rows = list.map(r => `<div class="crow ${r === P.rec ? 'on' : ''} ${Crafting.has(r) ? 'ok' : ''}" data-cr="${r.id}"><img src="${icon(r)}"><span class="cnm">${U.esc(r.n)}</span>${Crafting.has(r) ? '<i class="cok"></i>' : ''}</div>`).join('');
     let det = '';
     if (P.rec) {
       const r = P.rec;
       const chk = Crafting.check(r);
-      det = `<div class="cdet"><div class="ctitle">${U.esc(r.n)}</div><div class="sml">${r.build ? 'Construction — place it in the world.' : 'Produces: ' + r.out.map(([id, n]) => n + '× ' + ITEMS[id].n).join(', ')}</div><div class="req">${chk.map(c => `<div class="${c.have >= c.need ? 'ok' : 'no'}">${c.have >= c.need ? '✔' : '✖'} ${U.esc(c.label)}${c.need > 1 ? ' (' + c.have + '/' + c.need + ')' : ''}</div>`).join('')}</div>
+      const o0 = r.out && ITEMS[r.out[0][0]], sk = r.skill ? Object.entries(r.skill) : [], xp = r.xp ? Object.entries(r.xp) : [];
+      const info = [`<span>Time <b>${r.time || 1} s</b></span>`]
+        .concat(sk.map(([k, v]) => { const lv = G.player.skills[k] ? G.player.skills[k].lv : 0; return `<span class="${lv >= v ? '' : 'bad'}">Needs <b>${SKILL_NAMES[k] || k} ${v}</b></span>`; }))
+        .concat(xp.length ? [`<span>XP <b>${xp.map(([k, v]) => (SKILL_NAMES[k] || k) + ' +' + v).join(', ')}</b></span>`] : []).join('');
+      det = `<div class="cdet"><div class="chead"><img src="${icon(r)}"><div><div class="ctitle">${U.esc(r.n)}</div><div class="sml">${r.build ? 'Construction — place it in the world.' : 'Produces: ' + r.out.map(([id, n]) => n + '× ' + ITEMS[id].n).join(', ')}</div></div></div>${o0 && o0.desc ? `<div class="cdesc sml">${U.esc(o0.desc)}</div>` : ''}<div class="cinfo sml">${info}</div><div class="req">${chk.map(c => `<div class="${c.have >= c.need ? 'ok' : 'no'}">${c.have >= c.need ? '✔' : '✖'} ${U.esc(c.label)}${c.need > 1 ? ' (' + c.have + '/' + c.need + ')' : ''}</div>`).join('')}</div>
       <div class="cbtns"><span class="btn ${Crafting.has(r) ? '' : 'dis'}" data-craft="1">${r.build ? 'Build' : 'Craft'}</span>${!r.build ? `<span class="btn ${Crafting.has(r) ? '' : 'dis'}" data-craft="5">Craft ×5</span>` : ''}</div></div>`;
     }
     P.body.innerHTML = `<div class="craft"><div class="ctabs">${tabs}</div><div class="cmain"><div class="clist">${rows}</div>${det}</div></div>`;
@@ -1069,25 +1077,38 @@ const MapView = {
     }
     this.draw();
   },
+  // the map is drawn like a paper road map: cream paper, white roads edged in grey, buildings in tan with a darker
+  // outline, pale green fields, darker woods with tree dots, blue water; what you have not seen is faded paper
   buildBase() {
     const w = Wd, GW = w.gw || w.w;
     const c = mkCanvas(GW, w.h), g = c.getContext('2d');
     const img = g.createImageData(GW, w.h);
     const cols = {};
     const hex = (h) => Col.rgb(h);
-    cols[FL.GRASS] = hex('#5a7a42'); cols[FL.GRASS2] = hex('#6a8848'); cols[FL.FOREST] = hex('#3e5430'); cols[FL.DIRT] = hex('#8a7458'); cols[FL.ASPHALT] = hex('#505052'); cols[FL.SIDEWALK] = hex('#9a9890');
-    cols[FL.CONCRETE] = hex('#8a8884'); cols[FL.SAND] = hex('#c8b48a'); cols[FL.WATER] = hex('#3a6a8a'); cols[FL.DEEPWATER] = hex('#2a4c6c'); cols[FL.FURROW] = hex('#6a5038'); cols[FL.GRAVEL] = hex('#8a8478'); cols[FL.PARKING] = hex('#6a6a6c');
+    cols[FL.GRASS] = hex('#d2dcb2'); cols[FL.GRASS2] = hex('#ccd8aa'); cols[FL.FOREST] = hex('#a8c48e'); cols[FL.DIRT] = hex('#e2d4b0'); cols[FL.ASPHALT] = hex('#fbf8f0'); cols[FL.SIDEWALK] = hex('#e6e0d2');
+    cols[FL.CONCRETE] = hex('#e0dbd0'); cols[FL.SAND] = hex('#ecdcb4'); cols[FL.WATER] = hex('#a8cce0'); cols[FL.DEEPWATER] = hex('#8fbad6'); cols[FL.FURROW] = hex('#dcc89a'); cols[FL.GRAVEL] = hex('#e2dccc'); cols[FL.PARKING] = hex('#e8e4da');
+    const ROAD = FL.ASPHALT, paper = [216, 208, 188], edge = [150, 146, 138], bldg = [222, 196, 156], bEdge = [136, 104, 70], wood = [120, 158, 100];
+    const isRoad = (i) => w.floor[i] === ROAD && w.room[i] < 0;
     for (let y = 0; y < w.h; y++) for (let x = 0; x < GW; x++) {
       const i = y * w.w + x, q = (y * GW + x) * 4;
       let c3;
-      if (w.room[i] >= 0) c3 = [176, 164, 146];
-      else c3 = cols[w.floor[i]] || [90, 120, 66];
+      if (w.room[i] >= 0) {
+        // a building: tan, outlined where it meets the outside
+        const out = (x > 0 && w.room[i - 1] < 0) || (x < GW - 1 && w.room[i + 1] < 0) || (y > 0 && w.room[i - w.w] < 0) || (y < w.h - 1 && w.room[i + w.w] < 0);
+        c3 = out ? bEdge : bldg;
+      } else {
+        c3 = cols[w.floor[i]] || [204, 214, 170];
+        // a road's edge drawn as a grey line where it meets anything else
+        if (isRoad(i) && ((x > 0 && !isRoad(i - 1)) || (x < GW - 1 && !isRoad(i + 1)) || (y > 0 && !isRoad(i - w.w)) || (y < w.h - 1 && !isRoad(i + w.w)))) c3 = edge;
+      }
       const o = w.obj[i];
-      if (o && o.t === 'tree') c3 = [46, 70, 38];
+      if (o && o.t === 'tree') c3 = wood;
+      // the paper's grain
+      const n = ((x * 73856093 ^ y * 19349663) >>> 0) % 7 - 3;
       const known = this.revealed || w.seen[i];
-      let f = known ? 1 : 0.18;
-      if ((w.wallN[i] && w.wallN[i] <= 3) || (w.wallW[i] && w.wallW[i] <= 3)) { c3 = [60, 60, 60]; f = known ? 1 : 0.33; }
-      img.data[q] = c3[0] * f; img.data[q + 1] = c3[1] * f; img.data[q + 2] = c3[2] * f; img.data[q + 3] = 255;
+      let r = c3[0] + n, gg = c3[1] + n, bb = c3[2] + n;
+      if (!known) { const k = 0.82; r = r * (1 - k) + paper[0] * k; gg = gg * (1 - k) + paper[1] * k; bb = bb * (1 - k) + paper[2] * k; if (((x + y) & 7) === 0) { r -= 14; gg -= 14; bb -= 14; } }
+      img.data[q] = r; img.data[q + 1] = gg; img.data[q + 2] = bb; img.data[q + 3] = 255;
     }
     g.putImageData(img, 0, 0);
     this.base = c; this.baseT = performance.now();
@@ -1112,7 +1133,7 @@ const MapView = {
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     if (!this.base || performance.now() - this.baseT > 3000) this.buildBase();
     const g = cv.getContext('2d');
-    g.fillStyle = '#111'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#d8d0bc'; g.fillRect(0, 0, W, H);
     g.imageSmoothingEnabled = false;
     g.save();
     g.translate(W / 2, H / 2); g.scale(this.zoom, this.zoom); g.translate(-this.cx, -this.cy);
@@ -1134,17 +1155,19 @@ const MapView = {
         const hw = g.measureText(l.text).width / 2 + 3, hh = tier === 0 ? 9 : 7;
         if (drawn.some(q => Math.abs(q[0] - sx) < q[2] + hw && Math.abs(q[1] - sy) < q[3] + hh)) continue;
         drawn.push([sx, sy, hw, hh]);
-        g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillText(l.text, sx + 1, sy + 1);
-        g.fillStyle = tier === 0 ? '#fff0c0' : tier === 1 ? '#f0e8c8' : '#d8d0b8'; g.fillText(l.text, sx, sy);
+        // printed in ink with a paper halo, towns in capitals
+        const tx = tier === 0 ? l.text.toUpperCase() : l.text;
+        g.lineWidth = 3; g.strokeStyle = 'rgba(246,240,224,0.92)'; g.strokeText(tx, sx, sy);
+        g.fillStyle = tier === 0 ? '#2a2018' : tier === 1 ? '#4a3a2a' : '#5a4a3a'; g.fillText(tx, sx, sy);
       }
     }
     // player
     const p = G.player;
     const px = (vxOf(p.x) - this.cx) * this.zoom + W / 2, py = (p.y - this.cy) * this.zoom + H / 2;
     g.save(); g.translate(px, py); g.rotate(p.angle);
-    g.fillStyle = '#ff4040'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
+    g.fillStyle = '#d02020'; g.strokeStyle = '#fff8e8'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(9, 0); g.lineTo(-6, 6); g.lineTo(-3, 0); g.lineTo(-6, -6); g.closePath(); g.fill(); g.stroke();
     g.restore();
-    g.fillStyle = '#ccc'; g.textAlign = 'left'; g.font = '10px Verdana'; g.fillText('N ↑', 8, 16);
+    g.fillStyle = '#3a2e22'; g.textAlign = 'left'; g.font = 'bold 11px Verdana'; g.fillText('N ↑', 8, 16);
   },
 };

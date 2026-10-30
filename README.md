@@ -29,7 +29,7 @@ Your game saves automatically. Death is permanent.
 - A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.
 
 **The dead**
-- Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead.
+- Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead. Crouch to stay below the window sills.
 - Sandbox options for their numbers, speed (shamblers to sprinters), toughness and how the infection spreads.
 - Gore with wounds, real holes torn out of bodies that keep bleeding, dismemberment, blood that pools, sprays onto walls and leaves footprints; a Gore and a Gore detail setting, or switched off.
 - Deaths that follow from how they died: thrown by cars by their speed, blows from every side, gunshots by calibre, fire, stomps and falls.
@@ -50,9 +50,9 @@ Your game saves automatically. Death is permanent.
 - A driving model with grip and skids on wet roads, snow and gravel.
 
 **Interface**
-- Inventory and loot windows with sorting, stacks, drag and drop and item tooltips.
-- A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, and a map.
-- Animated 3D characters in textured clothes (dresses, skirts, long coats, hoods; beards and a range of hair styles), with your gear - and any body you carry - visible on your character.
+- Inventory and loot windows with sorting, stacks, drag and drop and item tooltips; put things down where you want them, on the floor or on a table.
+- A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, a crafting window, and a paper road map of what you have explored.
+- Animated 3D characters in textured clothes (dresses, skirts, long coats, hoods, ties, scarves, hi-vis vests; beards and a range of hair styles), with your gear - and any body you carry - visible on your character.
 
 ## Controls
 
