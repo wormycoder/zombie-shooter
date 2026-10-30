@@ -51,7 +51,7 @@ Your game saves automatically. Death is permanent.
 
 **Interface**
 - Inventory and loot windows with sorting, stacks, drag and drop and item tooltips; put things down where you want them, on the floor or on a table.
-- A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, a crafting window, and a paper road map of what you have explored.
+- A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, a crafting window, and a paper road map of what you have explored, which you can mark up.
 - Animated 3D characters in textured clothes (dresses, skirts, long coats, hoods, ties, scarves, hi-vis vests; beards and a range of hair styles), with your gear - and any body you carry - visible on your character.
 
 ## Controls
