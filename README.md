@@ -23,7 +23,7 @@ Your game saves automatically. Death is permanent.
 ## Features
 
 **A living county**
-- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns (with a hospital, a hotel, a car dealer and a factory), an army base, a prison, an airfield, a quarry, a truck stop, and camps, wrecks and old farms out in the country.
+- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns (with a hospital, a hotel, a car dealer, a mall and two factories), an army base, a prison, an airfield, a quarry, a truck stop, and camps, wrecks and old farms out in the country.
 - Houses with real floor plans and upstairs rooms, shops with flats above, apartment blocks, police and fire stations, a clinic, a school, churches, a motel, gas stations, warehouses and a trailer park — each with loot to match.
 - Yards shaped by the people who lived there, foliage that grows wild along verges and empty lots, and four seasons with autumn colour, bare winter trees and snow.
 - A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.

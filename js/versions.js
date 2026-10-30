@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.031.000.172', date: '2026-10-30', title: 'Kingsbury Mall',
+    notes: [
+      'A shopping mall in Kingsbury (Expanded map): a wide tiled concourse with benches, glass doors at both ends, and shops down both sides - clothes, sports, books, electronics, toys, a pharmacy and a food court - with a car park along the front. New loot for the sports, electronics and toy shops.',
+      'Kingsbury now gets its factory too (Beacon Tool & Die); last version it ran out of room.',
+    ],
+    commits: [], shots: ['v031000_1'],
+  },
+  {
     v: '000.030.000.171', date: '2026-10-30', title: 'More music, better sounds and a factory',
     notes: [
       'Ten new pieces of music, with new instruments: a fingerpicked and strummed acoustic guitar, a solo cello and a celesta. A second title theme, two more day pieces, a second dusk piece, two more night pieces (one only celesta, one only drones and cello), a second rain piece, two winter pieces that play on cold days, and a second chase loop with heavy drums. Pieces no longer repeat back to back, and each chase picks a loop afresh.',

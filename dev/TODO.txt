@@ -87,6 +87,17 @@ FIX - PERFORMANCE ON OLDER DEVICES IS VERY BAD.
   -> VERY HIGH. STARTED: the Low and Medium presets now use the new
      settings (Low: zombies at 15/sec, lazy animation, 1x textures,
      half-res ground). Next: measure on a slow CPU profile.
+     MEASURED (000.031.000.172), Low preset, the Stable map, CPU slowed 4x
+     (headless Chromium, so canvas and WebGL are drawn in software):
+     6.7 fps. Most of a frame was the WebGL character pass being drawn in
+     software and copied into the page (26 ms of 40 ms at full speed) - on a
+     real graphics card that is cheap. With it left out: 16.8 fps, and the
+     game's own code is only ~17 ms a frame at 4x (~4 ms at full speed:
+     drawing 11, zombies 4, the rest 2); the remainder is the browser
+     compositing the canvas in software. So the script side is not the
+     bottleneck; what is left is graphics (resolution - Low is already
+     half - and the 3D pass). Next: try on a real low-end machine with the
+     detailed FPS counter (Experimental) to see render vs sim there.
 
 FIX - LOOK INTO HOW MANY CORES OR THREADS THE GAME IS USING, MAKE SURE IT
       PRIORITIZES BEING AS EFFICIENT AS POSSIBLE - AND ALSO LOOK INTO GPU
@@ -410,8 +421,8 @@ HIGH (added) - IMPROVE THE SFX MORE, AND ADD MORE MUSIC, THEN WORK ON WHATEVER.
      WHATEVER: hood up in the rain (TODO item); a factory in Riverton
      (machines - a new object - workbenches, offices, lockers, break room).
      Not judged by ear here - worth a listen.
-     Next: a mall; the factory in Kingsbury too (it ran out of blocks);
-       tune the deaths / fight-offs / clothes by eye.
+     Next: a mall (DONE 000.031.000.172); the factory in Kingsbury too
+       (DONE 000.031.000.172); tune the deaths / fight-offs / clothes by eye.
 
 --------------------------------------------------------------------
 RUN LOG
@@ -475,5 +486,7 @@ Fix (000.029.001.170), asked for: doors sounded goofy (a pitch-gliding
   creak) - rebuilt as handle, swing, thud and latch.
 Run 15 (000.030.000.171), asked for: better sound effects, ten more pieces
   of music; then the hood in the rain and a factory.
+Run 16 (000.031.000.172): Kingsbury Mall, Kingsbury's factory, a slow-CPU
+  profile of the Low preset (see the performance FIX above).
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

@@ -954,7 +954,7 @@ const Facade = {
     const plinth = mat === 'brick' ? 'brick' : mat === 'metal' ? 'metal' : mat === 'trailer' ? 'skirt' : (mat === 'log' || t === 'barn' || t === 'farmhouse') ? 'stone' : 'conc';
     const gut = flat || mat === 'log' || shed ? '' : mat === 'brick' ? r.pick(['#e8e6e0', '#5a4636']) : r.pick(['#ecebe6', '#ecebe6', trim, '#6a5646']);
     const shop = !house && !shed && flat && t !== 'trailer';
-    const awn = shop && !/police|school|firestation|warehouse|gasstation|clinic|bank|apartments|autorepair|library|postoffice|prison|military|barracks|hangar|tower/.test(t) && r.chance(0.72) ? r.pick(this.AWN) : null;
+    const awn = shop && !/police|school|firestation|warehouse|mall|factory|gasstation|clinic|bank|apartments|autorepair|library|postoffice|prison|military|barracks|hangar|tower/.test(t) && r.chance(0.72) ? r.pick(this.AWN) : null;
     const frame = r.pick(['#4a4036', '#a9adb1', '#2c2c2c']), sign = r.pick(this.SIGN), acc = r.pick(this.ACC);
     const gm = house && (mat === 'clap' || mat === 'vinyl') ? r.weighted([[mat, 5], ['scale', 1.6], ['batten', 1]]) : mat;
     let num = 0;
