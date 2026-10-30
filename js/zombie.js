@@ -577,6 +577,8 @@ const Zombie = {
     const p = G.player;
     if (z.st !== 'down' && z.st !== 'climb' && z.st !== 'getup') { z.st = 'chase'; z.mem = 10; z.tx = p.x; z.ty = p.y; z.canSee = true; }
     if (z.hp <= 0) { o.dmg = dmg; this.kill(z, fromA, o); return; }
+    // with active ragdolls a heavy blow can take it off its feet (it cannot catch itself)
+    if (Settings.v.ragdoll && z.rdF > 1.1 && !o.knock && o.stag !== 0 && R.chance(0.35)) o.knock = true;
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
     // a blow while it is still half way up puts it back down
     if ((o.knock || (z.st === 'getup' && z.lie > 0.35 && o.stag !== 0)) && z.st !== 'down' && z.st !== 'climb') {

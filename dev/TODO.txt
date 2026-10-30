@@ -424,14 +424,21 @@ HIGH (added) - IMPROVE THE SFX MORE, AND ADD MORE MUSIC, THEN WORK ON WHATEVER.
      Next: a mall (DONE 000.031.000.172); the factory in Kingsbury too
        (DONE 000.031.000.172); tune the deaths / fight-offs / clothes by eye.
 TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
-  -> STARTED: Settings > Experimental > Animation > Active ragdolls (beta).
-     The zombies' pose follows the animation through a spring and damper
-     per channel (Char3D.rag): hits kick the channels by direction and
-     force (pushed pelvis, bending spine, whipping head, loose arms), the
-     muscles pull back with a little overshoot; on death they slacken -
-     a looser fall, follow-through and a bounce. Feet stay on the
-     animation while standing. Next: tune by eye in play, the player too,
-     cars hitting zombies (a bigger kick), real limb collision.
+  -> v1 (spring layer on the pose) judged not active enough - no stumbling,
+     no physics. v2: Settings > Experimental > Animation > Active ragdolls.
+     A point-mass body (pelvis, chest, head, wrists, ankles; Jakobsen-style
+     Verlet/PBD: bones as distance constraints, gravity, ground, friction)
+     simulated all the time for the zombies and the player near you (the two
+     nearest detail rings). Muscles: PD springs toward the animated points
+     that also hold up the body's weight, so it moves with momentum.
+     Balance: the capture point (hips + velocity / sqrt(g/h)); off the
+     support a foot steps there, repeated until caught (stumbles of 1-3
+     steps), arms out and up while off balance; then the feet step back
+     under the body. Down or dead the muscles let go: the legs stay stiff
+     for ~0.5 s so the body topples over its feet, then a limp ragdoll that
+     settles near the lying pose. Heavy blows can knock a zombie down.
+     Next: tune by eye in play; car hits; bodies colliding with walls and
+     each other; arms reaching for the ground when falling.
 
 --------------------------------------------------------------------
 RUN LOG
