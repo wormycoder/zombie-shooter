@@ -64,6 +64,8 @@ const MapGen = {
     this.boardUp(seed);
     // the empty country between the towns (the Expanded map): camps, wrecks, hay fields, old orchards
     if (S > 400) this.countryside(seed);
+    // the odd thing left out on a table, a desk, a counter or a nightstand
+    this.tableClutter(seed);
     // keep saves compact
     for (const o of w.obj) if (o && o.sz) o.sz = Math.round(o.sz * 100) / 100;
     return w;
@@ -218,6 +220,38 @@ const MapGen = {
   // chance that a house has a burglar alarm (sandbox option; stores are a few times likelier)
   // Boarded-up houses: about one house in fourteen (homes, farmhouses, cabins, trailers) has planks over its outside
   // windows and doors, 1-3 each - someone holed up there. Its own random stream, so the maps keep their layouts.
+  // things left lying on the furniture of homes and offices: a can and a newspaper on the kitchen table, a novel on
+  // the nightstand, a soda on a desk (its own random numbers: the map is the same with or without it)
+  tableClutter(seed) {
+    const w = this.w, r = new RNG((seed ^ 0x7ab1e5) >>> 0), W = w.w;
+    const kinds = { house: 1, farmhouse: 1, cabin: 1, trailer: 1, apartments: 1, office: 1, diner: 1, restaurant: 1, motel: 1, hotel: 1, school: 1, library: 1, clinic: 1, postoffice: 1, factory: 1 };
+    const LIST = {
+      table: ['@snack', '@canned', 'Newspaper', 'Magazine', 'Pop', 'EmptyBottle', 'CanOpener', 'Beer', 'WaterBottle', 'Apple'],
+      counter: ['@canned', '@snack', 'CanOpener', 'KitchenKnife', 'EmptyBottle', 'Pop', 'Bread', 'Lighter'],
+      desk: ['Newspaper', 'Magazine', 'Novel', 'Pop', 'Battery', 'Scissors', 'Flashlight', 'ComicBook'],
+      nightstand: ['Novel', 'Magazine', 'Lighter', 'Painkillers', 'WaterBottle', 'ComicBook', 'Glasses'],
+    };
+    const pick = (t) => { let id = r.pick(LIST[t]); if (id[0] === '@') { const g = LOOT_GROUPS[id.slice(1)]; id = g && g.length ? r.pick(g) : 'Newspaper'; } return ITEMS[id] ? id : null; };
+    for (const b of w.buildings) {
+      if (!kinds[b.type]) continue;
+      for (const rid of b.rooms) {
+        const rm = w.rooms[rid];
+        if (!rm) continue;
+        for (let y = rm.y0; y <= rm.y1; y++) for (let x = rm.x0; x <= rm.x1; x++) {
+          const o = w.obj[y * W + x];
+          if (!o || !LIST[o.t] || o.part || !r.chance(o.t === 'table' ? 0.35 : 0.2)) continue;
+          const n = r.chance(0.3) ? 2 : 1;
+          for (let k = 0; k < n; k++) {
+            const id = pick(o.t), it = id && Items.make(id);
+            if (!it) continue;
+            const i = y * W + x; let a = w.items.get(i); if (!a) { a = []; w.items.set(i, a); }
+            it.fx = r.f(0.25, 0.75); it.fy = r.f(0.25, 0.75); it.rot = r.f(0, 6.283); it.fz = FloorItems.surfAt(x, y) || OBJ[o.t].h;
+            a.push(it);
+          }
+        }
+      }
+    }
+  },
   boardUp(seed) {
     const w = this.w, r = new RNG((seed ^ 0x5bd1e995) >>> 0), W = w.w;
     const homes = new Set(['house', 'farmhouse', 'cabin', 'trailer']);
