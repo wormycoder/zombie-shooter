@@ -907,6 +907,26 @@ const Render = {
       else if (neon && !cut && f && !f.smashed && (f.barricade || 0) < 2) this.neonGlow(x, y, d, alpha);
     }
     if (rope === 2) this.drawRope(up ? x : x + LV.W0, y, d, s, up ? WALL_H : 0.05, up ? WALL_H + 0.85 : WALL_H);
+    if (Wd.wblood && !cut) this.wallBlood(x, y, d, s, alpha);
+  },
+  // blood sprayed on the face of a wall toward the camera (gore.js Gore.wall), drawn on the wall's plane
+  wallBlood(x, y, d, s, alpha) {
+    const L = Wd.wblood.get(((y * Wd.w + x) << 1) | d);
+    if (!L) return;
+    const ctx = this.ctx;
+    for (const b of L) {
+      if (b[4] < 0) continue;
+      const a = b[0], z = b[1], h = b[2] / 2, o = 0.03;
+      const P0 = d ? this.P(x + o, y + a - h, z + h) : this.P(x + a - h, y + o, z + h);
+      const Pu = d ? this.P(x + o, y + a + h, z + h) : this.P(x + a + h, y + o, z + h);
+      const Pv = d ? this.P(x + o, y + a - h, z - h) : this.P(x + a - h, y + o, z - h);
+      const spr = Gore.sprite({ t: 'wall', v: b[3] }, Gore.stage({ b: b[5] }));
+      ctx.save();
+      ctx.transform((Pu[0] - P0[0]) / 64, (Pu[1] - P0[1]) / 64, (Pv[0] - P0[0]) / 64, (Pv[1] - P0[1]) / 64, P0[0], P0[1]);
+      ctx.globalAlpha = (alpha === undefined ? 1 : alpha) * (0.35 + 0.65 * Math.min(1, s));
+      ctx.drawImage(spr, 0, 0);
+      ctx.restore();
+    }
   },
   // warm light in the windows of lit rooms after dark
   windowGlow(x, y, d, f, alpha) {

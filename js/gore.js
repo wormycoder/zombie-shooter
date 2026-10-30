@@ -143,6 +143,19 @@ const Gore = {
       blob(0, 0, 6, C[2], 9);
       const fl = ['#9a3a32', '#c0807a', '#5a0a08', '#e0d8c0'];
       for (let i = 0; i < 4; i++) { g.fillStyle = fl[i]; g.fillRect((rng.next() - 0.5) * 10, (rng.next() - 0.5) * 10, 2 + rng.next() * 3, 1.5 + rng.next() * 2); }
+    } else if (t === 'wall') {
+      // a splash on a wall (drawn on the wall's own plane, +y down): spatter, and runs of blood dripping down
+      g.scale(1.7, 1.7);
+      blob(0, -6, 8, C[2], 11); blob(0.5, -6.5, 7, C[0], 11);
+      for (let i = 0; i < 10; i++) { const b = rng.next() * 7, r = 9 + rng.next() * 14; drop(Math.cos(b) * r, -6 + Math.sin(b) * r * 0.8, 0.7 + rng.next() * 1.8, 0, C[0]); }
+      for (let i = 0; i < 4; i++) { const x = (rng.next() - 0.5) * 12, l = 8 + rng.next() * 18; g.fillStyle = C[0]; g.fillRect(x - 0.9, -4, 1.8, l); drop(x, -4 + l, 1.4, 0, C[2]); }
+      if (st === 0) blob(-2, -8, 3, C[1], 7);
+    } else if (t === 'foot') {
+      // a bloody shoe print along +x (v odd: the left foot): the sole, the heel, the tread showing in the blood
+      const sy = d.v & 1 ? -1 : 1;
+      g.globalAlpha = 0.85; blob(5, sy * 0.5, 6, C[0], 10); blob(-7, sy * 0.3, 4.2, C[0], 9);
+      g.globalAlpha = 0.35; g.fillStyle = C[2]; for (let i = 0; i < 4; i++) g.fillRect(1 + i * 2.4, -4 + sy * 0.5, 0.9, 8);
+      g.globalAlpha = 1;
     } else if (lim) this.limbArt(g, d, C, rng);
     this.spr.set(key, c);
     return c;
@@ -192,10 +205,12 @@ const Gore = {
     const ca = Math.cos(A), sa = Math.sin(A);
     if (kind === 'blunt' || kind === 'car') {
       this.burst(hx, hy, hz, n, A, kind === 'car' ? 0.7 : 1.3, 0.5, kind === 'car' ? 4 : 2.4, 0.4, 2.2);
+      if (R.chance(0.4)) this.wall(hx, hy, hz, A + R.f(-0.8, 0.8), 1, sz * 0.55);
       this.dec('splat', hx + ca * 0.3, hy + sa * 0.3, A, sz);
     } else if (kind === 'blade' || kind === 'chop') {
       // a spurt out of the cut, thrown on with the blade
       this.burst(hx, hy, hz, n + 2, A + R.f(-0.4, 0.4), 0.45, 1.4, 3.8, 0.2, 1.8);
+      if (R.chance(0.6)) this.wall(hx, hy, hz, A + R.f(-0.4, 0.4), 1.2, sz * 0.6);
       this.dec('streak', hx + ca * 0.55, hy + sa * 0.55, A + R.f(-0.3, 0.3), sz * 1.2);
     } else if (kind === 'stab') {
       this.burst(hx, hy, hz, Math.ceil(n * 0.5), A, 0.5, 0.6, 1.8, 0.2, 1.2);
@@ -208,6 +223,7 @@ const Gore = {
       const L = R.f(0.8, 1.6);
       if (!World.firstEdgeHit(hx, hy, hx + ca * L, hy + sa * L)) this.dec('streak', hx + ca * L, hy + sa * L, A, sz * 1.3 * big);
       else this.dec('splat', hx + ca * 0.4, hy + sa * 0.4, A, sz);
+      this.wall(hx, hy, hz, A, 1.8, sz * 0.75 * big);
     } else if (kind === 'stomp') {
       this.burst(hx, hy, 0.12, n, A, Math.PI, 0.4, 1.8, 0.3, 1.4);
       this.dec('splat', hx, hy, R.f(0, 6.28), sz * 1.2);
@@ -245,6 +261,47 @@ const Gore = {
     this.bleeders.add(z);
     this.gibs(z.x, z.y, z.lie > 0.5 ? 0.2 : 1.1, [0, 1, 2, 3, 5][q], A);
     this.touch(z);
+  },
+  // ---------------------------------------------------------------- blood on walls
+  // Spray that reaches a wall marks it. Wd.wblood: edge id -> [[a, z, s, v, side, b], ...] - a along the edge 0..1, z the
+  // height, s the size (tiles), side 1 on the face toward the camera (+x / +y) or -1 on the far one, b the game minute
+  wall(hx, hy, hz, A, reach, s) {
+    if (!Wd || !this.lv()) return;
+    const ca = Math.cos(A), sa = Math.sin(A), e = World.firstEdgeHit(hx, hy, hx + ca * reach, hy + sa * reach);
+    if (!e) return;
+    const W = Wd.wblood || (Wd.wblood = new Map()), k = ((e.y * Wd.w + e.x) << 1) | e.d, at = e.t;
+    const a = U.clamp(e.d ? hy + sa * reach * at - e.y : hx + ca * reach * at - e.x, 0.12, 0.88);
+    const side = e.d ? (ca < 0 ? 1 : -1) : (sa < 0 ? 1 : -1), rd = (v) => Math.round(v * 100) / 100;
+    let L = W.get(k);
+    if (!L) W.set(k, L = []);
+    L.push([rd(a), rd(U.clamp(hz + R.f(-0.25, 0.2) - at * reach * 0.2, 0.3, 2)), rd(U.clamp(s, 0.18, 0.55)), R.int(0, 5), side, Math.round(G.time)]);
+    if (L.length > 6) L.shift();
+    if (W.size > 600) W.delete(W.keys().next().value);
+  },
+  // ---------------------------------------------------------------- bloody footprints
+  // walking through fresh blood (a pool, a splash or a streak) leaves prints for a dozen steps, fainter each one;
+  // e: the walker (its .bs counts the steps left, .bsd the distance since the last print, .bsf which foot)
+  steps(e, moved, a) {
+    if (!this.lv() || !Wd || !(moved > 0)) return;
+    e.bsd = (e.bsd || 0) + moved;
+    // (looked for every few inches while the feet are clean, and at each print: still in it, the count starts over)
+    if (!e.bs) { if (e.bsd < 0.15) return; e.bsd = 0; if (this.wet(e)) { e.bs = 12; e.bsd = 0.4; } return; }
+    if (e.bsd < 0.55) return;
+    e.bsd = 0;
+    if (this.wet(e)) e.bs = 12;
+    e.bsf = !e.bsf;
+    const sd = e.bsf ? 0.09 : -0.09;
+    this.dec('foot', e.x - Math.sin(a) * sd, e.y + Math.cos(a) * sd, a, 0.24, { v: e.bsf ? 1 : 0, al: Math.min(1, e.bs / 8) });
+    e.bs--;
+  },
+  // fresh blood underfoot: a pool, a splash or a streak less than ten game hours old
+  wet(e) {
+    for (const d of Wd.decals) {
+      if (d.k !== 'g' || (d.t !== 'pool' && d.t !== 'splat' && d.t !== 'streak') || G.time - d.b > 600) continue;
+      const r = d.s * (d.t === 'pool' ? 0.45 : 0.3);
+      if (Math.abs(d.x - e.x) < r && Math.abs(d.y - e.y) < r) return true;
+    }
+    return false;
   },
   // the chunks keep bleeding: drops run out of them, fewer as it slows, low down once the body is on the ground
   bleed(dt) {

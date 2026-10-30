@@ -392,6 +392,8 @@ const Player = {
     sp *= this.speedMult() * Debug.speed;
     if (p.st.drunk > 0.3) { const wob = Math.sin(performance.now() / 300) * p.st.drunk * 0.5; const c = Math.cos(wob), s = Math.sin(wob); const tx = nx * c - ny * s; ny = nx * s + ny * c; nx = tx; }
     p.moveMode = mode; p.mdir = Math.atan2(ny, nx);
+    // bloody footprints after stepping in blood (gore.js)
+    Gore.steps(p, sp * dt, p.mdir);
     const ox = p.x, oy = p.y;
     if (Debug.ghost) { p.x += nx * sp * dt; p.y += ny * sp * dt; } else World.move(p, nx * sp * dt, ny * sp * dt, p.r);
     Vehicles.pushOut(p, p.r);
