@@ -206,7 +206,10 @@ const Zombie = {
   // 3-5 chunks every other step (unless chasing or on screen), 6-11 a coarse update every ~2 s, 12+ frozen.
   // With a crowd close by, adaptive physics updates each crowd zombie every other step instead.
   updateAll(dt) {
-    this.rebuildGrid();
+    // (a big crowd: the grid every other step - a zombie moves a few inches a step, and the cells are 4 tiles)
+    if (G.zombies.length < 800 || !((this.tick || 0) & 1) || this.gN !== G.zombies.length) { this.rebuildGrid(); this.gN = G.zombies.length; }
+    // path searches this step: a crowd turning to chase spreads its searches over the next few steps
+    World.pathBudget = 10;
     const p = G.player;
     const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
     const lazy = Settings.v.zLazy, crowd = Settings.v.zAdapt && (this.nearN || 0) > 120;
@@ -241,7 +244,10 @@ const Zombie = {
           zdt = z.acc; z.acc = 0;
         } else if (z.acc) { zdt += z.acc; z.acc = 0; }
       } else if (d > 60) { z.far = (z.far || 0) + dt; if (z.far > 1) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
+      const ox = z.x, oy = z.y;
       this.update(z, zdt, px, py, d);
+      // the dead near you leave bloody prints too (gore.js)
+      if (d < 18 && !z.crawl) Gore.steps(z, Math.abs(z.x - ox) + Math.abs(z.y - oy), z.a);
       upd++;
       if (z.st === 'chase' || z.st === 'attack' || z.st === 'grab') chasing++;
     }
@@ -444,7 +450,9 @@ const Zombie = {
       mx = dx / (dist || 1); my = dy / (dist || 1);
     } else {
       z.pathCool = (z.pathCool || 0) - dt;
-      if ((!z.path || z.pathT <= 0) && z.pathCool <= 0) {
+      if ((!z.path || z.pathT <= 0) && z.pathCool <= 0 && World.pathBudget <= 0) { z.pathCool = R.f(0.05, 0.2); if (!z.path) { mx = dx / dist; my = dy / dist; } }
+      else if ((!z.path || z.pathT <= 0) && z.pathCool <= 0) {
+        World.pathBudget--;
         z.pathT = R.f(1.5, 2.5) + (dPlayer > 25 ? 2 : 0);
         z.pathCool = R.f(1.0, 1.8) + (dPlayer > 25 ? 2 : 0);
         z.path = World.findPath(z.x, z.y, z.tx, z.ty, 'z', dPlayer < 25 ? 900 : 400);

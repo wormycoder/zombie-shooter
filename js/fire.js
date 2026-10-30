@@ -173,6 +173,9 @@ const Fire = {
   entities(dt) {
     const m = Wd.fire, W = Wd.w;
     const has = m && m.size;
+    // nothing burning on the map: the dead that are still alight are seen to four times a second
+    if (!has) { this.idleT = (this.idleT || 0) + dt; if (this.idleT < 0.25) return; dt = this.idleT; }
+    this.idleT = 0;
     let gone = false;
     for (const z of G.zombies) {
       if (z.dead) {

@@ -928,6 +928,7 @@ const Vehicles = {
       this.activeT = 1;
       const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
       this.active = G.cars.filter(c => Math.abs(c.x - px) < 75 && Math.abs(c.y - py) < 75);
+      this.activeS = new Set(this.active);
     }
     // sirens wail for miles and pull every zombie that hears them
     let siren = null, sd = 1e9;
@@ -948,15 +949,23 @@ const Vehicles = {
     this.updatePuffs(rdt);
     let screech = 0, sx = 0, sy = 0;
     for (const c of G.cars) {
-      const tm = this.tmp(c);
       const mine = p && p.inCar === c;
+      // a parked car far from the player with nothing running: only its once-a-second systems tick
+      if (!mine && !c.engine && !c.v && !c.vs && !this.activeS.has(c) && !(c.alarmT > 0)) {
+        c.sysAcc = (c.sysAcc || 0) + dt;
+        if (c.sysAcc >= 1) { this.systems(c, c.sysAcc, c.sysAcc * MIN_PER_SEC, this.tmp(c), false); c.sysAcc = 0; }
+        continue;
+      }
+      const tm = this.tmp(c);
       if (!mine) {
         if (Math.abs(c.v) > 0.01 || Math.abs(c.vs || 0) > 0.01) this.sim(c, dt, null);
         else { c.braking = false; c.rev = false; }
         if (c.engine && c.gas > 0) { c.gas -= 0.00001 * dt; c.noiseT = (c.noiseT || 0) - dt; if (c.noiseT <= 0) { c.noiseT = 1.5; Noise.emit(c.x, c.y, 10, 'engine'); } }
         if (c.engine && c.gas <= 0) this.stall(c);
       }
-      this.systems(c, dt, gm, tm, mine);
+      // (cars far from the player that nobody is running: their batteries, leaks and lights once a second)
+      if (mine || c.engine || tm.crank > 0 || tm.door > 0 || this.activeS.has(c)) { if (c.sysAcc) { this.systems(c, c.sysAcc, c.sysAcc * MIN_PER_SEC, tm, mine); c.sysAcc = 0; } this.systems(c, dt, gm, tm, mine); }
+      else { c.sysAcc = (c.sysAcc || 0) + dt; if (c.sysAcc >= 1) { this.systems(c, c.sysAcc, c.sysAcc * MIN_PER_SEC, tm, false); c.sysAcc = 0; } }
       // effects only where someone can see them
       if (Math.abs(c.x - Render.cam.x) < 40 && Math.abs(c.y - Render.cam.y) < 40) {
         this.effects(c, tm, dt, rdt);
