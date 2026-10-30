@@ -506,5 +506,7 @@ Run 17 (000.032.000.173): ties, scarves, hi-vis vests; items on tables;
   half-res roofs.
 Run 18 (000.033.000.174): the paper map, the crafting window, sitting on
   seats, crouching under windows.
+Fix (000.033.001.175): deaths checked by eye on contact sheets - the
+  default 'arms flung out' was a horizontal T; now out and down, uneven.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

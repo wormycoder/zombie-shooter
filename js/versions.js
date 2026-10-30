@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.033.001.175', date: '2026-10-30', title: 'Death throes',
+    notes: [
+      'The dead no longer fling their arms straight out like a scarecrow as they fall: the arms go out and down from the shoulders, one thrown forward and the other back.',
+      'Sitting down and getting up make a sound (a wooden chair creaks, a sofa rustles).',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.033.000.174', date: '2026-10-30', title: 'A paper map, seats and crouching under windows',
     notes: [
       'The map is drawn like a paper road map: cream paper, white roads edged in grey, buildings in tan, green fields and woods, blue water, place names printed in ink; what you have not seen yet is faded.',

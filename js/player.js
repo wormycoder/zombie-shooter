@@ -195,12 +195,14 @@ const Player = {
     const v = DIRV[o.dir] || [0, 1];
     p.angle = Math.atan2(v[1], v[0]);
     p.sitting = true;
+    Sfx.play(o.t === 'chair' || o.t === 'bench' || o.t === 'pew' ? 'wood' : 'cloth');
   },
   standUp() {
     const p = G.player, s = p.seat;
     if (!s) return;
     p.seat = null;
     if (s.solid) { p.x = s.bx; p.y = s.by; }
+    Sfx.play('cloth');
   },
   flashlight() {
     const p = G.player;

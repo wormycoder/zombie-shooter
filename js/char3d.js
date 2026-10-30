@@ -1221,7 +1221,8 @@ const Char3D = {
     else if (s === 'clutch') { this.arm(A, -1, 0.22, -0.04, -0.12, 0.9); this.arm(A, 1, 0.25, -0.02, -0.06, 0.9); }
     else if (s === 'flail') { const w = f ? 1 : -1; this.arm(A, -1, 0.2 * w, 0.32, 0.35 * w * k, 0.5); this.arm(A, 1, -0.15 * w, 0.34, -0.3 * w * k + 0.1, 0.6); }
     else if (s === 'limp') { this.arm(A, -1, 0.04, 0.1, -0.48, 0.1); this.arm(A, 1, 0.03, 0.11, -0.47, 0.1); }
-    else { this.arm(A, -1, 0.05, 0.4 * k, 0.12 * k - 0.2, 0.3); this.arm(A, 1, 0.04, 0.42 * k, 0.1 * k - 0.2, 0.3); }
+    // flung wide: out and down from the shoulders, not straight out (one thrown forward, the other back)
+    else { this.arm(A, -1, 0.04 + 0.1 * k, 0.12 + 0.16 * k, -0.42 + 0.16 * k, 0.35); this.arm(A, 1, 0.02 - 0.08 * k, 0.12 + 0.2 * k, -0.42 + 0.12 * k, 0.3); }
   },
   // what stays wrong with the body once it lies: broken limbs, a splat spread flat
   post(A, r) {
