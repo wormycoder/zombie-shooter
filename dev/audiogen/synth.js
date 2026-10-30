@@ -192,8 +192,15 @@ const RECIPES = {
   switch: [2, 0.15, 'none', (X, r) => { X.burst(0, 'white', 'bandpass', r.f(2600, 3200), 4, 0.6, 0.0003, 0.006); X.ring(0.001, [[r.f(1800, 2200), 0.2, 0.01]], 1); }],
   beep: [1, 1.1, 'none', (X) => { for (let k = 0; k < 4; k++) X.tone(k * 0.25, 'square', 2000, 2000, 0.2, 0.002, 0.03, { lp: 4000, h: 0.08 }); }],
   // ---- doors, windows, building
-  doorOpen: [4, 1.2, 'room', (X, r) => { creak(X, r, r.f(0.5, 0.85), false); X.burst(0, 'white', 'bandpass', 2400, 3, 0.25, 0.001, 0.012); }],
-  doorClose: [4, 0.9, 'room', (X, r) => { creak(X, r, 0.2, false, 0.25); X.burst(0.2, 'white', 'bandpass', 2600, 4, 0.35, 0.0005, 0.01); X.tone(0.21, 'sine', 105, 48, 1, 0.001, 0.08); X.burst(0.21, 'pink', 'lowpass', 900, 0.8, 0.7, 0.001, 0.06, { send: 0.3 }); X.burst(0.23, 'white', 'bandpass', 500, 4, 0.2, 0.005, 0.08); }],
+  // (opening: the handle, the latch letting go, the swing; now and then the hinge rasps a little)
+  doorOpen: [5, 1.1, 'room', (X, r, v) => { doorHandle(X, r, 0); doorSwing(X, r, 0.1, r.f(0.45, 0.65), 1); if (v % 2 === 1) creak(X, r, r.f(0.25, 0.4), false, r.f(0.12, 0.2)); }],
+  // (closing: the swing, the slab hitting the frame, the latch catching, the panel ringing low)
+  doorClose: [5, 0.9, 'room', (X, r) => {
+    doorSwing(X, r, 0, 0.22, 0.8); const t = r.f(0.16, 0.22);
+    X.tone(t, 'sine', r.f(85, 105), 45, 1, 0.001, 0.06); X.burst(t, 'pink', 'lowpass', 1100, 0.8, 0.75, 0.001, 0.04, { send: 0.3 });
+    X.ring(t, [[r.f(140, 180), 0.35, 0.09], [r.f(310, 380), 0.2, 0.06], [r.f(700, 820), 0.08, 0.04]], 1);
+    X.burst(t + 0.004, 'white', 'bandpass', r.f(2600, 3200), 6, 0.3, 0.0004, 0.008); X.burst(t + 0.02, 'white', 'bandpass', 600, 3, 0.1, 0.004, 0.05);
+  }],
   garage: [1, 2.2, 'room', (X, r) => { X.burst(0, 'pink', 'bandpass', 450, 2, 0.5, 0.25, 0.6, { h: 0.9 }); for (let k = 0; k < 10; k++) X.burst(k * 0.15 + r.f(0, 0.05), 'white', 'bandpass', r.f(800, 1400), 3, 0.15, 0.002, 0.03); }],
   lock: [2, 0.3, 'small', (X, r) => { X.burst(0, 'white', 'bandpass', 2400, 5, 0.6, 0.0004, 0.008); X.burst(0.08, 'white', 'bandpass', 1800, 4, 0.5, 0.0004, 0.01); X.ring(0.081, [[r.f(1200, 1500), 0.2, 0.04]], 1); }],
   locked: [2, 0.4, 'small', (X, r) => { for (let k = 0; k < 3; k++) { X.burst(k * 0.07, 'white', 'bandpass', r.f(1600, 2000), 4, 0.5, 0.001, 0.015); X.tone(k * 0.07, 'sine', 140, 90, 0.2, 0.001, 0.02); } }],
@@ -248,18 +255,27 @@ const RECIPES = {
 for (const s of ['hard', 'grass', 'gravel', 'wood', 'carpet', 'snow']) RECIPES['st_' + s] = [6, 0.3, 'none', (X, r, v) => step(X, s, v)];
 
 function creak(X, r, dur, sash, gain, base) {
-  // stick-slip: a pulse train at a wandering rate, through the door's resonances
-  const { o } = X, s = o.createOscillator(); s.type = 'sawtooth';
-  const f0 = base || r.f(45, 75);
-  s.frequency.setValueAtTime(f0, 0);
-  for (let k = 1; k <= 6; k++) s.frequency.linearRampToValueAtTime(f0 * r.f(0.7, 1.6), dur * k / 6);
-  s.start(0); s.stop(dur + 0.1);
-  const amp = X.curve([[0, 0], [0.04, gain || 0.5], [dur * 0.7, (gain || 0.5) * 0.8], [dur, 0]]);
-  for (const [f, q, g] of sash ? [[700, 6, 0.6], [1500, 8, 0.4]] : [[r.f(500, 700), 10, 0.7], [r.f(1100, 1400), 12, 0.5], [r.f(2300, 2700), 14, 0.25]]) {
-    const bp = X.filt('bandpass', f, q), gg = o.createGain(); gg.gain.value = g * 3; s.connect(bp); bp.connect(gg); gg.connect(amp);
+  // a hinge's stick-slip: not a tone but a rasp - impulses at an uneven, slowly drifting rate (each period jittered),
+  // through narrow high resonances, quiet, swelling and fading
+  const { o } = X, n = Math.ceil((dur + 0.05) * SR), b = o.createBuffer(1, n, SR), a = b.getChannelData(0);
+  let rate = (base || r.f(70, 120)), ph = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    rate += (r.next() - 0.5) * 0.6; rate = Math.max(35, Math.min(220, rate + (Math.sin(t * 6.3 + 1) * 0.02)));
+    ph += rate / SR;
+    if (ph >= 1) { ph -= 1 + (r.next() - 0.5) * 0.3; a[i] = (0.6 + r.next() * 0.4) * (r.chance(0.08) ? 0.2 : 1); }
+  }
+  const src = o.createBufferSource(); src.buffer = b; src.start(0);
+  const amp = X.curve([[0, 0], [dur * 0.25, gain || 0.35], [dur * 0.7, (gain || 0.35) * 0.7], [dur, 0]]);
+  for (const [f, q, g] of sash ? [[900, 3, 0.8], [2200, 4, 0.5]] : [[r.f(1100, 1500), 14, 1], [r.f(2300, 2900), 16, 0.6], [r.f(3600, 4200), 18, 0.3]]) {
+    const bp = X.filt('bandpass', f, q), gg = o.createGain(); gg.gain.value = g * 6; src.connect(bp); bp.connect(gg); gg.connect(amp);
   }
   X.chain([amp, X.pan(r.f(-0.2, 0.2))], 0.25);
 }
+// a wooden door: the handle and latch (small metal clicks), the swing (air and the door's weight, low and soft), and
+// on a closing door the slab meeting the frame - a thud with the panel's wooden ring and a little rattle
+function doorHandle(X, r, t0) { X.burst(t0, 'white', 'bandpass', r.f(2600, 3200), 6, 0.35, 0.0004, 0.008); X.ring(t0 + 0.001, [[r.f(1900, 2300), 0.12, 0.025]], 1); X.burst(t0 + r.f(0.05, 0.09), 'white', 'bandpass', r.f(1800, 2300), 5, 0.28, 0.0005, 0.012); }
+function doorSwing(X, r, t0, dur, g) { X.burst(t0, 'pink', 'lowpass', r.f(350, 500), 0.7, 0.3 * g, dur * 0.4, dur * 0.35, { h: dur * 0.2 }); X.burst(t0, 'brown', 'lowpass', 160, 0.7, 0.25 * g, dur * 0.3, dur * 0.3); }
 function starter(X, r, t0, dur) {
   // the starter motor whining, the engine turning over in lumps
   X.tone(t0, 'sawtooth', 380, 420, 0.1, 0.02, dur, { lp: 1200, h: dur * 0.6 });

@@ -8,6 +8,11 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.029.001.170', date: '2026-10-30', title: 'Better doors',
+    notes: ['Doors no longer sound like a cartoon: opening is the handle, the latch letting go and the door swinging, with now and then a short, raspy hinge creak; closing is the swing, the door meeting the frame with a solid wooden thud, and the latch catching. Windows, car hoods and falling trees use the new creak too.'],
+    commits: [], shots: [],
+  },
+  {
     v: '000.029.000.169', date: '2026-10-30', title: 'Fully 3D, detail rings and a new soundtrack',
     notes: [
       'The characters are always 3D now: the old flat 2D figures are gone. In big crowds some zombies used to flicker between 2D and 3D when the 3D drawing space ran out; each ring of detail now draws at its own resolution, and nothing falls back to 2D.',
