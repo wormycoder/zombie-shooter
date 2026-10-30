@@ -23,7 +23,7 @@ Your game saves automatically. Death is permanent.
 ## Features
 
 **A living county**
-- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns, an army base, a prison, an airfield, a quarry and a truck stop.
+- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns (with a hospital, a hotel and a car dealer), an army base, a prison, an airfield, a quarry, a truck stop, and camps, wrecks and old farms out in the country.
 - Houses with real floor plans and upstairs rooms, shops with flats above, apartment blocks, police and fire stations, a clinic, a school, churches, a motel, gas stations, warehouses and a trailer park — each with loot to match.
 - Yards shaped by the people who lived there, foliage that grows wild along verges and empty lots, and four seasons with autumn colour, bare winter trees and snow.
 - A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.
@@ -31,7 +31,7 @@ Your game saves automatically. Death is permanent.
 **The dead**
 - Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead.
 - Sandbox options for their numbers, speed (shamblers to sprinters), toughness and how the infection spreads.
-- Gore with wounds, chunks torn out that keep bleeding, dismemberment and pooling blood; a Gore and a Gore detail setting, or switched off.
+- Gore with wounds, real holes torn out of bodies that keep bleeding, dismemberment, blood that pools, sprays onto walls and leaves footprints; a Gore and a Gore detail setting, or switched off.
 - Deaths that follow from how they died: thrown by cars by their speed, blows from every side, gunshots by calibre, fire, stomps and falls.
 
 **Survival**
@@ -52,7 +52,7 @@ Your game saves automatically. Death is permanent.
 **Interface**
 - Inventory and loot windows with sorting, stacks, drag and drop and item tooltips.
 - A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, and a map.
-- Animated 3D characters in textured clothes, with your gear visible on your character.
+- Animated 3D characters in textured clothes (dresses, skirts, long coats, hoods; beards and a range of hair styles), with your gear - and any body you carry - visible on your character.
 
 ## Controls
 

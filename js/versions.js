@@ -8,6 +8,18 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.028.000.166', date: '2026-10-30', title: 'Holes, blood and a faster engine',
+    notes: [
+      'Chunks torn out of the dead are real holes now: cut through the body and everything worn over it, with torn flesh inside, ribs showing at High gore detail.',
+      'Blood sprays onto walls, splashes with runs dripping down; walking through fresh blood leaves bloody footprints, yours and the dead\'s.',
+      'A faster engine with big crowds: the dead share their path searches, fire and parked cars no longer cost anything when nothing is happening (a crowded game\'s simulation runs about 40% lighter).',
+      'New clothes and looks: dresses, skirts and a trench coat, long coats that hang below the waist, hoodies with their hood; bun, bob and afro hair; beards (full, goatee, moustache), also in character creation.',
+      'A body you carry shows over your shoulder, and the dying keep twitching a while after they land (burns, broken bones, blades, small calibre shots).',
+      'The Expanded map: Kingsbury General Hospital, the Riverton Hotel and Kingsbury Motors; out in the country, abandoned camps, burnt-out wrecks, hay fields and old orchards.',
+    ],
+    commits: [], shots: ['v028000_1', 'v028000_2', 'v028000_3', 'v028000_4'],
+  },
+  {
     v: '000.027.002.161', date: '2026-10-27', title: 'Small fixes',
     notes: ['E lets go of a body you are dragging, and a hint says so the first time.', 'Boarded-up houses often hold the supplies of whoever holed up there: canned food, water, bandages, nails and planks.', 'The README lists the newest features.'],
     commits: [], shots: [],

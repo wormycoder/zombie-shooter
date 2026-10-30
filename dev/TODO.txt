@@ -359,6 +359,26 @@ HIGH (added) - MORE DEATH ANIMATIONS, GORE CHUNKS, KATANA, BARRICADED HOUSES,
         over windows and doors (a separate random stream so maps keep
         their layout), more loot inside, sometimes a sign or a body.
 
+HIGH (added) - 1 REAL CHUNK HOLES, 2 BLOOD IMPROVEMENTS (WALLS, FOOTPRINTS),
+      3 ENGINE UPGRADE (ZOMBIE AI, WORLD TICKS), 4 CONTINUE THE LIST.
+  -> DONE (000.028.000.166):
+     1 The shader cuts the torso (and every layer worn over it) open inside a
+       ragged edge; a cup of torn flesh inside, ribs at High. Very low: a
+       patch.
+     2 Wall spray (gunshots, blades, blows; on the wall face toward the
+       camera, saved); bloody footprints for the player and zombies nearby.
+     3 Profiled a crowded Expanded game (2,550 zombies): the step went from
+       115 to 70 ms per second of play. Path searches budgeted (16 -> 1),
+       the grid every other step for crowds, fire and parked cars idle.
+       Still the biggest: drawing (the graphics card's work in a real
+       browser), then the near zombies' own updates.
+     4 Clothes (dress, skirt, trench coat, long coats, hoods), hair (bun,
+       bob, afro), beards; the carried body shown; twitching after the
+       fall; the hospital, hotel and car dealer; countryside camps, wrecks,
+       hay fields and orchards.
+     Next: tune the deaths / fight-offs / new clothes by eye in play; more
+       buildings (a factory, a mall); hood up in the rain.
+
 --------------------------------------------------------------------
 RUN LOG
 --------------------------------------------------------------------
@@ -411,5 +431,9 @@ Run 12 (000.027.000.159): the deaths, fight-offs, fence fails, suicide,
   dragging and heaving bodies, boarded-up houses.
   (Test notes: t31 and t45 pick random open spots and now and then find
   none - a fault in those test scripts, not the game.)
+Run 13 (000.028.000.166): real holes, wall blood and footprints, the
+  engine pass, clothes and hair, carried bodies, twitching, the hospital,
+  hotel, dealer and countryside. (t31 fixed: its open-ground search now
+  ignores foliage.)
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).
