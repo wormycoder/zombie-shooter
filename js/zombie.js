@@ -44,10 +44,13 @@ const Zombie = {
     const cold = Season.tree === 'b' || Season.snow > 0.2 || Season.tree === 's', warm = Season.tree === 'g';
     if (female && !cold && R.chance(0.22)) { mk('Dress'); if (R.chance(0.7)) mk(R.pick(['Sneakers', 'DressShoes'])); if (R.chance(0.3)) mk(R.pick(['DenimJacket', 'LeatherJacket'])); return out; }
     mk(cold ? R.pick(['Shirt', 'Shirt', 'TShirt', 'Sweater']) : R.pick(['TShirt', 'TShirt', 'Shirt', 'TankTop', 'Shirt']));
+    // office workers in ties; road crews and builders in hi-vis (and hard hats)
+    if (out[out.length - 1].id === 'Shirt' && !female && R.chance(0.22)) mk('Tie');
+    else if (R.chance(0.04)) { mk('HiVisVest'); if (R.chance(0.6)) mk('HardHat'); }
     if (R.chance(cold ? 0.8 : warm ? 0.25 : 0.5)) mk(cold ? R.pick(['WinterCoat', 'WinterCoat', 'Hoodie', 'LeatherJacket', 'DenimJacket', 'TrenchCoat']) : R.pick(['Hoodie', 'DenimJacket', 'Sweater', 'LeatherJacket', 'WinterCoat']));
     mk(female && R.chance(0.15) ? 'Skirt' : female && warm && R.chance(0.3) ? 'Shorts' : cold ? R.pick(['Jeans', 'Jeans', 'Trousers', 'CargoPants']) : R.pick(['Jeans', 'Jeans', 'Trousers', 'Shorts', 'CargoPants']));
     if (R.chance(0.85)) mk(cold ? R.pick(['Boots', 'Boots', 'Sneakers']) : R.pick(['Sneakers', 'Sneakers', 'Boots', 'DressShoes']));
-    if (R.chance(cold ? 0.45 : 0.15)) mk(cold ? R.pick(['Beanie', 'Beanie', 'BaseballCap']) : R.pick(['BaseballCap', 'Beanie']));
+    if (!out.some(it => it.worn === 'hat') && R.chance(cold ? 0.45 : 0.15)) mk(cold ? R.pick(['Beanie', 'Beanie', 'BaseballCap']) : R.pick(['BaseballCap', 'Beanie']));
     if (cold && R.chance(0.25)) mk(R.pick(['Gloves', 'Scarf']));
     if (R.chance(0.3)) mk('Belt');
     if (R.chance(0.06)) { const b = Items.make(R.pick(['SchoolBag', 'HikingBag', 'DuffelBag'])); b.worn = 'back'; b.items = Loot.zombiePockets(); out.push(b); }
@@ -67,6 +70,7 @@ const Zombie = {
     L.hat = hat ? { type: ITEMS[hat.id].hatType || 'cap', col: hat.col } : null;
     L.bag = back ? (back.col || '#444') : null;
     L.vest = vest ? vest.col : null;
+    { const nk = get('neck'); L.neck = nk ? { tie: !!ITEMS[nk.id].tie, col: nk.col } : null; L.hivis = !!(vest && ITEMS[vest.id].hivis); }
     L.gore = z.gore;
     this.garb(L, get);
     // textures: cloth and blood from what they wear; grime, how far gone the skin is, stubble on some of the men
@@ -420,7 +424,8 @@ const Zombie = {
     if (d < sr && (z.x >= LV.W0) === (px >= LV.W0)) {
       const ad = Math.abs(U.angDiff(z.a, Math.atan2(py - z.y, px - z.x)));
       const fov = (z.st === 'chase') ? Math.PI : 1.25;
-      if ((ad < fov || d < 1.6) && World.lineClear(z.x, z.y, px, py, 'sight')) see = true;
+      // a survivor crouching (sneaking) is below the window sills: seen through a window only from close by
+      if ((ad < fov || d < 1.6) && World.lineClear(z.x, z.y, px, py, p.sneak && !p.inCar && d > 2.5 ? 'low' : 'sight')) see = true;
       if (d < 1.2) see = true;
     }
     if (p.asleep && d > 2.5 && z.st !== 'chase') see = see && d < 4;

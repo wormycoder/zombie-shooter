@@ -265,6 +265,8 @@ Cl('FireHelmet', 'Firefighter Helmet', 1.0, ['helmet', '#c8a020'], { slot: 'hat'
 Cl('PoliceCap', 'Police Cap', 0.1, ['cap', '#2a3040'], { slot: 'hat', cover: ['head'], sc: 3, bi: 0, ins: 0.05, cols: ['#2a3040'], hatType: 'cap', tex: 'twill' });
 Cl('Gloves', 'Winter Gloves', 0.1, ['gloves', '#3a3a3a'], { slot: 'gloves', cover: ['hands'], sc: 20, bi: 5, ins: 0.3, cols: ['#3a3a3a', '#5a3a3a'], tex: 'knit' });
 Cl('LeatherGloves', 'Leather Gloves', 0.2, ['gloves', '#4a3020'], { slot: 'gloves', cover: ['hands'], sc: 45, bi: 20, ins: 0.2, cols: ['#4a3020', '#202020'], tex: 'leather' });
+Cl('HiVisVest', 'Hi-Vis Vest', 0.3, ['vest', '#d8e020'], { slot: 'vest', cover: ['torso'], sc: 5, bi: 2, ins: 0.05, cols: ['#d8e020', '#f07a10'], tex: 'twill', hivis: true, desc: 'Fluorescent, with reflective bands. Easy to see - for the living and the dead.' });
+Cl('Tie', 'Necktie', 0.05, ['scarf', '#2a3a6a'], { slot: 'neck', cover: [], sc: 0, bi: 0, ins: 0, cols: ['#2a3a6a', '#7a1a1a', '#1a1a1a', '#3a5a3a', '#6a5a2a'], tex: 'stripe', tie: true });
 Cl('Scarf', 'Scarf', 0.1, ['scarf', '#8a2a2a'], { slot: 'neck', cover: ['neck'], sc: 25, bi: 10, ins: 0.2, cols: ['#8a2a2a', '#2a4a7a', '#c0a040', '#3a6a3a'], tex: 'knit' });
 Cl('Glasses', 'Glasses', 0.05, ['glasses', '#303030'], { slot: 'eyes', cover: [], sc: 0, bi: 0, ins: 0, cols: ['#303030'] });
 Cl('Belt', 'Belt', 0.2, ['belt', '#5a3a20', '#c8b060'], { slot: 'waist', cover: [], sc: 0, bi: 0, ins: 0, attach: ['beltL', 'beltR'], cols: ['#5a3a20', '#2a2420', '#7a5a3a'], desc: 'Two hotbar slots on the hips for small weapons, tools and a flashlight.' });

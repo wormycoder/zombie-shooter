@@ -82,6 +82,9 @@ VERY HIGH - ADD BETTER ZOMBIE PERFORMANCE, AND GENERAL WORLD PERFORMANCE.
      half). In a 150-zombie crowd at 60 fps the 3D work per frame drops to
      ~40% at 30/sec and ~25% at 15/sec. Next: a frame-time profile of a
      big horde and of the expanded map, walls and roofs at half res.
+     Since: the horde/Expanded profile (000.028.000.166, the engine pass);
+     roofs at half res with World textures: Half (000.032.000.173). Walls
+     are small per-tile sprites already shared between tiles.
 
 FIX - PERFORMANCE ON OLDER DEVICES IS VERY BAD.
   -> VERY HIGH. STARTED: the Low and Medium presets now use the new
@@ -181,7 +184,9 @@ HIGH TO VERY HIGH - BETTER UI - MORE ZOMBOID ESQUE, COULD RE-WRITE WHOLE UI
      step bigger, and Auto UI scale 125% on 1920 x 1080. Item tooltips
      like Zomboid's (stat rows, condition / contents / battery / freshness
      bars) DONE (000.019.001.130). Still to do: the crafting window's
-     layout, the world map's look.
+     layout, the world map's look. DONE (000.033.000.174): a paper road
+     map; the crafting window's details (picture, time, skill, XP, what
+     can be made now).
 
 HIGH (added) - MAKE SURE THE UI SCALES WITH THE RESOLUTION OF THE SCREEN,
       SOMETIMES STUFF GETS CUT OFF ON LOWER RESOLUTIONS (LIKE ON MY LAPTOP)
@@ -201,6 +206,8 @@ HIGH - ADD MORE 3D MODELS, AND MAKE ACTUAL TEXTURES FOR SAID MODELS,
      sockets, stubble, blood from the mouth), hair - with grime and blood
      soaked in. Still to do: more models (hoods, long coats, dresses,
      skirts, ties, hi-vis vests, beards, more hair styles).
+     DONE since: hoods, long coats, dresses, skirts, beards, hair styles
+     (000.028.000.166); ties, scarves shown, hi-vis vests (000.032.000.173).
 
 FIX - THE CHARACTER AND ZOMBIE MODELS LOOK ODD, ALMOST OUT OF STYLE.
   -> HIGH. First pass DONE (000.024.000.143): the flat plastic look was
@@ -263,6 +270,9 @@ FIX - ADD ANIMATIONS AND ACTIONS FOR THINGS LIKE TALL FENCES, FAILING TO
        jam; magazines thumbed full round by round, swapped in and out;
      - sitting on the floor was already there (Z) - kept.
      Still possible: a crouch-walk under windows, sitting in chairs.
+     DONE (000.033.000.174): crouched (sneaking) you are below the sills -
+     seen through a window only from close by; sitting on chairs, sofas,
+     armchairs, benches and pews at their height.
 
 MEDIUM - ADD BETTER GUN CONTROLS, AND MORE GUNS.
   -> DONE, first pass (000.022.000.139): magazines as items (R swaps in
@@ -283,6 +293,8 @@ MEDIUM - ADD THE ABILITY TO PLACE 3D (OR 2D IF 3D ITEMS ARE UNAVAILABLE) ON
      survivor walks over first); right-click or Esc cancels. Right-click an
      item on the floor to pick up just that one or turn it. Still possible:
      3D models for the most common items, putting items on tables.
+     DONE (000.032.000.173): items on tables, counters, desks, nightstands,
+     dressers, workbenches, crates, washers and stoves (drawn on top).
 
 LOW OR MEDIUM - NEW & BETTER AUDIO, WITH ACTUAL CLIPS (CAN BE SOURCED FROM
       INTERNET, OR SYNTHESIZED, IT JUST HAS TO SOUND OK.)
@@ -507,5 +519,13 @@ Run 15 (000.030.000.171), asked for: better sound effects, ten more pieces
   of music; then the hood in the rain and a factory.
 Run 16 (000.031.000.172): Kingsbury Mall, Kingsbury's factory, a slow-CPU
   profile of the Low preset (see the performance FIX above).
+Test branch (claude/active-ragdolls-test), asked for: active ragdolls as
+  an option - v2 a simulated body with balance and stumbling.
+Run 17 (000.032.000.173): ties, scarves, hi-vis vests; items on tables;
+  half-res roofs.
+Run 18 (000.033.000.174): the paper map, the crafting window, sitting on
+  seats, crouching under windows.
+Fix (000.033.001.175): deaths checked by eye on contact sheets - the
+  default 'arms flung out' was a horizontal T; now out and down, uneven.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

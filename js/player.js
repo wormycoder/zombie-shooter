@@ -185,6 +185,25 @@ const Player = {
     Sfx.play('hurt'); Sfx.play('break');
     if (p.health <= 0) this.die('Died from a bad fall');
   },
+  // sitting down on a chair, a sofa, a bench: on the seat, facing the way it faces; standing up, back where you came
+  // from (a sofa or a bench is solid furniture)
+  SEAT_H: { chair: 0.46, sofa: 0.42, armchair: 0.42, bench: 0.46, pew: 0.46 },
+  sitOn(o, x, y) {
+    const p = G.player;
+    p.seat = { h: this.SEAT_H[o.t] || 0.45, bx: p.x, by: p.y, solid: !!OBJ[o.t].solid };
+    p.x = x + 0.5; p.y = y + 0.5;
+    const v = DIRV[o.dir] || [0, 1];
+    p.angle = Math.atan2(v[1], v[0]);
+    p.sitting = true;
+    Sfx.play(o.t === 'chair' || o.t === 'bench' || o.t === 'pew' ? 'wood' : 'cloth');
+  },
+  standUp() {
+    const p = G.player, s = p.seat;
+    if (!s) return;
+    p.seat = null;
+    if (s.solid) { p.x = s.bx; p.y = s.by; }
+    Sfx.play('cloth');
+  },
   flashlight() {
     const p = G.player;
     if (!p || p.inCar) return false;
@@ -207,6 +226,7 @@ const Player = {
     L.hat = hat ? { type: ITEMS[hat.id].hatType || 'cap', col: hat.col } : null;
     L.bag = back ? (back.col || ITEMS[back.id].bag.col || '#555') : null;
     L.vest = vest ? vest.col : null;
+    { const nk = w('neck'); L.neck = nk ? { tie: !!ITEMS[nk.id].tie, col: nk.col } : null; L.hivis = !!(vest && ITEMS[vest.id].hivis); }
     L.gloves = gloves ? gloves.col : null;
     L.glasses = !!w('eyes');
     L.att = Hotbar.visual();
@@ -327,6 +347,7 @@ const Player = {
       p.path = null;
       if (p.action && !p.action.walkOk) Actions.cancel();
       p.sitting = false;
+      if (p.seat) this.standUp();
     }
     if (Input.hit('c')) { p.sneak = !p.sneak; this.say(p.sneak ? 'Sneaking' : 'Walking', '#ccc'); }
     const aiming = Input.aiming() && !p.action;
@@ -933,7 +954,7 @@ const Player = {
       const lv = w.fracture ? (b.splint ? 0.6 : 1) : (w.deep || w.bite) ? 0.5 : w.cut ? 0.3 : 0;
       if (lv > (pose.limp || 0)) { pose.limp = lv; pose.limpSide = pt.endsWith('L') ? -1 : 1; }
     }
-    if (p.sitting) { pose.crouch = 0.8; pose.mode = 'sit'; }
+    if (p.sitting) { pose.crouch = 0.8; pose.mode = 'sit'; if (p.seat) pose.seatH = p.seat.h; }
     if (p.fallT !== undefined && p.fallT !== null && !p.dead) {
       const t = p.fallT;
       pose.arms = 'idle'; pose.amp = 0; pose.lieDir = -1; pose.lieOff = 0;

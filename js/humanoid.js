@@ -11,7 +11,6 @@ const WEAPON_MODELS = {
   knife: { len: 0.28, w0: 2.2, w1: 1.2, col: '#d8dee4', grip: '#202020', gripLen: 0.1 },
   katana: { len: 1.0, w0: 2.2, w1: 1.7, col: '#d8dde2', grip: '#1a1a2a', gripLen: 0.27 },
   machete: { len: 0.62, w0: 3, w1: 2.6, col: '#c8d0d8', grip: '#202020', gripLen: 0.14 },
-  katana: { len: 0.95, w0: 2.4, w1: 2, col: '#e0e8f0', grip: '#202020', gripLen: 0.22 },
   pan: { len: 0.32, w0: 2.2, w1: 2.2, col: '#303438', head: 'pan' },
   hammer: { len: 0.36, w0: 2.4, w1: 2.4, col: '#7a5a3a', head: 'hammer' },
   sledge: { len: 0.95, w0: 2.8, w1: 2.8, col: '#6a4a2a', head: 'sledge' },

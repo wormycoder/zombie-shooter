@@ -8,6 +8,33 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.033.001.175', date: '2026-10-30', title: 'Death throes',
+    notes: [
+      'The dead no longer fling their arms straight out like a scarecrow as they fall: the arms go out and down from the shoulders, one thrown forward and the other back.',
+      'Sitting down and getting up make a sound (a wooden chair creaks, a sofa rustles).',
+    ],
+    commits: [], shots: [],
+  },
+  {
+    v: '000.033.000.174', date: '2026-10-30', title: 'A paper map, seats and crouching under windows',
+    notes: [
+      'The map is drawn like a paper road map: cream paper, white roads edged in grey, buildings in tan, green fields and woods, blue water, place names printed in ink; what you have not seen yet is faded.',
+      'Sit / Rest on a chair, sofa, armchair, bench or pew now sits you on it, at its height and facing the way it faces; walk to stand up.',
+      'Crouching (sneaking) keeps you below the window sills: the dead outside see you through a window only from close by.',
+      'The crafting window shows what a recipe makes (with its picture and description), the time it takes, the skill it needs and the experience it gives, and marks what you can make now - with a count on each tab.',
+    ],
+    commits: [], shots: ['v033000_1', 'v033000_2'],
+  },
+  {
+    v: '000.032.000.173', date: '2026-10-30', title: 'Ties, hi-vis and things on tables',
+    notes: [
+      'New clothes on the 3D characters: neckties (down the shirt front; under a jacket only the knot shows), scarves now shown wrapped round the neck, and hi-vis vests in yellow or orange with reflective bands. Some of the dead wear them: office workers in ties, road crews and builders in hi-vis and hard hats. Ties turn up in office desks and wardrobes, hi-vis vests in hardware stores and factory lockers.',
+      'Place (inventory) now puts things on tables, counters, desks, nightstands, dressers, workbenches, crates and stoves, drawn on top at the right height; moved furniture leaves them on the floor.',
+      'World textures: Half now also keeps the roofs at half resolution - a quarter of the memory for the town\'s roofs.',
+    ],
+    commits: [], shots: ['v032000_1', 'v032000_2'],
+  },
+  {
     v: '000.031.000.172', date: '2026-10-30', title: 'Kingsbury Mall',
     notes: [
       'A shopping mall in Kingsbury (Expanded map): a wide tiled concourse with benches, glass doors at both ends, and shops down both sides - clothes, sports, books, electronics, toys, a pharmacy and a food court - with a car park along the front. New loot for the sports, electronics and toy shops.',

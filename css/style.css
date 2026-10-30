@@ -245,6 +245,15 @@ body { font-family: Verdana, Tahoma, 'DejaVu Sans', sans-serif; font-size: 13px;
 .clist { width: 220px; overflow-y: auto; border-right: 1px solid var(--line); }
 .crow { display: flex; align-items: center; gap: 6px; padding: 3px 6px; cursor: pointer; color: var(--dim); }
 .crow img { width: 22px; height: 22px; }
+.crow .cnm { flex: 1; }
+.crow .cok { width: 7px; height: 7px; border-radius: 50%; background: #7ccf6a; flex: none; }
+.ctab .cn { display: inline-block; min-width: 14px; padding: 0 3px; margin-left: 3px; border-radius: 7px; background: rgba(124, 207, 106, 0.25); color: #b6eaa8; font-size: 10px; text-align: center; }
+.chead { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.chead img { width: 44px; height: 44px; padding: 3px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
+.cdesc { color: var(--dim); margin: 2px 0 6px; }
+.cinfo { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 8px; color: var(--dim); }
+.cinfo b { color: var(--text); font-weight: normal; }
+.cinfo .bad b { color: #e07a6a; }
 .crow.ok { color: var(--text); }
 .crow.on { background: rgba(255, 255, 255, 0.16); }
 .crow:hover { background: rgba(255, 255, 255, 0.07); }
