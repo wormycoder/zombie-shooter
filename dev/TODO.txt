@@ -510,6 +510,9 @@ Fix (000.033.001.175): deaths checked by eye on contact sheets - the
   default 'arms flung out' was a horizontal T; now out and down, uneven.
   The 24 fight-offs checked the same way: they read right.
 Run 19 (000.034.000.177): markers on the map (right-click); a duplicate
-  katana model removed.
+  katana model removed. (t45 made robust: a home with no free wall for the
+  bed is now skipped instead of crashing the script.)
+Run 20 (000.035.000.178): things left out on tables, desks, counters and
+  nightstands in homes and other buildings (own random stream).
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

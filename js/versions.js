@@ -8,6 +8,13 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.035.000.178', date: '2026-10-30', title: 'Lived-in homes',
+    notes: [
+      'Homes, offices, diners, motels and the like have the odd thing left out on their furniture: a can or a packet of crisps on the kitchen table, a newspaper on a desk, a novel or painkillers on a nightstand, a soda on the counter. Pick them up like anything else on the floor.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.034.000.177', date: '2026-10-30', title: 'Marking the map',
     notes: [
       'Right-click the map to mark a place: a safehouse, medical supplies, loot, danger, fuel or a note, each in its own ink. Right-click a marker to take it away. Markers are kept with your save.',
