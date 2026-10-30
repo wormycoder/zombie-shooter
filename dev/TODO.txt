@@ -435,6 +435,98 @@ HIGH (added) - IMPROVE THE SFX MORE, AND ADD MORE MUSIC, THEN WORK ON WHATEVER.
      Not judged by ear here - worth a listen.
      Next: a mall (DONE 000.031.000.172); the factory in Kingsbury too
        (DONE 000.031.000.172); tune the deaths / fight-offs / clothes by eye.
+TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
+  -> v1 (spring layer on the pose) judged not active enough - no stumbling,
+     no physics. v2: Settings > Experimental > Animation > Active ragdolls.
+     A point-mass body (pelvis, chest, head, wrists, ankles; Jakobsen-style
+     Verlet/PBD: bones as distance constraints, gravity, ground, friction)
+     simulated all the time for the zombies and the player near you (the two
+     nearest detail rings). Muscles: PD springs toward the animated points
+     that also hold up the body's weight, so it moves with momentum.
+     Balance: the capture point (hips + velocity / sqrt(g/h)); off the
+     support a foot steps there, repeated until caught (stumbles of 1-3
+     steps), arms out and up while off balance; then the feet step back
+     under the body. Down or dead the muscles let go: the legs stay stiff
+     for ~0.5 s so the body topples over its feet, then a limp ragdoll that
+     settles near the lying pose. Heavy blows can knock a zombie down.
+     v3: car hits throw the body by the car's speed (the legs swept out
+     from under it, lifted at speed); knocked down and still falling, the
+     hands go out to the ground ahead; body points cannot pass through
+     walls or into furniture (pulled back to the body's side).
+     Next: tune by eye in play; bodies against each other.
+     v4 (asked for: corpses ragdoll ~5 s then sleep until touched; the
+     player's body firmer; deaths fully dynamic - no death poses - by how
+     they died; crawling when the legs are wrecked; lots of features):
+     - deaths are physics only from the pose they died in, by style
+       (Zombie.rdStyleOf / Char3D.DSTY): stumble (body shots: steps as it
+       goes), stagger (shotgun / rifle: thrown back several steps), rigid
+       (headshots, blows to the head: a plank that topples, limp on
+       impact), crumple, spin (blows from the side), knees (stabbed from
+       behind: legs fold, then forward), thrown (cars), flail (burning:
+       lurching, arms thrashing), slump (already down); twitching after
+       some deaths.
+     - corpses stay simulated ~5 s, then sleep as a still sprite; a blow,
+       a shot, a kick, being moved or dragged wakes them.
+     - dragging pulls the held limb (a wrist, the ankles, the collar) at
+       hand height, the rest of the body trailing.
+     - where blows land on the living: legs (a limp that slows it, then
+       crawling with the legs dragging once they are wrecked), an arm
+       (hangs dead), the head (dazed: swaying, lurching steps, half speed).
+     - zombies trip over bodies (stumble on, or now and then go down).
+     - the player's body is held 1.6x firmer, takes blows at 70%, and
+       needs a bigger push before it steps.
+     v5 (asked for: generally improve the ragdolls):
+     - bodies touch: the dead and the fallen land on and lie over other
+       bodies (held up from below, so a heap does not slide apart; pushed
+       aside when side by side; a body still on its feet walks over them).
+       A hard landing on a sleeping body wakes it and jolts it.
+     - hard landings thud (and a corpse that hits hard leaves a little
+       blood where it lands).
+     - shots to the head snap the head back, the trunk hardly moving.
+     - settled bodies are saved: the pose and the points go with the save
+       (z.rdPose), so a loaded game shows each body as it settled, and one
+       out of sight or redrawn does not fall again.
+     - a body first seen already down (died out of sight, loaded) lies
+       still instead of replaying its death; dead bodies are simulated at
+       any distance (they soon sleep), not only in the two near rings.
+     - new bodies start at rest (no throw out of the ground on the first
+       step); slow frames run in more physics steps instead of slow motion
+       (up to 0.25 s a frame).
+     v6 (asked for: pushing them breaks them a lot - more muscle constraints):
+     - shape muscles (Char3D.ragMus): on its feet the chest is held to the
+       hips, the head to the chest, the hands to the chest, as the
+       animation has them (the legs left to the feet and the balance, so
+       a push still makes it step); down - falling, lying, crawling - the
+       body keeps its proportions (distances between its parts) whichever
+       way it lies, so gravity turns it over, not the muscles. The dead let
+       go (dying on their feet they keep them while their strength fades).
+     - joint limits for every body, dead too (Char3D.JL): the feet stay
+       apart and out of the trunk and the head, the hands out of the head,
+       the spine does not fold double, the legs do not do the splits.
+     - no point goes faster than 7 m/s (14 for a car hit): the old code
+       could fling a hand at 20-30 m/s in a stagger.
+     - knocked down, falling or lying, the body is carried with the slide
+       the game gives it (a shove) rather than left behind and stretched.
+     - smaller random arm kicks from blows, arms out less when off balance,
+       a stumbling step reaches 0.45 m at most.
+     Measured (fixed 60 fps, 4 directions each, distortion of the body's
+     proportions): shoved down 0.77 -> 0.44 m, staggered 0.60 -> 0.50 m
+     (fling 21-33 m/s -> 7), heavy blow 0.56 -> 0.30 m; still steps when
+     pushed (stagger 5 steps, blow 3, dazed 5).
+     v7 (asked for: only apply the ragdoll when a force is applied or the
+     state calls for it):
+     - physics takes a body only when something acts on it: a blow (hit,
+       shot, shove, car), a stagger, a fall, dying, being dragged, a daze,
+       a wrecked arm or legs; lying or getting up after it stays physical.
+       It lets go once the body has recovered (on its feet, no step under
+       way, feet back under it, every point within 8 cm of where the
+       muscles want it), easing back into the animation over 1/3 s
+       (R.w). Otherwise the plain animation; the points only follow it
+       (speeds capped), so the next blow starts from the right place.
+     - measured (fixed 60 fps): walking / chasing / idle 0 physics frames;
+       back to animation 1.8 s after a blow, ~2 s after a stagger, 3.7 s
+       after a 3 s daze, ~5.5 s after being shoved down (up again).
+     Next: elbows and knees as points, getting up from the physics pose.
 
 --------------------------------------------------------------------
 RUN LOG
