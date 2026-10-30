@@ -120,6 +120,8 @@ function traitDef(id) { return TRAITS.find(t => t.id === id) || HIDDEN_TRAITS[id
 
 const SKIN_TONES = ['#f2d0b0', '#e8bf98', '#d8a878', '#b88058', '#8a5a3a', '#5e3a24'];
 const HAIR_COLS = ['#1a1410', '#3a2a1a', '#6a4a2a', '#a07040', '#d8b060', '#8a3a1a', '#c8c8c8', '#504840'];
-const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'bald', 'messy'];
+const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'bald', 'messy', 'bun', 'bob', 'afro'];
+// facial hair (men)
+const BEARDS = ['none', 'full', 'goatee', 'moustache'];
 const FIRST_NAMES = ['Tom', 'Jake', 'Rick', 'Dale', 'Bill', 'Sam', 'Kate', 'Marie', 'Lisa', 'Anne', 'Joe', 'Wes', 'Mona', 'Nora', 'Pete', 'Ray', 'Dee', 'Cole', 'Lena', 'Ruth', 'Hank', 'Jill', 'Owen', 'Fay'];
 const LAST_NAMES = ['Miller', 'Turner', 'Baker', 'Shaw', 'Hale', 'Price', 'Boyd', 'Grant', 'Walsh', 'Pike', 'Reed', 'Stone', 'Cobb', 'Hayes', 'Lowe', 'Banks', 'Frost', 'Wade', 'Kerr', 'Dunn'];

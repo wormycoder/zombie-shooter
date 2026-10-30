@@ -212,6 +212,7 @@ const Player = {
     L.att = Hotbar.visual();
     // textures: the cloth of each thing worn, blood soaked into bloody clothes; a man's stubble grows over three days
     Char3D.dress(L, w, 0.5);
+    Zombie.garb(L, w);
     L.stubble = L.female ? 0 : Math.round(U.clamp(0.15 + p.minutesAlive / 4320, 0, 1) * 10) / 10;
     L.dirt = 0.06;
     return L;
@@ -907,6 +908,9 @@ const Player = {
       if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
     }
     if (p.shoutT > 0 && !p.action && !p.swing && !p.aiming) { pose.arms = 'shout'; pose.k = 1 - p.shoutT / 1.1; }
+    // carrying a body over the shoulder: shown on the model, the right arm round its legs
+    const cb = p.inv.find(i => i.id === 'Corpse');
+    if (cb && cb.z && cb.z.look) { pose.carry = cb.z.look; if (!p.action && !p.aiming && !p.swing) { pose.arms = 'carry'; pose.weapon = null; } }
     if (p.drag && !p.action && !p.aiming) { pose.arms = 'dragc'; pose.sub = p.dragS || 1; pose.weapon = null; }
     if (p.foT > 0 && p.fo && !p.action && !p.aiming) { pose.arms = 'fightoff'; pose.k = 1 - p.foT / 0.6; pose.foSide = p.fo.side; pose.foKind = p.fo.kind; pose.foV = p.fo.v; }
     // working the pump or the bolt between shots
@@ -933,7 +937,7 @@ const Player = {
       pose.lie = p.dead ? Math.min(1, (p.deadT || 0) * 2) : 1;
       const dr = p.dead && p.death && Char3D.DEATHS[p.death];
       pose.lieDir = dr && dr.lie ? dr.lie : 1; pose.arms = 'idle'; pose.amp = 0; pose.weapon = null; pose.lieOff = p.asleep ? 0.85 : 0;
-      pose.mode = p.dead ? 'dead' : 'sleep'; pose.prog = p.dead ? Math.min(1, (p.deadT || 0) / (dr ? dr.dur : 0.9)) : 1; pose.death = dr ? p.death : null;
+      pose.mode = p.dead ? 'dead' : 'sleep'; pose.prog = p.dead ? Math.min(1, (p.deadT || 0) / (dr ? dr.T : 0.9)) : 1; pose.death = dr ? p.death : null;
     }
     return pose;
   },

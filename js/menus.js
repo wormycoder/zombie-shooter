@@ -239,6 +239,7 @@ const Menu = {
           <div class="lbl2">Skin</div><div class="sws">${sw(SKIN_TONES, 'skin', c.look.skin)}</div>
           <div class="lbl2">Hair</div><div class="sws">${sw(HAIR_COLS, 'hair', c.look.hair)}</div>
           <div class="nrow">${HAIR_STYLES.map(h => `<span class="btn xs ${h === c.look.hairStyle ? 'on' : ''}" data-look="hairStyle" data-v="${h}">${h}</span>`).join('')}</div>
+          ${c.look.female ? '' : `<div class="nrow">${BEARDS.map(h => `<span class="btn xs ${h === (c.look.beard || 'none') ? 'on' : ''}" data-look="beard" data-v="${h}">${h === 'none' ? 'no beard' : h}</span>`).join('')}</div>`}
           <div class="lbl2">Shirt</div><div class="sws">${sw(TSHIRT_COLS, 'shirtCol', c.look.shirtCol)}</div>
           <canvas id="cprev" width="180" height="200"></canvas>
         </div>
@@ -263,7 +264,7 @@ const Menu = {
       if (a) {
         const k = a.dataset.c;
         if (k === 'rname') c.name = R.pick(FIRST_NAMES) + ' ' + R.pick(LAST_NAMES);
-        if (k === 'male') { c.look.female = false; if (['long', 'ponytail'].includes(c.look.hairStyle)) c.look.hairStyle = 'short'; }
+        if (k === 'male') { c.look.female = false; if (['long', 'ponytail', 'bun', 'bob'].includes(c.look.hairStyle)) c.look.hairStyle = 'short'; }
         if (k === 'female') { c.look.female = true; }
         if (k === 'back') { this.sandbox(); return; }
         if (k === 'play') { if (this.points() >= 0) this.start(); return; }
@@ -285,7 +286,7 @@ const Menu = {
     if (!cv) return;
     const g = cv.getContext('2d');
     const c = this.cfg;
-    const look = { skin: c.look.skin, hair: c.look.hair, hairStyle: c.look.hairStyle, shirt: c.look.shirtCol, sleeves: 'short', pants: c.look.pantsCol, shoes: '#e0e0e0', female: c.look.female };
+    const look = { skin: c.look.skin, hair: c.look.hair, hairStyle: c.look.hairStyle, beard: c.look.female || c.look.beard === 'none' ? null : c.look.beard, shirt: c.look.shirtCol, sleeves: 'short', pants: c.look.pantsCol, shoes: '#e0e0e0', female: c.look.female };
     const occ = OCCUPATIONS.find(o => o.id === c.occ);
     if (occ && occ.gear) for (const id of occ.gear) { const d = ITEMS[id]; if (d.slot === 'shirt') look.shirt = d.cols[0]; if (d.slot === 'pants') look.pants = d.cols[0]; if (d.slot === 'hat') look.hat = { type: d.hatType, col: d.cols[0] }; if (d.slot === 'shoes') look.shoes = d.cols[0]; }
     const draw = (t) => {

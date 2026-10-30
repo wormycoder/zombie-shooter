@@ -15,7 +15,8 @@ const Zombie = {
       think: R.f(0, 0.5), atkT: 0, cd: 0, downT: 0, lie: 0, lieDir: 1, stag: 0, svx: 0, svy: 0,
       speed: Zombie.rollSpeed(), crawl: false, female, wear,
       va: 0, ph: R.f(0, 6), amp: 0, idleT: R.f(1, 8), groanT: R.f(2, 12), dead: false,
-      hair: female ? R.pick(['long', 'ponytail', 'short', 'messy']) : R.pick(['short', 'buzz', 'bald', 'messy', 'short']),
+      hair: female ? R.pick(['long', 'ponytail', 'short', 'messy', 'bun', 'bob', 'afro', 'long']) : R.pick(['short', 'buzz', 'bald', 'messy', 'short', 'afro']),
+      beard: !female && R.chance(0.35) ? R.pick(['full', 'full', 'goatee', 'moustache']) : null,
       hairCol: R.pick(HAIR_COLS), skin: Col.mix(R.pick(SKIN_TONES), ZSKIN, 0.5), blood: R.f(0.2, 1),
     };
     z.look = this.computeLook(z);
@@ -41,9 +42,10 @@ const Zombie = {
     if (kind === 'medic') { mk('Scrubs'); mk('ScrubPants'); mk('Sneakers'); if (R.chance(0.5)) mk('LabCoat'); return out; }
     // people dressed for the weather when they turned
     const cold = Season.tree === 'b' || Season.snow > 0.2 || Season.tree === 's', warm = Season.tree === 'g';
+    if (female && !cold && R.chance(0.22)) { mk('Dress'); if (R.chance(0.7)) mk(R.pick(['Sneakers', 'DressShoes'])); if (R.chance(0.3)) mk(R.pick(['DenimJacket', 'LeatherJacket'])); return out; }
     mk(cold ? R.pick(['Shirt', 'Shirt', 'TShirt', 'Sweater']) : R.pick(['TShirt', 'TShirt', 'Shirt', 'TankTop', 'Shirt']));
-    if (R.chance(cold ? 0.8 : warm ? 0.25 : 0.5)) mk(cold ? R.pick(['WinterCoat', 'WinterCoat', 'Hoodie', 'LeatherJacket', 'DenimJacket']) : R.pick(['Hoodie', 'DenimJacket', 'Sweater', 'LeatherJacket', 'WinterCoat']));
-    mk(female && warm && R.chance(0.3) ? 'Shorts' : cold ? R.pick(['Jeans', 'Jeans', 'Trousers', 'CargoPants']) : R.pick(['Jeans', 'Jeans', 'Trousers', 'Shorts', 'CargoPants']));
+    if (R.chance(cold ? 0.8 : warm ? 0.25 : 0.5)) mk(cold ? R.pick(['WinterCoat', 'WinterCoat', 'Hoodie', 'LeatherJacket', 'DenimJacket', 'TrenchCoat']) : R.pick(['Hoodie', 'DenimJacket', 'Sweater', 'LeatherJacket', 'WinterCoat']));
+    mk(female && R.chance(0.15) ? 'Skirt' : female && warm && R.chance(0.3) ? 'Shorts' : cold ? R.pick(['Jeans', 'Jeans', 'Trousers', 'CargoPants']) : R.pick(['Jeans', 'Jeans', 'Trousers', 'Shorts', 'CargoPants']));
     if (R.chance(0.85)) mk(cold ? R.pick(['Boots', 'Boots', 'Sneakers']) : R.pick(['Sneakers', 'Sneakers', 'Boots', 'DressShoes']));
     if (R.chance(cold ? 0.45 : 0.15)) mk(cold ? R.pick(['Beanie', 'Beanie', 'BaseballCap']) : R.pick(['BaseballCap', 'Beanie']));
     if (cold && R.chance(0.25)) mk(R.pick(['Gloves', 'Scarf']));
@@ -52,7 +54,7 @@ const Zombie = {
     return out;
   },
   computeLook(z) {
-    const L = { skin: z.skin, hair: z.hairCol, hairStyle: z.hair, zombie: !z.victim, blood: z.blood, female: z.female };
+    const L = { skin: z.skin, hair: z.hairCol, hairStyle: z.hair, zombie: !z.victim, blood: z.blood, female: z.female, beard: z.beard || null };
     const get = (s) => z.wear.find(it => it.worn === s);
     const shirt = get('shirt'), jacket = get('jacket'), pants = get('pants'), shoes = get('shoes'), hat = get('hat'), back = get('back'), vest = get('vest');
     const dirty = (c) => Col.mix(c, '#3a2a20', 0.3);
@@ -66,11 +68,19 @@ const Zombie = {
     L.bag = back ? (back.col || '#444') : null;
     L.vest = vest ? vest.col : null;
     L.gore = z.gore;
+    this.garb(L, get);
     // textures: cloth and blood from what they wear; grime, how far gone the skin is, stubble on some of the men
     Char3D.dress(L, get, 0.25);
     const h = (k) => Char3D.rnd(z.id, k);
     L.dirt = 0.4 + h(201) * 0.5; L.decay = 0.45 + h(202) * 0.55;
     L.stubble = z.female || h(203) < 0.5 ? 0 : 0.4 + h(204) * 0.6;
+    return L;
+  },
+  // the shape of what is worn: a skirt (a skirt, or a dress below the waist), a long coat, a hood down the back
+  garb(L, get) {
+    const sh = get('shirt'), pa = get('pants'), ja = get('jacket'), D = (it) => it && ITEMS[it.id];
+    L.skirt = D(pa) && D(pa).skirt ? pa.col : D(sh) && D(sh).dress ? sh.col : null;
+    L.coat = !!(D(ja) && D(ja).coat); L.hood = !!(D(ja) && D(ja).hood);
     return L;
   },
   // ------------------------------------------------------------------ feeding
@@ -698,7 +708,7 @@ const Zombie = {
     if (z.stag > 0) { pose.mode = 'stagger'; pose.prog = U.clamp(1 - z.stag / (z.stag0 || 0.6), 0, 1); pose.stagA = z.stagA || Math.PI; }
     if (z.st === 'climb') { pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = U.clamp(z.climbT / z.climbDur, 0, 1); pose.crouch = Math.sin(pose.prog * Math.PI) * 0.5; }
     if (z.lie > 0 || z.dead) { pose.lie = z.lie; pose.lieDir = z.lieDir; pose.amp = z.crawl && !z.dead ? z.amp : 0; pose.arms = z.dead ? 'idle' : 'zombie'; pose.lieOff = 0; }
-    if (z.dead || z.fake) { const dr = z.death && Char3D.DEATHS[z.death]; pose.mode = 'dead'; pose.death = z.fake ? null : z.death; pose.prog = z.fake ? 1 : U.clamp(since(z.fallAt) / (dr ? dr.dur : 0.9), 0, 1); }
+    if (z.dead || z.fake) { const dr = z.death && Char3D.DEATHS[z.death]; pose.mode = 'dead'; pose.death = z.fake ? null : z.death; pose.prog = z.fake ? 1 : U.clamp(since(z.fallAt) / (dr ? dr.T : 0.9), 0, 1); }
     else if (z.st === 'down') { pose.mode = z.crawl ? 'crawl' : 'fall'; pose.prog = U.clamp(since(z.downAt) / 0.7, 0, 1); }
     else if (z.st === 'getup') { pose.mode = 'getup'; pose.prog = U.clamp((z.getT || 0) / this.GETUP, 0, 1); }
     else if (z.crawl) pose.mode = 'crawl';

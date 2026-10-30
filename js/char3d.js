@@ -1228,6 +1228,10 @@ const Char3D = {
     if (r.ground) return this.bodyKeys(S, 'D:' + name + dir, D, [
       (A) => lie(A), (A) => { lie(A); jolt(A, kk, true); }, (A) => { lie(A); jolt(A, kk * 0.6, false); }, (A) => { lie(A); jolt(A, kk * 0.3, true); }, (A) => lie(A),
     ], [0, 0.2, 0.45, 0.7, 1]);
+    // the fall takes r.dur of the r.T; any time after it is spent twitching on the ground, weaker each time
+    const f = r.dur / r.T, na = r.after ? Math.max(2, Math.round(r.after / 0.35)) : 0;
+    const fr = [], ts = [];
+    for (let k = 0; k < na; k++) { const w = (1 - k / na) * (0.4 + kk); fr.push((A) => { lie(A); jolt(A, w, (k & 1) === 0); }); ts.push(0.74 * f + (1 - 0.74 * f) * (k + 1) / (na + 1)); }
     return this.bodyKeys(S, 'D:' + name + dir, D, [
       (A) => { self.standPose(A, D); A[C3.PZ] += dr; if (dr) self.armsOf(A, r, 1, 0); },
       // the blow lands: pushed, twisted, the head snapped, arms thrown
@@ -1257,16 +1261,14 @@ const Char3D = {
         A[C3.PX] += pu * 0.3 - 0.2 * dir; A[C3.PZ] += 0.1 + lf * 0.25 + (dir < 0 ? 0.12 : 0); A[C3.PP] *= 0.85; A[C3.PW] = sp * 0.95; A[C3.HP] += dir > 0 ? -0.25 : 0.2;
         self.armsOf(A, r, 0.5, 0); self.post(A, r);
       },
-      (A) => { lie(A); jolt(A, 0.3 + kk, true); },
-      (A) => { lie(A); jolt(A, kk * 0.7, false); },
-      (A) => lie(A),
-    ], [0, 0.12, 0.34, 0.56, 0.74, 0.83, 0.92, 1]);
+    ].concat(na ? fr : [(A) => { lie(A); jolt(A, 0.3 + kk, true); }, (A) => { lie(A); jolt(A, kk * 0.7, false); }], [(A) => lie(A)]),
+      (na ? [0, 0.12, 0.34, 0.56, 0.74].map(t => t * f).concat(ts) : [0, 0.12, 0.34, 0.56, 0.74, 0.83, 0.92]).concat([1]));
   },
   lying(T, S, D, P, mode) {
     const RD = mode === 'dead' && P.death ? this.DEATHS[P.death] : null;
     const dir = P.lieDir || 1, vary = mode === 'dead';
     if (RD) {
-      const p = P.prog !== undefined ? P.prog : S.fresh ? 1 : U.clamp(S.mt / RD.dur, 0, 1);
+      const p = P.prog !== undefined ? P.prog : S.fresh ? 1 : U.clamp(S.mt / RD.T, 0, 1);
       if (p < 1) { c3track(this.deathKeys(S, D, P.death, RD, dir), p, T); return; }
       this.liePose(T, D, dir, S.id, true); this.post(T, RD);
       return;
@@ -1376,7 +1378,7 @@ const Char3D = {
   },
   // ===================================================================== model
   // colours for a look; the player's look object is rebuilt every frame, so it is cached by content
-  lookStr(L) { return [L.skin, L.shirt, L.jacket, L.pants, L.shoes, L.hair, L.hairStyle, L.hat && L.hat.type, L.hat && L.hat.col, L.bag, L.vest, L.gloves, L.sleeves, L.shorts, L.glasses, L.blood, L.texK, L.stubble, L.dirt].join('|'); },
+  lookStr(L) { return [L.skin, L.shirt, L.jacket, L.pants, L.shoes, L.hair, L.hairStyle, L.skirt, L.hat && L.hat.type, L.hat && L.hat.col, L.bag, L.vest, L.gloves, L.sleeves, L.shorts, L.glasses, L.blood, L.texK, L.stubble, L.dirt].join('|'); },
   // the material of a worn item: [kind, variant] - its pattern if it has one, else its cloth
   texOf(it) {
     const p = it.pat, d = ITEMS[it.id];
@@ -1419,6 +1421,7 @@ const Char3D = {
       jacket, jacketD: jacket ? this.sc(jacket, 0.78) : null, pants, pantsD: this.sc(pants, 0.8), belt: [0.17, 0.12, 0.09], buckle: [0.66, 0.64, 0.58],
       shoes, sole: bare(look.shoes) ? this.sc(skin, 0.8) : this.mix(this.sc(shoes, 0.5), [0.85, 0.83, 0.78], look.shoes && this.rgb(look.shoes)[0] > 0.7 ? 0.6 : 0),
       hand: look.gloves ? rgb(look.gloves) : zomb ? this.mix(skin, [0.3, 0.07, 0.05], 0.12 + blood * 0.3) : skin, vest: look.vest ? rgb(look.vest) : null,
+      skirt: look.skirt ? dirt(rgb(look.skirt)) : null,
       bag: look.bag ? rgb(look.bag) : null, bagD: look.bag ? this.sc(rgb(look.bag), 0.72) : null, hat: look.hat ? rgb(look.hat.col || '#444') : null,
       blood: [0.4, 0.05, 0.035], bloodD: [0.22, 0.05, 0.035], wound: [0.36, 0.08, 0.07], glass: [0.08, 0.08, 0.09], bone: [0.78, 0.74, 0.62],
     };
@@ -1454,6 +1457,7 @@ const Char3D = {
     Pl.sole = T(Pl.sole, [C3MAT.rubber, 0, Math.min(1, gr + 0.3), 0]);
     Pl.hand = look.gloves ? T(Pl.hand, wear('gloves', [C3MAT.knit], blood * 0.5)) : T(Pl.hand, [C3MAT.skin, decay, gr * 0.8, zomb ? blood * 0.8 : 0]);
     if (Pl.vest) Pl.vest = T(Pl.vest, wear('vest', [C3MAT.twill], blood * 0.6));
+    if (Pl.skirt) Pl.skirt = T(Pl.skirt, tx.pants && !Pl.bareLegs ? wear('pants', [C3MAT.twill], blood * 0.5) : wear('shirt', [C3MAT.cotton], blood * 0.5));
     if (Pl.bag) { Pl.bag = T(Pl.bag, wear('bag', [C3MAT.twill], 0)); Pl.bagD = T(Pl.bagD, Pl.bag.m); }
     if (Pl.hat) Pl.hat = T(Pl.hat, wear('hat', [C3MAT.cotton], 0));
     Pl.hair = T(Pl.hair, [C3MAT.hair, 0, gr * 0.5, 0]);
@@ -1632,7 +1636,10 @@ const Char3D = {
       C3H.on = true;
     }
     const top = Pl.top, under = jk ? Pl.shirt : Pl.top, jx = jk ? 1.07 : 1;
-    c3box(M.PELVIS, Pf, 0, 0, 0, UP * hiS, UP * hiS, UP * H, Pl.pants);
+    c3box(M.PELVIS, Pf, 0, 0, 0, UP * hiS, UP * hiS, UP * H, Pl.skirt && Pl.bareLegs ? Pl.skirt : Pl.pants);
+    // a skirt (a skirt, or a dress below the waist) and a long coat's tails: flared cones hung from the hips
+    if (Pl.skirt) c3box(CY, Pf, 0, 0, -0.18, 0.135 * hiS, 0.165 * hiS, 0.22, Pl.skirt, 1.35, 1);
+    if (look.coat && Pl.jacket) c3box(CY, Pf, -0.01, 0, -0.15, 0.142 * hiS, 0.178 * hiS, 0.27, Pl.jacket, 1.3, 1);
     // the shirt hangs over the belt unless tucked in
     const tuck = ex.tuck && !jk && !Pl.bareTop;
     c3box(M.BELLY, Lf, 0, 0, tuck || Pl.bareTop ? 0 : -0.035, UB * waS, UB * waS * 1.01, UB * H, Pl.bareTop ? Pl.skin : under);
@@ -1651,6 +1658,8 @@ const Char3D = {
       if (det > 0) c3box(CY, NB, 0.012, 0, -0.01, 0.075, 0.08, 0.035, Pl.jacketD, 1.06, 0.9);
       if (det > 1) { c3pt(c3a, Lf, 0.1 * waS, 0, -0.17); c3pt(c3b, Cf, 0.115 * shS, 0, 0.2); c3seg(BOX, c3a, c3b, 0.003, 0.004, Pl.jacketD, 1, 1, Cf[3], Cf[4], Cf[5]); }
     } else if (!Pl.bareTop && det > 0) c3box(CY, NB, 0.008, 0, -0.02, 0.064, 0.068, 0.016, Pl.shirtD, 1, 0.95);
+    // a hoodie's hood, down, bunched behind the neck
+    if (look.hood && Pl.jacket && det > 0) c3box(RB, NB, -0.078, 0, -0.004, 0.05, 0.09, 0.065, Pl.jacket, 0.85, 1.1);
     if (Pl.vest) {
       c3box(M.CHEST, Cf, 0.002, 0, -0.012, UC * shS * 1.1, UC * shS * 1.06, UC * H * 0.94, Pl.vest);
       c3box(M.BELLY, Lf, 0, 0, 0.02, UB * waS * 1.14, UB * waS * 1.14, UB * H * 0.9, Pl.vest);
@@ -1829,6 +1838,9 @@ const Char3D = {
     }
     GL3D.sd = sd0;
     if (Wm && handR) { this.wroll = S.wroll || 0; this.lineOn = S.line && det > 0; this.propCol = Pose.propCol; this.ejS = S; this.weapon(Pose.weapon, handR, wd, Cf, Pose.flash, false, Pl); this.wroll = 0; this.lineOn = false; this.propCol = null; this.ejS = null; }
+    // ---- a body carried over the right shoulder (Pose.carry: its look): the hips on the shoulder, the legs down the
+    // front under the arm that holds them, the torso, head and arms hanging down the back
+    if (Pose.carry && det > 0) this.carried(Pose.carry, Cf, D, M);
     // ---- gear on the hotbar: a long weapon slung across the back, tools on the belt, a pistol in the holster
     if (look.att && det > 0) for (const [slot, model] of look.att) {
       const W = WEAPON_MODELS[model] || WEAPON_MODELS.generic;
@@ -1844,6 +1856,23 @@ const Char3D = {
       }
     }
     return this.shadowOf();
+  },
+  carried(look, Cf, D, M) {
+    const Q = this.pal(look, D), z0 = D.shZ, y = D.shW * 0.85, F = Cf;
+    const top = Q.jacket || Q.shirt, low = Q.skirt || Q.pants, P = (x, yy, z, o) => c3pt(o, F, x, yy, z);
+    c3box(M.RB, F, 0.0, y, z0 + 0.1, 0.1, 0.12, 0.085, low);
+    for (const s of [-1, 1]) {
+      const A = P(0.06, y + s * 0.06, z0 + 0.08, c3a), K = P(0.17, y + s * 0.07, z0 - 0.25, c3b), F2 = P(0.15, y + s * 0.065, z0 - 0.62, c3g);
+      c3seg(M.LIMB, A, K, 0.07, 0.068, Q.skirt ? Q.skin : low, 1, 1, F[3], F[4], F[5]);
+      c3seg(M.LIMB, K, F2, 0.055, 0.05, Q.skirt || Q.bareLegs ? Q.skin : low, 1, 1, F[3], F[4], F[5]);
+      c3emit(M.SPH, F2[0], F2[1], F2[2], 0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.04, Q.shoes, 1, 1);
+    }
+    const T0 = P(-0.06, y, z0 + 0.08, c3a), T1 = P(-0.17, y, z0 - 0.36, c3b);
+    c3seg(M.RB, T0, T1, 0.1, 0.14, top, 1, 1, F[3], F[4], F[5]);
+    const Hd = P(-0.2, y, z0 - 0.5, c3g);
+    c3emit(M.SPH, Hd[0], Hd[1], Hd[2], 0.095, 0, 0, 0, 0.085, 0, 0, 0, 0.1, Q.face || Q.skin, 1, 1);
+    if (look.hairStyle !== 'bald' && Q.hair) c3emit(M.SPH, Hd[0] - F[3] * 0.02, Hd[1] - F[4] * 0.02, Hd[2] - 0.035, 0.09, 0, 0, 0, 0.08, 0, 0, 0, 0.075, Q.hair, 1, 1);
+    for (const s of [-1, 1]) { const S0 = P(-0.14, y + s * 0.12, z0 - 0.26, c3a), H2 = P(-0.16, y + s * 0.13, z0 - 0.78, c3b); c3seg(M.LIMB, S0, H2, 0.045, 0.04, Q.sleeve || top, 1, 1, F[3], F[4], F[5]); }
   },
   // the end of a severed limb at joint A (B: toward where the limb was): torn flesh and the bone end
   stump(A, B, r, Pl, det) {
@@ -2027,7 +2056,7 @@ const Char3D = {
     if (hsty !== 'bald' && !fullHelm) {
       const hc = hsty === 'buzz' ? this.mix(Pl.hair, Pl.skin, 0.45) : Pl.hair;
       // (under a hat a little smaller, so it shows below the brim without poking through the crown)
-      const big = (hsty === 'messy' ? 1.05 : hsty === 'buzz' ? 0.985 : hsty === 'long' || fem ? 1.025 : 1) * (hat ? 0.97 : 1);
+      const big = (hsty === 'afro' ? 1.17 : hsty === 'messy' ? 1.05 : hsty === 'buzz' ? 0.985 : hsty === 'bob' ? 1.04 : hsty === 'long' || fem ? 1.025 : 1) * (hat ? 0.97 : 1);
       c3box(M.HAIR, Hf, -0.002, 0, 0, UH * big, UH * big * (fem ? 0.97 : 1), UH * (big > 1 ? 1 + (big - 1) * 0.6 : big), hc);
       if (hsty === 'long') {
         // hangs down the back to the shoulders, and past the ears at the sides
@@ -2037,6 +2066,14 @@ const Char3D = {
         c3box(SP, Hf, -0.103 * hs, 0, 0.1 * hs, 0.026, 0.026, 0.026, this.sc(hc, 0.85));
         c3pt(c3a, Hf, -0.115 * hs, 0, 0.095 * hs); c3pt(c3b, Hf, -0.135 * hs, 0, -0.03);
         c3seg(RB, c3a, c3b, 0.022, 0.024, hc, 1, 0.55, Hf[3], Hf[4], Hf[5]);
+      } else if (hsty === 'bun' && !hat) {
+        c3box(SP, Hf, -0.088 * hs, 0, 0.162 * hs, 0.04, 0.042, 0.038, this.sc(hc, 0.92));
+      } else if (hsty === 'bob') {
+        // to the jaw all round: the back and the sides, cut straight
+        c3box(RB, Hf, -0.062 * hs, 0, 0.035, 0.045, 0.078 * hw, 0.075, hc, 0.9, 1);
+        if (det > 0) for (const sd of [-1, 1]) c3box(RB, Hf, 0.002, sd * 0.077 * hw, 0.04, 0.046, 0.016, 0.07, hc, 0.85, 1);
+      } else if (hsty === 'afro' && det > 0 && !hat) {
+        c3box(SP, Hf, -0.012, 0, 0.165 * hs, 0.112, 0.104, 0.075, hc);
       } else if (hsty === 'messy' && det > 0 && !hat) {
         c3box(SP, Hf, 0.045 * hs, 0.03, 0.17 * hs, 0.04, 0.034, 0.028, hc); c3box(SP, Hf, -0.03 * hs, -0.04, 0.18 * hs, 0.042, 0.036, 0.03, hc);
         c3box(SP, Hf, 0.07 * hs, -0.035, 0.145 * hs, 0.03, 0.03, 0.022, hc);
@@ -2048,6 +2085,13 @@ const Char3D = {
       else if (hat.type === 'helmet') { c3box(M.CAP, Hf, -0.004, 0, -0.012, UC * 1.13, UC * 1.12, UC * 1.08, hcol); c3box(CY, Hf, 0.0, 0, 0.112, 0.128, 0.11, 0.008, this.sc(hcol, 0.85)); }
       else if (hat.type === 'beanie') { c3box(M.CAP, Hf, -0.004, 0, -0.03, UC * 1.04, UC * 1.05, UC * 1.08, hcol); c3box(CY, Hf, -0.004, 0, 0.1, 0.107 * hs, 0.088 * hw, 0.018, this.sc(hcol, 0.85)); }
       else { c3box(M.CAP, Hf, 0, 0, 0, UC, UC * 1.01, UC, hcol); c3box(RB, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92), 1, 1); }
+    }
+    // facial hair: a full beard over the jaw and chin, a goatee, a moustache
+    const bd = look.beard;
+    if (bd && bd !== 'none' && !fullHelm && Pl.hair) {
+      if (bd === 'full') { c3box(SP, Hf, 0.07 * hs, 0, -0.02 * hs, 0.043, 0.071 * hw, 0.044, Pl.hair); if (det > 0) c3box(BOX, Hf, 0.099 * hs, 0, 0.024 * hs, 0.007, 0.025, 0.006, Pl.hair); }
+      else if (bd === 'goatee') { c3box(SP, Hf, 0.094 * hs, 0, -0.03 * hs, 0.016, 0.022, 0.028, Pl.hair); if (det > 0) c3box(BOX, Hf, 0.1 * hs, 0, 0.024 * hs, 0.006, 0.02, 0.005, Pl.hair); }
+      else if (bd === 'moustache' && det > 0) c3box(BOX, Hf, 0.1 * hs, 0, 0.025 * hs, 0.007, 0.027, 0.006, Pl.hair);
     }
     if (look.glasses && det > 0) { c3box(BOX, Hf, 0.108 * hs, 0, 0.084 * hs, 0.004, 0.058, 0.012, Pl.glass); }
     void CY;
@@ -2188,4 +2232,10 @@ const Char3D = {
   D.suicideP = { lie: 1, dur: 1.1, side: -0.6, knees: 0.6, head: 0.6, arms: 'limp', kick: 0.1 };
   D.suicideK = { lie: 1, dur: 1.2, push: -0.5, knees: 1, head: -0.6, arms: 'limp', kick: 0.1 };
   D.splat1 = { lie: -1, dur: 0.45, drop: 1.6, arms: 'out', splat: 1 }; D.splat2 = { lie: 1, dur: 0.45, drop: 1.6, arms: 'out', splat: -1, kick: 0.2 };
+  // twitching on after the fall (seconds): burning, broken bones, a sharp wound, a small calibre shot
+  for (const k in D) {
+    const r = D[k];
+    r.after = r.ground ? 0 : /^fire/.test(k) ? 2.6 : /^bones/.test(k) ? 1.4 : /^sharp/.test(k) ? 0.8 : /^gunS/.test(k) ? 0.7 : 0;
+    r.T = r.dur + r.after;
+  }
 })();

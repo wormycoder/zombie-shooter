@@ -174,6 +174,12 @@ Object.assign(Char3D, {
       else { this.hand(T, D, -1, -0.22, -0.15, -0.25 + w, 0.3); this.hand(T, D, 1, 0.15, 0.32, -0.2, 0.4); T[C3.SP] += 0.2; }
       T[C3.GR] = 0; T[C3.LH] = 1;
     },
+    // ---- carrying a body over the shoulder: the right arm wrapped round its legs, the left swinging free, leaning a
+    // little forward under the weight
+    carry(T, S, D, P) {
+      this.hand(T, D, 1, 0.16, 0.2, -0.02, 1.4);
+      T[C3.SP] += 0.12; T[C3.SR] -= 0.06; T[C3.HR] -= 0.1;
+    },
     // ---- heaving a body over a fence or out of a window: down to grab it, up to the chest, shoved over
     heave(T, S, D, P) {
       const k = P.k || 0, lift = this.ease(k, 0.2, 0.55), push = this.ease(k, 0.65, 0.85) * (1 - this.ease(k, 0.9, 1));

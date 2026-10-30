@@ -10,7 +10,7 @@ const LOOT_GROUPS = {
   drink: ['Pop', 'PopOrange', 'JuiceBox', 'WaterBottle', 'WaterBottle', 'Beer'],
   meds: ['Bandage', 'Bandage', 'Painkillers', 'Disinfectant', 'AlcoholWipes', 'Vitamins', 'SleepingPills', 'Antidepressants', 'BetaBlockers', 'SutureNeedle', 'Tweezers', 'SterileBandage'],
   tools: ['Hammer', 'Saw', 'Screwdriver', 'PipeWrench', 'DuctTape', 'Glue', 'NailsBox', 'Flashlight', 'Battery', 'Scissors'],
-  clothes: ['TShirt', 'TShirt', 'Shirt', 'TankTop', 'Hoodie', 'Sweater', 'DenimJacket', 'Jeans', 'Jeans', 'Trousers', 'Shorts', 'Sneakers', 'DressShoes', 'Boots', 'Beanie', 'BaseballCap', 'Scarf', 'Gloves', 'WinterCoat', 'CargoPants', 'Belt'],
+  clothes: ['Dress', 'Skirt', 'TrenchCoat', 'TShirt', 'TShirt', 'Shirt', 'TankTop', 'Hoodie', 'Sweater', 'DenimJacket', 'Jeans', 'Jeans', 'Trousers', 'Shorts', 'Sneakers', 'DressShoes', 'Boots', 'Beanie', 'BaseballCap', 'Scarf', 'Gloves', 'WinterCoat', 'CargoPants', 'Belt'],
   books: ['Novel', 'Magazine', 'Magazine', 'ComicBook', 'Newspaper', '@skillbook1', '@skillbook1', '@skillbook2'],
   bags: ['SchoolBag', 'SchoolBag', 'DuffelBag', 'HikingBag', 'FannyPack', 'PlasticBag'],
   skillbook1: [], skillbook2: [], skillbook3: [],

@@ -62,6 +62,8 @@ const MapGen = {
     if (this.foliagePass) this.foliagePass();
     // some houses were boarded up by people who did not make it
     this.boardUp(seed);
+    // the empty country between the towns (the Expanded map): camps, wrecks, hay fields, old orchards
+    if (S > 400) this.countryside(seed);
     // keep saves compact
     for (const o of w.obj) if (o && o.sz) o.sz = Math.round(o.sz * 100) / 100;
     return w;
@@ -235,6 +237,36 @@ const MapGen = {
       if (f.k === 'door') f.open = false;
     }
     for (const b of w.buildings) if (pick.has(b.id)) b.boarded = true;
+  },
+  // Things out in the country, on open grass and dirt away from roads and buildings: an abandoned camp (a fire ring,
+  // logs to sit on, a crate of supplies), a burnt-out wreck off the road, hay bales on a field, an old orchard. Its own
+  // random stream, so the maps keep their layouts.
+  countryside(seed) {
+    const w = this.w, W = w.w, r = new RNG((seed ^ 0x2545f491) >>> 0);
+    const open = (x, y) => { const f = w.floor[y * W + x]; return (f === FL.GRASS || f === FL.GRASS2 || f === FL.DIRT) && !w.obj[y * W + x] && w.room[y * W + x] < 0; };
+    const clear = (x0, y0, n) => { for (let y = y0 - 2; y <= y0 + n + 2; y++) for (let x = x0 - 2; x <= x0 + n + 2; x++) if (x < 2 || y < 2 || x >= W - 2 || y >= w.h - 2 || !open(x, y)) return false; return true; };
+    const put = (x, y, t, d, o) => { if (open(x, y)) w.obj[y * W + x] = this.mkObj(t, d || 'S', o); };
+    const town = (x, y) => (w.towns || []).some(T => x > T.x0 - 12 && x < T.x1 + 12 && y > T.y0 - 12 && y < T.y1 + 12);
+    let made = 0;
+    for (let k = 0; k < 4000 && made < 60; k++) {
+      const x = r.int(20, W - 30), y = r.int(20, w.h - 30), kind = r.pick(['camp', 'camp', 'wreck', 'hay', 'orchard']);
+      const n = kind === 'orchard' ? 9 : kind === 'hay' ? 8 : 4;
+      if (town(x, y) || !clear(x, y, n)) continue;
+      made++;
+      if (kind === 'camp') {
+        put(x + 2, y + 2, 'campfire', 'S');
+        put(x, y + 2, 'tlog', 'E', { v: r.int(0, 3) }); put(x + 2, y + 4, 'tlog', 'S', { v: r.int(0, 3) });
+        put(x + 4, y, 'crate', 'S');
+        if (r.chance(0.5)) put(x + 4, y + 4, 'woodcrate', 'S');
+      } else if (kind === 'wreck') {
+        put(x + 1, y + 1, 'car_wreck', r.pick(['N', 'E']), { col: '#3a3430', kind: r.pick(['sedan', 'wagon', 'pickup', 'van', 'hatchback', 'suv']) });
+        if (r.chance(0.5)) put(x + 3, y + 3, 'tstump', 'S', { v: r.int(0, 3) });
+      } else if (kind === 'hay') {
+        for (let j = 0; j < 7; j++) put(x + r.int(0, 8), y + r.int(0, 8), 'hay', r.pick(['N', 'E']));
+      } else {
+        for (let yy = 0; yy <= 8; yy += 3) for (let xx = 0; xx <= 8; xx += 3) if (r.chance(0.85) && open(x + xx, y + yy)) w.obj[(y + yy) * W + x + xx] = this.mkObj('tree', 'S', this.tree(x + xx, y + yy, 0.8, 0, r.pick(['apple', 'oak', 'apple'])));
+      }
+    }
   },
   alarmP() { const v = G.sb && G.sb.alarms; return v === undefined ? 0.03 : v; },
   newBuilding(type, x0, y0, x1, y1, o) {
@@ -1408,6 +1440,80 @@ const MapGen = {
     this.fill(x0, y0, x1, y0 + 1, FL.CONCRETE, 0);
     this.w.labels.push({ x: (x0 + x1) / 2, y: y0 + 8, text: name || 'Elementary School' });
   },
+  // A long building on a central corridor, rooms either side: o.rw room width, o.kind(k, side, n) -> [room type, floor]
+  // for the k-th room along on the north (0) or south (1) side, o.fill(rm) furnishes it (rm.k, rm.side, rm.n set)
+  corridorBuilding(type, x0, y0, x1, y1, o) {
+    const b = this.newBuilding(type, x0, y0, x1, y1, { wallType: WT.BRICK, roof: 'flat', roofCol: o.roofCol || '#5a5a5a', name: o.name, alarm: this.alarmP() > 0, front: 'N' });
+    const my = (y0 + y1) >> 1, hall = this.addRoom(b, o.hall || type, x0, my, x1, my + 1, o.hfl || FL.LINO, 4);
+    const n = Math.max(1, Math.floor((x1 - x0 + 1) / o.rw)), rooms = [];
+    for (let k = 0; k < n; k++) {
+      const x = x0 + k * o.rw, xe = k === n - 1 ? x1 : x + o.rw - 1;
+      for (const side of [0, 1]) {
+        const [rt, fl] = o.kind(k, side, n);
+        const rm = this.addRoom(b, rt, x, side ? my + 2 : y0, xe, side ? y1 : my - 1, fl, 2);
+        rm.k = k; rm.side = side; rm.n = n; rooms.push(rm);
+      }
+    }
+    this.buildWalls(b);
+    for (const rm of rooms) this.doorBetween(rm, hall);
+    this.exteriorDoor(hall, 'W', { style: 'glass', locked: false, b: b.id, ext: true });
+    this.exteriorDoor(hall, 'E', { style: 'glass', locked: true, b: b.id, ext: true });
+    for (const rm of rooms) { this.windows(rm, { p: 0.55, win: { b: b.id, curtains: o.curtains || false } }); o.fill(rm); }
+    for (let x = x0 + 3; x < x1 - 2; x += 6) if (!this.reserved(x, my)) { this.w.obj[my * this.W + x] = this.mkObj(o.hallObj || 'chair', 'S'); if (!this.connected(hall)) this.w.obj[my * this.W + x] = null; }
+    return { b, hall, rooms, my };
+  },
+  // the county hospital: emergency and reception by the main doors, the pharmacy across the hall, wards of beds,
+  // staff rooms at the far end; ambulances at the emergency doors, a car park
+  hospital(x0, y0, x1, y1, name) {
+    const r = this.rng, bx1 = Math.min(x1 - 1, x0 + 40), by1 = y0 + 19;
+    const H = this.corridorBuilding('hospital', x0 + 1, y0 + 2, bx1, by1, {
+      name, rw: 7, roofCol: '#6a6a6a', hfl: FL.TILE, hallObj: 'chair',
+      kind: (k, side, n) => k === 0 ? (side ? ['pharmacy', FL.LINO] : ['clinic', FL.TILE]) : k === n - 1 ? ['office', FL.CARPET] : ['clinic', FL.LINO],
+      fill: (rm) => {
+        if (rm.type === 'pharmacy') { for (let k = 0; k < 4; k++) this.place(rm, 'shelf'); this.place(rm, 'counter'); return; }
+        if (rm.type === 'office') { this.place(rm, 'desk'); this.place(rm, 'chair'); this.place(rm, 'locker'); this.place(rm, 'locker'); this.place(rm, 'sofa'); return; }
+        if (rm.k === 0) { this.place(rm, 'counter'); this.place(rm, 'desk'); for (let k = 0; k < 3; k++) this.place(rm, 'chair'); this.place(rm, 'medcab'); this.place(rm, 'bed', { two: 'along', extra: { col: '#dfe6ec' } }); return; }
+        for (let k = 0; k < 3; k++) this.place(rm, 'bed', { two: 'along', extra: { col: '#dfe6ec' } });
+        this.place(rm, 'medcab'); if (r.chance(0.5)) this.place(rm, 'shelf'); if (r.chance(0.4)) this.place(rm, 'desk');
+      },
+    });
+    const B = H.b;
+    // the emergency bay and the car park in front
+    this.fill(x0 + 1, by1 + 2, bx1, Math.min(y1, by1 + 9), FL.PARKING, 0);
+    for (let k = 0; k < 2; k++) this.w.carSpots.push({ x: x0 + 3 + k * 5, y: by1 + 4.5, a: 0, kind: 'ambulance' });
+    for (let x = x0 + 14; x + 2 <= bx1; x += 4) if (r.chance(0.45)) this.w.carSpots.push({ x: x + 0.5, y: by1 + 6.5, a: r.chance(0.5) ? Math.PI / 2 : -Math.PI / 2 });
+    this.fill(x0 + 1, y0, bx1, y0 + 1, FL.CONCRETE, 0);
+    if (this.free(x0 + 3, y0 + 1)) this.put(x0 + 3, y0 + 1, 'yd_flagpole', 'S', {});
+    B.zIndoor = 16;
+    this.w.zones.push({ x0: x0 + 1, y0: y0 + 2, x1: bx1, y1: by1, n: 10 });
+    this.w.labels.push({ x: (x0 + bx1) / 2, y: (y0 + by1) / 2, text: name || 'County Hospital' });
+  },
+  // a town hotel: the lobby at the doors, guest rooms down both sides of the hall (a bed, a dresser, a nightstand)
+  hotel(x0, y0, x1, y1, name) {
+    const r = this.rng, bx1 = Math.min(x1 - 1, x0 + 34), by1 = y0 + 15;
+    this.corridorBuilding('hotel', x0 + 1, y0 + 2, bx1, by1, {
+      name, rw: 5, roofCol: '#4a3a3a', hfl: FL.CARPET, hallObj: 'armchair', curtains: true,
+      kind: (k, side) => k === 0 && !side ? ['office', FL.WOOD] : ['bedroom', FL.CARPET],
+      fill: (rm) => {
+        if (rm.type === 'office') { this.place(rm, 'counter'); this.place(rm, 'register'); this.place(rm, 'sofa'); this.place(rm, 'armchair'); return; }
+        this.place(rm, 'bed', { two: 'along', extra: { col: r.pick(['#8a2a2a', '#2a3a6a', '#d8d0c0']) } }); this.place(rm, 'dresser'); this.place(rm, 'nightstand');
+        if (r.chance(0.5)) this.place(rm, 'chair');
+      },
+    });
+    this.fill(x0 + 1, y0, bx1, y0 + 1, FL.CONCRETE, 0);
+    this.fill(x0 + 1, by1 + 2, bx1, Math.min(y1, by1 + 7), FL.PARKING, 0);
+    for (let x = x0 + 3; x + 2 <= bx1; x += 4) if (r.chance(0.4)) this.w.carSpots.push({ x: x + 0.5, y: by1 + 4.5, a: r.chance(0.5) ? Math.PI / 2 : -Math.PI / 2 });
+    this.w.labels.push({ x: (x0 + bx1) / 2, y: (y0 + by1) / 2, text: name || 'Hotel' });
+  },
+  // a car dealer: a small showroom, the lot in front in rows of cars for sale, flags along the street
+  dealer(x0, y0, x1, y1, name) {
+    const r = this.rng, lx1 = Math.min(x1 - 1, x0 + 34);
+    this.store('office', x0 + 2, y0 + 15, Math.min(14, lx1 - x0 - 2), 8, 'N', name);
+    this.fill(x0 + 1, y0, lx1, y0 + 13, FL.PARKING, 0);
+    const kinds = ['sedan', 'hatchback', 'wagon', 'sports', 'suv', 'pickup', 'van', 'sedan', 'suv'];
+    for (let row = 0; row < 2; row++) for (let x = x0 + 3; x + 2 <= lx1; x += 4) if (r.chance(0.8)) this.w.carSpots.push({ x: x + 0.5, y: y0 + 3.5 + row * 6, a: Math.PI / 2, kind: r.pick(kinds), lot: true });
+    for (let x = x0 + 2; x <= lx1; x += 5) if (this.free(x, y0)) this.put(x, y0, 'lamppost', 'S');
+  },
   industrial(x0, y0, x1, y1, names) {
     const r = this.rng;
     this.fill(x0, y0, x1, y1, FL.CONCRETE, 3);
@@ -1914,14 +2020,14 @@ const MapGen = {
     Fairfield: { com: 2, civic: ['church', 'gas'],
       shops: ['grocery', 'diner', 'hardware', 'postoffice', 'bar', 'pharmacy', 'autorepair'],
       names: { grocery: 'Fairfield General Store', diner: 'Route 9 Diner', hardware: 'Fairfield Feed & Seed', bar: "Hank's Tavern", pharmacy: 'Fairfield Drugs', postoffice: 'Fairfield Post Office', autorepair: "Dale's Auto Repair", church: 'Fairfield Methodist Church', gas: 'Fairfield Fuel' } },
-    Riverton: { com: 4, civic: ['school', 'church', 'library', 'park', 'gas'],
+    Riverton: { com: 4, civic: ['school', 'church', 'hotel', 'library', 'park', 'gas'],
       shops: ['grocery', 'pharmacy', 'police', 'restaurant', 'bar', 'clinic', 'postoffice', 'clothing', 'hardware', 'firestation', 'autorepair', 'bookstore', 'laundromat', 'office', 'diner', 'gunstore'],
       apts: ['Riverside Apartments', 'Mill Street Apartments'],
-      names: { grocery: 'River Valley Foods', pharmacy: 'Riverton Pharmacy', restaurant: 'Riverside Grill', bar: 'The Muddy Bank', clothing: 'Main Street Apparel', hardware: 'Riverton Hardware', bookstore: 'Chapter One Books', laundromat: 'Spin Cycle', office: 'Riverton Savings', diner: "Mel's Diner", gunstore: 'River Arms', school: 'Riverton Elementary', postoffice: 'Riverton Post Office', autorepair: 'River Road Garage', library: 'Riverton Public Library', clinic: 'Riverton Medical Clinic', church: "St. Luke's Church", gas: 'Riverton Gas', police: 'Riverton Police', firestation: 'Riverton Fire Dept.' } },
-    Kingsbury: { com: 3, civic: ['courthouse', 'school', 'library', 'church', 'motel', 'park', 'industrial'],
+      names: { hotel: 'The Riverton Hotel', grocery: 'River Valley Foods', pharmacy: 'Riverton Pharmacy', restaurant: 'Riverside Grill', bar: 'The Muddy Bank', clothing: 'Main Street Apparel', hardware: 'Riverton Hardware', bookstore: 'Chapter One Books', laundromat: 'Spin Cycle', office: 'Riverton Savings', diner: "Mel's Diner", gunstore: 'River Arms', school: 'Riverton Elementary', postoffice: 'Riverton Post Office', autorepair: 'River Road Garage', library: 'Riverton Public Library', clinic: 'Riverton Medical Clinic', church: "St. Luke's Church", gas: 'Riverton Gas', police: 'Riverton Police', firestation: 'Riverton Fire Dept.' } },
+    Kingsbury: { com: 3, civic: ['courthouse', 'hospital', 'school', 'dealer', 'library', 'church', 'motel', 'park', 'industrial'],
       shops: ['grocery', 'police', 'pharmacy', 'restaurant', 'clinic', 'bar', 'postoffice', 'clothing', 'firestation', 'hardware', 'autorepair', 'gunstore', 'bookstore', 'office', 'diner', 'laundromat'],
       apts: ['Kingsbury Arms', 'Maple Court', 'Elm Terrace', 'Courthouse Square'],
-      names: { grocery: 'Kingsbury Supermarket', pharmacy: 'County Drug Co.', restaurant: 'The Kingsbury Grill', bar: 'The Crown', clothing: 'Kingsbury Outfitters', hardware: 'Ace of Tools', gunstore: 'Kingsbury Gun Shop', bookstore: 'County Books', office: 'Kingsbury Realty', diner: 'Courthouse Diner', laundromat: 'Kingsbury Coin Laundry', school: 'Kingsbury High School', postoffice: 'Kingsbury Post Office', autorepair: 'Kingsbury Auto & Tire', library: 'Beacon County Library', clinic: 'Kingsbury General Clinic', church: 'First Presbyterian Church', motel: 'Royal Inn Motel', gas: 'Interstate Gas', police: 'Kingsbury Sheriff', firestation: 'Kingsbury Fire Station', courthouse: 'Beacon County Courthouse', industrial: ['Kingsbury Freight', 'County Storage'] } },
+      names: { hospital: 'Kingsbury General Hospital', dealer: 'Kingsbury Motors', grocery: 'Kingsbury Supermarket', pharmacy: 'County Drug Co.', restaurant: 'The Kingsbury Grill', bar: 'The Crown', clothing: 'Kingsbury Outfitters', hardware: 'Ace of Tools', gunstore: 'Kingsbury Gun Shop', bookstore: 'County Books', office: 'Kingsbury Realty', diner: 'Courthouse Diner', laundromat: 'Kingsbury Coin Laundry', school: 'Kingsbury High School', postoffice: 'Kingsbury Post Office', autorepair: 'Kingsbury Auto & Tire', library: 'Beacon County Library', clinic: 'Kingsbury General Clinic', church: 'First Presbyterian Church', motel: 'Royal Inn Motel', gas: 'Interstate Gas', police: 'Kingsbury Sheriff', firestation: 'Kingsbury Fire Station', courthouse: 'Beacon County Courthouse', industrial: ['Kingsbury Freight', 'County Storage'] } },
   },
   bigTowns() {
     const P = this.big, r = this.rng, W = this.W;
@@ -1984,6 +2090,10 @@ const MapGen = {
     const rest = (yy0) => { if (y1 - yy0 >= 9) this.houseRow(x0, yy0, x1, y1, 'S', Math.max(0.3, sp)); };
     if (c === 'park') { this.park(x0, y0, x1, y1, T.name + ' Park'); return; }
     if (c === 'school') { this.school(x0, y0, x1, y1, names.school); return; }
+    if (c === 'hospital' && y1 - y0 >= 26) { this.hospital(x0, y0, x1, y1, names.hospital); if (x1 - x0 > 46) this.houseRow(x0 + 42, y0, x1, y1, 'E', 0.6); return; }
+    if (c === 'hotel' && y1 - y0 >= 22) { this.hotel(x0, y0, x1, y1, names.hotel); rest(y0 + 25); return; }
+    if (c === 'dealer' && y1 - y0 >= 24) { this.dealer(x0, y0, x1, y1, names.dealer); if (x1 - x0 > 40) this.houseRow(x0 + 36, y0, x1, y1, 'E', 0.6); return; }
+    if (c === 'hospital' || c === 'hotel' || c === 'dealer') { this.store(c === 'hospital' ? 'clinic' : 'office', x0 + ((w - 20) >> 1), y0 + 1, Math.min(w - 2, 20), 10, 'N', names[c]); rest(y0 + 13); return; }
     if (c === 'industrial') { this.industrial(x0, y0, Math.min(x1, x0 + 23), y1, names.industrial); if (x1 - x0 > 30) this.houseRow(x0 + 24, y0, x1, y1, 'E', 0.6); return; }
     if (c === 'church') { this.church(x0, y0, Math.min(x1, x0 + 26), y0 + 18, names.church); this.w.labels.pop(); this.w.labels.push({ x: x0 + 6, y: y0 + 6, text: names.church }); rest(y0 + 20); return; }
     if (c === 'gas') {
@@ -2264,7 +2374,7 @@ const MapGen = {
     this.w.zones.push({ x0: 2, y0: 145, x1: 44, y1: 232, n: 18 });
     // indoor zombies per building
     for (const b of this.w.buildings) {
-      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2, barracks: 4, prison: 6, tower: 0.5, hangar: 1, garage: 2, apartments: 4, library: 3, postoffice: 2, autorepair: 2 }[b.type];
+      const n = { house: 1, farmhouse: 1, cabin: 0.5, trailer: 0.6, clinic: 5, hospital: 16, hotel: 6, grocery: 5, police: 6, school: 8, warehouse: 3, motel: 4, church: 3, restaurant: 3, diner: 3, bar: 4, gasstation: 2, firestation: 3, office: 2, barracks: 4, prison: 6, tower: 0.5, hangar: 1, garage: 2, apartments: 4, library: 3, postoffice: 2, autorepair: 2 }[b.type];
       if (b.zIndoor === undefined) b.zIndoor = (n === undefined ? 2 : n) + (b.flat ? 1 : 0);
     }
   },
