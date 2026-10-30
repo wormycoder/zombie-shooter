@@ -1906,12 +1906,18 @@ const Facade = {
   roof(b, sq) {
     if (this.rw !== Wd) { this.rw = Wd; this.rcache.clear(); this.rpx = 0; }
     const lf = Season.snow < 0.15 && (Season.tree === 'a' || Season.tree === 's') ? 'L' : '';
-    const key = b.id + '|' + sq + '|' + (b.floors || 1) + lf;
+    const half = Settings.v.worldTex === 0.5, key = b.id + '|' + sq + '|' + (b.floors || 1) + lf + (half ? 'h' : '');
     let rec = this.rcache.get(key);
     if (!rec) {
       if (this.rbudget <= 0) return null;
       this.rbudget--;
       rec = this.buildRoof(b, sq, lf);
+      // World textures: Half - the roof kept at half resolution (a quarter of the memory), drawn scaled back up
+      if (half && rec.c.width > 8 && rec.c.height > 8) {
+        const c = document.createElement('canvas'); c.width = Math.ceil(rec.c.width / 2); c.height = Math.ceil(rec.c.height / 2);
+        const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(rec.c, 0, 0, c.width, c.height);
+        rec.c = c; rec.k = 2;
+      }
       this.rcache.set(key, rec);
       this.rpx += rec.c.width * rec.c.height;
       const cap = this.RCAP * CACHE_K();

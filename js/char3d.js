@@ -1382,7 +1382,7 @@ const Char3D = {
   },
   // ===================================================================== model
   // colours for a look; the player's look object is rebuilt every frame, so it is cached by content
-  lookStr(L) { return [L.skin, L.shirt, L.jacket, L.pants, L.shoes, L.hair, L.hairStyle, L.skirt, L.hat && L.hat.type, L.hat && L.hat.col, L.bag, L.vest, L.gloves, L.sleeves, L.shorts, L.glasses, L.blood, L.texK, L.stubble, L.dirt].join('|'); },
+  lookStr(L) { return [L.skin, L.shirt, L.jacket, L.pants, L.shoes, L.hair, L.hairStyle, L.skirt, L.hat && L.hat.type, L.hat && L.hat.col, L.bag, L.vest, L.hivis ? 1 : 0, L.neck && L.neck.col, L.neck && L.neck.tie ? 1 : 0, L.gloves, L.sleeves, L.shorts, L.glasses, L.blood, L.texK, L.stubble, L.dirt].join('|'); },
   // the material of a worn item: [kind, variant] - its pattern if it has one, else its cloth
   texOf(it) {
     const p = it.pat, d = ITEMS[it.id];
@@ -1393,7 +1393,7 @@ const Char3D = {
   dress(L, get, bloody) {
     const t = L.tex = {}, b = L.bld = {};
     let k = '';
-    for (const sl of ['shirt', 'jacket', 'pants', 'shoes', 'hat', 'gloves', 'vest', 'back']) {
+    for (const sl of ['shirt', 'jacket', 'pants', 'shoes', 'hat', 'gloves', 'vest', 'back', 'neck']) {
       const it = get(sl);
       if (!it) continue;
       const m = t[sl === 'back' ? 'bag' : sl] = this.texOf(it);
@@ -1424,7 +1424,7 @@ const Char3D = {
       hair, brow: this.sc(hair, 0.75), shirt, shirtD: this.sc(shirt, 0.8), bareTop: bare(look.shirt), bareLegs: bare(look.pants), barefoot: bare(look.shoes),
       jacket, jacketD: jacket ? this.sc(jacket, 0.78) : null, pants, pantsD: this.sc(pants, 0.8), belt: [0.17, 0.12, 0.09], buckle: [0.66, 0.64, 0.58],
       shoes, sole: bare(look.shoes) ? this.sc(skin, 0.8) : this.mix(this.sc(shoes, 0.5), [0.85, 0.83, 0.78], look.shoes && this.rgb(look.shoes)[0] > 0.7 ? 0.6 : 0),
-      hand: look.gloves ? rgb(look.gloves) : zomb ? this.mix(skin, [0.3, 0.07, 0.05], 0.12 + blood * 0.3) : skin, vest: look.vest ? rgb(look.vest) : null,
+      hand: look.gloves ? rgb(look.gloves) : zomb ? this.mix(skin, [0.3, 0.07, 0.05], 0.12 + blood * 0.3) : skin, vest: look.vest ? rgb(look.vest) : null, neck: look.neck ? rgb(look.neck.col || '#444') : null, refl: [0.8, 0.82, 0.8],
       skirt: look.skirt ? dirt(rgb(look.skirt)) : null,
       bag: look.bag ? rgb(look.bag) : null, bagD: look.bag ? this.sc(rgb(look.bag), 0.72) : null, hat: look.hat ? rgb(look.hat.col || '#444') : null,
       blood: [0.4, 0.05, 0.035], bloodD: [0.22, 0.05, 0.035], wound: [0.36, 0.08, 0.07], glass: [0.08, 0.08, 0.09], bone: [0.78, 0.74, 0.62],
@@ -1461,6 +1461,8 @@ const Char3D = {
     Pl.sole = T(Pl.sole, [C3MAT.rubber, 0, Math.min(1, gr + 0.3), 0]);
     Pl.hand = look.gloves ? T(Pl.hand, wear('gloves', [C3MAT.knit], blood * 0.5)) : T(Pl.hand, [C3MAT.skin, decay, gr * 0.8, zomb ? blood * 0.8 : 0]);
     if (Pl.vest) Pl.vest = T(Pl.vest, wear('vest', [C3MAT.twill], blood * 0.6));
+    if (Pl.neck) Pl.neck = T(Pl.neck, wear('neck', [C3MAT.knit], blood * 0.4));
+    Pl.refl = T(Pl.refl, [C3MAT.plastic, 0, gr, blood * 0.3]);
     if (Pl.skirt) Pl.skirt = T(Pl.skirt, tx.pants && !Pl.bareLegs ? wear('pants', [C3MAT.twill], blood * 0.5) : wear('shirt', [C3MAT.cotton], blood * 0.5));
     if (Pl.bag) { Pl.bag = T(Pl.bag, wear('bag', [C3MAT.twill], 0)); Pl.bagD = T(Pl.bagD, Pl.bag.m); }
     if (Pl.hat) Pl.hat = T(Pl.hat, wear('hat', [C3MAT.cotton], 0));
@@ -1671,6 +1673,23 @@ const Char3D = {
     if (Pl.vest) {
       c3box(M.CHEST, Cf, 0.002, 0, -0.012, UC * shS * 1.1, UC * shS * 1.06, UC * H * 0.94, Pl.vest);
       c3box(M.BELLY, Lf, 0, 0, 0.02, UB * waS * 1.14, UB * waS * 1.14, UB * H * 0.9, Pl.vest);
+      // a hi-vis vest's reflective bands, round the chest and the belly
+      if (look.hivis && det > 0) {
+        c3box(M.CHEST, Cf, 0.002, 0, 0.05, UC * shS * 1.12, UC * shS * 1.08, UC * H * 0.13, Pl.refl);
+        c3box(M.BELLY, Lf, 0, 0, 0.0, UB * waS * 1.16, UB * waS * 1.16, UB * H * 0.16, Pl.refl);
+      }
+    }
+    // what is worn round the neck: a tie down the shirt front (under a jacket only its knot shows), or a scarf
+    if (look.neck && Pl.neck && det > 0 && !(Pl.bareTop && !jk)) {
+      if (look.neck.tie) {
+        c3box(BOX, Cf, 0.122 * shS, 0, 0.215, 0.014, 0.016, 0.014, Pl.neck);
+        if (!jk || look.coat) { c3pt(c3a, Cf, 0.124 * shS, 0, 0.2); c3pt(c3b, Lf, 0.112 * waS, 0, -0.02); c3seg(BOX, c3a, c3b, 0.004, 0.018, Pl.neck, 0.55, 1.25, Cf[3], Cf[4], Cf[5]); }
+      } else {
+        // (over a jacket's turned-up collar: a little bigger)
+        const sj = jk ? 1.2 : 1;
+        c3box(CY, NB, 0.008, 0, 0.0, 0.092 * sj, 0.097 * sj, 0.055, Pl.neck, 1.08, 0.95);
+        c3box(BOX, Cf, 0.13 * shS * (jk ? jx * 1.06 : 1), -0.05, 0.1, 0.016, 0.032, 0.12, Pl.neck);
+      }
     }
     // blood and rips on the clothes (on the outermost layer)
     if (det > 0 && (ex.stains.length || ex.rips.length)) {

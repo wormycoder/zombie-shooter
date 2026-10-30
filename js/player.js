@@ -207,6 +207,7 @@ const Player = {
     L.hat = hat ? { type: ITEMS[hat.id].hatType || 'cap', col: hat.col } : null;
     L.bag = back ? (back.col || ITEMS[back.id].bag.col || '#555') : null;
     L.vest = vest ? vest.col : null;
+    { const nk = w('neck'); L.neck = nk ? { tie: !!ITEMS[nk.id].tie, col: nk.col } : null; L.hivis = !!(vest && ITEMS[vest.id].hivis); }
     L.gloves = gloves ? gloves.col : null;
     L.glasses = !!w('eyes');
     L.att = Hotbar.visual();

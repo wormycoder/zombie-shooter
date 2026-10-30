@@ -28,6 +28,10 @@ const FloorItems = {
   DIAG: new Set(['needle', 'tweezers', 'bat', 'spikedbat', 'crowbar', 'golfclub', 'sledge', 'pan', 'hammer', 'pipe', 'wrench', 'rollingpin', 'knife', 'screwdriver', 'machete', 'katana', 'axe', 'handaxe', 'shovel', 'spear', 'plank', 'trowel', 'flashlight', 'rod', 'scissors', 'lugwrench', 'canopener', 'branch', 'log', 'carrot']),
   // items are drawn a third bigger than life: at life size a can is a few pixels
   K: 1.35,
+  // furniture with a flat top that things can be put on: the height of the top (metres; null: the object's own)
+  SURF: { table: null, counter: null, desk: null, nightstand: null, dresser: null, counterbar: null, toolcab: 0.96, crate: null, woodcrate: null, washer: null, stove: null, register: 0.95 },
+  // the top a tile's furniture offers, or 0
+  surfAt(x, y) { const o = World.obj(x, y); if (!o || !(o.t in this.SURF)) return 0; const h = this.SURF[o.t]; return h === null ? OBJ[o.t].h : h; },
   meta: new Map(),
   // per icon: the painted area's centre (icon px), world px per icon px (k), standing or lying, a dark silhouette
   metaOf(it) {
@@ -91,10 +95,12 @@ const FloorItems = {
   target() {
     const [wx, wy] = Render.mouseWorld(), p = G.player;
     const up = p.x >= LV.W0, tx = Math.floor(wx), ty = Math.floor(wy), gx = up ? tx - LV.W0 : tx;
-    let ok = World.inb(tx, ty) && !World.tileSolid(tx, ty) && !World.isWater(tx, ty) && World.floor(tx, ty) !== FL.VOID;
+    // on the floor, or on a table, a counter, a desk... (a tile solid only because of that furniture)
+    const fz = World.inb(tx, ty) ? this.surfAt(tx, ty) : 0;
+    let ok = World.inb(tx, ty) && (fz > 0 || !World.tileSolid(tx, ty)) && !World.isWater(tx, ty) && World.floor(tx, ty) !== FL.VOID;
     if (ok && up && World.room(tx, ty) < 0) ok = false;
     if (ok && U.dist(p.x, p.y, wx, wy) > 14) ok = false;
-    return { wx, wy, tx, ty, gx, ok };
+    return { wx, wy, tx, ty, gx, ok, fz };
   },
   input() {
     const P = G.placing;
@@ -112,6 +118,7 @@ const FloorItems = {
       if (!Player.removeItem(it)) return;
       World.dropItem(t.tx + fx, t.ty + fy, it);
       it.fx = U.clamp(fx, 0.04, 0.96); it.fy = U.clamp(fy, 0.04, 0.96); it.rot = rot;
+      if (t.fz > 0) it.fz = t.fz; else delete it.fz;
       Sfx.play('pickup'); UI.refresh();
     }, { anim: 'loot', lvl: 0, begin: () => Actions.face(t.tx, t.ty) })), 1.4);
   },
@@ -121,7 +128,7 @@ const FloorItems = {
     if (!P) return;
     const t = this.target(), up = t.tx >= LV.W0, it = P.it, r0 = it.rot;
     it.rot = P.rot;
-    this.draw(ctx, it, (up ? t.wx - LV.W0 : t.wx), t.wy, up ? WALL_H * ZU : 0, 1, 0.75);
+    this.draw(ctx, it, (up ? t.wx - LV.W0 : t.wx), t.wy, (up ? WALL_H * ZU : 0) + t.fz * ZU, 1, 0.75);
     it.rot = r0;
     const [X, Y] = Render.P(t.tx, t.ty, 0);
     poly(ctx, [[X, Y], [X + HTW, Y + HTH], [X, Y + TH], [X - HTW, Y + HTH]], t.ok ? 'rgba(80,255,80,0.12)' : 'rgba(255,60,60,0.22)', t.ok ? 'rgba(120,255,120,0.6)' : 'rgba(255,90,90,0.7)', 1);

@@ -544,7 +544,9 @@ const Render = {
   },
   drawItems(ctx, x, y, arr, lv) {
     const vx = lv ? x - LV.W0 : x, zo = lv ? WALL_H * ZU : 0, s = this.shadeAt(x, y);
-    for (const it of arr) FloorItems.draw(ctx, it, vx + it.fx, y + it.fy, zo, s);
+    // (things put on a table or a counter are drawn with it, after the furniture; taken away, they are on the floor)
+    const top = FloorItems.surfAt(x, y);
+    for (const it of arr) if (!(it.fz && top)) FloorItems.draw(ctx, it, vx + it.fx, y + it.fy, zo, s);
   },
   // The floor of the storey the player is on is composited (tiles, decals, items, light) on an
   // offscreen layer once per frame, then copied in one diagonal at a time during the painter sweep.
@@ -1029,6 +1031,11 @@ const Render = {
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(h[0], h[1], 16, 0, 7); ctx.fill();
     }
     if (an) an.call(ObjArt, ctx, o, X, Y, t, s, x, y);
+    // what has been put on top of it
+    if (o.t in FloorItems.SURF) {
+      const fi = World.floorItems(x, y);
+      if (fi) { const v0 = vx === undefined ? x : vx, zl = (v0 + y) * HTH - Y, top = FloorItems.surfAt(x, y); for (const it of fi) if (it.fz) FloorItems.draw(ctx, it, v0 + it.fx, y + it.fy, zl + top * ZU, s); }
+    }
     if (o.t === 'generator' && o.on && o.fuel > 0) { const c = isoP(X, Y, 0.3, 0.3, 0.9); ctx.fillStyle = 'rgba(120,120,120,0.4)'; ctx.beginPath(); ctx.arc(c[0] + Math.sin(t * 9) * 2, c[1] - (t * 20 % 12), 3, 0, 7); ctx.fill(); }
   },
 
@@ -1077,7 +1084,7 @@ const Render = {
     const rr = Facade.roof(b, Math.round(Season.snow * 4) / 4);
     if (alpha < 1) ctx.globalAlpha = alpha;
     if (rr) {
-      ctx.drawImage(rr.c, rr.x, rr.y);
+      if (rr.k) ctx.drawImage(rr.c, rr.x, rr.y, rr.c.width * rr.k, rr.c.height * rr.k); else ctx.drawImage(rr.c, rr.x, rr.y);
       if (s < 0.98) { ctx.globalAlpha = alpha * (1 - s); ctx.fillStyle = 'rgb(3,5,14)'; ctx.fill(rr.path); }
     } else this.drawRoofPlain(b, s, H, P);
     ctx.globalAlpha = 1;
