@@ -888,7 +888,7 @@ const UI = {
     const cv = P.body.querySelector('.cprev');
     const g = cv.getContext('2d');
     g.save(); g.translate(55, 136); g.scale(1.75, 1.75);
-    if (!Char3D.preview(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 })) Humanoid.draw(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 }, 1);
+    Char3D.preview(g, 0, 0, 0.75, Player.look(), { t: 0, amp: 0 });
     g.restore();
   },
   // what is worn over each part of the body and what it stops, as an attack reckons it (bite, scratch)

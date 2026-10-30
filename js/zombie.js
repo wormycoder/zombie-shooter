@@ -723,7 +723,7 @@ const Zombie = {
     if (!d) return;
     const [X, Y] = Render.epos(z);
     const alpha = d.alpha, rot = d.rot;
-    if (!Char3D.draw(ctx, z, X, Y, d.s, alpha)) Humanoid.draw(ctx, X, Y, z.a, z.look, d.pose, d.s, alpha);
+    Char3D.draw(ctx, z, X, Y, d.s, alpha);
     // (flies are sub-pixel specks when zoomed far out)
     const amb = Settings.v.ambient;
     if (rot > 0.15 && z.dead && amb > 0 && Render.cam.zoom > 0.8 && Math.abs(vxOf(z.x) - Render.cam.x) + Math.abs(z.y - Render.cam.y) < 26) {

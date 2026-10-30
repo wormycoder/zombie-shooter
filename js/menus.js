@@ -95,7 +95,7 @@ const Menu = {
     // title screen: the name at the top left, the menu as plain words down the left side
     $('#menu').innerHTML = `<div class="modal title"><div class="tlogo">
       <div class="logo">HOLLOW CREEK</div>
-      <div class="tag">There is no cure. There is no rescue.<br>There is only how long you last.</div></div>
+      <div class="tag">There is no cure. There is no rescue.<br>There is only how long you last.</div>${GL3D.ok() ? '' : '<div class="tag" style="color:#f99">This browser has no WebGL, which the game needs to draw its characters. Try a current Chrome, Edge or Firefox.</div>'}</div>
       <div class="tmenu">
       ${meta ? `<div class="tm" data-m="continue">Continue<span class="tsub">${U.esc(meta.name)} · Day ${meta.day}, ${meta.time}</span></div>` : ''}
       <div class="tm" data-m="new">New Game</div>
@@ -295,7 +295,7 @@ const Menu = {
       g.clearRect(0, 0, cv.width, cv.height);
       g.fillStyle = 'rgba(255,255,255,0.04)'; g.beginPath(); g.ellipse(90, 170, 60, 22, 0, 0, 7); g.fill();
       g.setTransform(2, 0, 0, 2, 90, 168);
-      if (!Char3D.preview(g, 0, 0, t / 1400, look, { t: t / 1000, amp: 0 })) Humanoid.draw(g, 0, 0, t / 1400, look, { t: t / 1000, amp: 0 }, 1);
+      Char3D.preview(g, 0, 0, t / 1400, look, { t: t / 1000, amp: 0 });
       requestAnimationFrame(draw);
     };
     requestAnimationFrame(draw);
@@ -341,7 +341,7 @@ const Menu = {
     }).join('');
     const row = (k) => {
       const o = SETTINGS_OPTS[k], na = k === 'chars3d' && !GL3D.ok();
-      const tip = (o.tip || '') + (na ? ' Not available in this browser (WebGL missing or running without GPU acceleration), so the 2D figures are used.' : '');
+      const tip = (o.tip || '') + (na ? ' WebGL is missing in this browser, so the characters cannot be drawn.' : '');
       return `<div class="opt" data-tip="${tip}"><span>${o.n}${na ? ' <span style="color:var(--dim);font-size:11px">(unavailable: no GPU)</span>' : ''}</span><select data-set="${k}">${o.opts.map((op, i) => `<option value="${i}" ${op[1] === S[k] ? 'selected' : ''}>${op[0]}</option>`).join('')}</select></div>`;
     };
     const presets = `<div class="sml" style="margin:2px 0 6px">Quality preset${pn ? '' : ' (custom)'}</div><div style="margin-bottom:10px">` + Object.keys(SETTINGS_PRESETS).map(n => `<span class="btn sm${n === pn ? ' on' : ''}" data-gpre="${n}">${n}</span>`).join('') + '</div>';

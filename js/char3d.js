@@ -170,6 +170,8 @@ const Char3D = {
   map: new Map(), cols: new Map(), st: new WeakMap(), pals: new WeakMap(), palK: new Map(),
   B: c3F(), P: c3F(), L: c3F(), C: c3F(), NB: c3F(), H: c3F(), T1: c3F(), T2: c3F(), mk: [0, 0, 0, 0],
   on() { return Settings.v.chars3d && !this.off && GL3D.ok(); },
+  // the resolution each detail ring is drawn at, as a share of the frame's
+  RQ: [1, 0.8, 0.62, 0.5],
   rgb(hex) {
     let c = this.cols.get(hex);
     if (c) return c;
@@ -231,7 +233,7 @@ const Char3D = {
       const mx = this.lodMax;
       if (mx > 0 && nd > mx && this.mode !== 4) {
         const ds = this.dists; ds.length = nd; ds.sort((a, b) => a - b);
-        this.RL[1] = Math.max(this.RL[0] + 0.5, ds[mx]);
+        this.RL[1] = Math.max(this.RL[0] + 2, ds[mx]);
         if (this.RL[2] < this.RL[1] + 3) this.RL[2] = this.RL[1] + 3;
       }
       for (let i = 0; i < nc; i++) {
@@ -256,13 +258,15 @@ const Char3D = {
     if (md === 1 && !G.paused) { if (this.prepMs > 4.5) this.bias = Math.min(1.5, this.bias + 0.01); else if (this.prepMs < 2.5) this.bias = Math.max(0, this.bias - 0.005); }
     else if (md !== 1) this.bias = 0;
     // smaller on screen, simplified sooner (full size at 1.1 screen px per world px and up)
+    // Rings round the player: full detail always within the first (whatever the crowd), then simpler models further
+    // out, each ring also drawn at a lower resolution (RQ). Smaller on screen and a slow Auto pull the outer rings in.
     const f = U.clamp(s / 1.1, 0.45, 1) * k / (1 + this.bias), R = this.RL;
-    R[0] = md === 2 ? 0 : 6;
-    if (md === 2) { R[1] = 6; R[2] = Math.max(10, 16 * f); }
-    else if (md === 3) { R[1] = Math.max(8, 12 * f); R[2] = 1e9; }
-    else { R[1] = Math.max(7, 16 * f); R[2] = Math.max(R[1] + 4, 30 * f); }
+    R[0] = md === 2 ? 4 * k : 9 * k;
+    if (md === 2) { R[1] = 9 * k; R[2] = Math.max(R[1] + 4, 17 * f); }
+    else if (md === 3) { R[1] = Math.max(R[0] + 3, 15 * f); R[2] = Math.max(R[1] + 5, 26 * f); }
+    else { R[1] = Math.max(R[0] + 4, 18 * f); R[2] = Math.max(R[1] + 6, 30 * f); }
     this.lodMax = v.lodMax === undefined ? 40 : v.lodMax;
-    // re-renders of stale body sprites per frame (new ones are never held back)
+  // re-renders of stale body sprites per frame (new ones are never held back)
     this.ibud = 40;
     this.zooming = Math.abs(Render.cam.zoom - Render.cam.tz) > Render.cam.tz * 0.01;
   },
@@ -338,7 +342,7 @@ const Char3D = {
     // settled now (also one seen again without a sprite, which may be every frame when frames take over 0.4 s)
     if (dead && !stat) stat = S.mode === 'dead' && S.offT >= S.offD;
     const cell = this.render(S, ang, look, pose, light, flash, lod);
-    if (!cell) return;
+    if (!cell) { if (S.imp && S.imp.gen === C3Imp.gen) this.map.set(e, S.imp); return; }
     this.map.set(e, cell);
     this.lodN[stat ? 4 : lod]++;
     if (stat || lod === 3 || iv > 0) { cell.S = S; cell.ang = ang; cell.bl = look.blood; cell.lk = look; this.pend.push(cell); }
@@ -347,7 +351,7 @@ const Char3D = {
   impUse(S, e, ang, look, light, anim) {
     const I = S.imp;
     if (!I || I.gen !== C3Imp.gen) return false;
-    const rs = GL3D.scale / I.s, near = rs > 0.87 && rs < 1.15;
+    const rs = GL3D.scale / (I.s0 || I.s), near = rs > 0.87 && rs < 1.15;
     // (anim: true for a far crowd's frame, a few frames old at most; a number: its age limit in ms)
     if (anim) { if (!near || (anim === true ? this.fno - I.made > 4 : this.now - I.t > anim)) return false; }
     else if (!(near && I.light === light && I.ang === ang && I.bl === look.blood && I.key === S.key && (I.lk === look || e === G.player))) {
@@ -398,7 +402,7 @@ const Char3D = {
       const sl = I.sl, g = C3Imp.g;
       g.clearRect(sl.x, sl.y, sl.w, sl.h);
       g.drawImage(GL3D.c2, c.px, c.py, c.pw, c.ph, sl.x + 1, sl.y + 1, c.pw, c.ph);
-      I.pw = c.pw; I.ph = c.ph; I.ax = c.ax; I.ay = c.ay; I.s = s; I.light = c.lt; I.ang = c.ang; I.bl = c.bl; I.lk = c.lk; I.key = S.key; c.lk = null;
+      I.pw = c.pw; I.ph = c.ph; I.ax = c.ax; I.ay = c.ay; I.s = s * (c.q || 1); I.s0 = s; I.light = c.lt; I.ang = c.ang; I.bl = c.bl; I.lk = c.lk; I.key = S.key; c.lk = null;
       I.made = I.used = this.fno; I.t = this.now;
     }
     P.length = 0;
@@ -1475,7 +1479,11 @@ const Char3D = {
     if (sh[0] + hx > C3B.x1) C3B.x1 = sh[0] + hx;
     if (sh[1] - hy < C3B.y0) C3B.y0 = sh[1] - hy;
     if (sh[1] + hy > C3B.y1) C3B.y1 = sh[1] + hy;
-    const cell = GL3D.cell(C3B.x1 - C3B.x0 + 4, C3B.y1 - C3B.y0 + 4, 2 - C3B.x0, 2 - C3B.y0);
+    // each detail ring renders at its own resolution; a full atlas takes it lower still rather than drop the character
+    const w = C3B.x1 - C3B.x0 + 4, h = C3B.y1 - C3B.y0 + 4, q0 = this.RQ[lod || 0];
+    let cell = GL3D.cell(w, h, 2 - C3B.x0, 2 - C3B.y0, q0);
+    if (!cell) cell = GL3D.cell(w, h, 2 - C3B.x0, 2 - C3B.y0, q0 * 0.55);
+    if (!cell) cell = GL3D.cell(w, h, 2 - C3B.x0, 2 - C3B.y0, q0 * 0.3);
     if (!cell) { GL3D.undo(mk); return null; }
     GL3D.seal(cell, mk, light, flash);
     cell.shadow = sh; cell.lt = light;

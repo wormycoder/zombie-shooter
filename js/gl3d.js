@@ -24,10 +24,10 @@ const GL3D = {
   cv: null, gl: null, prog: null, failed: false,
   BOX: 0, RBOX: 1, CYL: 2, SPH: 3, NM: 4, defs: [],
   inst: [], n: [0, 0, 0, 0], cap: [0, 0, 0, 0], meshes: [],
-  // software WebGL (no GPU) is far too slow to redraw models every frame; ?soft3d forces it on for testing
-  soft: false, allowSoft: /[?&]soft3d/.test(location.search), renderer: '',
+  // software WebGL (no GPU): slow, but the characters are always 3D, so it is used too (Char3D draws less with it)
+  soft: false, allowSoft: true, renderer: '',
   cells: [], cx: 0, cy: 0, rowH: 0, scale: 1, AW: 0, AH: 0,
-  FL: 34,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, seed 1, taper 2, material 4, holes 8
+  FL: 35,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, seed 1, taper 2, material 4, holes 8, cell scale 1
   sd: 0,    // seed stamped on the parts queued next (decorrelates their textures)
   ho: [0, 0, 0], h0: null, h1: null,   // (ho: the part's centre in the holes' frame) holes cut in the parts queued next: [x, y, z, r] in the part's own metres (or null)
   ok() {
@@ -54,9 +54,9 @@ const GL3D = {
       this.drawInst = v2 ? (m, n, t, o, k) => gl.drawElementsInstanced(m, n, t, o, k) : (m, n, t, o, k) => ext.drawElementsInstancedANGLE(m, n, t, o, k);
       const vs = `
         attribute vec3 aP; attribute vec3 aN;
-        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT; attribute float iS; attribute vec4 iM; attribute vec4 iH0; attribute vec4 iH1;
+        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT; attribute float iS; attribute vec4 iM; attribute vec4 iH0; attribute vec4 iH1; attribute float iQ;
         uniform vec2 uAtlas; uniform float uScale;
-        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ; varying vec4 vH0; varying vec4 vH1;
+        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying vec2 vZ; varying vec4 vH0; varying vec4 vH1;
         void main() {
           // taper: the cross-section scales linearly along local z; the normal follows the slanted surface
           float s = mix(iT.x, iT.y, aP.z * 0.5 + 0.5), sd = (iT.y - iT.x) * 0.5;
@@ -73,8 +73,9 @@ const GL3D = {
           vB = vec4(lp * vec3(lx, ly, lz), iS + lx * 31.0 + ly * 17.0 + lz * 11.0);
           vC = vec4(lp, (lx + ly) * 0.5 * s);
           vD = vec4(n, iL.x);
-          vM = iM; vZ = w.z; vH0 = iH0; vH1 = iH1;
-          vec2 sc = vec2((w.x - w.y) * 32.0, (w.x + w.y) * 16.0 - w.z * 32.0) * uScale + iL.zw;
+          vM = iM; vZ = vec2(w.z, iQ); vH0 = iH0; vH1 = iH1;
+          // (iQ: the cell's own resolution, below 1 for characters further off)
+          vec2 sc = vec2((w.x - w.y) * 32.0, (w.x + w.y) * 16.0 - w.z * 32.0) * uScale * iQ + iL.zw;
           gl_Position = vec4(sc.x / uAtlas.x * 2.0 - 1.0, 1.0 - sc.y / uAtlas.y * 2.0, -(w.x + w.y + w.z) / 16.0, 1.0);
         }`;
       // Materials (iM.x; iM.y a variant, iM.z grime 0..1, iM.w blood 0..1), painted procedurally on the surface:
@@ -90,7 +91,7 @@ const GL3D = {
         precision mediump float;
         #endif
         uniform float uPx;
-        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ; varying vec4 vH0; varying vec4 vH1;
+        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying vec2 vZ; varying vec4 vH0; varying vec4 vH1;
         float hsh(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
         float vn(vec3 x) {
           vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -99,7 +100,7 @@ const GL3D = {
         }
         float fbm(vec3 p) { return vn(p) * 0.57 + vn(p * 2.03 + 11.3) * 0.29 + vn(p * 4.1 + 23.7) * 0.14; }
         // how much of a feature f metres across shows at this zoom: none under ~1.3 px, all over ~3 px
-        float vis(float f) { return smoothstep(1.3, 3.0, f * uPx); }
+        float vis(float f) { return smoothstep(1.3, 3.0, f * uPx * vZ.y); }
         void main() {
           vec3 c = vA.rgb, n = normalize(vD.xyz);
           float t = floor(vM.x + 0.5), spec = 0.0, cloth = 0.0;
@@ -236,12 +237,12 @@ const GL3D = {
             // round a hole: torn, wet with blood
             if (rim > 0.0) c = mix(c, mix(vec3(0.42, 0.05, 0.04), vec3(0.2, 0.03, 0.02), rim), rim * 0.9);
             // grime, worst toward the ground, then blood soaked in (more on the front)
-            float g = fbm(P * 6.0 + 50.0) + (0.35 - vZ) * 0.7;
+            float g = fbm(P * 6.0 + 50.0) + (0.35 - vZ.x) * 0.7;
             float gm = smoothstep(0.78 - vM.z * 0.5, 1.02 - vM.z * 0.4, g) * vM.z;
             c = mix(c, c * vec3(0.56, 0.5, 0.42) + vec3(0.035, 0.028, 0.018), gm * 0.85 * vm + gm * 0.25 * (1.0 - vm));
             if (vM.w > 0.0 && t != 14.0 && t != 10.0) {
               // (coverage: about 5% at 0.2, 12% at 0.4, a third at 1 - less on the legs)
-              float bl = fbm(P * 7.0 + 80.0) + max(Q.x, 0.0) * 0.06 + (vn(P * 30.0) - 0.5) * 0.08, th = 0.735 - vM.w * 0.18 + clamp(1.15 - vZ, 0.0, 1.0) * 0.09;
+              float bl = fbm(P * 7.0 + 80.0) + max(Q.x, 0.0) * 0.06 + (vn(P * 30.0) - 0.5) * 0.08, th = 0.735 - vM.w * 0.18 + clamp(1.15 - vZ.x, 0.0, 1.0) * 0.09;
               float bmk = smoothstep(th, th + 0.03, bl);
               vec3 bc = mix(vec3(0.34, 0.045, 0.035), vec3(0.17, 0.03, 0.022), vn(P * 18.0)) * (0.8 + cloth * 0.1);
               c = mix(c, bc, bmk * mix(0.45, 0.9, vm));
@@ -266,7 +267,7 @@ const GL3D = {
       gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
       this.prog = p;
-      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM', 'iH0', 'iH1']) this.loc[a] = gl.getAttribLocation(p, a);
+      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM', 'iH0', 'iH1', 'iQ']) this.loc[a] = gl.getAttribLocation(p, a);
       this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale'); this.uPx = gl.getUniformLocation(p, 'uPx');
       const buf = (data, T) => { const b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, data, gl.STATIC_DRAW); return b; };
       for (const m of this.buildMeshes().concat(this.defs.map(d => d.build()))) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
@@ -402,11 +403,13 @@ const GL3D = {
     this.rowW = Math.min(this.maxW, scale > 1.6 ? 2048 : 1024);
   },
   // reserve an atlas cell (world px sizes); null when the atlas is full
-  cell(w, h, ax, ay) {
-    const s = this.scale, pw = Math.ceil(w * s) + 2, ph = Math.ceil(h * s) + 2;
+  // (q: this cell's resolution as a share of the frame's, for characters further off)
+  cell(w, h, ax, ay, q) {
+    q = q || 1;
+    const s = this.scale * q, pw = Math.ceil(w * s) + 2, ph = Math.ceil(h * s) + 2;
     if (this.cx + pw > this.rowW) { this.cx = 0; this.cy += this.rowH; this.rowH = 0; }
     if (this.cy + ph > this.maxW) return null;
-    const c = { px: this.cx + 1, py: this.cy + 1, pw: pw - 2, ph: ph - 2, w, h, ax, ay };
+    const c = { px: this.cx + 1, py: this.cy + 1, pw: pw - 2, ph: ph - 2, w, h, ax, ay, q };
     this.cx += pw; this.rowH = Math.max(this.rowH, ph);
     this.cells.push(c);
     return c;
@@ -429,10 +432,10 @@ const GL3D = {
   // drop everything queued since mark (no cell could be found)
   undo(mk) { for (let k = 0; k < this.NM; k++) this.n[k] = mk[k]; },
   seal(c, mk, light, flash) {
-    const ox = c.px + c.ax * this.scale, oy = c.py + c.ay * this.scale, F = this.FL;
+    const ox = c.px + c.ax * this.scale * c.q, oy = c.py + c.ay * this.scale * c.q, F = this.FL;
     for (let k = 0; k < this.NM; k++) {
       const a = this.inst[k];
-      for (let i = mk[k], e = this.n[k]; i < e; i++) { const o = i * F; a[o + 15] = light; a[o + 16] = flash || 0; a[o + 17] = ox; a[o + 18] = oy; }
+      for (let i = mk[k], e = this.n[k]; i < e; i++) { const o = i * F; a[o + 15] = light; a[o + 16] = flash || 0; a[o + 17] = ox; a[o + 18] = oy; a[o + 34] = c.q; }
     }
   },
   flush() {
@@ -468,7 +471,7 @@ const GL3D = {
       gl.enableVertexAttribArray(L.aN); gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 24, 12); this.divisor(L.aN, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, M.ibuf);
       gl.bufferData(gl.ARRAY_BUFFER, this.inst[k].subarray(0, n * this.FL), gl.DYNAMIC_DRAW);
-      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iS', 1, 19); at('iT', 2, 20); at('iM', 4, 22); at('iH0', 4, 26); at('iH1', 4, 30);
+      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iS', 1, 19); at('iT', 2, 20); at('iM', 4, 22); at('iH0', 4, 26); at('iH1', 4, 30); at('iQ', 1, 34);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ib);
       this.drawInst(gl.TRIANGLES, M.ni, gl.UNSIGNED_SHORT, 0, n);
     }
@@ -481,7 +484,7 @@ const GL3D = {
   },
   // draw a cell with its anchor at world px (x, y) on the 2D context (already transformed to world px)
   blit(ctx, c, x, y, alpha) {
-    const s = this.scale;
+    const s = this.scale * c.q;
     if (alpha !== undefined && alpha < 1) ctx.globalAlpha = alpha;
     ctx.drawImage(this.c2, c.px, c.py, c.pw, c.ph, x - c.ax, y - c.ay, c.pw / s, c.ph / s);
     if (alpha !== undefined && alpha < 1) ctx.globalAlpha = 1;

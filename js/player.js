@@ -864,7 +864,7 @@ const Player = {
   },
 
   // ------------------------------------------------------------------ rendering
-  // what the character model shows this frame (Char3D animates from it; Humanoid draws the 2D fallback).
+  // what the character model shows this frame (Char3D animates from it).
   // mode: loco / dead / sleep / sit / kneel / climb; gait: walk / run / sprint / sneak; arms: what the upper body does
   pose() {
     const p = G.player;
@@ -962,8 +962,7 @@ const Player = {
     const p = G.player, d = this.drawInfo();
     if (!d) return;
     const [X, Y] = Render.epos(p);
-    if (Char3D.draw(ctx, p, X, Y, d.s, 1)) return;
-    Humanoid.draw(ctx, X, Y, d.ang, this.look(), this.pose(), d.s);
+    Char3D.draw(ctx, p, X, Y, d.s, 1);
   },
   // ---- aiming a gun. Where the shot goes, worked out once a frame for the ground marks and the reticle: the line of fire
   // out to the gun's range or the first wall, how far shots stray either side (the aim error's reach, plus a shotgun's
