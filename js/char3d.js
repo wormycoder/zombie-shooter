@@ -558,7 +558,7 @@ const Char3D = {
     const cur = S.cur, off = S.off;
     for (let i = 0; i < C3.N; i++) cur[i] = T[i] + off[i] * k;
     // (the near detail rings only: far away it would not show; a body back in range starts again from its pose)
-    if (Settings.v.ragdoll && !S.preview && dt > 0 && !(S.lod > 1)) this.phys(S, P, dt, ex, ey, ang, fresh || !S.rg || this.now - S.rg.t > 400);
+    if (Settings.v.ragdoll && !S.preview && dt > 0 && !(S.lod > 1)) this.phys(S, P, dt, ex, ey, ang, fresh || !S.rg || this.now - S.rg.t > 1500);
     S.fresh = false;
   },
   // ---- active ragdoll (Experimental; after Jakobsen, "Advanced Character Physics"): a body of point masses - the
@@ -597,7 +597,7 @@ const Char3D = {
     const tw = this.ragTargets(cur, D, this.rgT), W = R ? R.tg : new Float64Array(21);
     for (let k = 0; k < NP; k++) { const bx = tw[k * 3], by = tw[k * 3 + 1]; W[k * 3] = ex + bx * ca - by * sa; W[k * 3 + 1] = ey + bx * sa + by * ca; W[k * 3 + 2] = tw[k * 3 + 2]; }
     if (!R || fresh || Math.hypot(ex - R.ex, ey - R.ey) > 1.5) {
-      R = S.rg = { x: Float64Array.from(W), v: new Float64Array(21), tg: W, tp: Float64Array.from(W), A: new Float32Array(C3.N), foot: new Float64Array(4), step: null, bal: 0, ox: 0, oy: 0, leg: 0, wasUp: true, rdN: P.rdN, ex, ey, str: 1, t: this.now };
+      R = S.rg = { x: Float64Array.from(W), v: new Float64Array(21), tg: W, tp: Float64Array.from(W), A: new Float32Array(C3.N), foot: new Float64Array(4), step: null, bal: 0, ox: 0, oy: 0, leg: 0, wasUp: true, rdN: P.rdN, ex, ey, str: P.mode === 'dead' || P.mode === 'fall' ? 0.1 : 1, t: this.now };
       return;
     }
     R.ex = ex; R.ey = ey; R.t = this.now;
@@ -616,8 +616,9 @@ const Char3D = {
     if (P.rdN !== undefined && P.rdN !== R.rdN) {
       R.rdN = P.rdN;
       const F = P.rdF || 0.5, pa = ang + (P.rdA === undefined ? Math.PI : P.rdA), px = Math.cos(pa), py = Math.sin(pa), rr = () => Math.random() - 0.5;
-      const kick = [0.9, 2.1, 2.7, 1.5, 1.5, 0, 0];
-      for (let k = 0; k < NP; k++) { v[k * 3] += px * kick[k] * F + (k > 2 && k < 5 ? rr() * 1.4 * F : 0); v[k * 3 + 1] += py * kick[k] * F + (k > 2 && k < 5 ? rr() * 1.4 * F : 0); v[k * 3 + 2] += (k > 2 && k < 5 ? 0.8 * F : k === 2 ? 0.3 * F : 0); }
+      // (a car sweeps the legs and lifts the body; a blow lands high)
+      const car = P.rdCar || 0, kick = car ? [1.6, 1.4, 1.3, 1.5, 1.5, 2.4, 2.4] : [0.9, 2.1, 2.7, 1.5, 1.5, 0, 0];
+      for (let k = 0; k < NP; k++) { v[k * 3] += px * kick[k] * F + (k > 2 && k < 5 ? rr() * 1.4 * F : 0); v[k * 3 + 1] += py * kick[k] * F + (k > 2 && k < 5 ? rr() * 1.4 * F : 0); v[k * 3 + 2] += (k > 2 && k < 5 ? 0.8 * F : k === 2 ? 0.3 * F : 0) + car * (k >= 5 ? 3.2 : 2.2); }
     }
     // the feet: a stumble moves the support - the stepping foot's offset (world) - and the whole body's target with it
     const ft = R.foot;
@@ -644,6 +645,13 @@ const Char3D = {
       const j = (side < 0 ? 3 : 4) * 3, fl = Math.sin(S.t * 11 + side) * 0.08 * bal;
       TW[j] += -sa * side * 0.28 * bal + ca * fl; TW[j + 1] += ca * side * 0.28 * bal + sa * fl; TW[j + 2] += 0.38 * bal;
     }
+    // knocked off its feet and still going down: the hands go out toward the ground ahead (a fall is broken, not
+    // taken on the face); the dead do not
+    if (mode === 'fall' && x[8] > 0.45) {
+      const hx = x[6] - x[0], hy = x[7] - x[1], hl = Math.hypot(hx, hy) || 1;
+      for (const k of [3, 4]) { const j = k * 3; TW[j] = x[6] + hx / hl * 0.25 + (k === 3 ? -hy : hy) / hl * 0.18; TW[j + 1] = x[7] + hy / hl * 0.25 + (k === 3 ? hx : -hx) / hl * 0.18; TW[j + 2] = 0.05; }
+      R.brace = 1;
+    } else R.brace = 0;
     // the hips' own motion as animated (for the balance below)
     const vtx = (TW[0] - tp[0]) / dt, vty = (TW[1] - tp[1]) / dt;
     const RP = this.RP, g = 9.8;
@@ -652,7 +660,7 @@ const Char3D = {
     for (let it = 0; it < n; it++) {
       const fr = (it + 1) / n;
       for (let k = 0; k < NP; k++) {
-        const rk = RP[k], w = armW && (k === 3 || k === 4) ? armW : rk[0], z0 = rk[1], hold = rk[3], kk = w * w * str, c = 2 * z0 * w * Math.sqrt(str);
+        const rk = RP[k], arm = k === 3 || k === 4, w = armW && arm ? armW : rk[0], z0 = rk[1], hold = rk[3], st2 = R.brace && arm ? Math.max(str, 0.6) : str, kk = w * w * st2, c = 2 * z0 * w * Math.sqrt(st2);
         for (let a = 0; a < 3; a++) {
           const i = k * 3 + a, t = tp[i] + (TW[i] - tp[i]) * fr, vt = (TW[i] - tp[i]) / dt;
           let acc = kk * (t - x[i]) + c * (vt - v[i]);
@@ -683,6 +691,18 @@ const Char3D = {
       }
     }
     tp.set(TW);
+    // the walls: a point the far side of a wall (or inside furniture) from the body's middle is pulled back to it
+    for (let k = 0; k < NP; k++) {
+      const j = k * 3, dx = x[j] - ex, dy = x[j + 1] - ey;
+      if (dx * dx + dy * dy < 0.2) continue;
+      if (Math.floor(x[j]) === Math.floor(ex) && Math.floor(x[j + 1]) === Math.floor(ey)) continue;
+      if (World.lineClear(ex, ey, x[j], x[j + 1], 'move')) continue;
+      let lo = 0, hi = 1;
+      for (let it = 0; it < 4; it++) { const m = (lo + hi) / 2; if (World.lineClear(ex, ey, ex + dx * m, ey + dy * m, 'move')) lo = m; else hi = m; }
+      x[j] = ex + dx * lo * 0.95; x[j + 1] = ey + dy * lo * 0.95; v[j] *= -0.2; v[j + 1] *= -0.2;
+    }
+    // nothing strays far from where the game has the body (a thrown body is followed by the game's own slide)
+    for (let k = 0; k < NP; k++) { const j = k * 3, dx = x[j] - ex, dy = x[j + 1] - ey, d = Math.hypot(dx, dy); if (d > 2.4) { x[j] = ex + dx / d * 2.4; x[j + 1] = ey + dy / d * 2.4; } }
     // ---- balance (the capture point): where the body would have to put a foot to stop - the hips' position plus
     // their velocity (relative to the animation) over sqrt(g / hip height). Too far from where the hips belong over
     // their feet and a foot steps there; that repeats until the body is caught - a stumble. Steady again, the feet

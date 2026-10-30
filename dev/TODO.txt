@@ -437,8 +437,11 @@ TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
      under the body. Down or dead the muscles let go: the legs stay stiff
      for ~0.5 s so the body topples over its feet, then a limp ragdoll that
      settles near the lying pose. Heavy blows can knock a zombie down.
-     Next: tune by eye in play; car hits; bodies colliding with walls and
-     each other; arms reaching for the ground when falling.
+     v3: car hits throw the body by the car's speed (the legs swept out
+     from under it, lifted at speed); knocked down and still falling, the
+     hands go out to the ground ahead; body points cannot pass through
+     walls or into furniture (pulled back to the body's side).
+     Next: tune by eye in play; bodies against each other.
 
 --------------------------------------------------------------------
 RUN LOG
