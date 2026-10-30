@@ -492,6 +492,27 @@ TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
      - new bodies start at rest (no throw out of the ground on the first
        step); slow frames run in more physics steps instead of slow motion
        (up to 0.25 s a frame).
+     v6 (asked for: pushing them breaks them a lot - more muscle constraints):
+     - shape muscles (Char3D.ragMus): on its feet the chest is held to the
+       hips, the head to the chest, the hands to the chest, as the
+       animation has them (the legs left to the feet and the balance, so
+       a push still makes it step); down - falling, lying, crawling - the
+       body keeps its proportions (distances between its parts) whichever
+       way it lies, so gravity turns it over, not the muscles. The dead let
+       go (dying on their feet they keep them while their strength fades).
+     - joint limits for every body, dead too (Char3D.JL): the feet stay
+       apart and out of the trunk and the head, the hands out of the head,
+       the spine does not fold double, the legs do not do the splits.
+     - no point goes faster than 7 m/s (14 for a car hit): the old code
+       could fling a hand at 20-30 m/s in a stagger.
+     - knocked down, falling or lying, the body is carried with the slide
+       the game gives it (a shove) rather than left behind and stretched.
+     - smaller random arm kicks from blows, arms out less when off balance,
+       a stumbling step reaches 0.45 m at most.
+     Measured (fixed 60 fps, 4 directions each, distortion of the body's
+     proportions): shoved down 0.77 -> 0.44 m, staggered 0.60 -> 0.50 m
+     (fling 21-33 m/s -> 7), heavy blow 0.56 -> 0.30 m; still steps when
+     pushed (stagger 5 steps, blow 3, dazed 5).
      Next: elbows and knees as points, getting up from the physics pose.
 
 --------------------------------------------------------------------
