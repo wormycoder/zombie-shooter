@@ -71,6 +71,16 @@ Your game saves automatically. Death is permanent.
 
 All controls are also listed in the game under **How to Play**.
 
+## Sound and music
+
+All the game's audio is in the `audio/` folder as ordinary .mp3 files, so any of it can be replaced with a recording:
+
+- `audio/sfx/<name>_<n>.mp3`: sound effects. Most have several variations (`_1`, `_2`, ...), picked at random each time.
+- `audio/loops/<name>.mp3`: ambience and machine loops (rain, wind, fire, flies, birdsong, crickets, the car engine, sirens, the helicopter, tyre squeal).
+- `audio/music/<name>.mp3`: the music (title, day1, day2, dusk, night1, night2, rain, the tension loop for chases, the death sting).
+
+Save a recording over a file with the same name and the game plays it instead (any length works). If you add or remove variations, run `node dev/audiogen/build.js` to update the list; see `dev/DEVELOPMENT.md`. Any sound without a file is synthesized by the game.
+
 ## Settings
 
 The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as the Expanded map, the memory budget, the frame rate counter (FPS or detailed) and a debug mode for testing.

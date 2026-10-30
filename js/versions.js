@@ -8,6 +8,16 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.029.000.170', date: '2026-10-30', title: 'Fully 3D, detail rings and a new soundtrack',
+    notes: [
+      'The characters are always 3D now: the old flat 2D figures are gone. In big crowds some zombies used to flicker between 2D and 3D when the 3D drawing space ran out; each ring of detail now draws at its own resolution, and nothing falls back to 2D.',
+      'Detail comes in rings around you: full detail always within about 9 tiles however big the crowd, then simpler models drawn at lower resolution further out.',
+      'A sound overhaul: every sound effect, ambience loop and piece of music is now a real .mp3 file in the audio folder, ready to be replaced with recordings one by one. New sounds: punchier gunshots with echoes, growling dead with real vocal formants, footsteps by surface, impacts, doors, glass, vehicles and more, most with several variations.',
+      'New music: nine pieces for piano, strings, bass and pads, chosen by the time of day and the weather; the title theme on the menus, a tension loop that rises during a chase, and a sting when you die. Birdsong by day and crickets at night outdoors.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.028.000.166', date: '2026-10-30', title: 'Holes, blood and a faster engine',
     notes: [
       'Chunks torn out of the dead are real holes now: cut through the body and everything worn over it, with torn flesh inside, ribs showing at High gore detail.',

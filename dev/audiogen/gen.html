@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Hollow Creek audio generator</title></head>
+<body>
+<p>Audio generator page: driven by dev/audiogen/build.js (node).</p>
+<script src="synth.js"></script>
+<script src="music.js"></script>
+<script>
+// build.js calls these through the page
+window.Gen = {
+  list() { return { sfx: Object.fromEntries(Object.entries(RECIPES).map(([k, v]) => [k, v[0]])), loops: Object.fromEntries(Object.entries(LOOPS).map(([k, v]) => [k, v[0]])), music: Object.fromEntries(Object.entries(TRACKS).map(([k, v]) => [k, { loop: !!v.loop, sting: !!v.sting }])) }; },
+  async sfx(name, v) { return pcm16(await renderSfx(name, v, 1993 + name.length * 131)); },
+  async loop(name) { return pcm16(await renderLoop(name, 2024 + name.length * 17)); },
+  async music(name) { return pcm16(await renderTrack(name)); },
+};
+</script>
+</body></html>

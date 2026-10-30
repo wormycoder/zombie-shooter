@@ -1,6 +1,7 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Procedural audio (WebAudio): sound effects, ambience, generative music
+// Audio (Web Audio): the files in audio/ first (audiofiles.js), and synthesized sounds, ambience and generative music
+// for anything without a file
 // ---------------------------------------------------------------------------
 const Sfx = {
   ctx: null, on: false, vol: { master: 0.8, sfx: 0.9, music: 0.45 },
@@ -36,11 +37,13 @@ const Sfx = {
     this.fireSrc = this.loopNoise(this.brown, 'lowpass', 900);
     this.flySrc = this.loopNoise(this.noise, 'bandpass', 520); this.flySrc.fl.Q.value = 9;
     this.on = true;
+    this.fl = {};
+    // the audio files; without a list of them, the clips rendered in the background (sfxbank.js)
+    AudioFiles.init(c);
+    if (typeof SfxBank !== 'undefined' && !AudioFiles.mode) SfxBank.build(c);
     Music.init();
-    // the rendered clips (sfxbank.js), made in the background
-    if (typeof SfxBank !== 'undefined') SfxBank.build(c);
   },
-  setVol(k, v) { this.vol[k] = v; if (!this.ctx) return; if (k === 'master') this.master.gain.value = v; if (k === 'sfx') this.sfxG.gain.value = v; if (k === 'music') this.musG.gain.value = v; },
+  setVol(k, v) { this.vol[k] = v; if (!this.ctx) return; if (Music.curEl) AudioFiles.elLevel('music', Music.cur, Music.curLvl || 0.8); if (k === 'master') this.master.gain.value = v; if (k === 'sfx') this.sfxG.gain.value = v; if (k === 'music') this.musG.gain.value = v; },
   loopNoise(buf, type, f) {
     const c = this.ctx;
     const s = c.createBufferSource(); s.buffer = buf; s.loop = true;
@@ -49,6 +52,18 @@ const Sfx = {
     s.connect(fl); fl.connect(g); g.connect(this.sfxG);
     s.start();
     return { s, fl, g };
+  },
+  // a loop file at a level (and playback rate): Web Audio once decoded, or an audio element from the disk; false: no
+  // file (the caller synthesizes it)
+  fileLoop(name, v, rate) {
+    if (AudioFiles.mode === 'el') return AudioFiles.elLevel('loops', name, v, rate);
+    if (!AudioFiles.loops[name]) return false;
+    let L = this.fl[name];
+    if (!L) { const g = this.ctx.createGain(); g.gain.value = 0; g.connect(this.sfxG); L = this.fl[name] = { g, s: AudioFiles.loopSrc(name, g) }; }
+    const t = this.ctx.currentTime;
+    L.g.gain.setTargetAtTime(v, t, 0.15);
+    if (rate) L.s.playbackRate.setTargetAtTime(rate, t, 0.08);
+    return true;
   },
   // positional helpers
   spatial(x, y, maxD) {
@@ -104,6 +119,10 @@ const Sfx = {
     const sp = this.spatial(x, y, name === 'alarm' || name === 'thunder' ? 80 : 36);
     const G_ = sp.g, pan = sp.pan;
     if (G_ < 0.01) return;
+    // the file for it (the survivor's voice by the character's sex; an attack is a snarl)
+    const fem = G.player && G.player.look && G.player.look.female;
+    const fn = name === 'hurt' || name === 'shout' ? name + (fem ? 'F' : 'M') : name === 'zattack' ? (Math.random() < 0.5 ? 'snarlM' : 'snarlF') : name === 'cardoor' ? 'carDoorClose' : name;
+    if (AudioFiles.play(fn, G_, pan)) return;
     if (SfxBank.play(name, G_, pan)) return;
     const r = (a, b) => a + Math.random() * (b - a);
     switch (name) {
@@ -242,7 +261,9 @@ const Sfx = {
     if (!this.on || G.speed > 8) return;
     const sp = this.spatial(z.x, z.y, 22);
     if (sp.g < 0.02) return;
-    if (SfxBank.play((aggressive && Math.random() < 0.5 ? 'snarl' : 'groan') + (z.female ? 'F' : 'M'), sp.g * (aggressive ? 1.15 : 0.9), sp.pan)) return;
+    const vn = (aggressive && Math.random() < 0.5 ? 'snarl' : 'groan') + (z.female ? 'F' : 'M');
+    if (AudioFiles.play(vn, sp.g * (aggressive ? 1.15 : 0.9), sp.pan)) return;
+    if (SfxBank.play(vn, sp.g * (aggressive ? 1.15 : 0.9), sp.pan)) return;
     this.groanAt(this.ctx.currentTime, Math.random() * 0.8 + (aggressive ? 0.6 : 1.0), (z.female ? 110 : 75) + Math.random() * 25, (aggressive ? 0.28 : 0.16) * sp.g, sp.pan, aggressive && Math.random() < 0.5);
   },
   footstep(fl, mode, sneak) {
@@ -251,6 +272,7 @@ const Sfx = {
     const loud = (mode === 'sprint' ? 0.22 : mode === 'run' ? 0.17 : 0.1) * (sneak ? 0.45 : 1);
     const p = G.player, snow = Season.snow > 0.3 && p && World.room(Math.floor(p.x), Math.floor(p.y)) < 0;
     const surf = snow ? 'snow' : fl === FL.GRASS || fl === FL.GRASS2 || fl === FL.FOREST || fl === FL.FURROW ? 'grass' : fl === FL.WOOD ? 'wood' : fl === FL.DIRT || fl === FL.SAND || fl === FL.GRAVEL ? 'gravel' : fl === FL.CARPET ? 'carpet' : 'hard';
+    if (AudioFiles.play('st_' + surf, loud * 4.5, 0, mode === 'sprint' ? 1.06 : 1)) return;
     if (SfxBank.play('st_' + surf, loud * 4.5, 0, mode === 'sprint' ? 1.06 : 1)) return;
     if (fl === FL.GRASS || fl === FL.GRASS2 || fl === FL.FOREST || fl === FL.FURROW) this.nz(t, 0.09, 'bandpass', 1800, 0.8, loud * 0.8, 0, { a: 0.01 });
     else if (fl === FL.WOOD) { this.nz(t, 0.06, 'lowpass', 900, 1, loud, 0); this.tn(t, 0.05, 'sine', 160, 90, loud * 0.8, 0); }
@@ -261,16 +283,18 @@ const Sfx = {
   rain(level, indoor) {
     if (!this.on) return;
     const t = this.ctx.currentTime;
-    this.rainSrc.g.gain.setTargetAtTime(level * (indoor ? 0.12 : 0.3), t, 0.5);
-    this.rainSrc.fl.frequency.setTargetAtTime(indoor ? 900 : 3500, t, 0.5);
-    const cold = typeof Season !== 'undefined' && (Season.tree === 'b' || Season.snow > 0.3);
-    this.windSrc.g.gain.setTargetAtTime(0.06 + level * 0.12 + (cold ? 0.07 : 0), t, 1);
+    const cold = typeof Season !== 'undefined' && (Season.tree === 'b' || Season.snow > 0.3), wind = 0.06 + level * 0.12 + (cold ? 0.07 : 0);
+    if (this.fileLoop('rain', level * (indoor ? 0.25 : 0.7))) this.rainSrc.g.gain.setTargetAtTime(0, t, 0.5);
+    else { this.rainSrc.g.gain.setTargetAtTime(level * (indoor ? 0.12 : 0.3), t, 0.5); this.rainSrc.fl.frequency.setTargetAtTime(indoor ? 900 : 3500, t, 0.5); }
+    if (this.fileLoop('wind', wind * 2.2)) this.windSrc.g.gain.setTargetAtTime(0, t, 1);
+    else this.windSrc.g.gain.setTargetAtTime(wind, t, 1);
   },
   // roar and crackle of nearby fires (level: summed intensity nearby)
   fire(level) {
     if (!this.on) return;
     const c = this.ctx, t = c.currentTime;
     const g = Math.min(0.5, level * 0.035);
+    if (this.fileLoop('fire', Math.min(0.9, level * 0.07))) { this.fireSrc.g.gain.setTargetAtTime(0, t, 0.4); return; }
     this.fireSrc.g.gain.setTargetAtTime(g, t, 0.4);
     if (level > 0.2 && Math.random() < Math.min(0.6, level * 0.05)) {
       const n = 1 + (Math.random() * 3 | 0);
@@ -280,6 +304,7 @@ const Sfx = {
   flies(level) {
     if (!this.on) return;
     const t = this.ctx.currentTime;
+    if (this.fileLoop('flies', Math.min(0.35, level * 0.08))) { this.flySrc.g.gain.setTargetAtTime(0, t, 0.5); return; }
     this.flySrc.g.gain.setTargetAtTime(Math.min(0.09, level * 0.02), t, 0.5);
     this.flySrc.fl.frequency.setTargetAtTime(480 + Math.random() * 120, t, 0.2);
   },
@@ -287,7 +312,13 @@ const Sfx = {
   engine(car, rpm, th) {
     if (!this.on) return;
     const c = this.ctx, t = c.currentTime;
-    if (!car) { if (this.eng) { this.eng.g.gain.setTargetAtTime(0, t, 0.12); this.eng.ng.gain.setTargetAtTime(0, t, 0.12); } return; }
+    if (!car) { if (this.eng) { this.eng.g.gain.setTargetAtTime(0, t, 0.12); this.eng.ng.gain.setTargetAtTime(0, t, 0.12); } this.fileLoop('engine', 0); return; }
+    // the engine loop file, pitched with the revs
+    if (AudioFiles.loops.engine || (AudioFiles.mode === 'el' && AUDIO_LIST.loops.engine)) {
+      const P = car.parts || {}, cr = !car.engine, r2 = rpm === undefined ? 0.2 + Math.min(0.8, Math.abs(car.v || 0) / 18) : rpm;
+      const loud = P.muffler !== undefined && P.muffler < 30 ? 1.4 : 1, T = (typeof CAR_TYPES !== 'undefined' && CAR_TYPES[car.type]) || {};
+      if (this.fileLoop('engine', Math.min(0.9, (cr ? 0.25 : 0.32 + r2 * 0.35 + (th ? 0.12 : 0)) * loud), (cr ? 0.35 : 0.55 + r2 * 1.5) * (T.pitch || 1))) return;
+    }
     if (!this.eng) {
       const o = c.createOscillator(); o.type = 'sawtooth';
       const o2 = c.createOscillator(); o2.type = 'square';
@@ -336,6 +367,7 @@ const Sfx = {
       this.scr = { g, fl };
     }
     const sp = level > 0 ? this.spatial(x, y, 40) : { g: 0 };
+    if (this.fileLoop('screech', Math.min(0.8, (level || 0) * sp.g), 0.9 + (level || 0) * 0.25)) { this.scr.g.gain.setTargetAtTime(0, t, 0.1); return; }
     this.scr.g.gain.setTargetAtTime(Math.min(0.5, (level || 0) * 0.5 * sp.g), t, level > 0 ? 0.04 : 0.12);
     if (level > 0) this.scr.fl.frequency.setTargetAtTime(1500 + level * 500, t, 0.1);
   },
@@ -343,7 +375,8 @@ const Sfx = {
   siren(c) {
     if (!this.on) return;
     const ctx = this.ctx;
-    if (!c) { if (this.sir) this.sir.g.gain.setTargetAtTime(0, ctx.currentTime, 0.2); return; }
+    if (!c) { if (this.sir) this.sir.g.gain.setTargetAtTime(0, ctx.currentTime, 0.2); this.fileLoop('siren', 0); return; }
+    { const p = G.player, sp = p && p.inCar === c ? { g: 1 } : this.spatial(c.x, c.y, 120); if (this.fileLoop('siren', 0.4 * sp.g + 0.02)) return; }
     if (!this.sir) {
       const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 900;
       const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.28;
@@ -360,7 +393,8 @@ const Sfx = {
   heli(h) {
     if (!this.on) return;
     const c = this.ctx;
-    if (!h) { if (this.hel) this.hel.g.gain.setTargetAtTime(0, c.currentTime, 0.5); return; }
+    if (!h) { if (this.hel) this.hel.g.gain.setTargetAtTime(0, c.currentTime, 0.5); this.fileLoop('heli', 0); return; }
+    if (this.fileLoop('heli', 0.8 * this.spatial(h.x, h.y, 110).g + 0.02)) return;
     if (!this.hel) {
       const s = c.createBufferSource(); s.buffer = this.brown; s.loop = true;
       const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 250;
@@ -378,6 +412,8 @@ const Sfx = {
     const t = this.ctx.currentTime;
     const sp = this.spatial(x, y, 140);
     const g = Math.max(0.05, sp.g) * 0.5;
+    const fk = { gunshots: 'distantGun', scream: 'distantScream', crash: 'distantCrash', dog: 'distantDog' }[kind];
+    if (fk && AudioFiles.play(fk, Math.max(0.15, sp.g), sp.pan)) return;
     if (kind === 'gunshots') { const n = 2 + Math.floor(Math.random() * 5); for (let k = 0; k < n; k++) { const tt = t + k * (0.2 + Math.random() * 0.5); this.nz(tt, 0.5, 'lowpass', 500, 1, 0.5 * g, sp.pan, { verb: true }); this.tn(tt, 0.2, 'sine', 90, 35, 0.4 * g, sp.pan); } }
     else if (kind === 'scream') this.tn(t, 1.2, 'sawtooth', 650, 380, 0.08 * g, sp.pan, { lp: 1200, vib: 7, verb: true });
     else if (kind === 'crash') { this.nz(t, 1.0, 'lowpass', 700, 1, 0.5 * g, sp.pan, { verb: true }); }
@@ -402,9 +438,73 @@ const Music = {
     o1.connect(fl); o2.connect(fl); fl.connect(g); g.connect(Sfx.musG); g.connect(Sfx.verb);
     o1.start(); o2.start(); trem.start();
     this.drone = { g, fl, tg };
-    // the first piece a little after the start; the piano warms up meanwhile
+    // the first piece a little after the start; the piano warms up meanwhile (not needed with the music files)
     this.nextPhrase = this.t + 4;
-    for (const m of [45, 48, 52, 57, 60, 64, 69]) this.pianoNote(m);
+    if (!this.files()) for (const m of [45, 48, 52, 57, 60, 64, 69]) this.pianoNote(m);
+  },
+  // ------------------------------------------------------------------ the music files (audio/music)
+  files() { return typeof AUDIO_LIST !== 'undefined' && !!AudioFiles.mode && Object.keys(AUDIO_LIST.music).length > 0; },
+  // the track for now: the title on the menus; in play rain, night, dusk or day (one of a mood's at random)
+  moodTrack() {
+    const ok = (a) => a.filter(n => AudioFiles.hasMusic(n));
+    if (G.mode !== 'play') return ok(['title'])[0] || null;
+    const h = Game.hour(), rain = G.weather && G.weather.rain > 0.4, night = G.light.amb < 0.35;
+    let L = rain ? ok(['rain']) : night ? ok(['night1', 'night2']) : h >= 17 && h < 21 ? ok(['dusk']) : ok(['day1', 'day2']);
+    if (!L.length) L = ok(['title']);
+    return L.length ? L[(Math.random() * L.length) | 0] : null;
+  },
+  async startTrack(name, lvl) {
+    this.cur = name; this.curLvl = lvl || 0.8; this.trackEnd = null;
+    if (AudioFiles.mode === 'el') {
+      const a = AudioFiles.el('music', name, false);
+      try { a.currentTime = 0; } catch (e) { /* not loaded yet */ }
+      a.onended = () => { if (this.curEl === a) { this.curEl = null; this.cur = null; this.trackEnd = this.t; } };
+      this.curEl = a; AudioFiles.elLevel('music', name, this.curLvl);
+      return;
+    }
+    let b;
+    try { b = await AudioFiles.track(name); } catch (e) { AudioFiles.failed.add('music/' + name); this.cur = null; return; }
+    if (this.cur !== name) return;
+    const c = Sfx.ctx, s = c.createBufferSource(), g = c.createGain();
+    s.buffer = b; g.gain.value = this.curLvl; s.connect(g); g.connect(Sfx.musG); s.start();
+    s.onended = () => { if (this.src === s) { this.src = null; this.cur = null; this.trackEnd = this.t; } };
+    this.src = s; this.srcG = g;
+  },
+  stopTrack(fade) {
+    fade = fade || 1;
+    if (this.src) { const t = Sfx.ctx.currentTime; this.srcG.gain.setTargetAtTime(0, t, fade); this.src.stop(t + fade * 5); this.src = null; }
+    if (this.curEl) { const a = this.curEl; this.curEl = null; a.pause(); }
+    this.cur = null;
+  },
+  // the chase: the tension loop rises with it (and the calm track ducks under it)
+  async tensionFile(v) {
+    if (!AudioFiles.hasMusic('tension')) return false;
+    if (AudioFiles.mode === 'el') { const a = AudioFiles.el('music', 'tension', true); a.loop = true; AudioFiles.elLevel('music', 'tension', v * 0.85); if (v <= 0.01 && !a.paused) a.pause(); return true; }
+    if (!this.tens) {
+      if (this.tensBusy || v < 0.05) return true;
+      this.tensBusy = true;
+      try {
+        const r = await fetch(AudioFiles.url('music', 'tension')), b = await Sfx.ctx.decodeAudioData(await r.arrayBuffer());
+        const c = Sfx.ctx, g = c.createGain(); g.gain.value = 0; g.connect(Sfx.musG);
+        const s = c.createBufferSource(); s.buffer = b; s.loop = true; if (b.duration > 2) { s.loopStart = 0.08; s.loopEnd = b.duration - 0.42; } s.connect(g); s.start();
+        this.tens = { g };
+      } catch (e) { AudioFiles.failed.add('music/tension'); }
+      this.tensBusy = false;
+      return true;
+    }
+    this.tens.g.gain.setTargetAtTime(v * 0.85, Sfx.ctx.currentTime, 0.6);
+    return true;
+  },
+  fileUpdate(dt) {
+    const p = G.player, menu = G.mode !== 'play';
+    // a change between the menus and play: what is on fades and the right music follows
+    if (menu !== this.wasMenu) { this.wasMenu = menu; this.stopTrack(1.2); this.nextPhrase = this.t + (menu ? 1 : 15); }
+    if (this.trackEnd !== null && this.trackEnd !== undefined) { this.nextPhrase = this.t + (menu ? R.f(4, 8) : R.f(40, 120)); this.trackEnd = null; }
+    const calm = this.tension < 0.4 && !(p && p.asleep);
+    if (!this.cur && this.t > this.nextPhrase && calm) { const n = this.moodTrack(); if (n) this.startTrack(n); else this.nextPhrase = this.t + 30; }
+    if (this.srcG) this.srcG.gain.setTargetAtTime((this.curLvl || 0.8) * (1 - this.tension * 0.75), Sfx.ctx.currentTime, 0.8);
+    else if (this.curEl) AudioFiles.elLevel('music', this.cur, (this.curLvl || 0.8) * (1 - this.tension * 0.75));
+    return this.tensionFile(this.tension);
   },
   // ------------------------------------------------------------------ instruments
   hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
@@ -540,17 +640,24 @@ const Music = {
     this.drone.g.gain.setTargetAtTime(this.tension * 0.07, c.currentTime, 0.3);
     this.drone.tg.gain.setTargetAtTime(this.tension * 0.04, c.currentTime, 0.3);
     this.drone.fl.frequency.setTargetAtTime(180 + this.tension * 500, c.currentTime, 0.3);
-    if (this.t > this.nextPhrase) {
+    if (this.files()) {
+      // the music files instead of the generated pieces (and the tension loop instead of the drone)
+      if (AudioFiles.hasMusic('tension')) { this.drone.g.gain.setTargetAtTime(0, c.currentTime, 0.3); this.drone.tg.gain.setTargetAtTime(0, c.currentTime, 0.3); }
+      this.fileUpdate(dt);
+    } else if (this.t > this.nextPhrase) {
       const name = this.piece || (this.piece = this.choose());
       if (this.tension >= 0.4 || (p && p.asleep)) this.nextPhrase = this.t + 5;
       else if (!this.ready(name)) this.nextPhrase = this.t + 0.5;
       else { const len = this.play(name, c.currentTime + 0.3); this.piece = null; this.nextPhrase = this.t + len + (G.mode === 'play' ? R.f(60, 150) : R.f(8, 15)); }
     }
     if (G.mode !== 'play') return;
+    // the ambience beds (files): birdsong by day, crickets on warm nights, outdoors and out of the rain
+    const outside = p && World.outdoor(p.x, p.y) && G.weather.rain < 0.3, warm = Season.tree !== 'b' && Season.snow < 0.3;
+    const bedD = Sfx.fileLoop('day', outside && warm && G.light.amb > 0.6 ? 0.35 : 0), bedN = Sfx.fileLoop('night', outside && warm && G.light.amb < 0.3 && G.weather.temp > 8 ? 0.3 : 0);
     // ambience follows the season: songbirds in spring and summer, cicadas on hot days,
     // crickets on warm nights, crows and owls through the cold months
     this.ambT -= dt;
-    if (this.ambT <= 0 && G.mode === 'play' && p && World.outdoor(p.x, p.y) && G.weather.rain < 0.3) {
+    if (this.ambT <= 0 && G.mode === 'play' && p && World.outdoor(p.x, p.y) && G.weather.rain < 0.3 && !(bedD && bedN)) {
       this.ambT = R.f(1.5, 6);
       const t = c.currentTime;
       const st = Season.tree, winter = st === 'b' || Season.snow > 0.3, autumn = st === 'y' || st === 'a' || st === 's', temp = G.weather.temp;
@@ -569,6 +676,7 @@ const Music = {
   },
   death() {
     if (!Sfx.on) return;
+    if (this.files() && AudioFiles.hasMusic('death')) { this.stopTrack(0.4); this.tensionFile(0); this.startTrack('death', 0.9); this.nextPhrase = this.t + 40; return; }
     const t = Sfx.ctx.currentTime + 0.5;
     [45, 52, 57, 60].forEach((m, k) => this.key(m, t + k * 0.5, 0.4, 0));
     [53, 60, 57].forEach((m, k) => this.key(m, t + 3 + k * 0.6, 0.35, 0));
