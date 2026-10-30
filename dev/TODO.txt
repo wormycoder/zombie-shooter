@@ -423,6 +423,15 @@ HIGH (added) - IMPROVE THE SFX MORE, AND ADD MORE MUSIC, THEN WORK ON WHATEVER.
      Not judged by ear here - worth a listen.
      Next: a mall (DONE 000.031.000.172); the factory in Kingsbury too
        (DONE 000.031.000.172); tune the deaths / fight-offs / clothes by eye.
+TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
+  -> STARTED: Settings > Experimental > Animation > Active ragdolls (beta).
+     The zombies' pose follows the animation through a spring and damper
+     per channel (Char3D.rag): hits kick the channels by direction and
+     force (pushed pelvis, bending spine, whipping head, loose arms), the
+     muscles pull back with a little overshoot; on death they slacken -
+     a looser fall, follow-through and a bounce. Feet stay on the
+     animation while standing. Next: tune by eye in play, the player too,
+     cars hitting zombies (a bigger kick), real limb collision.
 
 --------------------------------------------------------------------
 RUN LOG

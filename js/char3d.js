@@ -557,7 +557,57 @@ const Char3D = {
     const k = S.offT >= S.offD ? 0 : 1 - U.smooth(S.offT / S.offD);
     const cur = S.cur, off = S.off;
     for (let i = 0; i < C3.N; i++) cur[i] = T[i] + off[i] * k;
+    if (Settings.v.ragdoll && !S.preview && dt > 0 && P.rdN !== undefined) this.rag(S, P, dt, fresh);
     S.fresh = false;
+  },
+  // ---- active ragdoll (Experimental): the body follows the animated pose through muscles - a spring and a damper on
+  // each channel - instead of copying it. A blow kicks the channels (the body is pushed, the spine and pelvis give,
+  // the head whips the other way, the arms fly loose) and the muscles pull it back with a little overshoot. On death
+  // they slacken: the fall follows the death animation loosely, with follow-through and a bounce on landing. The feet
+  // stay on the animation while standing (they carry the weight); lying, everything is loose.
+  // per channel: stiffness (1/s^2) alive, dead
+  RAGK: (() => {
+    const k = new Float32Array(37 * 2), set = (a, b, ka, kd) => { for (let i = a; i <= b; i++) { k[i * 2] = ka; k[i * 2 + 1] = kd; } };
+    set(0, 2, 320, 140); set(3, 5, 220, 90); set(6, 8, 160, 60); set(9, 11, 90, 35);
+    set(12, 21, 0, 70); set(22, 29, 75, 28); set(30, 32, 200, 60); set(33, 36, 0, 0);
+    return k;
+  })(),
+  rag(S, P, dt, fresh) {
+    const N = C3.N, cur = S.cur, K = this.RAGK;
+    if (!S.rp || fresh) { S.rp = Float32Array.from(cur); S.rv = new Float32Array(N); S.rdN = P.rdN; return; }
+    const rp = S.rp, rv = S.rv;
+    if (P.rdN !== S.rdN) {
+      S.rdN = P.rdN;
+      // the blow: push direction in the body frame (x forward, y to the left), its force
+      const F = P.rdF || 0.5, fx = Math.cos(P.rdA || Math.PI), fy = Math.sin(P.rdA || Math.PI), r = () => Math.random() - 0.5;
+      rv[C3.PX] += fx * 0.9 * F; rv[C3.PY] += fy * 0.9 * F;
+      rv[C3.PP] += fx * 2.2 * F; rv[C3.PR] -= fy * 2.2 * F; rv[C3.PW] += r() * 2 * F;
+      rv[C3.SP] += fx * 6 * F; rv[C3.SR] -= fy * 5 * F; rv[C3.SW] += r() * 5 * F;
+      rv[C3.HP] -= fx * 7 * F; rv[C3.HR] += fy * 6 * F; rv[C3.HW] += r() * 5 * F;
+      for (const w of [C3.LW, C3.RW]) { rv[w] += (fx * 1.2 + r() * 1.6) * F; rv[w + 1] += (fy * 1.2 + r() * 1.6) * F; rv[w + 2] += (0.6 + r()) * 1.6 * F; }
+      rv[C3.LE] += r() * 3 * F; rv[C3.RE] += r() * 3 * F;
+    }
+    const dead = P.mode === 'dead', lying = dead || P.mode === 'fall' || P.mode === 'lie';
+    // the muscles slacken over the fall (dead) and a body down is loose; damping under critical: a little overshoot
+    const slack = dead ? U.clamp((P.prog || 0) * 2, 0, 1) : 0, zeta = dead ? 0.32 : 0.55, n = Math.min(12, Math.ceil(dt / 0.008)), h = dt / n;
+    for (let i = 0; i < N; i++) {
+      const ka = K[i * 2], kd = K[i * 2 + 1];
+      let k = ka + (kd - ka) * slack;
+      if (lying && k === 0) k = kd || 0;
+      if (k === 0) { rp[i] = cur[i]; rv[i] = 0; continue; }
+      const c = 2 * zeta * Math.sqrt(k);
+      let x = rp[i], v = rv[i];
+      for (let j = 0; j < n; j++) { v += (k * (cur[i] - x) - c * v) * h; x += v * h; }
+      // never far from the animation (no limbs through the floor, nothing flung away)
+      const lim = i < 3 ? 0.25 : i >= 12 && i <= 29 ? 0.35 : 0.9;
+      if (x - cur[i] > lim) { x = cur[i] + lim; v *= -0.3; } else if (cur[i] - x > lim) { x = cur[i] - lim; v *= -0.3; }
+      rp[i] = x; rv[i] = v;
+    }
+    // the pelvis does not sink into the ground (the landing bounces instead)
+    if (lying && rp[C3.PZ] < cur[C3.PZ]) { rp[C3.PZ] = cur[C3.PZ]; if (rv[C3.PZ] < 0) rv[C3.PZ] *= -0.35; }
+    cur.set(rp);
+    // a body still moving is not settled yet (it would be frozen into its resting sprite mid-bounce)
+    if (dead) { let e = 0; for (let i = 0; i < N; i++) e = Math.max(e, Math.abs(rv[i])); if (e > 0.04 && S.offD) S.offT = Math.min(S.offT, S.offD * 0.999); }
   },
   // how long a change of state takes to blend in
   blendDur(from, to, P) {
