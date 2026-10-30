@@ -43,6 +43,7 @@ const OBJ = {
   barrel: { n: 'Rain Collector Barrel', solid: true, h: 1.1, water: 'barrel' },
   woodcrate: { n: 'Wooden Crate', solid: true, h: 1.0, cont: { type: 'crate', cap: 50 } },
   generator: { n: 'Generator', solid: true, h: 0.9 },
+  machine: { n: 'Machine', solid: true, h: 1.7 },
   crop: { n: 'Farm Plot', solid: false, h: 0.6 },
   hay: { n: 'Hay Bale', solid: true, h: 0.9 },
   washer: { n: 'Washing Machine', solid: true, h: 1.0, cont: { type: 'crate', cap: 10 } },

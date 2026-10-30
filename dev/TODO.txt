@@ -377,7 +377,8 @@ HIGH (added) - 1 REAL CHUNK HOLES, 2 BLOOD IMPROVEMENTS (WALLS, FOOTPRINTS),
        fall; the hospital, hotel and car dealer; countryside camps, wrecks,
        hay fields and orchards.
      Next: tune the deaths / fight-offs / new clothes by eye in play; more
-       buildings (a factory, a mall); hood up in the rain.
+       buildings (a factory - DONE 000.030.000.171 - a mall); hood up in the
+       rain (DONE 000.030.000.171).
 
 HIGH (added) - REMOVE THE 2D FIGURES, GO FULLY 3D. BUG: WITH UNLIMITED
       SETTINGS, CROWDS FLICKER BETWEEN 2D AND 3D. LOD IN RINGS, NOT CLOSE.
@@ -394,6 +395,23 @@ HIGH (added) - A COMPLETE SOUND OVERHAUL: .MP3 FILES THE GAME USES, TO BE
      rendered by dev/audiogen (new recipes and a composer), listed in
      js/data/audiolist.js. Over http: Web Audio; from disk: audio elements.
      Not judged by ear here - worth a listen; any file can be swapped.
+HIGH (added) - IMPROVE THE SFX MORE, AND ADD MORE MUSIC, THEN WORK ON WHATEVER.
+  -> DONE (000.030.000.171):
+     SFX: voices rebuilt (a softer glottal source, slow shimmer, a 4th
+     formant, breath through the tract, a wet gurgle for the dead); a
+     modal "struck body" for wood, doors, door pounding, planks, hits; real
+     bubbles for drinking, splashes, filling; coughs from the voice; wood
+     floors creak (rasp, not a tone), soles scuff. 8 groans, 6 snarls each.
+     MUSIC: guitar (Karplus-Strong, in tune), solo cello, celesta; 10 new
+     pieces (title2, day3, day4, dusk2, night3, night4, rain2, winter1,
+     winter2, tension2). Moods are every file named after them (day1..dayN),
+     winter pieces on cold days, no back-to-back repeats, a chase loop
+     picked afresh after a quiet spell.
+     WHATEVER: hood up in the rain (TODO item); a factory in Riverton
+     (machines - a new object - workbenches, offices, lockers, break room).
+     Not judged by ear here - worth a listen.
+     Next: a mall; the factory in Kingsbury too (it ran out of blocks);
+       tune the deaths / fight-offs / clothes by eye.
 
 --------------------------------------------------------------------
 RUN LOG
@@ -453,5 +471,9 @@ Run 13 (000.028.000.166): real holes, wall blood and footprints, the
   ignores foliage.)
 Run 14 (000.029.000.169): fully 3D characters, LOD rings with their own
   resolution (the crowd flicker fixed), the sound overhaul (.mp3 files).
+Fix (000.029.001.170), asked for: doors sounded goofy (a pitch-gliding
+  creak) - rebuilt as handle, swing, thud and latch.
+Run 15 (000.030.000.171), asked for: better sound effects, ten more pieces
+  of music; then the hood in the rain and a factory.
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).

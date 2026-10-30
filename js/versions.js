@@ -8,6 +8,17 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.030.000.171', date: '2026-10-30', title: 'More music, better sounds and a factory',
+    notes: [
+      'Ten new pieces of music, with new instruments: a fingerpicked and strummed acoustic guitar, a solo cello and a celesta. A second title theme, two more day pieces, a second dusk piece, two more night pieces (one only celesta, one only drones and cello), a second rain piece, two winter pieces that play on cold days, and a second chase loop with heavy drums. Pieces no longer repeat back to back, and each chase picks a loop afresh.',
+      'Better zombie voices: a softer, more human throat with an uneven, breathy rasp and a wet gurgle, instead of a buzzy synthesizer tone. More variations of groans and snarls.',
+      'Better impacts and liquids: hits, wood, doors, zombies pounding on doors and breaking planks now ring with the body they hit; drinking is gulps instead of "bloops"; splashes and filling bottles bubble properly; flesh hits are wetter; coughs sound like coughs. Wooden floors now creak instead of squeak, and soles scuff on hard floors.',
+      'A hoodie\'s hood goes up when you are out in the rain (if nothing else is on your head) and comes down indoors.',
+      'A factory in Riverton (Expanded map): a shop floor full of machines (drill presses, lathes, stamping presses), workbenches and stock, offices, a locker room with work clothes and hard hats, a break room, and a loading yard.',
+    ],
+    commits: [], shots: ['v030000_1', 'v030000_2'],
+  },
+  {
     v: '000.029.001.170', date: '2026-10-30', title: 'Better doors',
     notes: ['Doors no longer sound like a cartoon: opening is the handle, the latch letting go and the door swinging, with now and then a short, raspy hinge creak; closing is the swing, the door meeting the frame with a solid wooden thud, and the latch catching. Windows, car hoods and falling trees use the new creak too.'],
     commits: [], shots: [],

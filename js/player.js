@@ -213,6 +213,12 @@ const Player = {
     // textures: the cloth of each thing worn, blood soaked into bloody clothes; a man's stubble grows over three days
     Char3D.dress(L, w, 0.5);
     Zombie.garb(L, w);
+    // the hood goes up in the rain (outdoors, nothing on the head) and comes down indoors or when it stops
+    if (L.hood && !hat) {
+      const rain = G.weather ? G.weather.rain : 0, out = !p.inCar && World.outdoor(p.x, p.y);
+      if (out && rain > 0.3) p.hoodUp = true; else if (!out || rain < 0.15) p.hoodUp = false;
+      L.hoodUp = !!p.hoodUp;
+    }
     L.stubble = L.female ? 0 : Math.round(U.clamp(0.15 + p.minutesAlive / 4320, 0, 1) * 10) / 10;
     L.dirt = 0.06;
     return L;

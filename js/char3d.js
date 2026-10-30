@@ -90,7 +90,7 @@ const c3a = c3v(), c3b = c3v(), c3c = c3v(), c3d = c3v(), c3e = c3v(), c3g = c3v
 
 // ---- body meshes: smooth lathes built once (profiles in metres for an average man; U = metres per mesh unit).
 // Rings for 'z' meshes: [z, back x, front x, half width, front exponent, back exponent] (face / chest toward +x).
-const C3U = {}, C3R = {};
+const C3U = {}, C3R = {}, HOOD = { type: 'hood' };
 // the inside of a chunk torn out (gore)
 const C3HOLE = [0.1, 0.016, 0.013];
 // the inside of a hole (GL3D material 17; variant 1 with ribs)
@@ -1667,7 +1667,7 @@ const Char3D = {
       if (det > 1) { c3pt(c3a, Lf, 0.1 * waS, 0, -0.17); c3pt(c3b, Cf, 0.115 * shS, 0, 0.2); c3seg(BOX, c3a, c3b, 0.003, 0.004, Pl.jacketD, 1, 1, Cf[3], Cf[4], Cf[5]); }
     } else if (!Pl.bareTop && det > 0) c3box(CY, NB, 0.008, 0, -0.02, 0.064, 0.068, 0.016, Pl.shirtD, 1, 0.95);
     // a hoodie's hood, down, bunched behind the neck
-    if (look.hood && Pl.jacket && det > 0) c3box(RB, NB, -0.078, 0, -0.004, 0.05, 0.09, 0.065, Pl.jacket, 0.85, 1.1);
+    if (look.hood && !look.hoodUp && Pl.jacket && det > 0) c3box(RB, NB, -0.078, 0, -0.004, 0.05, 0.09, 0.065, Pl.jacket, 0.85, 1.1);
     if (Pl.vest) {
       c3box(M.CHEST, Cf, 0.002, 0, -0.012, UC * shS * 1.1, UC * shS * 1.06, UC * H * 0.94, Pl.vest);
       c3box(M.BELLY, Lf, 0, 0, 0.02, UB * waS * 1.14, UB * waS * 1.14, UB * H * 0.9, Pl.vest);
@@ -1950,7 +1950,7 @@ const Char3D = {
     c3pt(c3a, NB, -0.004, 0, -0.04); c3pt(c3b, Hf, -0.012, 0, 0.0);
     const nr = 0.056 * (fem ? 0.88 : 1) * (0.94 + bw * 0.06);
     const hs = D.head, hw = hs * (fem ? 0.95 : 1);
-    const hsty = look.hairStyle || 'short', hat = look.hat, full = hat && hat.type === 'fullhelmet', noHead = (gm & GM.HEAD) || (gg && gg.cr);
+    const hsty = look.hairStyle || 'short', hat = look.hat || (look.hoodUp && Pl.jacket ? HOOD : null), full = hat && hat.type === 'fullhelmet', noHead = (gm & GM.HEAD) || (gg && gg.cr);
     if (gm & GM.HEAD) { c3pt(c3b, NB, -0.006, 0, 0.03); c3pt(c3g, NB, -0.006, 0, 0.3); c3seg(BOX, c3a, c3b, nr, nr, Pl.skin, 1, 1, NB[3], NB[4], NB[5]); this.stump(c3b, c3g, nr * 1.08, Pl, 0); }
     else {
       c3seg(BOX, c3a, c3b, nr, nr, Pl.skin, 1, 1, NB[3], NB[4], NB[5]);
@@ -1969,6 +1969,7 @@ const Char3D = {
       if (full) { c3box(BOX, Hf, 0.004, 0, 0.085, 0.13, 0.11, 0.14, hcol); c3box(BOX, Hf, 0.1, 0, 0.085, 0.035, 0.078, 0.04, Pl.glass); }
       else if (hat.type === 'helmet') c3box(BOX, Hf, -0.004, 0, 0.15 * hs, 0.12 * hs, 0.1 * hw, 0.065 * hs, hcol);
       else if (hat.type === 'beanie') c3box(BOX, Hf, -0.004, 0, 0.15 * hs, 0.108 * hs, 0.09 * hw, 0.06 * hs, hcol);
+      else if (hat.type === 'hood') { c3box(BOX, Hf, -0.012, 0, 0.13 * hs, 0.115 * hs, 0.095 * hw, 0.085 * hs, Pl.jacket); c3box(BOX, Hf, -0.08 * hs, 0, 0.0, 0.04, 0.085 * hw, 0.1, Pl.jacket); }
       else { c3box(BOX, Hf, -0.002, 0, 0.165 * hs, 0.108 * hs, 0.088 * hw, 0.048 * hs, hcol); c3box(BOX, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92)); }
     }
     // ---- arms (the left hand on the weapon as in the full model), held items
@@ -2059,7 +2060,7 @@ const Char3D = {
       c3box(BOX, Hf, 0.094 * hs, 0, 0.006 * hs - mo * 0.5, 0.008, zomb ? 0.02 : 0.019, mo, zomb ? [0.12, 0.03, 0.03] : Pl.lip);
     }
     // hair or hat
-    const hsty = look.hairStyle || 'short', hat = look.hat;
+    const hsty = look.hairStyle || 'short', hat = look.hat || (look.hoodUp && Pl.jacket ? HOOD : null);
     const fullHelm = hat && hat.type === 'fullhelmet', UH = C3U.HAIR * hs;
     if (hsty !== 'bald' && !fullHelm) {
       const hc = hsty === 'buzz' ? this.mix(Pl.hair, Pl.skin, 0.45) : Pl.hair;
@@ -2092,6 +2093,13 @@ const Char3D = {
       if (fullHelm) { c3box(SP, Hf, 0.004, 0, 0.085, 0.13, 0.11, 0.14, hcol); c3box(RB, Hf, 0.1, 0, 0.085, 0.035, 0.078, 0.04, Pl.glass); }
       else if (hat.type === 'helmet') { c3box(M.CAP, Hf, -0.004, 0, -0.012, UC * 1.13, UC * 1.12, UC * 1.08, hcol); c3box(CY, Hf, 0.0, 0, 0.112, 0.128, 0.11, 0.008, this.sc(hcol, 0.85)); }
       else if (hat.type === 'beanie') { c3box(M.CAP, Hf, -0.004, 0, -0.03, UC * 1.04, UC * 1.05, UC * 1.08, hcol); c3box(CY, Hf, -0.004, 0, 0.1, 0.107 * hs, 0.088 * hw, 0.018, this.sc(hcol, 0.85)); }
+      // a hood up (in the rain): a loose shell over the crown and the sides, down the back of the neck, open at the face
+      else if (hat.type === 'hood') {
+        const jc = Pl.jacket;
+        c3box(M.CAP, Hf, -0.018, 0, -0.012, UC * 1.15, UC * 1.16, UC * 1.17, jc);
+        c3box(RB, Hf, -0.076 * hs, 0, 0.0, 0.054, 0.09 * hw, 0.12, jc, 0.85, 1);
+        if (det > 0) for (const sd of [-1, 1]) c3box(RB, Hf, 0.02 * hs, sd * 0.084 * hw, 0.05 * hs, 0.06, 0.016, 0.09, this.sc(jc, 0.9), 0.9, 1);
+      }
       else { c3box(M.CAP, Hf, 0, 0, 0, UC, UC * 1.01, UC, hcol); c3box(RB, Hf, 0.13 * hs, 0, 0.122 * hs, 0.05, 0.07, 0.006, this.sc(hcol, 0.92), 1, 1); }
     }
     // facial hair: a full beard over the jaw and chin, a goatee, a moustache

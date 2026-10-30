@@ -802,6 +802,40 @@ const ObjArt = {
     this.box(0.25, 0.32, 0.7, 0.75, 0.68, 0.85, '#303030');
     line(this.g, this.P(0.15, 0.25, 0.75), this.P(0.85, 0.25, 0.75), '#202020', 2);
   },
+  // a factory machine: 0 a drill press (a column, the head over the table), 1 a lathe (a long bed, the headstock, the
+  // tailstock), 2 a stamping press (a heavy frame round the die); machine green, yellow guard stripes
+  d_machine(o) {
+    const v = o.v || 0, col = ['#4a6a5a', '#5a6a72', '#6a5a4a'][v], dk = Col.shade(col, 0.7);
+    if (v === 1) {
+      const along = o.dir === 'N' || o.dir === 'S', b = along ? [0.06, 0.28, 0, 0.94, 0.72] : [0.28, 0.06, 0, 0.72, 0.94];
+      this.shadow(b[0], b[1], b[3], b[4]);
+      this.box(b[0] + 0.06, b[1] + 0.06, 0, b[3] - 0.06, b[4] - 0.06, 0.75, dk);
+      this.box(b[0], b[1], 0.75, b[3], b[4], 0.9, col);
+      const hs = along ? [b[0], b[1], b[0] + 0.28, b[4]] : [b[0], b[1], b[3], b[1] + 0.28];
+      this.box(hs[0], hs[1], 0.9, hs[2], hs[3], 1.35, col);
+      const ts = along ? [b[3] - 0.16, b[1] + 0.08, b[3], b[4] - 0.08] : [b[0] + 0.08, b[4] - 0.16, b[3] - 0.08, b[4]];
+      this.box(ts[0], ts[1], 0.9, ts[2], ts[3], 1.15, dk);
+      line(this.g, this.P(along ? b[0] + 0.28 : 0.5, along ? 0.5 : b[1] + 0.28, 1.08), this.P(along ? b[3] - 0.16 : 0.5, along ? 0.5 : b[4] - 0.16, 1.08), '#b8b8b0', 2);
+      return;
+    }
+    const b = [0.18, 0.18, 0, 0.82, 0.82];
+    this.shadow(b[0], b[1], b[3], b[4]);
+    if (v === 0) {
+      this.box(0.22, 0.22, 0, 0.78, 0.78, 0.12, dk);
+      this.box(0.42, 0.42, 0.12, 0.58, 0.58, 1.6, col);
+      this.box(0.3, 0.3, 0.75, 0.7, 0.7, 0.82, dk);
+      this.box(0.3, 0.26, 1.3, 0.7, 0.74, 1.62, col);
+      line(this.g, this.P(0.5, 0.5, 1.3), this.P(0.5, 0.5, 1.05), '#b8b8b0', 2);
+      return;
+    }
+    this.box(b[0], b[1], 0, b[3], b[4], 0.35, dk);
+    for (const [u0, u1] of [[0.18, 0.32], [0.68, 0.82]]) this.box(u0, 0.3, 0.35, u1, 0.7, 1.55, col);
+    this.box(b[0], 0.28, 1.45, b[3], 0.72, 1.75, col);
+    this.box(0.36, 0.36, 0.35, 0.64, 0.64, 0.6, '#3a3a3a');
+    this.box(0.36, 0.36, 1.05, 0.64, 0.64, 1.45, dk);
+    const fr = this.front(o) || 'S';
+    for (let k = 0; k < 4; k++) this.faceRect(fr, b, k * 0.25, k * 0.25 + 0.12, 0.25, 0.33, '#d8b020');
+  },
   d_crop(o) {
     const g = this.g;
     const cd = CROPS[o.crop] || CROPS.carrot;

@@ -4,7 +4,7 @@
 
 Scavenge the houses and stores of Hollow Creek and its neighbouring towns, fortify a safe house, drive, farm, cook and craft, and keep yourself fed, rested and sane while the dead hunt by sight and sound.
 
-Every graphic, model and sound in the game is generated procedurally at runtime; there are no asset files.
+Every graphic and model in the game is generated procedurally at runtime. The sounds and music are generated too, rendered once into ordinary audio files that can be swapped for recordings (see Sound and music).
 
 ---
 
@@ -23,7 +23,7 @@ Your game saves automatically. Death is permanent.
 ## Features
 
 **A living county**
-- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns (with a hospital, a hotel and a car dealer), an army base, a prison, an airfield, a quarry, a truck stop, and camps, wrecks and old farms out in the country.
+- A procedurally generated county: the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests. The Expanded map (beta) adds three more towns (with a hospital, a hotel, a car dealer and a factory), an army base, a prison, an airfield, a quarry, a truck stop, and camps, wrecks and old farms out in the country.
 - Houses with real floor plans and upstairs rooms, shops with flats above, apartment blocks, police and fire stations, a clinic, a school, churches, a motel, gas stations, warehouses and a trailer park — each with loot to match.
 - Yards shaped by the people who lived there, foliage that grows wild along verges and empty lots, and four seasons with autumn colour, bare winter trees and snow.
 - A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.
@@ -77,7 +77,7 @@ All the game's audio is in the `audio/` folder as ordinary .mp3 files, so any of
 
 - `audio/sfx/<name>_<n>.mp3`: sound effects. Most have several variations (`_1`, `_2`, ...), picked at random each time.
 - `audio/loops/<name>.mp3`: ambience and machine loops (rain, wind, fire, flies, birdsong, crickets, the car engine, sirens, the helicopter, tyre squeal).
-- `audio/music/<name>.mp3`: the music (title, day1, day2, dusk, night1, night2, rain, the tension loop for chases, the death sting).
+- `audio/music/<name>.mp3`: the music, by mood: `title`, `day`, `dusk`, `night`, `rain` and `winter` pieces (title, title2, day1-day4, dusk, dusk2, night1-night4, rain, rain2, winter1, winter2), the `tension` loops for chases and the death sting. A file named after a mood with a number (say `night5.mp3`) joins that mood's rotation after the list is rebuilt.
 
 Save a recording over a file with the same name and the game plays it instead (any length works). If you add or remove variations, run `node dev/audiogen/build.js` to update the list; see `dev/DEVELOPMENT.md`. Any sound without a file is synthesized by the game.
 

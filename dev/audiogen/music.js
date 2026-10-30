@@ -16,6 +16,17 @@ const TRACKS = {
   rain: { root: 58, mode: 'lydian', bpm: 70, prog: [0, 1, 5, 4], parts: { piano: 1, pad: 0.5, strings: 0.4 }, lh: 'arp8', seed: 73, rain: true },
   tension: { root: 48, mode: 'phrygian', bpm: 104, prog: [0, 1, 0, 6], parts: { strings: 1, bass: 1, perc: 1, drone: 0.6 }, lh: 'none', seed: 83, loop: 16 },
   death: { root: 45, mode: 'aeolian', bpm: 50, prog: [0], parts: {}, seed: 97, sting: true },
+  // (more pieces: lead picks the melody's instrument, lhInst the accompaniment's)
+  title2: { root: 50, mode: 'dorian', bpm: 60, prog: [0, 6, 5, 3], parts: { piano: 1, cello: 1, strings: 0.6, bass: 0.5, pad: 0.3 }, lh: 'broken', lead: 'cello', seed: 113 },
+  day3: { root: 50, mode: 'ionian', bpm: 92, prog: [0, 4, 5, 3], parts: { guitar: 1, strings: 0.4, bass: 0.5, piano: 0.6 }, lh: 'pick', lhInst: 'guitar', lead: 'piano', seed: 127 },
+  day4: { root: 52, mode: 'mixolydian', bpm: 84, prog: [0, 6, 3, 0], parts: { guitar: 1, cello: 0.8, bass: 0.5, pad: 0.2, brush: 0.6 }, lh: 'strum', lhInst: 'guitar', lead: 'cello', seed: 139 },
+  dusk2: { root: 53, mode: 'aeolian', bpm: 58, prog: [0, 5, 6, 4], parts: { piano: 1, cello: 1, strings: 0.7, bass: 0.6, pad: 0.4 }, lh: 'arp8', lead: 'cello', seed: 149 },
+  night3: { root: 56, mode: 'dorian', bpm: 52, prog: [0, 3, 6, 3], parts: { celesta: 0.9, pad: 0.9, drone: 0.7, strings: 0.3 }, lh: 'none', lead: 'celesta', seed: 157, sparse: true },
+  night4: { root: 49, mode: 'phrygian', bpm: 48, prog: [0, 1, 0, 5], parts: { piano: 0.6, pad: 1, drone: 0.9, cello: 0.5 }, lh: 'sparse', lead: 'cello', seed: 163, sparse: true },
+  rain2: { root: 55, mode: 'dorian', bpm: 66, prog: [0, 3, 6, 4], parts: { guitar: 1, pad: 0.6, strings: 0.3, piano: 0.5 }, lh: 'pick', lhInst: 'guitar', lead: 'piano', seed: 173, rain: true },
+  winter1: { root: 57, mode: 'aeolian', bpm: 60, prog: [0, 5, 3, 4], parts: { celesta: 0.8, strings: 0.9, pad: 0.5, bass: 0.4, piano: 0.6 }, lh: 'sparse', lead: 'celesta', seed: 181 },
+  winter2: { root: 51, mode: 'dorian', bpm: 56, prog: [0, 3, 0, 4], parts: { piano: 1, cello: 0.9, pad: 0.5, drone: 0.4 }, lh: 'broken', lead: 'piano', seed: 191 },
+  tension2: { root: 45, mode: 'aeolian', bpm: 120, prog: [0, 0, 5, 1], parts: { strings: 1, bass: 1, taiko: 1, drone: 0.7, cello: 0.8 }, lh: 'none', seed: 197, loop: 16 },
 };
 
 const mhz = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -44,6 +55,30 @@ async function pianoNote(m, vel) {
   const hg = o.createGain(); hg.gain.value = 0.08 * vel; hs.connect(hf); hf.connect(hg); hg.connect(pan); hs.start(0);
   const buf = await o.startRendering();
   return (pianoCache[key] = buf);
+}
+
+// one guitar note: a plucked string (Karplus-Strong: a burst of noise circulating in a delay the string's length, losing
+// its highs each pass, a fractional all-pass for the tuning), softened by the pluck, coloured by the body afterwards
+const guitarCache = {};
+function guitarNote(m, vel) {
+  const key = m + ':' + vel;
+  if (guitarCache[key]) return guitarCache[key];
+  const f = mhz(m), D = SR / f + 0.5, N = Math.floor(D - 0.1), fr = D - N, C = (1 - fr) / (1 + fr), len = Math.ceil(3.2 * SR), out = new Float32Array(len), buf = new Float32Array(N);
+  let s = (m * 7919 + 13) >>> 0; const rnd = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 1e6) / 1e6 * 2 - 1; };
+  for (let i = 0; i < N; i++) buf[i] = rnd();
+  // the pluck: smooth the burst (a soft finger), and a comb for where on the string it was plucked
+  for (let p = 0; p < (vel > 0.7 ? 1 : 2); p++) for (let i = 1; i < N; i++) buf[i] = (buf[i] + buf[i - 1]) * 0.5;
+  const pp = Math.max(1, Math.floor(N * 0.18)), b2 = buf.slice(); for (let i = 0; i < N; i++) buf[i] = b2[i] - 0.6 * b2[(i + pp) % N];
+  const T60 = Math.max(1.2, 4.5 - (m - 40) * 0.07), rho = Math.pow(0.001, 1 / (T60 * f));
+  let idx = 0, xp = 0, yp = 0;
+  for (let i = 0; i < len; i++) {
+    const a = buf[idx], b = buf[(idx + 1) % N], lp = (a + b) * 0.5 * rho, y = C * lp + xp - C * yp; xp = lp; yp = y;
+    out[i] = a; buf[idx] = y; idx = (idx + 1) % N;
+  }
+  let pk = 0; for (let i = 0; i < 4000; i++) pk = Math.max(pk, Math.abs(out[i]));
+  const g = 0.5 * vel / (pk || 1); for (let i = 0; i < len; i++) out[i] *= g * (i < 30 ? i / 30 : 1);
+  const ab = new AudioBuffer({ length: len, sampleRate: SR, numberOfChannels: 1 }); ab.copyToChannel(out, 0);
+  return (guitarCache[key] = ab);
 }
 
 async function renderTrack(name) {
@@ -98,6 +133,42 @@ async function renderTrack(name) {
   };
   const tom = (t, f, lvl) => { const s = o.createOscillator(); s.frequency.setValueAtTime(f, t); s.frequency.exponentialRampToValueAtTime(f * 0.5, t + 0.25); const g = o.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.25 * lvl, t + 0.004); g.gain.setTargetAtTime(0, t + 0.004, 0.09); s.connect(g); out(g, 0.3); s.start(t); s.stop(t + 0.8); };
   const tick = (t, lvl) => { const n = o.createBufferSource(), b = o.createBuffer(1, 1024, SR), a = b.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = (r.next() * 2 - 1) * Math.exp(-i / 90); n.buffer = b; const hp = o.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6000; const g = o.createGain(); g.gain.value = 0.12 * lvl; n.connect(hp); hp.connect(g); out(g, 0.2); n.start(t); };
+  // the guitar's body: a low air resonance, the top's, a softened top end
+  const gbus = o.createBiquadFilter(); gbus.type = 'peaking'; gbus.frequency.value = 110; gbus.Q.value = 1.5; gbus.gain.value = 5;
+  const gtop = o.createBiquadFilter(); gtop.type = 'peaking'; gtop.frequency.value = 220; gtop.Q.value = 1.2; gtop.gain.value = 3;
+  const glp = o.createBiquadFilter(); glp.type = 'lowpass'; glp.frequency.value = 4200; gbus.connect(gtop); gtop.connect(glp); out(glp, 0.3);
+  const guitar = (m, t, vel) => { if (!P.guitar) return; const s = o.createBufferSource(); s.buffer = guitarNote(Math.round(m), Math.round(vel * 4) / 4); const g = o.createGain(); g.gain.value = P.guitar * 0.8; const pn = o.createStereoPanner(); pn.pan.value = Math.max(-0.4, Math.min(0.4, (m - 60) / 50)) - 0.1; s.connect(g); g.connect(pn); pn.connect(gbus); s.start(t); };
+  // a solo cello: a bowed sawtooth through the body's resonances, bow noise, vibrato that comes in after the attack
+  const cello = (m, t, dur, lvl) => {
+    if (!P.cello) return;
+    const f = mhz(m), osc = o.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(f * 0.995, t); osc.frequency.linearRampToValueAtTime(f, t + 0.08);
+    const vib = o.createOscillator(); vib.frequency.value = r.f(5, 5.8); const vg = o.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(f * 0.006, t + Math.min(0.5, dur * 0.5)); vib.connect(vg); vg.connect(osc.frequency);
+    const g = o.createGain(), pk = 0.05 * lvl * P.cello, a = Math.min(0.25, dur * 0.3);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + a); g.gain.linearRampToValueAtTime(pk * 0.8, t + Math.max(a, dur - 0.1)); g.gain.setTargetAtTime(0, t + dur, 0.12);
+    const lp = o.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 0.5;
+    osc.connect(lp); let last = lp;
+    for (const [bf, bq, bg] of [[280, 2, 6], [520, 2.5, 4], [1300, 2, 3]]) { const pf = o.createBiquadFilter(); pf.type = 'peaking'; pf.frequency.value = bf; pf.Q.value = bq; pf.gain.value = bg; last.connect(pf); last = pf; }
+    last.connect(g);
+    const bn = o.createBufferSource(), bb = o.createBuffer(1, Math.ceil(0.4 * SR), SR), ba = bb.getChannelData(0); for (let i = 0; i < ba.length; i++) ba[i] = r.next() * 2 - 1;
+    bn.buffer = bb; bn.loop = true; const bbp = o.createBiquadFilter(); bbp.type = 'bandpass'; bbp.frequency.value = f * 4; bbp.Q.value = 2; const bgn = o.createGain(); bgn.gain.value = 0.15; bn.connect(bbp); bbp.connect(bgn); bgn.connect(g);
+    const pn = o.createStereoPanner(); pn.pan.value = 0.15; g.connect(pn); out(pn, 0.45);
+    osc.start(t); vib.start(t); bn.start(t); osc.stop(t + dur + 1); vib.stop(t + dur + 1); bn.stop(t + dur + 1);
+  };
+  // a celesta / music box: a struck bar (the fundamental, a quiet partial four times up, a click), ringing long
+  const celesta = (m, t, vel) => {
+    if (!P.celesta) return;
+    const f = mhz(m), pn = o.createStereoPanner(); pn.pan.value = r.f(-0.3, 0.3); out(pn, 0.55);
+    for (const [k, a, tau] of [[1, 1, 1.4], [4.02, 0.22, 0.35], [9.9, 0.05, 0.08]]) {
+      if (f * k > 15000) continue;
+      const osc = o.createOscillator(); osc.frequency.value = f * k; const g = o.createGain(), pk = 0.07 * vel * a * P.celesta;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + 0.002); g.gain.setTargetAtTime(0, t + 0.002, tau);
+      osc.connect(g); g.connect(pn); osc.start(t); osc.stop(t + tau * 7);
+    }
+  };
+  const lead = (n, t, vel, dur) => { const L = T.lead || 'piano'; if (L === 'cello') cello(n - 12, t, dur, vel * 1.1); else if (L === 'celesta') celesta(n + 12, t, vel); else if (L === 'guitar') guitar(n, t, vel); else jobs.push(piano(n, t, vel)); };
+  const lhNote = (m, t, vel) => { if (T.lhInst !== 'guitar') return jobs.push(piano(m, t, vel)); while (m < 40) m += 12; while (m > 76) m -= 12; guitar(m, t, vel * 1.2); };
+  const taiko = (t, lvl) => { tom(t, 58, lvl * 1.6); const n = o.createBufferSource(), b = o.createBuffer(1, 4096, SR), a = b.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = (r.next() * 2 - 1) * Math.exp(-i / 500); n.buffer = b; const lp = o.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; const g = o.createGain(); g.gain.value = 0.3 * lvl; n.connect(lp); lp.connect(g); out(g, 0.5); n.start(t); };
+  const brush = (t, lvl) => { const n = o.createBufferSource(), b = o.createBuffer(1, 6000, SR), a = b.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = (r.next() * 2 - 1) * Math.min(1, i / 600) * Math.exp(-i / 1500); n.buffer = b; const bp = o.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 5000; bp.Q.value = 0.7; const g = o.createGain(); g.gain.value = 0.05 * lvl * P.brush; n.connect(bp); bp.connect(g); out(g, 0.3); n.start(t); };
   const jobs = [];
   if (T.sting) {
     // the death sting: a low cluster swells, a piano falls away over it
@@ -113,9 +184,13 @@ async function renderTrack(name) {
   for (let k = 0; k < 4; k++) { const rh = r.pick(rhythms); const notes = rh.map(() => { d += r.pick([-2, -1, -1, 0, 1, 1, 2]); d = Math.max(-1, Math.min(9, d)); return d; }); motif.push([rh, notes]); }
   const lhPattern = (ch, t, lvl, kind) => {
     const [a, b, c] = ch.map(m => m - 12);
-    if (kind === 'arp8') [a, c, a + 12, b + 12, c, a + 12, b + 12, c].forEach((m, k) => jobs.push(piano(m, t + k * beat / 2, lvl * (k % 4 ? 0.45 : 0.6))));
-    else if (kind === 'broken') { jobs.push(piano(a - 12, t, lvl * 0.6)); [b, c, a + 12].forEach((m, k) => jobs.push(piano(m, t + (k + 1) * beat, lvl * 0.42))); }
-    else if (kind === 'sparse') { jobs.push(piano(a - 12, t, lvl * 0.5)); if (r.chance(0.6)) jobs.push(piano(c, t + beat * 2, lvl * 0.35)); }
+    if (kind === 'arp8') [a, c, a + 12, b + 12, c, a + 12, b + 12, c].forEach((m, k) => lhNote(m, t + k * beat / 2, lvl * (k % 4 ? 0.45 : 0.6)));
+    else if (kind === 'broken') { lhNote(a - 12, t, lvl * 0.6); [b, c, a + 12].forEach((m, k) => lhNote(m, t + (k + 1) * beat, lvl * 0.42)); }
+    else if (kind === 'sparse') { lhNote(a - 12, t, lvl * 0.5); if (r.chance(0.6)) lhNote(c, t + beat * 2, lvl * 0.35); }
+    // fingerpicking: the thumb on the beat (root, fifth), the fingers between
+    else if (kind === 'pick') [a - 12, c, a + 12, b + 12, c - 12, c, a + 12, b + 12].forEach((m, k) => lhNote(m, t + k * beat / 2 + r.f(0, 0.012), lvl * (k % 2 ? 0.38 : 0.55)));
+    // strumming: the chord swept low to high, down on the beats, a lighter up-strum between
+    else if (kind === 'strum') [[0, 0.6, 1], [1, 0.4, 1], [1.5, 0.3, -1], [2, 0.5, 1], [2.5, 0.3, -1], [3, 0.45, 1], [3.5, 0.3, -1]].forEach(([bt, v, dir]) => { const ns = [a - 12, c - 12, a, b, c, a + 12]; (dir > 0 ? ns : ns.slice().reverse()).forEach((m, k) => lhNote(m, t + bt * beat + k * 0.012, lvl * v * 0.7)); });
   };
   const section = (t0, bars, o2) => {
     for (let b = 0; b < bars; b++) {
@@ -131,10 +206,12 @@ async function renderTrack(name) {
         rh.forEach((du, k) => {
           let n = deg(notes[k] + (o2.up || 0), 1);
           if (k === rh.length - 1) { let best = n, bd = 99; for (const cm of ch) for (const oc of [12, 24]) { const c2 = cm + oc; if (Math.abs(c2 - n) < bd) { bd = Math.abs(c2 - n); best = c2; } } n = best; }
-          if (!(T.sparse && r.chance(0.35))) jobs.push(piano(n, tt + (o2.swing ? r.f(0, 0.04) : 0), o2.mel * r.f(0.85, 1)));
+          if (!(T.sparse && r.chance(0.35))) lead(n, tt + (o2.swing ? r.f(0, 0.04) : 0), o2.mel * r.f(0.85, 1), du * beat * 0.95);
           tt += du * beat;
         });
       }
+      if (P.brush) for (let k = 0; k < 8; k++) brush(t + k * beat / 2 + (k % 2 ? beat * 0.08 : 0), k % 2 ? 0.6 : 1);
+      if (P.taiko) { [0, 1.5, 2, 3, 3.5].forEach((bt, k) => taiko(t + bt * beat, k === 0 ? 1 : 0.6)); if (b % 4 === 3) [3.25, 3.5, 3.75].forEach(bt => taiko(t + bt * beat, 0.5)); }
       if (P.perc) { for (let k = 0; k < 4; k++) { tom(t + k * beat, k % 2 ? 70 : 95, k === 0 ? 1 : 0.6); tick(t + k * beat + beat / 2, 0.8); } if (b % 2) tom(t + 3.5 * beat, 120, 0.5); }
     }
   };
@@ -142,7 +219,9 @@ async function renderTrack(name) {
     section(0, T.loop, { lvl: 0.8, strings: 1 });
     drone(T.root - 24, 0, sec + 4);
     // short ostinato in the strings, a stab each bar
-    for (let b = 0; b < T.loop; b++) for (let k = 0; k < 8; k++) strings([deg(T.prog[b % 4], -1) + (k % 4 === 3 ? 1 : 0)], b * bar + k * beat / 2, beat * 0.4, 0.8);
+    const fig = P.taiko ? [0, 0, 2, 0, 1, 0, 2, 3] : [0, 0, 0, 1, 0, 0, 0, 1];
+    for (let b = 0; b < T.loop; b++) for (let k = 0; k < 8; k++) strings([deg(T.prog[b % 4] + (P.taiko ? fig[k] : 0), -1) + (!P.taiko && fig[k] ? 1 : 0)], b * bar + k * beat / 2, beat * 0.4, 0.8);
+    if (P.cello) for (let b = 0; b < T.loop; b += 2) cello(deg(T.prog[b % 4], -1), b * bar, bar * 1.9, 0.9);
     await Promise.all(jobs);
     return loopFinish(await o.startRendering(), sec);
   }

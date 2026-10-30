@@ -444,14 +444,21 @@ const Music = {
   },
   // ------------------------------------------------------------------ the music files (audio/music)
   files() { return typeof AUDIO_LIST !== 'undefined' && !!AudioFiles.mode && Object.keys(AUDIO_LIST.music).length > 0; },
-  // the track for now: the title on the menus; in play rain, night, dusk or day (one of a mood's at random)
+  // the track for now: a title piece on the menus; in play the rain, night, dusk or day pieces (the winter ones on cold
+  // days), one of the mood's at random and not the one just played. A mood is every file named after it: day1, day2 ...
   moodTrack() {
-    const ok = (a) => a.filter(n => AudioFiles.hasMusic(n));
-    if (G.mode !== 'play') return ok(['title'])[0] || null;
-    const h = Game.hour(), rain = G.weather && G.weather.rain > 0.4, night = G.light.amb < 0.35;
-    let L = rain ? ok(['rain']) : night ? ok(['night1', 'night2']) : h >= 17 && h < 21 ? ok(['dusk']) : ok(['day1', 'day2']);
-    if (!L.length) L = ok(['title']);
-    return L.length ? L[(Math.random() * L.length) | 0] : null;
+    const all = typeof AUDIO_LIST !== 'undefined' ? Object.keys(AUDIO_LIST.music) : [];
+    const ok = (mood) => all.filter(n => n.replace(/\d+$/, '') === mood && AudioFiles.hasMusic(n));
+    let L;
+    if (G.mode !== 'play') L = ok('title');
+    else {
+      const h = Game.hour(), rain = G.weather && G.weather.rain > 0.4, night = G.light.amb < 0.35, winter = Season.tree === 'b' || Season.snow > 0.3;
+      L = rain ? ok('rain') : night ? ok('night') : winter && R.chance(0.7) ? ok('winter') : h >= 17 && h < 21 ? ok('dusk') : ok('day');
+      if (!L.length) L = ok('day');
+    }
+    if (!L.length) L = ok('title');
+    if (L.length > 1) L = L.filter(n => n !== this.lastTrack);
+    return L.length ? (this.lastTrack = L[(Math.random() * L.length) | 0]) : null;
   },
   async startTrack(name, lvl) {
     this.cur = name; this.curLvl = lvl || 0.8; this.trackEnd = null;
@@ -476,19 +483,29 @@ const Music = {
     if (this.curEl) { const a = this.curEl; this.curEl = null; a.pause(); }
     this.cur = null;
   },
-  // the chase: the tension loop rises with it (and the calm track ducks under it)
+  // the chase: a tension loop rises with it (and the calm track ducks under it); after a quiet spell the loop is let go,
+  // and the next chase picks one of the tension pieces afresh
+  tensName() {
+    const L = typeof AUDIO_LIST !== 'undefined' ? Object.keys(AUDIO_LIST.music).filter(n => /^tension\d*$/.test(n) && AudioFiles.hasMusic(n)) : [];
+    return L.length ? L[(Math.random() * L.length) | 0] : null;
+  },
   async tensionFile(v) {
-    if (!AudioFiles.hasMusic('tension')) return false;
-    if (AudioFiles.mode === 'el') { const a = AudioFiles.el('music', 'tension', true); a.loop = true; AudioFiles.elLevel('music', 'tension', v * 0.85); if (v <= 0.01 && !a.paused) a.pause(); return true; }
+    if (v > 0.02) this.tensQuiet = this.t; else if (this.tensN && !this.tensBusy && this.t - (this.tensQuiet || 0) > 25) { if (this.tens) try { this.tens.s.stop(); } catch (e) { /* stopped */ } this.tens = null; this.tensN = null; }
+    if (!this.tensN) { if (v < 0.05) return true; this.tensN = this.tensName(); if (!this.tensN) return false; }
+    const name = this.tensN;
+    if (AudioFiles.mode === 'el') {
+      for (const k of Object.keys(AudioFiles.els || {})) if (/^music\/tension/.test(k) && k !== 'music/' + name && !AudioFiles.els[k].paused) AudioFiles.els[k].pause();
+      const a = AudioFiles.el('music', name, true); a.loop = true; AudioFiles.elLevel('music', name, v * 0.85); if (v <= 0.01 && !a.paused) a.pause(); return true;
+    }
     if (!this.tens) {
       if (this.tensBusy || v < 0.05) return true;
       this.tensBusy = true;
       try {
-        const r = await fetch(AudioFiles.url('music', 'tension')), b = await Sfx.ctx.decodeAudioData(await r.arrayBuffer());
+        const r = await fetch(AudioFiles.url('music', name)), b = await Sfx.ctx.decodeAudioData(await r.arrayBuffer());
         const c = Sfx.ctx, g = c.createGain(); g.gain.value = 0; g.connect(Sfx.musG);
         const s = c.createBufferSource(); s.buffer = b; s.loop = true; if (b.duration > 2) { s.loopStart = 0.08; s.loopEnd = b.duration - 0.42; } s.connect(g); s.start();
-        this.tens = { g };
-      } catch (e) { AudioFiles.failed.add('music/tension'); }
+        this.tens = { g, s };
+      } catch (e) { AudioFiles.failed.add('music/' + name); this.tensN = null; }
       this.tensBusy = false;
       return true;
     }
