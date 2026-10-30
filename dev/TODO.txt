@@ -381,7 +381,7 @@ HIGH (added) - 1 REAL CHUNK HOLES, 2 BLOOD IMPROVEMENTS (WALLS, FOOTPRINTS),
 
 HIGH (added) - REMOVE THE 2D FIGURES, GO FULLY 3D. BUG: WITH UNLIMITED
       SETTINGS, CROWDS FLICKER BETWEEN 2D AND 3D. LOD IN RINGS, NOT CLOSE.
-  -> DONE (000.029.000.170): the 2D painter and the 2D option are gone
+  -> DONE (000.029.000.169): the 2D painter and the 2D option are gone
      (software WebGL is used too; no WebGL at all: a notice on the title).
      The flicker: the character atlas filled up and the overflow fell back
      to 2D. Each LOD ring now renders at its own resolution (100/80/62/50%)
@@ -389,7 +389,7 @@ HIGH (added) - REMOVE THE 2D FIGURES, GO FULLY 3D. BUG: WITH UNLIMITED
      always within 9 tiles (x the LOD distance setting), rings beyond.
 HIGH (added) - A COMPLETE SOUND OVERHAUL: .MP3 FILES THE GAME USES, TO BE
       REPLACED WITH REAL AUDIO OVER TIME; MUSIC AND SOUND OVERHAULS.
-  -> DONE (000.029.000.170): audio/ holds 302 sound-effect files (~100
+  -> DONE (000.029.000.169): audio/ holds 302 sound-effect files (~100
      sounds, variations each), 10 ambience/machine loops, 9 music tracks,
      rendered by dev/audiogen (new recipes and a composer), listed in
      js/data/audiolist.js. Over http: Web Audio; from disk: audio elements.
@@ -451,7 +451,7 @@ Run 13 (000.028.000.166): real holes, wall blood and footprints, the
   engine pass, clothes and hair, carried bodies, twitching, the hospital,
   hotel, dealer and countryside. (t31 fixed: its open-ground search now
   ignores foliage.)
-Run 14 (000.029.000.170): fully 3D characters, LOD rings with their own
+Run 14 (000.029.000.169): fully 3D characters, LOD rings with their own
   resolution (the crowd flicker fixed), the sound overhaul (.mp3 files).
 Next runs, planned: more character models (clothes, hair, beards); the
   map's part 2 (a hospital, more shop types, the countryside).
