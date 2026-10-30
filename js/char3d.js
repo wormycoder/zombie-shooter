@@ -305,7 +305,7 @@ const Char3D = {
     if (!S || S.look !== look && S.lookId !== this.lookKey(look)) {
       const prev = S;
       S = this.newState(id, look);
-      if (prev) { S.cur.set(prev.cur); S.fresh = false; S.key = prev.key; S.ph = prev.ph; S.v = prev.v; S.amp = prev.amp; S.hip = prev.hip; S.lx = prev.lx; S.ly = prev.ly; S.mode = prev.mode; S.mt = prev.mt; S.t = prev.t; S.seen = prev.seen; S.lod = prev.lod; S.lodT = prev.lodT; }
+      if (prev) { S.cur.set(prev.cur); S.fresh = false; S.key = prev.key; S.ph = prev.ph; S.v = prev.v; S.amp = prev.amp; S.hip = prev.hip; S.lx = prev.lx; S.ly = prev.ly; S.mode = prev.mode; S.mt = prev.mt; S.t = prev.t; S.seen = prev.seen; S.lod = prev.lod; S.lodT = prev.lodT; S.rg = prev.rg; }
       this.st.set(e, S);
     }
     // not drawn for a while (off screen, out of sight): start from its current state instead of blending from a stale pose
@@ -322,7 +322,17 @@ const Char3D = {
     if (Settings.v.ragdoll && pose.mode === 'dead' && S.rg && S.rg.deadT !== undefined) {
       const R = S.rg;
       if (R.asleep && (pose.rdN !== R.rdN || Math.hypot(e.x - R.ex, e.y - R.ey) > 0.01 || pose.dragBy)) R.asleep = false;
-      if (!R.asleep) stat = false;
+      if (!R.asleep) { stat = false; R.saved = 0; }
+      else {
+        this.ragReg(R);
+        // (its pose goes with the save: loaded again it lies as it settled, not in a canned death pose)
+        if (!R.saved && e.dead && R.A0 && R.ang !== undefined) {
+          R.saved = 1;
+          const ca = Math.cos(R.ang), sa = Math.sin(R.ang), rd = v => Math.round(v * 1000) / 1000, p = [];
+          for (let k = 0; k < 7; k++) { const dx = R.x[k * 3] - R.ex, dy = R.x[k * 3 + 1] - R.ey; p.push(rd(dx * ca + dy * sa), rd(-dx * sa + dy * ca), rd(R.x[k * 3 + 2])); }
+          e.rdPose = { a: Array.from(R.A0, rd), p };
+        }
+      }
     }
     if (dead) {
       light = Math.round(light * 40) / 40;
@@ -565,7 +575,7 @@ const Char3D = {
     const cur = S.cur, off = S.off;
     for (let i = 0; i < C3.N; i++) cur[i] = T[i] + off[i] * k;
     // (the near detail rings only: far away it would not show; a body back in range starts again from its pose)
-    if (Settings.v.ragdoll && !S.preview && dt > 0 && !(S.lod > 1)) this.phys(S, P, dt, ex, ey, ang, fresh && !(S.rg && S.rg.deadT !== undefined) || !S.rg || (this.now - S.rg.t > 1500 && S.rg.deadT === undefined));
+    if (Settings.v.ragdoll && !S.preview && dt > 0 && (!(S.lod > 1) || P.mode === 'dead')) this.phys(S, P, dt, ex, ey, ang, fresh && !(S.rg && S.rg.deadT !== undefined) || !S.rg || (this.now - S.rg.t > 1500 && S.rg.deadT === undefined));
     S.fresh = false;
   },
   // ---- active ragdoll (Experimental; after Jakobsen, "Advanced Character Physics"): a body of point masses - the
@@ -602,12 +612,22 @@ const Char3D = {
     // dying there is no death animation: the body keeps the pose it died in (what its muscles hold while it is still
     // on its feet) and physics does the rest
     if (P.mode === 'dead' && R && R.A0) cur.set(R.A0);
+    // (a body first seen already down - loaded, or died out of sight - lies as it was, or as saved)
+    else if (P.mode === 'dead' && !R && P.rdPose && P.rdPose.a && P.rdPose.a.length === C3.N && !(P.prog < 1)) cur.set(P.rdPose.a);
     const ca = Math.cos(ang), sa = Math.sin(ang);
     // body frame -> world (tiles are metres): x along the facing, y to the body's right
     const tw = this.ragTargets(cur, D, this.rgT), W = R ? R.tg : new Float64Array(21);
     for (let k = 0; k < NP; k++) { const bx = tw[k * 3], by = tw[k * 3 + 1]; W[k * 3] = ex + bx * ca - by * sa; W[k * 3 + 1] = ey + bx * sa + by * ca; W[k * 3 + 2] = tw[k * 3 + 2]; }
     if (!R || fresh || Math.hypot(ex - R.ex, ey - R.ey) > 1.5) {
       R = S.rg = { x: Float64Array.from(W), v: new Float64Array(21), tg: W, tp: Float64Array.from(W), A: new Float32Array(C3.N), foot: new Float64Array(4), step: null, bal: 0, ox: 0, oy: 0, leg: 0, wasUp: true, rdN: P.rdN, ex, ey, str: P.mode === 'dead' || P.mode === 'fall' ? 0.1 : 1, t: this.now };
+      if (P.mode === 'dead' && !(P.prog < 1)) {
+        R.deadT = 10; R.style = this.DSTY[P.rdStyle] ? P.rdStyle : 'crumple'; R.A0 = Float32Array.from(cur); R.upT = 0; R.legSet = 1; R.cv0 = 0; R.wake = 0; R.pitched = 1;
+        const Q = P.rdPose && P.rdPose.p;
+        if (Q && Q.length === 21) for (let k = 0; k < NP; k++) { const bx = Q[k * 3], by = Q[k * 3 + 1]; R.x[k * 3] = ex + bx * ca - by * sa; R.x[k * 3 + 1] = ey + bx * sa + by * ca; R.x[k * 3 + 2] = Q[k * 3 + 2]; }
+        R.asleep = !!Q; R.saved = R.asleep ? 1 : 0;
+      }
+      // (lying, the pose's points may start a little in the ground: settled out of it at rest, not thrown out)
+      for (let rep = 0; rep < 8; rep++) { this.ragCons(R.x, W, D, R); for (let k = 0; k < NP; k++) { const rad = this.RP[k][2]; if (R.x[k * 3 + 2] < rad) R.x[k * 3 + 2] = rad; } }
       return;
     }
     // (a body that is moved - dragged, slid along by a car - wakes up)
@@ -615,7 +635,10 @@ const Char3D = {
     R.ex = ex; R.ey = ey; R.t = this.now;
     const x = R.x, v = R.v, tp = R.tp, A = R.A;
     A.set(cur);
-    dt = Math.min(dt, 0.1);
+    // (slow frames run in more steps rather than in slow motion)
+    dt = Math.min(dt, 0.25);
+    R.down = P.mode === 'dead' || P.mode === 'fall' || P.mode === 'lie' || P.mode === 'crawl';
+    this.ragReg(R);
     const mode = P.mode, down = mode === 'dead' || mode === 'fall' || mode === 'lie' || mode === 'sleep' || mode === 'crawl';
     // muscle strength: full on the feet; dead or knocked down they let go (a little tone left, so the body settles near
     // the pose the game thinks it lies in); getting up they come back
@@ -649,7 +672,8 @@ const Char3D = {
       R.rdN = P.rdN; R.wake = 5; R.asleep = false;
       const F = (P.rdF || 0.5) * (me ? 0.7 : 1), pa = ang + (P.rdA === undefined ? Math.PI : P.rdA), px = Math.cos(pa), py = Math.sin(pa), rr = () => Math.random() - 0.5;
       // (a car sweeps the legs and lifts the body; a blow lands high)
-      const car = P.rdCar || 0, kick = car ? [1.6, 1.4, 1.3, 1.5, 1.5, 2.4, 2.4] : [0.9, 2.1, 2.7, 1.5, 1.5, 0, 0];
+      // (a shot to the head snaps it back, the trunk hardly moves)
+      const car = P.rdCar || 0, kick = car ? [1.6, 1.4, 1.3, 1.5, 1.5, 2.4, 2.4] : P.rdHead ? [0.4, 1.1, 4.6, 1.1, 1.1, 0, 0] : [0.9, 2.1, 2.7, 1.5, 1.5, 0, 0];
       for (let k = 0; k < NP; k++) { v[k * 3] += px * kick[k] * F + (k > 2 && k < 5 ? rr() * 1.4 * F : 0); v[k * 3 + 1] += py * kick[k] * F + (k > 2 && k < 5 ? rr() * 1.4 * F : 0); v[k * 3 + 2] += (k > 2 && k < 5 ? 0.8 * F : k === 2 ? 0.3 * F : 0) + car * (k >= 5 ? 3.2 : 2.2); }
     }
     // the feet: a stumble moves the support - the stepping foot's offset (world) - and the whole body's target with it
@@ -657,7 +681,7 @@ const Char3D = {
     R.ox += ((ft[0] + ft[2]) / 2 - R.ox) * Math.min(1, dt * 3); R.oy += ((ft[1] + ft[3]) / 2 - R.oy) * Math.min(1, dt * 3);
     const offX = R.ox, offY = R.oy;
     // target velocities (for the dampers: they match the animation's motion, so walking does not lag)
-    const h = 1 / 120, n = Math.max(1, Math.round(dt / h)), hh = dt / n;
+    const h = Math.max(1 / 120, dt / 20), n = Math.max(1, Math.round(dt / h)), hh = dt / n;
     const TW = this.rgTW || (this.rgTW = new Float64Array(21));
     for (let k = 0; k < NP; k++) {
       const fo = k === 5 ? 0 : k === 6 ? 2 : -1;
@@ -714,6 +738,14 @@ const Char3D = {
     let dgx = 0, dgy = 0, dgz = 0;
     if (dragPts) { const dx = P.dragX - ex, dy = P.dragY - ey, dl = Math.hypot(dx, dy) || 1; dgx = P.dragX - dx / dl * 0.42; dgy = P.dragY - dy / dl * 0.42; dgz = P.dragBy === 2 ? 0.42 : 0.55; }
     const RP = this.RP, g = 9.8;
+    // other bodies near enough to touch: the dead and the fallen lie on one another rather than through
+    const nb = this.rgNb || (this.rgNb = []), cf = this.rgCf || (this.rgCf = new Uint8Array(7)), PS = this.rgPS || (this.rgPS = new Float64Array(21));
+    nb.length = 0;
+    if (R.down) {
+      const sm = this.rgSm = (this.rgSm || 0) + 1;
+      for (const L of [this.rgL0, this.rgL]) if (L) for (const O of L) if (O !== R && O.down && O.sm !== sm && Math.abs(O.ex - ex) < 3 && Math.abs(O.ey - ey) < 3) { O.sm = sm; nb.push(O); }
+    }
+    let imp = 0;
     // arms doing something (aiming, swinging, working) are held firmly; hanging or reaching (the dead) they swing loose
     const armW = (P.arms && !/^(idle|zombie|hold)$/.test(P.arms)) || P.swingT !== undefined || P.aim ? 18 : 0;
     for (let it = 0; it < n; it++) {
@@ -738,26 +770,33 @@ const Char3D = {
       x0.set(x);
       for (let i = 0; i < 21; i++) x[i] += v[i] * hh;
       for (let rep = 0; rep < 3; rep++) {
-        this.ragBone(x, 0, 1, this.ragLen(TW, 0, 1), 0);
-        this.ragBone(x, 1, 2, this.ragLen(TW, 1, 2), 0);
-        this.ragBone(x, 1, 3, D.shW + D.ua + D.fa + 0.04, 1); this.ragBone(x, 1, 4, D.shW + D.ua + D.fa + 0.04, 1);
-        this.ragBone(x, 0, 5, D.thigh + D.shin + D.hipW + 0.05, 1); this.ragBone(x, 0, 6, D.thigh + D.shin + D.hipW + 0.05, 1);
-        this.ragBone(x, 2, 0, this.ragLen(TW, 2, 0) * 0.72, -1);
-        // dying, the legs stay stiff for a moment (struts, not ropes): the body topples over its feet before the
-        // knees go, instead of dropping straight down
-        if (R.leg > 0.3) { const L = (D.hipH - D.ankH) * (0.55 + 0.4 * R.leg); this.ragBone(x, 0, 5, L, -1); this.ragBone(x, 0, 6, L, -1); }
-        // rigid (a headshot): every point held at its distance from the others - a plank that topples whole
-        if (R.rigid) for (const q of R.rigid) this.ragBone(x, q[0], q[1], q[2], 0);
-        for (let k = 0; k < NP; k++) { const rad = RP[k][2]; if (x[k * 3 + 2] < rad) x[k * 3 + 2] = rad; }
+        this.ragCons(x, TW, D, R);
+        for (let k = 0; k < NP; k++) { const rad = RP[k][2]; if (x[k * 3 + 2] < rad) { if (!rep && k < 3) imp = Math.max(imp, -v[k * 3 + 2]); x[k * 3 + 2] = rad; } }
       }
+      cf.fill(0);
+      // (a push apart moves the point without setting it moving; what was moving into the other body stops)
+      if (nb.length) { PS.fill(0); this.ragTouch(x, v, nb, cf, PS, x[8] > 0.75); for (let i = 0; i < 21; i++) x0[i] += PS[i]; }
       for (let i = 0; i < 21; i++) {
         let nv = (x[i] - x0[i]) / hh;
         // ground friction on whatever lies on it
-        if (i % 3 !== 2 && x[i - (i % 3) + 2] <= RP[(i / 3) | 0][2] + 0.002) nv *= 1 - Math.min(1, hh * 8);
+        // (bodies on bodies: cloth on cloth, they do not slide off one another easily)
+        if (i % 3 !== 2) { if (cf[(i / 3) | 0]) nv *= 1 - Math.min(1, hh * 30); else if (x[i - (i % 3) + 2] <= RP[(i / 3) | 0][2] + 0.002) nv *= 1 - Math.min(1, hh * 8); }
         v[i] = nv;
+      }
+      if (nb.length) for (let k = 0; k < NP; k++) {
+        if (!cf[k]) continue;
+        const j = k * 3, pl = Math.hypot(PS[j], PS[j + 1], PS[j + 2]);
+        if (pl < 1e-9) continue;
+        const nx = PS[j] / pl, ny = PS[j + 1] / pl, nz = PS[j + 2] / pl, vn = v[j] * nx + v[j + 1] * ny + v[j + 2] * nz;
+        if (vn < 0) { v[j] -= vn * nx; v[j + 1] -= vn * ny; v[j + 2] -= vn * nz; }
       }
     }
     tp.set(TW);
+    // a hard landing: a thud (and from a corpse that hits hard, a little blood where it lands)
+    if (imp > 2.2 && R.down && !(this.now - (R.thT || 0) < 400) && G.player && typeof Sfx !== 'undefined') {
+      R.thT = this.now; Sfx.play('thud', x[0], x[1]);
+      if (imp > 3.6 && mode === 'dead' && !me && Math.random() < 0.6) Fx.decal(x[3], x[4], 0.6);
+    }
     // the walls: a point the far side of a wall (or inside furniture) from the body's middle is pulled back to it
     for (let k = 0; k < NP; k++) {
       const j = k * 3, dx = x[j] - ex, dy = x[j + 1] - ey;
@@ -830,6 +869,7 @@ const Char3D = {
       cur[j] = o[0]; cur[j + 1] = o[1]; cur[j + 2] = o[2];
       cur[j + 4] = A[j + 4] + asinA - Math.asin(U.clamp(Pn[5], -1, 1));
     }
+    R.ang = ang;
     // a body still moving is not settled yet (it would be frozen into its resting sprite mid-fall)
     if (mode === 'dead' && !R.asleep && S.offD) S.offT = Math.min(S.offT, S.offD * 0.999);
   },
@@ -862,6 +902,58 @@ const Char3D = {
       v[9] += qx * 2.6; v[10] += qy * 2.6; v[12] -= qx * 2.6; v[13] -= qy * 2.6; v[3] += qx * 0.9; v[4] += qy * 0.9; v[6] += qx * 1.3; v[7] += qy * 1.3;
       v[15] -= qx * 0.6; v[16] -= qy * 0.6; v[18] -= qx * 0.6; v[19] -= qy * 0.6;
     }
+  },
+  // the bodies simulated (or lying asleep) this frame and last - for bodies to touch
+  ragReg(R) {
+    if (this.rgF !== this.fno) { this.rgF = this.fno; this.rgL0 = this.rgL; this.rgL = []; }
+    if (R.reg !== this.fno) { R.reg = this.fno; this.rgL.push(R); }
+  },
+  // the points of x against the trunk, head and feet of the bodies nb (balls): pushed apart, this body taking all
+  // of it from one asleep (which a hard knock wakes), half from one moving itself; cf: the points touching. Only
+  // ever up or aside (the one on top is the one lifted: two bodies must not climb one another), and a little at a
+  // time (one dropped in the middle of another eases out rather than being thrown)
+  RC: [0.13, 0.13, 0.1, 0.05, 0.05, 0.07, 0.07],
+  // (a body still on its feet walks over the dead, as the game has it: its feet do not touch them)
+  ragTouch(x, v, nb, cf, PS, up) {
+    const RC = this.RC;
+    for (const O of nb) {
+      const ox = O.x, sh = O.asleep ? 1 : 0.5;
+      for (let k = 0; k < (up ? 5 : 7); k++) {
+        const j = k * 3;
+        for (const m of [0, 1, 2, 5, 6]) {
+          const q = m * 3, dx = x[j] - ox[q], dy = x[j + 1] - ox[q + 1], dz = x[j + 2] - ox[q + 2], r = RC[k] + RC[m], d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 >= r * r) continue;
+          const d = Math.sqrt(d2);
+          // (straight on top: up)
+          let nx = d > 1e-4 ? dx / d : 0, ny = d > 1e-4 ? dy / d : 0, nz = d > 1e-4 ? dz / d : 1;
+          if (nz < -0.3) continue;
+          // (on top: held up straight from below, as on a heap, so it does not slide off sideways; beside: aside)
+          let p;
+          if (nz > 0.3) { nx = ny = 0; nz = 1; p = Math.min(0.005, (ox[q + 2] + Math.sqrt(r * r - dx * dx - dy * dy) - x[j + 2]) * sh); }
+          else { const hl = Math.hypot(nx, ny) || 1; nx /= hl; ny /= hl; nz = 0; p = Math.min(0.005, (r - d) * sh); }
+          if (p <= 0) continue;
+          x[j] += nx * p; x[j + 1] += ny * p; x[j + 2] += nz * p; PS[j] += nx * p; PS[j + 1] += ny * p; PS[j + 2] += nz * p; cf[k] = 1;
+          const vn = -(v[j] * nx + v[j + 1] * ny + v[j + 2] * nz);
+          if (vn > 1.2) {
+            if (O.asleep) { O.asleep = false; O.wake = 2; }
+            const ov = O.v; ov[q] -= nx * vn * 0.3; ov[q + 1] -= ny * vn * 0.3; ov[q + 2] -= nz * vn * 0.3;
+          }
+        }
+      }
+    }
+  },
+  // the bones (and the struts of stiff legs, and a rigid body's frame)
+  ragCons(x, TW, D, R) {
+    this.ragBone(x, 0, 1, this.ragLen(TW, 0, 1), 0);
+    this.ragBone(x, 1, 2, this.ragLen(TW, 1, 2), 0);
+    this.ragBone(x, 1, 3, D.shW + D.ua + D.fa + 0.04, 1); this.ragBone(x, 1, 4, D.shW + D.ua + D.fa + 0.04, 1);
+    this.ragBone(x, 0, 5, D.thigh + D.shin + D.hipW + 0.05, 1); this.ragBone(x, 0, 6, D.thigh + D.shin + D.hipW + 0.05, 1);
+    this.ragBone(x, 2, 0, this.ragLen(TW, 2, 0) * 0.72, -1);
+    // dying, the legs stay stiff for a moment (struts, not ropes): the body topples over its feet before the
+    // knees go, instead of dropping straight down
+    if (R.leg > 0.3) { const L = (D.hipH - D.ankH) * (0.55 + 0.4 * R.leg); this.ragBone(x, 0, 5, L, -1); this.ragBone(x, 0, 6, L, -1); }
+    // rigid (a headshot): every point held at its distance from the others - a plank that topples whole
+    if (R.rigid) for (const q of R.rigid) this.ragBone(x, q[0], q[1], q[2], 0);
   },
   ragLen(T, a, b) { return Math.hypot(T[a * 3] - T[b * 3], T[a * 3 + 1] - T[b * 3 + 1], T[a * 3 + 2] - T[b * 3 + 2]); },
   // a bone between points a and b: kind 0 exactly len, 1 at most len, -1 at least len (equal masses)

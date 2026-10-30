@@ -584,7 +584,7 @@ const Zombie = {
     o = o || {};
     if (z.dead) {
       // a blow, a shot or a kick on a body: it jolts (active ragdolls)
-      if (Settings.v.ragdoll) { z.rdN = (z.rdN || 0) + 1; z.rdA = U.angDiff(z.a, fromA !== undefined ? fromA : z.a + Math.PI); z.rdF = U.clamp(0.3 + dmg / 50, 0.3, 1.2); z.rdCar = o.kind === 'car' ? U.clamp((o.spd || 20) / 45, 0.2, 1.4) : 0; }
+      if (Settings.v.ragdoll) { z.rdN = (z.rdN || 0) + 1; z.rdA = U.angDiff(z.a, fromA !== undefined ? fromA : z.a + Math.PI); z.rdF = U.clamp(0.3 + dmg / 50, 0.3, 1.2); z.rdCar = o.kind === 'car' ? U.clamp((o.spd || 20) / 45, 0.2, 1.4) : 0; z.rdHead = o.head ? 1 : 0; }
       return;
     }
     if (z.fake) { z.fake = false; z.downT = R.f(0.8, 1.6); }
@@ -592,6 +592,7 @@ const Zombie = {
     z.hp -= dmg;
     // for the active ragdoll (Char3D.rag): which way the blow pushes, relative to its facing, and how hard
     z.rdN = (z.rdN || 0) + 1; z.rdA = U.angDiff(z.a, fromA !== undefined ? fromA : z.a + Math.PI); z.rdF = U.clamp(0.35 + dmg / 40 + (o.knock ? 0.4 : 0) + (z.hp <= 0 ? 0.5 : 0), 0.3, 1.8);
+    z.rdHead = o.head ? 1 : 0;
     // a car: thrown by its speed, the legs swept out from under it, lifted at speed
     if (o.kind === 'car') { const mph = o.spd || 20; z.rdF = U.clamp(mph / 18, 0.8, 4); z.rdCar = U.clamp(mph / 45, 0.2, 1.4); } else z.rdCar = 0;
     // blood by the kind of blow, wounds, limbs that come off (gore.js; o.kind blunt / blade / chop / stab / gun ...)
@@ -685,7 +686,7 @@ const Zombie = {
     const pushA = fromA !== undefined ? fromA : z.a + Math.PI;
     // how it dies (Char3D.DEATHS): which way it falls follows from the death; a car throws the body along the road
     const dk = z.death = this.deathOf(z, fromA, o || {}, wasDown), dr = dk && Char3D.DEATHS[dk];
-    z.rdStyle = this.rdStyleOf(z, fromA, o || {}, wasDown);
+    z.rdStyle = this.rdStyleOf(z, fromA, o || {}, wasDown); z.rdPose = null;
     if (dr && dr.lie) z.lieDir = dr.lie;
     if (dr && o && o.kind === 'car') { const v = Math.min(9, (o.spd || 20) * 0.06); z.slide = [Math.cos(pushA) * v, Math.sin(pushA) * v]; }
     World.move(z, Math.cos(pushA) * 0.3, Math.sin(pushA) * 0.3, z.r);
@@ -759,7 +760,7 @@ const Zombie = {
     if (D0 && z.dead && !z.fake && D0.pose.lieDir === z.lieDir) {
       D0.s = s; D0.rot = rot;
       // (active ragdolls: what has happened to the body since - a blow, being dragged)
-      if (Settings.v.ragdoll) { const q = D0.pose, pl = G.player; q.rdN = z.rdN; q.rdA = z.rdA; q.rdF = z.rdF; q.rdCar = z.rdCar; if (pl && pl.drag === z) { q.dragBy = pl.dragS || 1; q.dragX = pl.x; q.dragY = pl.y; } else q.dragBy = 0; }
+      if (Settings.v.ragdoll) { const q = D0.pose, pl = G.player; q.rdN = z.rdN; q.rdA = z.rdA; q.rdF = z.rdF; q.rdCar = z.rdCar; q.rdHead = z.rdHead; q.rdPose = z.rdPose; if (pl && pl.drag === z) { q.dragBy = pl.dragS || 1; q.dragX = pl.x; q.dragY = pl.y; } else q.dragBy = 0; }
       return D0;
     }
     // animation state for Char3D (mode, prog 0..1 through it) plus the simpler fields the 2D painter reads
@@ -776,7 +777,8 @@ const Zombie = {
     else if (z.biteT > 0 && !z.crawl && z.st !== 'down') { pose.mode = 'attack'; pose.prog = 1 - z.biteT / 0.4 * 0.18; }
     if (z.st === 'feed' && z.feeding) { pose.mode = 'feed'; pose.crouch = 0.75; pose.amp = 0; }
     if (z.st === 'thump') { pose.arms = 'thump'; pose.reach = 1; pose.lean = 0.3; pose.prog = U.clamp(1 - z.thumpT / (z.thump0 || 1), 0, 1); }
-    if (z.rdN) { pose.rdN = z.rdN; pose.rdA = z.rdA; pose.rdF = z.rdF; pose.rdCar = z.rdCar; }
+    if (z.rdN) { pose.rdN = z.rdN; pose.rdA = z.rdA; pose.rdF = z.rdF; pose.rdCar = z.rdCar; pose.rdHead = z.rdHead; }
+    if (z.rdPose) pose.rdPose = z.rdPose;
     if (z.rdStyle) pose.rdStyle = z.rdStyle;
     if (z.daze > 0) pose.daze = z.daze;
     if (z.armLimp) pose.armLimp = z.armLimp;

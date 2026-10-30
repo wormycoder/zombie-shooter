@@ -475,6 +475,24 @@ TEST BRANCH (claude/active-ragdolls-test) - ACTIVE RAGDOLLS AS AN OPTION.
      - zombies trip over bodies (stumble on, or now and then go down).
      - the player's body is held 1.6x firmer, takes blows at 70%, and
        needs a bigger push before it steps.
+     v5 (asked for: generally improve the ragdolls):
+     - bodies touch: the dead and the fallen land on and lie over other
+       bodies (held up from below, so a heap does not slide apart; pushed
+       aside when side by side; a body still on its feet walks over them).
+       A hard landing on a sleeping body wakes it and jolts it.
+     - hard landings thud (and a corpse that hits hard leaves a little
+       blood where it lands).
+     - shots to the head snap the head back, the trunk hardly moving.
+     - settled bodies are saved: the pose and the points go with the save
+       (z.rdPose), so a loaded game shows each body as it settled, and one
+       out of sight or redrawn does not fall again.
+     - a body first seen already down (died out of sight, loaded) lies
+       still instead of replaying its death; dead bodies are simulated at
+       any distance (they soon sleep), not only in the two near rings.
+     - new bodies start at rest (no throw out of the ground on the first
+       step); slow frames run in more physics steps instead of slow motion
+       (up to 0.25 s a frame).
+     Next: elbows and knees as points, getting up from the physics pose.
 
 --------------------------------------------------------------------
 RUN LOG
