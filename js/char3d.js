@@ -50,9 +50,14 @@ function c3emit(m, cx, cy, cz, xx, xy, xz, yx, yy, yz, zx, zy, zz, col, t0, t1) 
   if (py + ey > C3B.y1) C3B.y1 = py + ey;
 }
 // mesh m on frame F's axes: centre at local (a, b, c), half sizes along f, s, up; taper t0 (bottom) -> t1 (top)
+// holes torn in the body (gore chunks): parts drawn on the chest (F1) or lumbar (F2) frame get those frames' holes
+const C3H = { on: false, F1: null, L1: [], F2: null, L2: [] };
 function c3box(m, F, a, b, c, hf, hs, hu, col, t0, t1) {
+  const H = C3H, hl = H.on && (F === H.F1 ? H.L1 : F === H.F2 ? H.L2 : null);
+  if (hl && hl.length) { GL3D.h0 = hl[0]; GL3D.h1 = hl[1] || null; GL3D.ho[0] = a; GL3D.ho[1] = b; GL3D.ho[2] = c; }
   c3emit(m, F[0] + F[3] * a + F[6] * b + F[9] * c, F[1] + F[4] * a + F[7] * b + F[10] * c, F[2] + F[5] * a + F[8] * b + F[11] * c,
     F[3] * hf, F[4] * hf, F[5] * hf, F[6] * hs, F[7] * hs, F[8] * hs, F[9] * hu, F[10] * hu, F[11] * hu, col, t0 === undefined ? 1 : t0, t1 === undefined ? 1 : t1);
+  if (hl) GL3D.h0 = GL3D.h1 = null;
 }
 // mesh m spanning points A -> B: local z along AB (taper t0 at A, t1 at B), local x (half rx) toward hint h, y (half ry)
 function c3seg(m, A, B, rx, ry, col, t0, t1, hx, hy, hz) {
@@ -88,6 +93,8 @@ const c3a = c3v(), c3b = c3v(), c3c = c3v(), c3d = c3v(), c3e = c3v(), c3g = c3v
 const C3U = {}, C3R = {};
 // the inside of a chunk torn out (gore)
 const C3HOLE = [0.1, 0.016, 0.013];
+// the inside of a hole (GL3D material 17; variant 1 with ribs)
+const C3CUP = Object.assign([0.4, 0.07, 0.06], { m: [17, 0, 0, 0] }), C3CUPR = Object.assign([0.4, 0.07, 0.06], { m: [17, 1, 0, 0] });
 // material kinds painted by GL3D's fragment shader
 const C3MAT = { cotton: 1, denim: 2, knit: 3, leather: 4, quilt: 5, plaid: 6, stripe: 7, camo: 8, skin: 9, face: 10, hair: 11, twill: 12, plastic: 13, splat: 14, rubber: 15, fleece: 16 };
 function c3mesh(name, U, rings, seg, axis) {
@@ -1612,6 +1619,18 @@ const Char3D = {
     }
     // ---- pelvis, belly, rib cage
     GL3D.sd = sd0;
+    // chunks torn out (gore.js) from Low detail up are real holes through the torso and everything worn over it
+    const HQ = gg && gg.c && gg.c.length && det > 0 && Gore.q() >= 2;
+    if (HQ) {
+      const o = this.so || (this.so = new Float64Array(5));
+      C3H.F1 = Cf; C3H.F2 = Lf; C3H.L1 = []; C3H.L2 = [];
+      for (const c of gg.c) {
+        const ch = c[0] === 'chest', sx = ch ? shS : waS;
+        this.surf(o, ch ? 'CHEST' : 'BELLY', c[1], c[2], sx, sx, H);
+        (ch ? C3H.L1 : C3H.L2).push([o[0], o[1], o[2] + (ch ? 0 : 0), c[3]]);
+      }
+      C3H.on = true;
+    }
     const top = Pl.top, under = jk ? Pl.shirt : Pl.top, jx = jk ? 1.07 : 1;
     c3box(M.PELVIS, Pf, 0, 0, 0, UP * hiS, UP * hiS, UP * H, Pl.pants);
     // the shirt hangs over the belt unless tucked in
@@ -1668,23 +1687,27 @@ const Char3D = {
         this.patch(ch ? Cf : Lf, o, w[3] * (w[4] ? 1.1 : 0.7), w[3] * (w[4] ? 0.32 : 0.6), Pl.wound, 0.009);
       }
     }
-    // chunks torn out (gore.js): a soaked ring, a torn rim and the dark hollow; from medium detail flesh tags round
-    // the rim, at high a glimpse of rib
+    // chunks torn out (gore.js). Very low: a dark torn patch. From Low: the hole cut above, a cup of torn flesh inside
+    // it; from Medium flesh tags round the edge, at High ribs across the inside
+    C3H.on = false;
     if (gg && gg.c && gg.c.length && det > 0) {
-      const o = this.so || (this.so = new Float64Array(5)), sc = jk ? 1.08 : Pl.vest ? 1.1 : 1, q = Gore.q();
+      const o = this.so || (this.so = new Float64Array(5)), q = Gore.q();
       for (const c of gg.c) {
-        const ch = c[0] === 'chest', F = ch ? Cf : Lf, sx = (ch ? shS : waS) * sc, r = c[3];
+        const ch = c[0] === 'chest', F = ch ? Cf : Lf, sx = ch ? shS : waS, r = c[3];
         this.surf(o, ch ? 'CHEST' : 'BELLY', c[1], c[2], sx, sx, H);
-        this.patch(F, o, r * 1.7, r * 1.5, Pl.blood, 0.006);
-        if (q >= 2) this.patch(F, o, r * 1.15, r * 1.05, Pl.wound, 0.008);
-        this.patch(F, o, r * 0.82, r * 0.72, C3HOLE, 0.01);
+        if (!HQ) { this.patch(F, o, r * 1.6, r * 1.4, Pl.blood, 0.006); this.patch(F, o, r * 0.82, r * 0.72, C3HOLE, 0.01); continue; }
+        const nx = o[3], ny = o[4], k = r * 1.2, dn = -0.014;
+        // the cup: local z along the outward normal, its centre a little under the skin
+        const px = o[0] + nx * dn, py = o[1] + ny * dn, pz = o[2];
+        c3emit(M.SPH, F[0] + F[3] * px + F[6] * py + F[9] * pz, F[1] + F[4] * px + F[7] * py + F[10] * pz, F[2] + F[5] * px + F[8] * py + F[11] * pz,
+          (F[3] * -ny + F[6] * nx) * k, (F[4] * -ny + F[7] * nx) * k, (F[5] * -ny + F[8] * nx) * k, F[9] * k, F[10] * k, F[11] * k,
+          (F[3] * nx + F[6] * ny) * k, (F[4] * nx + F[7] * ny) * k, (F[5] * nx + F[8] * ny) * k, q >= 4 ? C3CUPR : C3CUP, 1, 1);
         if (q >= 3) {
-          const nx = o[3], ny = o[4], n = q >= 4 ? 5 : 3;
-          for (let k = 0; k < n; k++) {
-            const t = k / n * 6.283 + c[2], u = Math.cos(t) * r * 0.95, v = Math.sin(t) * r * 0.85;
-            c3box(M.SPH, F, o[0] + nx * 0.012 - ny * u, o[1] + ny * 0.012 + nx * u, o[2] + v, 0.008, 0.011, 0.009, Pl.wound);
+          const n = q >= 4 ? 6 : 4;
+          for (let j = 0; j < n; j++) {
+            const t = j / n * 6.283 + c[2], u = Math.cos(t) * r * 1.12, v = Math.sin(t) * r * 1.02;
+            c3box(M.SPH, F, o[0] + nx * 0.004 - ny * u, o[1] + ny * 0.004 + nx * u, o[2] + v, 0.008, 0.012, 0.01, Pl.wound);
           }
-          if (q >= 4) c3box(M.SPH, F, o[0] + nx * 0.008, o[1] + ny * 0.008, o[2] + r * 0.1, 0.004, r * 0.45, 0.006, Pl.bone);
         }
       }
     }

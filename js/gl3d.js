@@ -27,8 +27,9 @@ const GL3D = {
   // software WebGL (no GPU) is far too slow to redraw models every frame; ?soft3d forces it on for testing
   soft: false, allowSoft: /[?&]soft3d/.test(location.search), renderer: '',
   cells: [], cx: 0, cy: 0, rowH: 0, scale: 1, AW: 0, AH: 0,
-  FL: 26,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, seed 1, taper 2, material 4
+  FL: 34,   // floats per instance: centre 3, X 3, Y 3, Z 3, colour 3, light 1, flash 1, cell origin 2, seed 1, taper 2, material 4, holes 8
   sd: 0,    // seed stamped on the parts queued next (decorrelates their textures)
+  ho: [0, 0, 0], h0: null, h1: null,   // (ho: the part's centre in the holes' frame) holes cut in the parts queued next: [x, y, z, r] in the part's own metres (or null)
   ok() {
     if (this.failed) return false;
     if (this.gl) return !this.gl.isContextLost();
@@ -53,9 +54,9 @@ const GL3D = {
       this.drawInst = v2 ? (m, n, t, o, k) => gl.drawElementsInstanced(m, n, t, o, k) : (m, n, t, o, k) => ext.drawElementsInstancedANGLE(m, n, t, o, k);
       const vs = `
         attribute vec3 aP; attribute vec3 aN;
-        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT; attribute float iS; attribute vec4 iM;
+        attribute vec3 iC; attribute vec3 iX; attribute vec3 iY; attribute vec3 iZ; attribute vec3 iCol; attribute vec4 iL; attribute vec2 iT; attribute float iS; attribute vec4 iM; attribute vec4 iH0; attribute vec4 iH1;
         uniform vec2 uAtlas; uniform float uScale;
-        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ;
+        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ; varying vec4 vH0; varying vec4 vH1;
         void main() {
           // taper: the cross-section scales linearly along local z; the normal follows the slanted surface
           float s = mix(iT.x, iT.y, aP.z * 0.5 + 0.5), sd = (iT.y - iT.x) * 0.5;
@@ -72,14 +73,15 @@ const GL3D = {
           vB = vec4(lp * vec3(lx, ly, lz), iS + lx * 31.0 + ly * 17.0 + lz * 11.0);
           vC = vec4(lp, (lx + ly) * 0.5 * s);
           vD = vec4(n, iL.x);
-          vM = iM; vZ = w.z;
+          vM = iM; vZ = w.z; vH0 = iH0; vH1 = iH1;
           vec2 sc = vec2((w.x - w.y) * 32.0, (w.x + w.y) * 16.0 - w.z * 32.0) * uScale + iL.zw;
           gl_Position = vec4(sc.x / uAtlas.x * 2.0 - 1.0, 1.0 - sc.y / uAtlas.y * 2.0, -(w.x + w.y + w.z) / 16.0, 1.0);
         }`;
       // Materials (iM.x; iM.y a variant, iM.z grime 0..1, iM.w blood 0..1), painted procedurally on the surface:
       // 1 cotton, 2 denim, 3 knit, 4 leather, 5 quilted (puffer), 6 plaid (y: 0 flannel, 1 buffalo check), 7 stripes
       // (y: 0 light, 1 dark), 8 camouflage, 9 skin (y: decay of the dead), 10 face (y: decay, or minus stubble),
-      // 11 hair, 12 twill / canvas, 13 plastic, 14 a blood splat (ragged edge), 15 rubber / sneaker, 16 fleece.
+      // 11 hair, 12 twill / canvas, 13 plastic, 14 a blood splat (ragged edge), 15 rubber / sneaker, 16 fleece,
+      // 17 the inside of a hole torn in the body (y: ribs across it). Parts can also carry two holes (iH0/iH1).
       // Features too small to see at the current zoom fade to their average instead of shimmering.
       const fs = `
         #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -88,7 +90,7 @@ const GL3D = {
         precision mediump float;
         #endif
         uniform float uPx;
-        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ;
+        varying vec4 vA; varying vec4 vB; varying vec4 vC; varying vec4 vD; varying vec4 vM; varying float vZ; varying vec4 vH0; varying vec4 vH1;
         float hsh(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
         float vn(vec3 x) {
           vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -103,7 +105,27 @@ const GL3D = {
           float t = floor(vM.x + 0.5), spec = 0.0, cloth = 0.0;
           vec3 P = vB.xyz + vB.w * 1.37, Q = vC.xyz;
           float R = vC.w, ar = atan(Q.y, Q.x), U = ar * R;
-          if (c.r <= 1.0 && t > 0.5) {
+          // holes torn in the part: nothing inside a ragged edge (the cavity drawn behind shows through), blood round it
+          float rim = 0.0;
+          for (int h = 0; h < 2; h++) {
+            vec4 H = h == 0 ? vH0 : vH1;
+            if (H.w > 0.0) {
+              vec3 d = vB.xyz - H.xyz;
+              float e = H.w * (0.82 + 0.36 * vn(normalize(d + 1e-4) * 3.0 + H.xyz * 40.0)), l = length(d);
+              if (l < e) discard;
+              rim = max(rim, 1.0 - smoothstep(e, e + H.w * 0.6, l));
+            }
+          }
+          if (t > 16.5) {
+            // the inside of a hole (a cup below the surface, local z outward): only the half under the skin, lit as a
+            // hollow - torn flesh, darker the deeper, pale ribs across at high detail
+            if (Q.z > 0.02) discard;
+            n = -n;
+            float dp = clamp(-Q.z, 0.0, 1.0);
+            c = mix(vec3(0.5, 0.09, 0.07), vec3(0.16, 0.02, 0.02), dp) * (0.8 + 0.4 * vn(P * 60.0));
+            if (vM.y > 0.5) c = mix(c, vec3(0.78, 0.72, 0.6), (1.0 - smoothstep(0.06, 0.12, abs(fract(Q.y * 2.2 + 0.25) - 0.5))) * smoothstep(0.2, 0.5, dp) * 0.9);
+          }
+          if (c.r <= 1.0 && t > 0.5 && t < 16.5) {
             float mot = fbm(P * 13.0), vm = vis(0.03), vf = vis(0.012);
             if (t < 8.5 || t > 11.5) {
               cloth = 1.0;
@@ -211,6 +233,8 @@ const GL3D = {
               // fleece: soft, fuzzy, bigger folds
               c *= 1.0 + (vn(P * 150.0) - 0.5) * 0.08 * vf + sin(P.z * 22.0 + mot * 5.0) * 0.04 * vm;
             }
+            // round a hole: torn, wet with blood
+            if (rim > 0.0) c = mix(c, mix(vec3(0.42, 0.05, 0.04), vec3(0.2, 0.03, 0.02), rim), rim * 0.9);
             // grime, worst toward the ground, then blood soaked in (more on the front)
             float g = fbm(P * 6.0 + 50.0) + (0.35 - vZ) * 0.7;
             float gm = smoothstep(0.78 - vM.z * 0.5, 1.02 - vM.z * 0.4, g) * vM.z;
@@ -242,7 +266,7 @@ const GL3D = {
       gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
       this.prog = p;
-      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM']) this.loc[a] = gl.getAttribLocation(p, a);
+      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM', 'iH0', 'iH1']) this.loc[a] = gl.getAttribLocation(p, a);
       this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale'); this.uPx = gl.getUniformLocation(p, 'uPx');
       const buf = (data, T) => { const b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, data, gl.STATIC_DRAW); return b; };
       for (const m of this.buildMeshes().concat(this.defs.map(d => d.build()))) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
@@ -397,6 +421,9 @@ const GL3D = {
     a[o + 12] = r; a[o + 13] = g; a[o + 14] = b;
     a[o + 19] = this.sd; a[o + 20] = t0; a[o + 21] = t1;
     if (mat) { a[o + 22] = mat[0]; a[o + 23] = mat[1]; a[o + 24] = mat[2]; a[o + 25] = mat[3]; } else a[o + 22] = a[o + 23] = a[o + 24] = a[o + 25] = 0;
+    const h0 = this.h0, h1 = this.h1;
+    if (h0) { a[o + 26] = h0[0] - this.ho[0]; a[o + 27] = h0[1] - this.ho[1]; a[o + 28] = h0[2] - this.ho[2]; a[o + 29] = h0[3]; } else a[o + 29] = 0;
+    if (h1) { a[o + 30] = h1[0] - this.ho[0]; a[o + 31] = h1[1] - this.ho[1]; a[o + 32] = h1[2] - this.ho[2]; a[o + 33] = h1[3]; } else a[o + 33] = 0;
   },
   mark(out) { for (let k = 0; k < this.NM; k++) out[k] = this.n[k]; return out; },
   // drop everything queued since mark (no cell could be found)
@@ -441,7 +468,7 @@ const GL3D = {
       gl.enableVertexAttribArray(L.aN); gl.vertexAttribPointer(L.aN, 3, gl.FLOAT, false, 24, 12); this.divisor(L.aN, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, M.ibuf);
       gl.bufferData(gl.ARRAY_BUFFER, this.inst[k].subarray(0, n * this.FL), gl.DYNAMIC_DRAW);
-      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iS', 1, 19); at('iT', 2, 20); at('iM', 4, 22);
+      at('iC', 3, 0); at('iX', 3, 3); at('iY', 3, 6); at('iZ', 3, 9); at('iCol', 3, 12); at('iL', 4, 15); at('iS', 1, 19); at('iT', 2, 20); at('iM', 4, 22); at('iH0', 4, 26); at('iH1', 4, 30);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.ib);
       this.drawInst(gl.TRIANGLES, M.ni, gl.UNSIGNED_SHORT, 0, n);
     }
