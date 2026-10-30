@@ -1061,13 +1061,26 @@ const ContIcons = {
 // ---------------------------------------------------------------------------
 const MapView = {
   zoom: 2.5, cx: 120, cy: 120, revealed: false,
+  // the markers the player can put on the map: symbol, name, ink colour
+  MARKS: [['⌂', 'Safehouse', '#2a6a2a'], ['✚', 'Medical', '#b02020'], ['★', 'Loot', '#a07010'], ['⚠', 'Danger', '#c03018'], ['⛽', 'Fuel', '#2a4a8a'], ['●', 'Note', '#3a2e22']],
   reveal() { this.revealed = true; Player.say('Now I know the area.', '#8f8'); this.base = null; },
   render(P) {
     if (!P.body.querySelector('canvas')) {
-      P.body.innerHTML = `<div class="mapw"><canvas class="mapc"></canvas><div class="mapl sml">Drag to pan · wheel to zoom · explored areas only${this.revealed ? '' : ' (find a map to reveal more)'}</div></div>`;
+      P.body.innerHTML = `<div class="mapw"><canvas class="mapc"></canvas><div class="mapl sml">Drag to pan · wheel to zoom · right-click to mark · explored areas only${this.revealed ? '' : ' (find a map to reveal more)'}</div></div>`;
       const cv = P.body.querySelector('canvas');
       cv.addEventListener('wheel', (e) => { e.preventDefault(); this.zoom = U.clamp(this.zoom * (e.deltaY > 0 ? 0.85 : 1.18), Math.min(1.2, 560 / (Wd.gw || Wd.w)), 10); this.draw(); }, { passive: false });
+      // right-click: put a marker there (a safehouse, loot, danger...) or take one away
+      cv.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const r = cv.getBoundingClientRect(), k = this.zoom, sx = (e.clientX - r.left) * cv.width / r.width, sy = (e.clientY - r.top) * cv.height / r.height;
+        const wx = (sx - cv.width / 2) / k + this.cx, wy = (sy - cv.height / 2) / k + this.cy, p = G.player, M = p.marks || (p.marks = []);
+        const near = M.findIndex(m => Math.hypot(m.x - wx, m.y - wy) < 10 / k + 1.5);
+        const opts = this.MARKS.map(([sym, name, col]) => ({ label: sym + '  ' + name, fn: () => { M.push({ x: wx, y: wy, s: sym, n: name, c: col }); this.draw(); } }));
+        if (near >= 0) opts.unshift({ label: 'Remove marker', fn: () => { M.splice(near, 1); this.draw(); } });
+        UI.showContext(e.clientX, e.clientY, opts);
+      });
       cv.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
         this.dragging = true; const sx = e.clientX, sy = e.clientY, ox = this.cx, oy = this.cy;
         const mv = (ev) => { if (!this.dragging) return; const k = this.zoom * UI.scale; this.cx = ox - (ev.clientX - sx) / k; this.cy = oy - (ev.clientY - sy) / k; this.draw(); };
         const up = () => { this.dragging = false; window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
@@ -1161,8 +1174,19 @@ const MapView = {
         g.fillStyle = tier === 0 ? '#2a2018' : tier === 1 ? '#4a3a2a' : '#5a4a3a'; g.fillText(tx, sx, sy);
       }
     }
-    // player
+    // the player's own markers, inked on top
     const p = G.player;
+    if (p.marks) {
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      for (const m of p.marks) {
+        const sx = (m.x - this.cx) * this.zoom + W / 2, sy = (m.y - this.cy) * this.zoom + H / 2;
+        if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
+        g.font = 'bold 15px Verdana'; g.lineWidth = 3; g.strokeStyle = 'rgba(246,240,224,0.95)'; g.strokeText(m.s, sx, sy); g.fillStyle = m.c; g.fillText(m.s, sx, sy);
+        if (this.zoom >= 2) { g.font = '9px Verdana'; g.strokeText(m.n, sx, sy + 13); g.fillStyle = m.c; g.fillText(m.n, sx, sy + 13); }
+      }
+      g.textBaseline = 'alphabetic';
+    }
+    // player
     const px = (vxOf(p.x) - this.cx) * this.zoom + W / 2, py = (p.y - this.cy) * this.zoom + H / 2;
     g.save(); g.translate(px, py); g.rotate(p.angle);
     g.fillStyle = '#d02020'; g.strokeStyle = '#fff8e8'; g.lineWidth = 1.5;

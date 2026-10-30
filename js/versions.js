@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.034.000.177', date: '2026-10-30', title: 'Marking the map',
+    notes: [
+      'Right-click the map to mark a place: a safehouse, medical supplies, loot, danger, fuel or a note, each in its own ink. Right-click a marker to take it away. Markers are kept with your save.',
+      'The katana is drawn with its proper long two-handed grip again (a second, shorter model had quietly replaced it).',
+    ],
+    commits: [], shots: ['v034000_1'],
+  },
+  {
     v: '000.033.001.175', date: '2026-10-30', title: 'Death throes',
     notes: [
       'The dead no longer fling their arms straight out like a scarecrow as they fall: the arms go out and down from the shoulders, one thrown forward and the other back.',
