@@ -271,7 +271,11 @@ const Render = {
     }
     const dMin = minX + minY, dMax = maxX + maxY, WN = w.wallN, WW = w.wallW, OB = w.obj;
     // furniture in rooms never seen is not drawn (dark floors only, not black silhouettes of what is inside)
-    const RMa = w.room, SNa = w.seen, VGa = World.visGen, vgen = World.gen, hideUnseen = live && !p.dead;
+    const RMa = w.room, SNa = w.seen, VGa = World.visGen, vgen = World.gen, hideUnseen = (live && !p.dead) || Bench.eyes();
+    // (Out-of-view objects: Hidden - nothing but trees drawn on tiles not in view now, seen before or not)
+    // and no fences either (building walls stay: a house must not look hollow)
+    const keepOut = Settings.v.unseen !== 0, isTree = (o) => o.t === 'tree' || o.t === 'st_tree';
+    const fenceOut = (wt, i, j) => !keepOut && hideUnseen && WALL_INFO[wt] && WALL_INFO[wt].fence && VGa[i] !== vgen && VGa[j] !== vgen;
     // (a tile under a shut roof: its room's building covered this frame, and not just inside the walls that face the
     // camera, where windows and shop fronts look in; an inner wall: both sides such tiles)
     const BL = w.buildings;
@@ -318,11 +322,11 @@ const Render = {
         }
         const sh = shut(i, x, y);
         if (Y < B + 100) {
-          if (WN[i] && !(sh && shut(i - W_, x, y - 1))) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
-          if (WW[i] && !(sh && shut(i - 1, x - 1, y))) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
+          if (WN[i] && !(sh && shut(i - W_, x, y - 1)) && !fenceOut(WN[i], i, i - W_)) this.drawWall(x, y, 0, X, Y, pb, pl, 0);
+          if (WW[i] && !(sh && shut(i - 1, x - 1, y)) && !fenceOut(WW[i], i, i - 1)) this.drawWall(x, y, 1, X, Y, pb, pl, 0);
         }
         const o = OB[i];
-        if (o && !sh && (!hideUnseen || RMa[i] < 0 || SNa[i] || VGa[i] === vgen)) this.drawObj(o, x, y, X, Y, pl, t, x);
+        if (o && !sh && (!hideUnseen || VGa[i] === vgen || (keepOut ? RMa[i] < 0 || SNa[i] : isTree(o)))) this.drawObj(o, x, y, X, Y, pl, t, x);
         if (FM) { const fe = FM.get(i); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i * 0.37); }
         for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
       }
@@ -350,7 +354,7 @@ const Render = {
             if (bid >= 0 && bid !== hiddenId && ((openB && bid === openB.id) || this._ext)) this.drawWall(x + W0, y, 1, X, Y, pb, pl, 1);
           }
           if (!openB || x < openB.x0 || x > openB.x1 || y < openB.y0 || y > openB.y1) continue;
-          if (o && (!hideUnseen || RMa[i1] < 0 || SNa[i1] || VGa[i1] === vgen)) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
+          if (o && (!hideUnseen || VGa[i1] === vgen || (keepOut ? RMa[i1] < 0 || SNa[i1] : isTree(o)))) this.drawObj(o, x + W0, y, X, Y, pl, t, x);
           if (FM) { const fe = FM.get(i1); if (fe) Fire.drawFlames(ctx, X, Y, fe, t, i1 * 0.37); }
           for (; bk >= 0; bk = BN[bk]) this.drawEnt(ctx, BK[bk], BE[bk]);
         }
@@ -675,7 +679,8 @@ const Render = {
     const plv = p && !p.dead && p.x >= W0 ? 1 : 0;
     const px = p ? (plv ? p.x - W0 : p.x) : 0, py = p ? p.y : 0;
     const nightMin = p && Player.hasTrait('catseyes') ? 0.22 : 0.15;
-    const dead = !p || p.dead;
+    // (the benchmark's camera sees as a survivor would: Bench.eyes)
+    const dead = (!p || p.dead) && !Bench.eyes();
     for (let lv = 0; lv < layers; lv++) {
       const LB = lv ? this.lightB1 : this.lightB, SB = lv ? this.shadeB1 : this.shadeB, off = lv ? W0 : 0;
       const S0 = this.shadeB;

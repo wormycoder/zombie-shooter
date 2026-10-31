@@ -75,6 +75,9 @@ const Bench = {
   // put them on the screen and read the keys) instead of one per refresh of the screen, so the frame rates measured
   // are what the computer can make, not the screen's refresh rate or the browser's own limit (an energy saver)
   pumping: false,
+  // the camera sees as a survivor walking its way would (World.computeFOV, as Player.fov): the world in view lit, the
+  // rest darkened and, with Out-of-view objects: Hidden, left out - as in play
+  eyes() { return G.mode === 'bench' && !!this.run; },
   pump() {
     const ch = this.ch || (this.ch = new MessageChannel());
     this.pumping = true; this.pLast = performance.now();
@@ -97,6 +100,8 @@ const Bench = {
     // the camera drifts the same way through the town every stage
     const k = Math.min(1, r.t / (this.SETTLE + this.MEASURE + (r.i === 0 ? 2 : 0)));
     Render.cam.x = G.player.x = 85 + k * 40; Render.cam.y = G.player.y = 105 + k * 22; Render.cam.z = 0;
+    if (!(r.fovT > 0)) { r.fovT = 0.12; World.computeFOV(G.player.x, G.player.y, Math.atan2(22, 40), 1.65, 42 * (1 - (G.weather.fog || 0) * 0.55), 2); }
+    r.fovT -= dt;
     Render.cam.zoom = Render.cam.tz = 1;
     G.light.amb = L.hour > 20 || L.hour < 6 ? 0.3 : L.hour > 18 ? 0.62 : 1;
     G.light.flash = L.storm && Math.random() < dt * 0.25 ? 1 : Math.max(0, G.light.flash - dt * 3);

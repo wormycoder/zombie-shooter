@@ -598,6 +598,14 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      loads; recommended: Heavy at 50 fps or more, 1% low 30 or more.
      Laptop, 0.36.2 (warm-up of the light load only): Potato 30/27/15/12,
      Low 28/29/18/12 fps - the light stage at the 30 the browser held it to.
+     THEN (000.036.004, asked for: cut away unseen areas): Settings >
+     Optimization > Drawing > Out-of-view objects (unseen): Hidden draws no
+     furniture, props or fences on tiles not in view now (trees, building
+     walls and roofs stay); Potato uses it. The benchmark sees as a survivor
+     (Bench.eyes: World.computeFOV along the camera's way; the renderer
+     shades and hides as in play). Canvas calls a frame, Potato: light 933
+     -> 694, medium 1178 -> 962 (it was ~1650 on light before 0.36.1).
+     Laptop, 0.36.3 uncapped: Potato 32/29/17/13, Low 30/28/19/11 fps.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.

@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.004.196', date: '2026-10-31', title: 'Out of sight, out of the frame',
+    notes: [
+      'New setting, Settings > Optimization > Drawing > Out-of-view objects: Hidden leaves out the furniture, props and fences on tiles you cannot see right now (behind you, in other rooms, round corners) until they come into view again; trees and the buildings\' walls and roofs still show. The Potato preset uses it: on the benchmark about a quarter fewer drawing calls a frame.',
+      'The benchmark\'s camera now sees as a survivor would - the world in its view lit, the rest darkened (and left out with Out-of-view objects: Hidden) - so its numbers match play more closely.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.003.195', date: '2026-10-31', title: 'An uncapped benchmark',
     notes: [
       'The benchmark is uncapped: it makes its frames back to back instead of one per refresh of the screen, so its frame rates are what the computer can do - not held to the screen, the frame rate limit or the browser\'s energy saver.',
