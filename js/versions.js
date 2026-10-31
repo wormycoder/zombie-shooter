@@ -8,6 +8,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.006.198', date: '2026-10-31', title: 'Lighter crowds',
+    notes: [
+      'New setting, Settings > Optimization > Crowd sprites: zombies further off that are only walking or standing share ready-made pictures (by look, facing, step of the walk and light) instead of each being drawn on its own. In a street crowd of 150, the characters drawn each frame went from 47 to 20. Up close, and whatever a zombie does besides walking, is drawn as before. On in the Potato preset.',
+      'Lazy zombie updates has a new Strong level: zombies out of sight and away from you think every 2nd or 4th step (the far, idle ones least often); those in sight, close, attacking or holding on to you, every step. With 900 about, the zombies updated each step went from 430 to 250. Potato uses it.',
+      'The benchmark\'s zombies are seen as a survivor would see them - across the whole view, not only close by - so its crowds weigh what they would in play.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.005.197', date: '2026-10-31', title: 'A loading screen',
     notes: [
       'Starting a new game or continuing one now goes through a loading screen that makes up front what used to be made the first time it was needed - a hitch in the middle of play: the sound clips, every item\'s picture, the 3D characters, and the town for a few screens round you (walls, roofs, ground, furniture, trees and the people in it, out-of-view furniture included). A bar shows how far it has got.',

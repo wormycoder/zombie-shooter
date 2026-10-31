@@ -266,6 +266,7 @@ const Char3D = {
     else if (md === 3) { R[1] = Math.max(R[0] + 3, 15 * f); R[2] = Math.max(R[1] + 5, 26 * f); }
     else { R[1] = Math.max(R[0] + 4, 18 * f); R[2] = Math.max(R[1] + 6, 30 * f); }
     this.lodMax = v.lodMax === undefined ? 40 : v.lodMax;
+    this.crowd = !!v.crowdSpr; this.bankBud = 8;
   // re-renders of stale body sprites per frame (new ones are never held back)
     this.ibud = 40;
     this.zooming = Math.abs(Render.cam.zoom - Render.cam.tz) > Render.cam.tz * 0.01;
@@ -342,6 +343,8 @@ const Char3D = {
       S.acc = 0;
     } else {
       lod = this.pickLod(S, r || 0, e === G.player);
+      // crowd sprites: a far zombie just walking or standing is drawn from the shared bank (Char3D.bankUse)
+      if (lod >= 2 && this.crowd && e !== G.player && !flash && !e.dead && pose.mode === 'loco' && pose.arms === 'zombie' && !pose.limp && !pose.dragBy && !(e.stag > 0) && this.bankUse(e, ang, pose, light, lod)) { this.lodN[lod]++; S.acc = 0; S.fresh = true; return; }
       // zombies at a capped animation rate (Settings: zombie animation rate, lazy zombie animation): a step every iv s
       iv = e === G.player || flash ? 0 : this.animIv(e, r || 0);
       if (lod === 3 || iv > 0) {
@@ -363,6 +366,44 @@ const Char3D = {
     this.map.set(e, cell);
     this.lodN[stat ? 4 : lod]++;
     if (stat || lod === 3 || iv > 0) { cell.S = S; cell.ang = ang; cell.bl = look.blood; cell.lk = look; this.pend.push(cell); }
+  },
+  // ---- crowd sprites (Settings: Crowd sprites): zombies in the outer rings (LOD 2 and 3) only walking or standing share
+  // pictures, made at their ring's detail - one per look group (6 representative zombies), facing (8), step of the walk
+  // (6), walking or still, shambling or running, arms reaching or not and light (3 levels) - each made once (a stand-in state drawn as a preview: the pose straight
+  // from the walk phase) and kept in the impostor atlas, then drawn for every far zombie it fits; up to bankBud new
+  // ones a frame (the rest draw their own meanwhile). They give the slots back like any sprite unused for 4 s.
+  bank: new Map(), bankLook: [],
+  bankUse(e, ang, pose, light, lod) {
+    const TAU = Math.PI * 2, g = (e.id || 0) % 6;
+    const aq = ((Math.round(ang / (TAU / 8)) % 8) + 8) % 8, walking = (pose.amp || 0) > 0.3;
+    const wq = walking ? Math.floor((((pose.walk || 0) % TAU) + TAU) % TAU / TAU * 6) % 6 : 0;
+    const run = pose.gait === 'run' ? 1 : 0, reach = (pose.reach || 0) > 0.5 ? 1 : 0, lq = Math.max(0, Math.min(2, Math.round(light * 2)));
+    const key = (((((g * 8 + aq) * 6 + wq) * 2 + (walking ? 1 : 0)) * 2 + run) * 2 * 3 + reach * 3 + lq) * 2 + (lod === 3 ? 1 : 0);
+    let B = this.bank.get(key);
+    if (B) {
+      const I = B.S.imp;
+      if (B.f === this.fno && B.cell) { this.map.set(e, B.cell); return true; }
+      if (I && I.gen === C3Imp.gen) { const rs = GL3D.scale / (I.s0 || I.s); if (rs > 0.87 && rs < 1.15) { I.used = this.fno; this.map.set(e, I); return true; } }
+    }
+    if (this.bankBud <= 0) return false;
+    this.bankBud--;
+    const rep = this.bankLook[g] || (this.bankLook[g] = { look: e.look, id: e.id || 1 });
+    if (!B) {
+      if (this.bank.size > 3000) for (const [k, b] of this.bank) if (!b.S.imp) this.bank.delete(k);
+      const S = this.newState(rep.id, rep.look);
+      S.preview = true;
+      this.bank.set(key, B = { S, f: 0, cell: null });
+    }
+    const S = B.S, a = aq * TAU / 8;
+    const P = { walk: (wq + 0.5) * TAU / 6, amp: walking ? 0.85 : 0, t: 0, arms: 'zombie', lean: 0.12, headF: 0.03, headS: 0, limp: 0, mode: 'loco', gait: run ? 'run' : 'shamble', reach: reach ? 1 : 0 };
+    S.fresh = true;
+    this.animate(S, 0, 0, a, P, 0);
+    const cell = this.render(S, a, rep.look, P, Math.max(0.12, lq / 2), 0, lod);
+    if (!cell) return false;
+    cell.S = S; cell.ang = a; cell.bl = rep.look.blood; cell.lk = rep.look; this.pend.push(cell);
+    B.f = this.fno; B.cell = cell;
+    this.map.set(e, cell);
+    return true;
   },
   // draw S's sprite this frame if it is still good (anim: a recent far-crowd frame will do); false: render it again
   impUse(S, e, ang, look, light, anim) {

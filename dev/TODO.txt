@@ -616,6 +616,18 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      Potato) would throw the first of it away again - the warm-up stays well
      inside them (walls ~250, sprites ~500). From a file (file://) the sound
      files cannot be decoded ahead (the browser plays them from elements).
+     THEN (000.036.006, asked for: cheaper distant zombies; far zombies
+     thinking less): Crowd sprites (crowdSpr, Potato on) - outer-ring (LOD
+     2-3) zombies only walking/standing drawn from a shared bank (Char3D.
+     bankUse: 6 looks x 8 facings x 6 walk steps x walking/run/reach x 3
+     lights x ring; a stand-in state rendered as a preview, kept in the
+     impostor atlas; 8 new a frame). Renders a frame: street crowd of 150
+     47 -> 20; benchmark heavy (12 s) 38.7 -> 27.6. Lazy zombie updates:
+     Strong (Potato) - out of sight and 8+ away: chasing 16+ every 2nd
+     step, idle/wandering every 2nd within 12 and every 4th beyond;
+     900 zombies: updated a step 430 -> 246, update 8.5 -> 7.2 ms here.
+     The benchmark's zombies are seen through Bench.eyes (not only within
+     9 tiles), so its crowds now cost what they do in play.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.

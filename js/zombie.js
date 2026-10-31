@@ -253,7 +253,11 @@ const Zombie = {
       if (lazy) {
         if (cd >= 6 || d > 60) { z.far = (z.far || 0) + dt; if (z.far > (cd >= 6 ? 2 : 1)) { this.farUpdate(z, z.far); z.far = 0; } z.va = 0; continue; }
         const busy = z.st === 'chase' || z.st === 'attack' || z.st === 'grab' || z.va > 0.01;
-        const rate = (!busy && cd >= 3) || (crowd && d < 32 && z.st !== 'attack') ? 2 : 1;
+        let rate = (!busy && cd >= 3) || (crowd && d < 32 && z.st !== 'attack') ? 2 : 1;
+        // Strong: out of sight and away from you, they think every 2nd step (hunting you from 16+ tiles, idling or
+        // wandering within 12) or every 4th (idling or wandering beyond 12); in sight, close, attacking or holding on
+        // to you, every step
+        if (lazy === 2 && z.va <= 0.01 && d >= 8 && z.st !== 'attack' && z.st !== 'grab') rate = Math.max(rate, z.st === 'chase' ? (d >= 16 ? 2 : 1) : d >= 12 ? 4 : 2);
         if (rate > 1) {
           z.acc = (z.acc || 0) + dt;
           if ((tick + k) % rate) continue;
@@ -325,7 +329,7 @@ const Zombie = {
     // visual fade
     // (after death the camera stays on the body: those close by are seen gathering and feeding)
     // (in the dark a shape is still made out a few tiles off, further under a moon than on a black night)
-    const vis = p.dead ? d < 9 : World.isVis(Math.floor(z.x), Math.floor(z.y)) && (Render.lightAt(z.x, z.y) > 0.13 || d < Math.min(7, 2.6 + G.light.amb * 18) || Render.shadeAt(z.x, z.y) > 0.2);
+    const vis = p.dead && !Bench.eyes() ? d < 9 : World.isVis(Math.floor(z.x), Math.floor(z.y)) && (Render.lightAt(z.x, z.y) > 0.13 || d < Math.min(7, 2.6 + G.light.amb * 18) || Render.shadeAt(z.x, z.y) > 0.2);
     z.va = U.clamp(z.va + (vis ? dt * 5 : -dt * 3), 0, 1);
     // fake-dead: lies still until the player is close
     if (z.fake) {
