@@ -19,11 +19,12 @@ const Bench = {
   start() {
     if (G.mode !== 'menu') return;
     const keep = { v: Object.assign({}, Settings.v), zombies: G.zombies, cars: G.cars, wd: Wd, weather: G.weather, time: G.time, player: G.player };
-    // (a warm-up lap first, not counted: the first time through, the town's walls, roofs and ground are all painted
-    // for the first time, which the first preset measured would otherwise pay for alone)
-    const stages = [{ p: this.PRESETS[0], l: this.LOADS[0], iv: [], work: [], warm: true }];
+    // (a warm-up lap through every load first, not counted: the first time through, the town's walls, roofs and
+    // ground are painted, and night light, rain and the crowds built, for the first time - which the first preset
+    // measured would otherwise pay for alone)
+    const stages = this.LOADS.map(l => ({ p: this.PRESETS[0], l, iv: [], work: [], warm: true }));
     for (const p of this.PRESETS) for (const l of this.LOADS) stages.push({ p, l, iv: [], work: [] });
-    this.run = { keep, stages, i: -1, t: 0, hz: 1000 / (Game.rIv || 16.7) };
+    this.run = { keep, stages, i: -1, t: 0 };
     $('#menu').innerHTML = `<div class="benchbar" style="position:absolute;left:50%;top:14px;transform:translateX(-50%);padding:8px 16px;background:rgba(0,0,0,0.72);border:1px solid rgba(255,255,255,0.2);border-radius:3px;font:12px/1.5 Verdana,sans-serif;color:#ddd;text-align:center;pointer-events:auto;white-space:nowrap">
       <b>Benchmark</b> <span id="benchStage">preparing the town...</span><div style="height:4px;margin-top:6px;background:rgba(255,255,255,0.12)"><div id="benchBar" style="height:4px;width:0;background:#c8945a"></div></div>
       <div style="color:#999;font-size:11px;margin-top:4px">Esc to stop</div></div>`;
@@ -39,6 +40,7 @@ const Bench = {
       G.events.heli = null; G.alarms = [];
       G.mode = 'bench';
       this.next();
+      this.pump();
     }, 30);
   },
   // the next stage: its preset, its crowd and weather
@@ -66,9 +68,27 @@ const Bench = {
     G.time = L.hour * 60;
     G.weather = { rain: L.rain, target: L.rain, fog: L.storm ? 0.3 : 0.1, temp: 18, next: 1e12, storm: !!L.storm };
     const el = $('#benchStage');
-    if (el) el.textContent = st.warm ? 'warming up (painting the town)' : `${st.p} · ${L.n} (${L.z} zombies) · stage ${r.i} of ${r.stages.length - 1}`;
+    const nw = this.LOADS.length;
+    if (el) el.textContent = st.warm ? `warming up (${L.n.toLowerCase()})` : `${st.p} · ${L.n} (${L.z} zombies) · stage ${r.i - nw + 1} of ${r.stages.length - nw}`;
   },
-  // one frame (Game.loop, uncapped): the crowd, the effects and the world drawn as in play; iv = ms since the last
+  // Uncapped: frames are made back to back (a message to itself after each, so the browser still gets its turn to
+  // put them on the screen and read the keys) instead of one per refresh of the screen, so the frame rates measured
+  // are what the computer can make, not the screen's refresh rate or the browser's own limit (an energy saver)
+  pumping: false,
+  pump() {
+    const ch = this.ch || (this.ch = new MessageChannel());
+    this.pumping = true; this.pLast = performance.now();
+    ch.port1.onmessage = () => {
+      if (!this.run || G.mode !== 'bench') { this.pumping = false; return; }
+      const now = performance.now(), iv = now - this.pLast;
+      this.pLast = now;
+      this.frame(Math.min(0.1, iv / 1000), iv);
+      Input.endFrame(); Mem.tick(iv / 1000); Game.fpsMeter(now);
+      if (this.run && G.mode === 'bench') ch.port2.postMessage(0); else this.pumping = false;
+    };
+    ch.port2.postMessage(0);
+  },
+  // one frame (Bench.pump, uncapped): the crowd, the effects and the world drawn as in play; iv = ms since the last
   frame(dt, iv) {
     const r = this.run;
     if (!r || G.mode !== 'bench') return;
@@ -102,7 +122,7 @@ const Bench = {
   finish(done) {
     const r = this.run;
     if (!r) return;
-    this.run = null;
+    this.run = null; this.pumping = false;
     window.removeEventListener('keydown', this.key, true);
     const K = r.keep;
     Object.assign(Settings.v, K.v); Settings.save(); Settings.apply();
@@ -113,20 +133,19 @@ const Bench = {
     Menu.show();
     if (done) this.results(r);
   },
-  // the results table and the recommended preset (smooth: at least 50 fps, or nearly the screen's refresh rate,
-  // with the slowest frames above 30 under the heavy load)
+  // the results table and the recommended preset (smooth: at least 50 fps, the slowest frames above 30, under the
+  // heavy load)
   results(r) {
     const S = {};
     for (const st of r.stages) if (!st.warm) (S[st.p] = S[st.p] || {})[st.l.n] = this.stats(st);
-    const bar = Math.min(50, r.hz * 0.9);
     let rec = this.PRESETS[0];
-    for (const p of this.PRESETS) { const h = S[p] && S[p].Heavy; if (h && h.fps >= bar && h.low >= 30) rec = p; }
+    for (const p of this.PRESETS) { const h = S[p] && S[p].Heavy; if (h && h.fps >= 50 && h.low >= 30) rec = p; }
     const cell = (s) => s ? `<b>${Math.round(s.fps)}</b> fps<div style="font-size:10px;color:#999">1% low ${Math.round(s.low)} · ${s.ms.toFixed(1)} ms</div>` : '-';
     const head = this.LOADS.map(l => `<th style="padding:4px 8px;font-weight:normal;color:#aaa">${l.n}<div style="font-size:10px">${l.z} zombies</div></th>`).join('');
     const rows = this.PRESETS.map(p => `<tr${p === rec ? ' style="background:rgba(200,148,90,0.15)"' : ''}><td style="padding:4px 8px">${p}${p === rec ? ' ✓' : ''}</td>${this.LOADS.map(l => `<td style="padding:4px 8px;text-align:center">${cell(S[p][l.n])}</td>`).join('')}</tr>`).join('');
     $('#menu').innerHTML = `<div class="modal"><div class="mbox wide"><h2>Benchmark results</h2>
       <table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th></th>${head}</tr>${rows}</table>
-      <div class="sml" style="margin:10px 0">Frames a second (screen refresh about ${Math.round(r.hz)} Hz), the slowest 1% of frames, and the time the game worked on each frame.
+      <div class="sml" style="margin:10px 0">Frames a second, uncapped (made back to back, not held to the screen or the frame rate limit), the slowest 1% of frames, and the time the game worked on each frame.
       Recommended: <b>${rec}</b> - the highest preset that stays smooth with a heavy crowd.</div>
       <div class="btn big" data-bres="use">Use ${rec}</div><div class="btn big" data-bres="back">Back</div></div></div>`;
     $('#menu').onclick = (e) => {

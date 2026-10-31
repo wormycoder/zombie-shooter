@@ -8,6 +8,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.003.195', date: '2026-10-31', title: 'An uncapped benchmark',
+    notes: [
+      'The benchmark is uncapped: it makes its frames back to back instead of one per refresh of the screen, so its frame rates are what the computer can do - not held to the screen, the frame rate limit or the browser\'s energy saver.',
+      'The warm-up lap now runs every load (light to ultra heavy) before anything is measured, so the first preset no longer pays alone for the first night, rain and big crowds either.',
+      'A preset is recommended when it keeps 50 frames a second, with the slowest 1% above 30, under the heavy crowd.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.002.194', date: '2026-10-31', title: 'A fairer benchmark, a gentler Potato',
     notes: [
       'The benchmark starts with a warm-up lap (not counted): the first preset measured no longer pays alone for painting the whole town the first time, which made it look several frames a second slower than it is.',

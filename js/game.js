@@ -311,6 +311,8 @@ const Game = {
       Menu.drawBackground(dt);
       Music.update(dt);
     } else if (G.mode === 'bench') {
+      // (the benchmark makes its own frames, back to back: Bench.pump)
+      if (Bench.pumping) return;
       Bench.frame(dt, iv);
     }
     Input.endFrame();

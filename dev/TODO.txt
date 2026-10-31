@@ -591,6 +591,13 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      HUD and animation, very few particles, no weather (cache Small, LOD as
      Low). The laptop: an integrated UHD 600 sharing system memory (128 MB
      reserved) - small caches suit it.
+     THEN (000.036.003, asked for: uncap the FPS in the benchmark): frames
+     are made back to back (Bench.pump, a MessageChannel loop) instead of
+     one per requestAnimationFrame, so neither the screen's refresh nor the
+     browser's energy saver caps the result; the warm-up runs all four
+     loads; recommended: Heavy at 50 fps or more, 1% low 30 or more.
+     Laptop, 0.36.2 (warm-up of the light load only): Potato 30/27/15/12,
+     Low 28/29/18/12 fps - the light stage at the 30 the browser held it to.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.
