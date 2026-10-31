@@ -98,8 +98,11 @@ const Spr = {
   // rec.sil a strip of SLOTS copies, each darkened to one of DKQ steps (the sprite with the silhouette over it at that
   // step's alpha - exactly what drawing the two straight onto the screen gives, edges and glass included) and kept
   // for the step it was last needed at. A sprite that sits in one light (outside the view cone nearly every wall and
-  // object is darkened) costs a single draw instead of two; a slot is repainted only when its light changes step,
-  // and a sprite whose light changes frame after frame (a flickering fire, lightning) is drawn the two-draw way.
+  // object is darkened) costs a single draw instead of two. A slot is repainted only once the sprite's light has held
+  // a new step for STEADY frames (repainting a picture and drawing it straight after makes the graphics card catch
+  // up first, which costs far more than a second draw): until then, and where the light keeps moving (a flickering
+  // lamp, a fire, lightning, the night), it is drawn the two-draw way.
+  STEADY: 8,
   SLOTS: 3, DKQ: 20,
   drawShaded(ctx, rec, x, y, s, alpha) {
     const a = alpha === undefined ? 1 : alpha;
@@ -111,11 +114,12 @@ const Spr = {
         rec.blk = mkCanvas(w, h);
         const g = rec.blk.getContext('2d');
         g.drawImage(rec.c, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, w, h);
-        rec.sil = mkCanvas((w + 2) * this.SLOTS, h); rec.slv = [0, 0, 0]; rec.slu = [0, 0, 0]; rec.slr = -9;
+        rec.sil = mkCanvas((w + 2) * this.SLOTS, h); rec.slv = [0, 0, 0]; rec.slu = [0, 0, 0]; rec.slr = -9; rec.wq = 0; rec.wn = 0;
       }
       let k = rec.slv.indexOf(q);
-      if (k < 0 && rec.slr >= tk - 1) {
-        // (repainted a moment ago already: this frame the sprite and its silhouette over it)
+      if (k < 0) { if (rec.wq === q) rec.wn++; else { rec.wq = q; rec.wn = 1; } }
+      if (k < 0 && (rec.wn < this.STEADY || rec.slr >= tk - 1)) {
+        // (a new light not held long enough yet, or a slot repainted a moment ago: the sprite and its silhouette over it)
         ctx.drawImage(rec.c, x, y);
         ctx.globalAlpha = a * Math.min(1, dk);
         ctx.drawImage(rec.blk, x, y);

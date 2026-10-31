@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.009.201', date: '2026-10-31', title: 'Steadier nights, lighter zombie thinking',
+    notes: [
+      'Walls and furniture at night: the darkened copy of each picture is only kept once its light has settled (lamps, torches and fire flicker the light every frame, and remaking the copy each time cost more than it saved). Drawing the town at night took about half the time it did in a test on a slowed processor.',
+      'Lazy zombie updates, Strong (the Potato preset): fewer route searches each step, shorter ones for zombies far off, and zombies away from you check for a straight way to you less often. The zombies\' thinking took about a quarter less time with 350 about; those close by still find their way to you as before.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.008.200', date: '2026-10-31', title: 'Loading first, plain clothes for weak graphics',
     notes: [
       'The game loads before anything else - before the title screen too: the sound files, every item\'s picture, the 3D characters and the town behind the title screen are made ready first, behind a loading screen. A new game then only adds the town round you.',

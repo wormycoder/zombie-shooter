@@ -223,7 +223,8 @@ const Zombie = {
     // (a big crowd: the grid every other step - a zombie moves a few inches a step, and the cells are 4 tiles)
     if (G.zombies.length < 800 || !((this.tick || 0) & 1) || this.gN !== G.zombies.length) { this.rebuildGrid(); this.gN = G.zombies.length; }
     // path searches this step: a crowd turning to chase spreads its searches over the next few steps
-    World.pathBudget = 10;
+    // (Strong lazy zombies, for slow processors: fewer searches a step, each one shorter - see moveToward)
+    World.pathBudget = Settings.v.zLazy === 2 ? 4 : 10;
     // (active ragdolls: the tiles with a body on them, for tripping over - worked out once a second)
     if (Settings.v.ragdoll && (!this.corpseT || Render.tnow - this.corpseT > 1)) { this.corpseT = Render.tnow; const c = this.corpses || (this.corpses = new Set()); c.clear(); for (const z of G.zombies) if (z.dead) c.add((z.y | 0) * Wd.w + (z.x | 0)); }
     const p = G.player;
@@ -467,7 +468,7 @@ const Zombie = {
     let direct;
     if (cross) direct = false;
     else if (dist < 1.2) direct = World.lineClear(z.x, z.y, z.tx, z.ty, 'move');
-    else { z.dcT = (z.dcT || 0) - dt; if (z.dcT <= 0) { z.dcT = 0.4; z.dcOk = World.pathClear(z.x, z.y, z.tx, z.ty, z.r * 0.8); } direct = z.dcOk; }
+    else { z.dcT = (z.dcT || 0) - dt; if (z.dcT <= 0) { z.dcT = Settings.v.zLazy === 2 && dPlayer > 8 ? 0.9 : 0.4; z.dcOk = World.pathClear(z.x, z.y, z.tx, z.ty, z.r * 0.8); } direct = z.dcOk; }
     if (direct) {
       z.path = null;
       mx = dx / (dist || 1); my = dy / (dist || 1);
@@ -476,9 +477,9 @@ const Zombie = {
       if ((!z.path || z.pathT <= 0) && z.pathCool <= 0 && World.pathBudget <= 0) { z.pathCool = R.f(0.05, 0.2); if (!z.path) { mx = dx / dist; my = dy / dist; } }
       else if ((!z.path || z.pathT <= 0) && z.pathCool <= 0) {
         World.pathBudget--;
-        z.pathT = R.f(1.5, 2.5) + (dPlayer > 25 ? 2 : 0);
+        z.pathT = R.f(1.5, 2.5) + (dPlayer > 25 ? 2 : 0) + (Settings.v.zLazy === 2 && dPlayer > 12 ? 1 : 0);
         z.pathCool = R.f(1.0, 1.8) + (dPlayer > 25 ? 2 : 0);
-        z.path = World.findPath(z.x, z.y, z.tx, z.ty, 'z', dPlayer < 25 ? 900 : 400);
+        z.path = World.findPath(z.x, z.y, z.tx, z.ty, 'z', Settings.v.zLazy === 2 ? (dPlayer < 12 ? 700 : 250) : dPlayer < 25 ? 900 : 400);
         z.pi = 0;
         if (!z.path) { z.st = z.st === 'chase' ? 'chase' : 'idle'; mx = dx / dist; my = dy / dist; }
       } else if (!z.path) { mx = dx / dist; my = dy / dist; }

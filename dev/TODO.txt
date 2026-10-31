@@ -651,6 +651,18 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      ~220 -> ~100 ms a frame. The profile on the main thread with a
      GPU-emulated canvas showed it mostly idle - waiting on the graphics -
      which is where Plain helps on a UHD 600.
+     Laptop, 0.36.8: Potato 39/32/19/11 fps - Plain did not move it: the
+     laptop is held back by its processor, not its graphics.
+     THEN (000.036.009, keep optimizing): profiled at 4x CPU slowdown
+     (heavy stage, Potato). Spr.drawShaded at night thrashed its 3 shade
+     slots (lamps/torches flicker the light every frame) and repainted a
+     slot nearly every draw: a shade level now gets a slot only once it has
+     been asked for 8 times in a row (STEADY); until then sprite + black
+     silhouette are drawn as two images. drawShaded 27 -> 15 ms a frame.
+     Strong lazy zombies also search fewer routes a step (4, not 10),
+     shorter ones (700 nodes within 12 tiles, 250 beyond), less often far
+     off (+1 s), and test the straight way every 0.9 s past 8 tiles:
+     findPath 5.1 -> 2.3 ms, zombie AI 15.6 -> 11.8 ms a frame.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.
