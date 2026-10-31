@@ -17,8 +17,8 @@ const Mem = {
   measure() {
     const px = (c) => (c ? c.width * c.height : 0);
     let spr = 0, sil = 0, wall = 0, chunks = 0;
-    for (const r of Spr.cache.values()) { spr += px(r.c); sil += px(r.sil); }
-    for (const r of Spr.wcache.values()) { wall += px(r.c); sil += px(r.sil); }
+    for (const r of Spr.cache.values()) { spr += px(r.c); sil += px(r.sil) + px(r.blk); }
+    for (const r of Spr.wcache.values()) { wall += px(r.c); sil += px(r.sil) + px(r.blk); }
     for (const ch of Render.chunks.values()) chunks += px(ch.c);
     const B = {
       sprites: spr * 4, walls: wall * 4, shading: sil * 4, ground: chunks * 4, roofs: (Facade.rpx || 0) * 4,
@@ -47,8 +47,8 @@ const Mem = {
   trim(budget) {
     const ft = Facade.tick, old = ft - 60;
     const over = () => this.measure().totalMB > budget;
-    for (const r of Spr.cache.values()) if (r.sil && r.u < old) r.sil = null;
-    for (const r of Spr.wcache.values()) if (r.sil && r.u < old) r.sil = null;
+    for (const r of Spr.cache.values()) if (r.sil && r.u < old) r.sil = r.blk = null;
+    for (const r of Spr.wcache.values()) if (r.sil && r.u < old) r.sil = r.blk = null;
     if (Trees.cache) for (const r of Trees.cache.values()) if (r.sil && r.u < Trees.tick - 60) { Trees.px -= r.spx || 0; r.sil = null; }
     if (!over()) return;
     const lru = (map, keep, size) => {

@@ -66,7 +66,7 @@ const Spr = {
   // a record put out of a cache: its pictures are let go at once, though the renderer's per-tile memos may still point
   // at it (they see gone and fetch a new one) - otherwise every memo'd wall or object kept its old pictures alive and
   // the cache painted duplicates
-  drop(r) { r.gone = true; r.c = null; r.sil = null; },
+  drop(r) { r.gone = true; r.c = null; r.sil = null; r.blk = null; },
   // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory). The result is
   // always a new canvas (c may be a CPU canvas, which would be uploaded to the GPU again whenever it is drawn).
   trim(c, ax, ay) {
@@ -94,28 +94,44 @@ const Spr = {
     return { c: c2, ax: ax - x0, ay: ay - y0, sil: null };
   },
   draw(ctx, rec, sx, sy, s) { this.drawShaded(ctx, rec, sx - rec.ax, sy - rec.ay, s, 1); },
-  // draw sprite darkened to brightness s using a cached silhouette overlay (memory-light). A darkened sprite comes from
-  // rec.sil, which holds the sprite and its silhouette side by side: both draws read one texture, so the graphics
-  // card gets them as one batch instead of two (outside the view cone nearly every wall and object is darkened).
+  // draw sprite darkened to brightness s: one draw from a darkened copy. rec.blk is the sprite's black silhouette;
+  // rec.sil a strip of SLOTS copies, each darkened to one of DKQ steps (the sprite with the silhouette over it at that
+  // step's alpha - exactly what drawing the two straight onto the screen gives, edges and glass included) and kept
+  // for the step it was last needed at. A sprite that sits in one light (outside the view cone nearly every wall and
+  // object is darkened) costs a single draw instead of two; a slot is repainted only when its light changes step,
+  // and a sprite whose light changes frame after frame (a flickering fire, lightning) is drawn the two-draw way.
+  SLOTS: 3, DKQ: 20,
   drawShaded(ctx, rec, x, y, s, alpha) {
     const a = alpha === undefined ? 1 : alpha;
     if (a < 1) ctx.globalAlpha = a;
     const dk = 1 - s;
     if (dk > 0.02) {
-      const w = rec.c.width, h = rec.c.height;
-      if (!rec.sil) {
-        const c = mkCanvas(w * 2 + 2, h);
-        const g = c.getContext('2d');
-        g.drawImage(rec.c, 0, 0);
-        g.drawImage(rec.c, w + 2, 0);
-        g.globalCompositeOperation = 'source-atop';
-        g.fillStyle = 'rgb(3,5,14)';
-        g.fillRect(w + 2, 0, w, h);
-        rec.sil = c;
+      const w = rec.c.width, h = rec.c.height, q = Math.max(1, Math.min(this.DKQ, Math.round(dk * this.DKQ))), tk = Facade.tick;
+      if (!rec.sil || !rec.blk) {
+        rec.blk = mkCanvas(w, h);
+        const g = rec.blk.getContext('2d');
+        g.drawImage(rec.c, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, w, h);
+        rec.sil = mkCanvas((w + 2) * this.SLOTS, h); rec.slv = [0, 0, 0]; rec.slu = [0, 0, 0]; rec.slr = -9;
       }
-      ctx.drawImage(rec.sil, 0, 0, w, h, x, y, w, h);
-      ctx.globalAlpha = a * Math.min(1, dk);
-      ctx.drawImage(rec.sil, w + 2, 0, w, h, x, y, w, h);
+      let k = rec.slv.indexOf(q);
+      if (k < 0 && rec.slr >= tk - 1) {
+        // (repainted a moment ago already: this frame the sprite and its silhouette over it)
+        ctx.drawImage(rec.c, x, y);
+        ctx.globalAlpha = a * Math.min(1, dk);
+        ctx.drawImage(rec.blk, x, y);
+        ctx.globalAlpha = 1;
+        return;
+      }
+      if (k < 0) {
+        // the slot used longest ago, painted at this step
+        k = 0; for (let i = 1; i < this.SLOTS; i++) if (rec.slu[i] < rec.slu[k]) k = i;
+        const g = rec.sil.getContext('2d'), ox = k * (w + 2);
+        g.clearRect(ox, 0, w, h); g.drawImage(rec.c, ox, 0);
+        g.globalAlpha = q / this.DKQ; g.drawImage(rec.blk, ox, 0); g.globalAlpha = 1;
+        rec.slv[k] = q; rec.slr = tk;
+      }
+      rec.slu[k] = tk;
+      ctx.drawImage(rec.sil, k * (w + 2), 0, w, h, x, y, w, h);
     } else ctx.drawImage(rec.c, x, y);
     ctx.globalAlpha = 1;
   },
