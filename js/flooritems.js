@@ -39,8 +39,12 @@ const FloorItems = {
     let m = this.meta.get(c);
     if (m) return m;
     let x0 = 32, y0 = 32, x1 = -1, y1 = -1;
+    // (measured on a canvas of its own, painted again in memory: reading the icon itself back could stall the
+    // graphics card)
     try {
-      const px = c.getContext('2d').getImageData(0, 0, 32, 32).data;
+      const sc = this.scratch || (this.scratch = mkCanvas(32, 32)), sg = this.sg || (this.sg = sc.getContext('2d', { willReadFrequently: true }));
+      sg.clearRect(0, 0, 32, 32); sg.save(); Icons.draw(sg, it); sg.restore();
+      const px = sg.getImageData(0, 0, 32, 32).data;
       for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (px[(y * 32 + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     } catch (e) { /* a tainted canvas: take the whole icon */ }
     if (x1 < 0) { x0 = y0 = 4; x1 = y1 = 27; }

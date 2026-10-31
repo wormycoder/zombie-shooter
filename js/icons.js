@@ -12,10 +12,14 @@ const Icons = {
     let c = this.cache.get(key);
     if (c) return c;
     c = mkCanvas(32, 32);
-    const g = c.getContext('2d');
-    try { this.paint(g, d.ic ? d.ic[0] : 'box', col, (d.ic && d.ic[2]) || Col.mix(col, '#000', 0.4), d); } catch (e) { console.warn(e); }
+    this.draw(c.getContext('2d'), it);
     this.cache.set(key, c);
     return c;
+  },
+  // paint item it's icon into g (32 x 32)
+  draw(g, it) {
+    const d = ITEMS[it.id], col = it.col || (d.ic && d.ic[1]) || '#888';
+    try { this.paint(g, d.ic ? d.ic[0] : 'box', col, (d.ic && d.ic[2]) || Col.mix(col, '#000', 0.4), d); } catch (e) { console.warn(e); }
   },
   url(it) {
     const d = ITEMS[it.id];
