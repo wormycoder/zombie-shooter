@@ -35,9 +35,35 @@ const Preload = {
     if (on0) Sfx.on = true;
     this.busy = false;
   },
+  // Before anything - the title screen too: the sound files (from a file), every item's picture, the 3D renderer and
+  // the town behind the title screen, built and drawn a few frames (its zombies make the 3D models' first pictures).
+  // done() puts up the title screen.
+  async boot(done) {
+    this.busy = true;
+    G.mode = 'loading';
+    const show = (step, f) => Menu.loading('HOLLOW CREEK', step, f);
+    try {
+      const steps = [['Sounds', (f) => this.sounds(f)], ['Item pictures', () => this.icons()], ['Characters', () => this.chars()], ['The town', () => this.title()]];
+      for (let s = 0; s < steps.length; s++) {
+        const [name, fn] = steps[s];
+        show(name, s / steps.length);
+        await this.wait(20);
+        await fn((f) => show(name, (s + f) / steps.length));
+      }
+      show('Ready', 1);
+      await this.wait(20);
+    } catch (e) { console.warn('boot', e); }
+    this.busy = false;
+    done();
+  },
+  // the town behind the title screen: built, then drawn a few frames as the title screen draws it
+  async title() {
+    Menu.prepareBg();
+    for (let f = 0; f < 6; f++) { Menu.drawBackground(0.05); if (f % 2) await this.wait(0); }
+  },
   // the clips rendered at start-up (and, served over the web, the sound files) - waited for, up to a few seconds
   async sounds(step) {
-    if (typeof AudioFiles !== 'undefined' && AudioFiles.mode === 'el' && AudioFiles.warm) await AudioFiles.warm(step);
+    if (typeof AudioFiles !== 'undefined' && AudioFiles.warm) await AudioFiles.warm(step);
     const t0 = performance.now(), done = () => (typeof SfxBank === 'undefined' || SfxBank.ready || !SfxBank.busy) && (typeof AudioFiles === 'undefined' || AudioFiles.mode !== 'buf' || AudioFiles.ok);
     while (!done() && performance.now() - t0 < 8000) await this.wait(100);
   },

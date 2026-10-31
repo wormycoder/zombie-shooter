@@ -126,6 +126,17 @@ const GL3D = {
             c = mix(vec3(0.5, 0.09, 0.07), vec3(0.16, 0.02, 0.02), dp) * (0.8 + 0.4 * vn(P * 60.0));
             if (vM.y > 0.5) c = mix(c, vec3(0.78, 0.72, 0.6), (1.0 - smoothstep(0.06, 0.12, abs(fract(Q.y * 2.2 + 0.25) - 0.5))) * smoothstep(0.2, 0.5, dp) * 0.9);
           }
+#ifdef PLAIN
+          // (Character textures: Plain - no patterns painted per pixel: each material its flat colour, grime and blood
+          // soaked in as an even tint, a blood splat a plain disc)
+          if (c.r <= 1.0 && t > 0.5 && t < 16.5) {
+            if (t > 13.5 && t < 14.5) { if (length(Q.yz) > 0.8) discard; c *= 0.9; }
+            if (rim > 0.0) c = mix(c, vec3(0.32, 0.05, 0.04), rim * 0.9);
+            c = mix(c, c * vec3(0.56, 0.5, 0.42) + vec3(0.035, 0.028, 0.018), vM.z * 0.3);
+            if (vM.w > 0.0 && t != 14.0 && t != 10.0) c = mix(c, vec3(0.3, 0.04, 0.03), clamp(vM.w * 0.35, 0.0, 0.45));
+            if (t > 3.5 && t < 4.5) spec = 0.22; else if (t > 12.5 && t < 13.5) spec = 0.42;
+          }
+#else
           if (c.r <= 1.0 && t > 0.5 && t < 16.5) {
             float mot = fbm(P * 13.0), vm = vis(0.03), vf = vis(0.012);
             if (t < 8.5 || t > 11.5) {
@@ -248,6 +259,7 @@ const GL3D = {
               c = mix(c, bc, bmk * mix(0.45, 0.9, vm));
             }
           }
+#endif
           // light: tops brightest, then +y, then +x; a soft wrap keeps undersides from going black
           float b = 0.64 + 0.13 * n.x + 0.24 * n.y + 0.34 * n.z;
           b = clamp(b, 0.36, 1.06);
@@ -262,13 +274,20 @@ const GL3D = {
           gl_FragColor = vec4(o, 1.0);
         }`;
       const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
-      const p = gl.createProgram();
-      gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
-      gl.linkProgram(p);
-      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-      this.prog = p;
-      this.loc = {}; for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM', 'iH0', 'iH1', 'iQ']) this.loc[a] = gl.getAttribLocation(p, a);
-      this.uAtlas = gl.getUniformLocation(p, 'uAtlas'); this.uScale = gl.getUniformLocation(p, 'uScale'); this.uPx = gl.getUniformLocation(p, 'uPx');
+      // the program: with the materials painted per pixel, or plain (Settings: Character textures) - built when first
+      // wanted; its attribute and uniform locations go with it
+      this.mkProg = (plain) => {
+        const p = gl.createProgram();
+        gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, (plain ? '#define PLAIN 1\n' : '') + fs));
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        const P = { p, loc: {} };
+        for (const a of ['aP', 'aN', 'iC', 'iX', 'iY', 'iZ', 'iCol', 'iL', 'iT', 'iS', 'iM', 'iH0', 'iH1', 'iQ']) P.loc[a] = gl.getAttribLocation(p, a);
+        P.uAtlas = gl.getUniformLocation(p, 'uAtlas'); P.uScale = gl.getUniformLocation(p, 'uScale'); P.uPx = gl.getUniformLocation(p, 'uPx');
+        return P;
+      };
+      this.progs = {};
+      this.pick(typeof Settings !== 'undefined' && Settings.v.charTex === 0);
       const buf = (data, T) => { const b = gl.createBuffer(); gl.bindBuffer(T, b); gl.bufferData(T, data, gl.STATIC_DRAW); return b; };
       for (const m of this.buildMeshes().concat(this.defs.map(d => d.build()))) this.meshes.push({ vb: buf(new Float32Array(m.v), gl.ARRAY_BUFFER), ib: buf(new Uint16Array(m.i), gl.ELEMENT_ARRAY_BUFFER), ni: m.i.length, ibuf: gl.createBuffer() });
       for (let k = 0; k < this.NM; k++) { this.n[k] = 0; this.grow(k, 512); }
@@ -438,9 +457,15 @@ const GL3D = {
       for (let i = mk[k], e = this.n[k]; i < e; i++) { const o = i * F; a[o + 15] = light; a[o + 16] = flash || 0; a[o + 17] = ox; a[o + 18] = oy; a[o + 34] = c.q; }
     }
   },
+  // the program for full or plain materials (Settings: Character textures)
+  pick(plain) {
+    const k = plain ? 'plain' : 'full', P = this.progs[k] || (this.progs[k] = this.mkProg(plain));
+    this.plain = plain; this.prog = P.p; this.loc = P.loc; this.uAtlas = P.uAtlas; this.uScale = P.uScale; this.uPx = P.uPx;
+  },
   flush() {
     const gl = this.gl;
     if (!this.cells.length) return;
+    if ((Settings.v.charTex === 0) !== this.plain) this.pick(Settings.v.charTex === 0);
     let W = 256, H = 256;
     for (const c of this.cells) { if (c.px + c.pw + 1 > W) W = c.px + c.pw + 1; if (c.py + c.ph + 1 > H) H = c.py + c.ph + 1; }
     W = Math.min(this.maxW, W); H = Math.min(this.maxW, H);

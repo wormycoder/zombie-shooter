@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.008.200', date: '2026-10-31', title: 'Loading first, plain clothes for weak graphics',
+    notes: [
+      'The game loads before anything else - before the title screen too: the sound files, every item\'s picture, the 3D characters and the town behind the title screen are made ready first, behind a loading screen. A new game then only adds the town round you.',
+      'New setting, Settings > Optimization > Character textures: Plain gives clothing, skin and hair their flat colours (grime and blood soaked in as an even tint) instead of painting every material pixel by pixel - far less work for a weak graphics chip, noticeable mostly up close. The Potato preset uses it: in a test with 350 zombies the frame took half the time.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.007.199', date: '2026-10-31', title: 'A fuller loading screen',
     notes: [
       'The loading screen does more before play starts: played from a file, every sound is loaded once at no volume (later sounds start from that copy instead of reading the file again); the town round you is also drawn by night and in the rain; blood, gore, shots, flashes, smoke and casings are sprayed behind the screen and cleared away again; and the zombies think a few times with no time passing - so the first fight, the first shot and the first night no longer stutter while the browser gets ready for them. Nothing is heard and nothing moves meanwhile.',

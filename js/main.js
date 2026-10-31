@@ -69,7 +69,8 @@ window.addEventListener('load', () => {
     if (q.has('night')) G.time = 23 * 60;
     if (q.has('rain')) { G.weather.target = 1; G.weather.rain = 1; G.weather.storm = true; }
   } else {
-    Menu.show();
+    // a loading screen before anything, the title screen after it (preload.js)
+    Preload.boot(() => Menu.show());
   }
   requestAnimationFrame((t) => { Game.last = t; Game.loop(t); });
 });

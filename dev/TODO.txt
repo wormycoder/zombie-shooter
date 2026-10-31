@@ -638,6 +638,19 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      zombies with 1 ms steps, and keeps sound effects off throughout. The
      town warm-up stops at 70% of the picture caches. From a file here:
      314 sound files in ~2.5 s, the whole screen ~13 s with the map made.
+     Laptop, 0.36.7: Potato 40/33/22/13 fps.
+     THEN (000.036.008, asked for: load before ANYTHING, the title screen
+     too; keep optimizing): Preload.boot runs before the title screen -
+     the sound files (from a file, before any click: muted elements), item
+     pictures, the 3D renderer, the title town built and drawn; the game's
+     own loading screen then skips what is done. Character textures
+     (charTex: Full / Plain, Potato Plain): the fragment shader built a
+     second time with PLAIN defined - no per-pixel material patterns (the
+     fbm / noise per pixel), flat colours, grime and blood as an even tint,
+     wounds, holes and splats kept. Heavy stage here (3D in software):
+     ~220 -> ~100 ms a frame. The profile on the main thread with a
+     GPU-emulated canvas showed it mostly idle - waiting on the graphics -
+     which is where Plain helps on a UHD 600.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.

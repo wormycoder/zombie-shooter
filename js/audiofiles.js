@@ -65,7 +65,8 @@ const AudioFiles = {
   // kept - later plays copy the loaded element. step(fraction) reports progress
   pre: null,
   async warm(step) {
-    if (this.mode !== 'el' || this.pre || typeof AUDIO_LIST === 'undefined') return;
+    // (from a file: no need to wait for the sound to be switched on - muted elements may play before any click)
+    if (location.protocol !== 'file:' || this.pre || typeof AUDIO_LIST === 'undefined') return;
     const pre = this.pre = {}, urls = [];
     for (const [n, c] of Object.entries(AUDIO_LIST.sfx)) for (let i = 1; i <= c; i++) urls.push(this.url('sfx', n + '_' + i));
     let i = 0, done = 0;
