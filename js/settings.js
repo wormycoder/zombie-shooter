@@ -1,0 +1,187 @@
+'use strict';
+// ---------------------------------------------------------------------------
+// Player settings: graphics & performance, saved in this browser
+// ---------------------------------------------------------------------------
+// tab: 'opt' (Optimization), 'display' or 'exp' (Experimental) on the Settings screen; grp: section heading
+const SETTINGS_OPTS = {
+  res: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Render resolution', opts: [['Auto', 'auto'], ['40%', 0.4], ['50%', 0.5], ['67%', 0.67], ['75%', 0.75], ['100%', 1]], tip: 'Pixels drawn per frame. Lower is much faster, especially on high-DPI screens. Auto caps high-DPI screens at 1.5x.' },
+  dynRes: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Dynamic resolution', opts: [['Off', 0], ['On', 1]], tip: 'While the frame rate stays below its target (the frame rate limit, or 60), the render resolution steps down (to half at most) and comes back up when there is headroom again. Helps when the graphics card is the bottleneck (big or high-DPI screens).' },
+  fps: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Frame rate limit', opts: [['30 FPS', 30], ['60 FPS', 60], ['Unlimited', 0]], tip: 'A lower cap saves battery and keeps weak machines steady.' },
+  detail: { tab: 'display', n: 'World detail', opts: [['Low', 0], ['High', 1]], tip: 'Low skips ground markings and litter, grass edges and power-line wires.' },
+  chars3d: { tab: 'opt', grp: 'Characters & vehicles', n: 'Character detail', opts: [['Auto', 1], ['High', 4], ['Medium', 3], ['Low', 2]], tip: 'Animated 3D survivors and zombies, drawn with WebGL on the graphics card. Auto: full detail within about 9 tiles of you, then rings of simpler models drawn at lower resolution further out (the outer rings pull in when zoomed out or when the frame rate suffers). High: full detail everywhere. Medium / Low: simpler models sooner.' },
+  carDetail: { tab: 'opt', grp: 'Characters & vehicles', n: 'Car detail', opts: [['Low', 0], ['Auto', 1], ['High', 2]], tip: 'Vehicles are painted once per heading at double resolution. Auto paints them at normal resolution while zoomed out (a quarter of the memory and painting time, and no visible difference), Low always does.' },
+  shadows: { tab: 'opt', grp: 'Characters & vehicles', n: 'Shadows', opts: [['Off', 0], ['On', 1]], tip: 'Soft shadows under characters and vehicles.' },
+  particles: { tab: 'display', n: 'Particles', opts: [['Very low', 0.15], ['Low', 0.3], ['Medium', 0.6], ['High', 1]], tip: 'Blood, smoke, sparks and glass.' },
+  ambient: { tab: 'display', n: 'Ambient particles', opts: [['Off', 0], ['Reduced', 0.5], ['Full', 1]], tip: 'Exhaust, dust, spray and tyre smoke from vehicles, and flies over rotting bodies.' },
+  weather: { tab: 'display', n: 'Rain & snow', opts: [['Off', 0], ['Light', 0.45], ['Full', 1]], tip: 'Falling rain and snow on screen (the weather itself is unchanged).' },
+  uiScale: { tab: 'display', n: 'UI scale', opts: [['Auto', 0], ['75%', 0.75], ['85%', 0.85], ['100%', 1], ['115%', 1.15], ['130%', 1.3], ['150%', 1.5]], tip: 'The size of the whole interface: windows, menus, the HUD and text. Auto fits it to the window: smaller on laptop screens so nothing is cut off, a little larger on very big screens.' },
+  lodDist: { tab: 'opt', grp: 'Characters & vehicles', n: 'LOD distance', opts: [['Very near', 0.4], ['Near', 0.6], ['Normal', 1], ['Far', 1.6]], tip: 'How far from you characters keep their detailed models before switching to simpler ones (anything within 6 tiles always stays detailed, except on Low character detail).' },
+  lodMax: { tab: 'opt', grp: 'Characters & vehicles', n: 'Max detailed characters', opts: [['8', 8], ['15', 15], ['25', 25], ['40', 40], ['80', 80], ['Unlimited', 0]], tip: 'In a crowd only this many moving characters (the nearest) get the detailed models; the rest use simpler ones. Bodies lying still are kept as pre-drawn pictures and do not count.' },
+  crowdSpr: { tab: 'opt', grp: 'Characters & vehicles', n: 'Crowd sprites', opts: [['Off', 0], ['On', 1]], tip: 'Far zombies that are only walking or standing share ready-made pictures (by look, facing, step of the walk and light) instead of each being drawn on its own - big crowds cost far less. Up close, and anything a zombie does besides walking, is drawn as usual.' },
+  corpses: { tab: 'opt', grp: 'Memory & limits', n: 'Corpse limit', opts: [['50', 50], ['100', 100], ['200', 200], ['400', 400], ['Unlimited', 0]], tip: 'Beyond this many bodies, the oldest ones that are out of sight decay away (what they carried is left on the ground). Bodies are cheap to draw; this mostly keeps saves small.' },
+  decals: { tab: 'opt', grp: 'Memory & limits', n: 'Decal limit', opts: [['50', 50], ['100', 100], ['200', 200], ['450', 450], ['800', 800]], tip: 'Blood stains, scorch marks and puddles kept on the ground; past the limit the oldest disappear first.' },
+  cache: { tab: 'opt', grp: 'Memory & limits', n: 'Sprite cache size', opts: [['Small', 0], ['Normal', 1], ['Large', 2]], tip: 'How many pre-painted walls, ground chunks, roofs, vehicle views and character pictures are kept in graphics memory. Small saves memory (older or integrated graphics); Large repaints less when you move around a lot.' },
+  lightHz: { tab: 'opt', grp: 'Update rates', n: 'Lighting updates', opts: [['5 / sec', 5], ['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often lights and shadows are recalculated. Lower is cheaper; moving lights (flashlight, headlights) update less smoothly.' },
+  uiHz: { tab: 'opt', grp: 'Update rates', n: 'UI refresh rate', opts: [['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often the HUD, clock, moodles and open windows refresh.' },
+  zAnimHz: { tab: 'opt', grp: 'Update rates', n: 'Zombie animation rate', opts: [['Unlimited', 0], ['30 / sec', 30], ['20 / sec', 20], ['15 / sec', 15], ['10 / sec', 10]], tip: 'How many times a second each zombie\'s 3D pose is worked out and drawn again; in between, its last picture moves along with it. Lower is much lighter on the processor in a crowd. Anything that is hit or flashes keeps the full rate.' },
+  zAnimLazy: { tab: 'opt', grp: 'Update rates', n: 'Lazy zombie animation', opts: [['Off', 0], ['On', 1]], tip: 'Zombies standing about, wandering or feeding animate at half rate within 12 tiles of you and a quarter beyond (of the frame rate, or of the zombie animation rate). Chasing and fighting zombies keep the full rate.' },
+  texCap: { tab: 'opt', grp: 'Textures', n: 'Texture size limit', opts: [['Full (2x up close)', 2], ['1x', 1], ['Half', 0.5]], tip: 'The most detail painted into trees, vehicles and characters. Full paints them at double resolution when you zoom in; 1x never does (a quarter of the memory up close, a little softer); Half paints trees and characters at half resolution (blurry up close, for weak graphics cards and little memory).' },
+  worldTex: { tab: 'opt', grp: 'Textures', n: 'World textures', opts: [['Full', 1], ['Half resolution', 0.5]], tip: 'The ground (grass, roads, floors) is painted in 8 x 8 tile pieces and kept, and every roof is painted whole and kept. Half resolution paints both at half size: a quarter of the memory and painting time, softer ground and roofs. Zoomed far out they are always half size (no visible difference there).' },
+  zLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy zombie updates', opts: [['Off', 0], ['On', 1], ['Strong', 2]], tip: 'Zombies in distant chunks (8x8 tiles) think less often: 3-5 chunks away every other step, 6-11 a coarse update every 2 s, 12+ paused. Chasing and visible zombies always run at full rate. Strong: zombies out of sight and away from you think every 2nd or 4th step (the far, idle ones least often).' },
+  zAdapt: { tab: 'opt', grp: 'Simulation', n: 'Adaptive zombie physics', opts: [['Off', 0], ['On', 1]], tip: 'With more than 120 zombies close by, crowd zombies update at half rate to keep the frame rate up.' },
+  chunkLazy: { tab: 'opt', grp: 'Simulation', n: 'Lazy chunk updates', opts: [['Off', 0], ['On', 1]], tip: 'Chunks (8x8 tiles) 6+ away from you update at half speed and 12+ away are paused (food spoilage, crops, traps, fires catch up when you return).' },
+  unseen: { tab: 'opt', grp: 'Drawing', n: 'Out-of-view objects', opts: [['Shown', 1], ['Hidden', 0]], tip: 'Furniture and props on tiles you cannot see right now (behind you, in other rooms, round corners) are normally drawn darkened, as remembered. Hidden leaves them out until they come into view again, and the fences with them - trees, the buildings\' walls and roofs still show - so a weak computer draws much less each frame.' },
+  gore: { tab: 'display', grp: 'Gore', n: 'Gore', opts: [['Off', 0], ['Low', 1], ['Normal', 2], ['Extreme', 3]], tip: 'Blood sprays by weapon and lands as splatter, pools spread under the dead and dry over the days, wounded zombies leave trails. Off shows no blood at all; Extreme throws much more of it around.' },
+  goreQ: { tab: 'display', grp: 'Gore', n: 'Gore detail', opts: [['Off', 0], ['Very low', 1], ['Low', 2], ['Medium', 3], ['High', 4]], tip: 'Chunks torn out of the dead by blades, heavy blows, shotguns and cars, and the blood that runs from them. Higher levels allow more chunks on a body, model them in more detail (torn rims, flesh, bone) and let them bleed longer.' },
+  dismember: { tab: 'display', grp: 'Gore', n: 'Dismemberment', opts: [['Off', 0], ['On', 1]], tip: 'Heavy blades can take limbs and heads off, stomps and heavy blows crush skulls, shotguns up close blow parts away; a zombie that loses a leg crawls on. Needs Gore to be on.' },
+  memBudget: { tab: 'exp', grp: 'Memory', n: 'Memory budget', opts: [['512 MB', 512], ['1 GB', 1024], ['2 GB', 2048], ['4 GB', 4096], ['8 GB', 8192]], tip: 'How much memory the game lets itself use (an estimate: the pictures it keeps, its data, the tab). Past it, pictures not drawn lately are dropped and painted again when needed. 1 GB suits computers with 4-8 GB of memory; with 16 GB or more, 2-4 GB repaints less when you move about. 512 MB for very little free memory.' },
+  // read when a new game's world is made (saves keep the size they were made with); not part of the presets
+  fpsShow: { tab: 'exp', grp: 'Development', n: 'Frame rate counter', opts: [['Off', 0], ['FPS', 1], ['Detailed', 2]], tip: 'An overlay with the frames per second; Detailed adds frame time, simulation time, lighting and zombie counts.' },
+  ragdoll: { tab: 'exp', grp: 'Animation', n: 'Active ragdolls (beta)', opts: [['Off', 0], ['On', 1]], tip: 'Physics takes over a body only when something acts on it - a blow, a shot, a shove, a car, a fall, a daze, a wrecked limb, being dragged - and lets go again once it has recovered: it is thrown with real momentum, stumbles to catch itself, and the dead go down by how they died, piling on one another. Otherwise the plain animation.' },
+  debugMode: { tab: 'exp', grp: 'Development', n: 'Debug mode', opts: [['Off', 0], ['On', 1]], tip: 'Testing tools: cheats, item, zombie and car spawners, time and weather controls, teleport and world overlays. F2 or ` shows or hides the debug window.' },
+};
+// Auto (the default) is High plus the automatic helpers: dynamic resolution, adaptive character detail and car detail
+// by zoom - full quality whenever the machine keeps up
+const SETTINGS_PRESETS = {
+  // for very weak laptops (a Celeron and built-in graphics sharing the system's memory): Low with less of what is
+  // sure to cost the processor or the graphics - a blurrier picture (fewer pixels to fill and move), lights, the HUD
+  // and zombie animation updated 10 times a second, very few particles, no weather on screen. The rest stays as Low's:
+  // the small sprite cache (less held in the shared graphics memory) and the character detail rings (pulled in
+  // further, more of a crowd goes to sprites re-rendered every few frames, which on a real graphics card costs more)
+  Potato: { res: 0.4, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.15, ambient: 0, weather: 0, lodDist: 0.6, lodMax: 15, corpses: 100, decals: 100, cache: 0, lightHz: 10, uiHz: 10, zAnimHz: 10, zAnimLazy: 1, texCap: 0.5, worldTex: 0.5, zLazy: 2, zAdapt: 1, chunkLazy: 1, unseen: 0, crowdSpr: 1 },
+  Low: { res: 0.5, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.3, ambient: 0, weather: 0.45, lodDist: 0.6, lodMax: 15, corpses: 100, decals: 100, cache: 0, lightHz: 15, uiHz: 15, zAnimHz: 15, zAnimLazy: 1, texCap: 1, worldTex: 0.5, zLazy: 1, zAdapt: 1, chunkLazy: 1, unseen: 1, crowdSpr: 0 },
+  Medium: { res: 0.75, dynRes: 1, fps: 60, detail: 1, chars3d: 3, carDetail: 1, shadows: 1, particles: 0.6, ambient: 0.5, weather: 0.45, lodDist: 0.6, lodMax: 25, corpses: 200, decals: 200, cache: 1, lightHz: 30, uiHz: 30, zAnimHz: 30, zAnimLazy: 1, texCap: 1, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1, unseen: 1, crowdSpr: 0 },
+  Auto: { res: 'auto', dynRes: 1, fps: 60, detail: 1, chars3d: 1, carDetail: 1, shadows: 1, particles: 1, ambient: 1, weather: 1, lodDist: 1, lodMax: 40, corpses: 0, decals: 450, cache: 1, lightHz: 60, uiHz: 30, zAnimHz: 0, zAnimLazy: 1, texCap: 2, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1, unseen: 1, crowdSpr: 0 },
+  High: { res: 'auto', dynRes: 0, fps: 60, detail: 1, chars3d: 1, carDetail: 2, shadows: 1, particles: 1, ambient: 1, weather: 1, lodDist: 1, lodMax: 40, corpses: 0, decals: 450, cache: 1, lightHz: 60, uiHz: 30, zAnimHz: 0, zAnimLazy: 1, texCap: 2, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1, unseen: 1, crowdSpr: 0 },
+  Ultra: { res: 1, dynRes: 0, fps: 0, detail: 1, chars3d: 4, carDetail: 2, shadows: 1, particles: 1, ambient: 1, weather: 1, lodDist: 1.6, lodMax: 0, corpses: 0, decals: 800, cache: 2, lightHz: 60, uiHz: 60, zAnimHz: 0, zAnimLazy: 0, texCap: 2, worldTex: 1, zLazy: 0, zAdapt: 0, chunkLazy: 0, unseen: 1, crowdSpr: 0 },
+};
+const Settings = {
+  KEY: 'hc_settings',
+  v: Object.assign({ fpsShow: 0, ragdoll: 0, debugMode: 0, unseen: 1, crowdSpr: 0, gore: 2, goreQ: 3, dismember: 1, uiScale: 0, memBudget: 1024 }, SETTINGS_PRESETS.Auto),
+  listeners: [],
+  load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(this.KEY) || 'null');
+      if (s) for (const k in this.v) if (SETTINGS_OPTS[k].opts.some(o => o[1] === s[k])) this.v[k] = s[k];
+    } catch (e) { /* storage blocked */ }
+  },
+  save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.v)); } catch (e) { /* storage blocked */ } },
+  set(k, val) { this.v[k] = val; this.save(); this.apply(); },
+  usePreset(name) { Object.assign(this.v, SETTINGS_PRESETS[name]); this.save(); this.apply(); },
+  // name of the preset the current values match, or null
+  presetName() {
+    for (const n in SETTINGS_PRESETS) { const p = SETTINGS_PRESETS[n]; if (Object.keys(p).every(k => p[k] === this.v[k])) return n; }
+    return null;
+  },
+  onChange(fn) { this.listeners.push(fn); },
+  apply() { for (const fn of this.listeners) { try { fn(this.v); } catch (e) { console.error(e); } } },
+  // backing-store pixels per CSS pixel for the main canvas
+  dpr() {
+    // (behind the menus the menu's own quality scale stands in for the dynamic resolution)
+    const menu = typeof Menu !== 'undefined' && (G.mode === 'menu' || G.mode === 'create');
+    const d = Math.min(2, window.devicePixelRatio || 1), r = this.v.res, k = menu ? Menu.q : this.v.dynRes ? Perf.scale : 1;
+    if (r === 'auto') return Math.max(0.5 * Math.min(d, 1.5), Math.min(d, 1.5) * k);
+    return Math.max(Math.min(0.5, r), d * r * k);
+  },
+};
+Settings.load();
+
+// ---------------------------------------------------------------------------
+// Perf: frame statistics (last 240 frames), dynamic resolution and the performance report players can send
+// ---------------------------------------------------------------------------
+const Perf = {
+  N: 240, ft: new Float32Array(240), rt: new Float32Array(240), st: new Float32Array(240), ut: new Float32Array(240), n: 0, i: 0,
+  // dynamic resolution: render scale 0.5 .. 1 applied on top of the resolution setting
+  scale: 1, wN: 0, wJs: 0, good: 0, downT: 0, upT: 0, backoff: 4000, holdT: 0, probe: null,
+  // one rendered frame: ms since the previous one, and the render / simulation / UI ms it took
+  frame(iv, r, s, u) {
+    const k = this.i;
+    this.ft[k] = iv; this.rt[k] = r; this.st[k] = s; this.ut[k] = u;
+    this.i = (k + 1) % this.N; if (this.n < this.N) this.n++;
+    this.dyn(iv, r + s + u);
+  },
+  setScale(k) { if (k !== this.scale) { this.scale = k; if (typeof Render !== 'undefined' && Render.cv) Render.resize(); } },
+  // Windows of 30 frames, judged by their median (a single hitch does not count). Below target while the scripts are not
+  // the bottleneck (fewer pixels do not make them faster): one step down, kept only if the next window is faster. At
+  // target with headroom for 2 s: one step up; a step up that does not hold doubles the wait before the next try.
+  // (automated test browsers keep full resolution unless the URL asks for it: their software rendering is always slow)
+  auto: !(navigator.webdriver && !/[?&]dynres/.test(location.search)),
+  win: new Float32Array(30),
+  dyn(iv, js) {
+    if (!Settings.v.dynRes || !this.auto) { this.setScale(1); this.wN = 0; return; }
+    const T = 1000 / (Settings.v.fps || 60);
+    this.win[this.wN++] = iv; this.wJs += js;
+    if (this.wN < 30) return;
+    this.win.sort();
+    const med = (this.win[14] + this.win[15]) / 2, jsAvg = this.wJs / this.wN, now = performance.now();
+    this.wN = 0; this.wJs = 0;
+    if (G.paused || document.hidden || G.mode !== 'play') { this.probe = null; return; }
+    const P = this.probe;
+    if (P) {
+      this.probe = null;
+      // no faster with fewer pixels: not limited by the graphics card (or a capped display); back up and stay a while
+      if (med > P.med * 0.97) { this.setScale(P.k); this.holdT = now + 30000; return; }
+    }
+    if (med > T * 1.12) {
+      this.good = 0;
+      if (jsAvg < med * 0.75 && this.scale > 0.5 && now > this.holdT) {
+        if (now - this.upT < 3000) this.backoff = Math.min(60000, this.backoff * 2);
+        this.probe = { med, k: this.scale };
+        this.downT = now; this.setScale(Math.max(0.5, Math.round(this.scale * 10 - 1) / 10));
+      }
+    } else if (med < T * 1.04 && jsAvg < T * 0.6) {
+      if (now - this.upT > 15000) this.backoff = Math.max(4000, this.backoff / 2);
+      if (++this.good >= 4 && this.scale < 1 && now - this.downT > this.backoff) { this.good = 0; this.upT = now; this.setScale(Math.min(1, Math.round(this.scale * 10 + 1) / 10)); }
+    } else this.good = 0;
+  },
+  // frame statistics over the last n frames: [avg, p50, 1% low (99th percentile ms), worst, render, sim, ui]
+  stats() {
+    const n = this.n;
+    if (!n) return null;
+    const a = Array.from(this.ft.subarray(0, n)).sort((x, y) => x - y);
+    let f = 0, r = 0, s = 0, u = 0;
+    for (let k = 0; k < n; k++) { f += this.ft[k]; r += this.rt[k]; s += this.st[k]; u += this.ut[k]; }
+    return { avg: f / n, p50: a[n >> 1], p99: a[Math.min(n - 1, Math.floor(n * 0.99))], worst: a[n - 1], r: r / n, s: s / n, u: u / n };
+  },
+  gpu() {
+    if (typeof GL3D !== 'undefined' && GL3D.renderer) return GL3D.renderer;
+    if (this.gpuS === undefined) {
+      this.gpuS = 'unknown';
+      try { const gl = document.createElement('canvas').getContext('webgl'); const d = gl && gl.getExtension('WEBGL_debug_renderer_info'); if (gl) this.gpuS = String((d && gl.getParameter(d.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER)); } catch (e) { /* none */ }
+    }
+    return this.gpuS;
+  },
+  // plain-text report to copy and send
+  report() {
+    const L = [], f2 = (v) => (+v).toFixed(2), f1 = (v) => (+v).toFixed(1), V = Settings.v;
+    const st = this.stats();
+    L.push('Hollow Creek performance report' + (typeof VERSION !== 'undefined' ? ' - version ' + VERSION : ''));
+    L.push('Date: ' + new Date().toISOString().replace('T', ' ').slice(0, 19));
+    L.push('Browser: ' + navigator.userAgent);
+    L.push('GPU (WebGL): ' + this.gpu() + (typeof GL3D !== 'undefined' ? (GL3D.soft ? ' (software rendering)' : '') + (GL3D.failed ? ' - 3D characters unavailable' : '') : ''));
+    L.push('CPU threads: ' + (navigator.hardwareConcurrency || '?') + (navigator.deviceMemory ? ' - memory ' + navigator.deviceMemory + ' GB' : ''));
+    if (typeof Render !== 'undefined' && Render.cv) L.push('Window ' + Render.W + 'x' + Render.H + ' - devicePixelRatio ' + (window.devicePixelRatio || 1) + ' - render scale ' + f2(Render.dpr) + (V.dynRes ? ' (dynamic ' + Math.round(this.scale * 100) + '%)' : '') + ' - canvas ' + Render.cv.width + 'x' + Render.cv.height + ' - zoom ' + f2(Render.cam.zoom));
+    if (st) {
+      L.push('FPS ' + f1(1000 / st.avg) + ' (median ' + f1(1000 / st.p50) + ', 1% low ' + f1(1000 / st.p99) + ') over ' + this.n + ' frames');
+      L.push('Frame ' + f1(st.avg) + ' ms avg, ' + f1(st.worst) + ' ms worst - render ' + f2(st.r) + ' ms - simulation ' + f2(st.s) + ' ms - UI ' + f2(st.u) + ' ms');
+    }
+    if (typeof G !== 'undefined' && G.zombies) {
+      let al = 0, dd = 0; for (const z of G.zombies) if (z.dead) dd++; else al++;
+      L.push('Zombies ' + G.zombies.length + ' (' + al + ' alive, ' + dd + ' bodies) - updated ' + ((typeof Zombie !== 'undefined' && Zombie.updN) || 0) + ' - cars ' + G.cars.length + ' (' + (typeof Vehicles !== 'undefined' && Vehicles.active ? Vehicles.active.length : '-') + ' active)');
+    }
+    if (typeof Char3D !== 'undefined' && Char3D.lodN) {
+      const n = Char3D.lodN;
+      L.push('Characters drawn: full ' + n[0] + ', simplified ' + n[1] + ', box ' + n[2] + ', far sprites ' + n[3] + ', still-body sprites ' + n[4] + ' - prepare ' + f2(Char3D.prepMs) + ' ms - LOD radii ' + Char3D.RL.map(r => r > 1e6 ? 'inf' : f1(r)).join('/') + (Char3D.bias ? ' (auto bias ' + f2(Char3D.bias) + ')' : ''));
+      if (typeof GL3D !== 'undefined') L.push('GL atlas ' + GL3D.AW + 'x' + GL3D.AH + ' - cells ' + GL3D.cells.length + ' - sprite slots ' + C3Imp.n);
+    }
+    if (typeof Spr !== 'undefined') {
+      L.push('Caches: sprites ' + Spr.cache.size + ', walls ' + Spr.wcache.size + ', ground chunks ' + Render.chunks.size + ' (' + Render.chunkVis + ' on screen), roofs ' + Facade.rcache.size + ' (' + f1(Facade.rpx * 4 / 1048576) + ' MB)'
+        + (typeof CarArt !== 'undefined' ? ', car views ' + CarArt.cache.size + ' (' + f1(CarArt.bytes / 1048576) + ' MB)' : '') + ' - light grid ' + Render.lw + 'x' + Render.lh);
+      L.push('Decals ' + Wd.decals.length + ' - floor item piles ' + Wd.items.size + ' - fires ' + (Wd.fire ? Wd.fire.size : 0) + ' - particles ' + Fx.parts.length + (typeof Vehicles !== 'undefined' ? '/' + Vehicles.pfx.length : ''));
+    }
+    if (performance.memory) L.push('JS heap ' + Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB of ' + Math.round(performance.memory.jsHeapSizeLimit / 1048576));
+    if (typeof Mem !== 'undefined') L.push(Mem.text().replace(/^m/, 'M'));
+    L.push('Settings: ' + Object.keys(V).map(k => k + '=' + V[k]).join(' '));
+    return L.join('\n');
+  },
+};

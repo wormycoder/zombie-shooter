@@ -1,0 +1,835 @@
+'use strict';
+// ---------------------------------------------------------------------------
+// Timed actions
+// ---------------------------------------------------------------------------
+const Actions = {
+  start(a) {
+    const p = G.player;
+    if (!a) return;
+    p.action = a; a.t = 0;
+    p.sitting = false;
+    if (p.seat) Player.standUp();
+    if (a.begin) a.begin();
+  },
+  queue(a) {
+    const p = G.player;
+    if (!a) return;
+    if (!p.action) this.start(a); else p.queue.push(a);
+  },
+  cancel(silent) {
+    const p = G.player;
+    if (p.action && p.action.onCancel) p.action.onCancel();
+    p.action = null; p.queue = [];
+    p.climb = null;
+    void silent;
+  },
+  update(dt) {
+    const p = G.player;
+    const a = p.action;
+    if (!a || p.dead) return;
+    if (a.check && !a.check()) { this.cancel(); return; }
+    a.t += dt * (a.rate || 1) * (Debug.instant ? 1000 : 1);
+    if (a.tick) a.tick(dt);
+    if (a.t >= a.dur) {
+      p.action = null;
+      try { a.done(); } catch (e) { console.error(e); }
+      const nx = p.queue.shift();
+      if (nx) this.start(nx);
+    }
+  },
+  mk(name, dur, done, o) { return Object.assign({ name, dur, done, anim: 'work' }, o || {}); },
+  // what the hands hold for an item's animation (actanim.js props), and the colour it is drawn in
+  propOf(it) {
+    const d = ITEMS[it.id], ic = d.ic || [], k = ic[0];
+    if (d.drink || d.fluid) return { prop: k === 'soda' || k === 'jar' ? 'can' : k === 'carton' ? 'carton' : 'bottle', propCol: d.fluid ? '#a8c8e0' : ic[1] };
+    if (d.open || k === 'can' || k === 'tin') return { prop: 'can', propCol: ic[1] };
+    return { prop: 'food', propCol: ic[1] };
+  },
+  // container height for searching it: 0 the floor or low, 1 waist, 2 a high shelf
+  lootLvl(c) {
+    if (!c || c.kind === 'inv' || c.kind === 'bag') return null;
+    if (c.kind === 'floor' || c.kind === 'corpse') return 0;
+    if (c.kind === 'obj') { const t = c.obj && c.obj.t || ''; return /shelf|wardrobe|locker|fridge|cabinet|bookcase|bookshelf|vending/.test(t) ? 2 : /crate|box|trash|bin|chest|barrel|dumpster|toolbox|cooler|nightstand|oven|stove|washer|dryer/.test(t) ? 0 : 1; }
+    return 1;
+  },
+  // first aid on a part: kneeling for the legs and feet
+  medAnim(part, prop) {
+    const leg = typeof LEG_PARTS !== 'undefined' && LEG_PARTS.includes(part);
+    return { anim: 'bandage', part, prop: prop || null, kneel: leg, kneelSide: leg ? (part.endsWith('R') ? 1 : -1) : 0 };
+  },
+  // clothing slot to the dressing animation
+  dressPart(it) {
+    const sl = ITEMS[it.id].slot;
+    return sl === 'pants' ? 'low' : sl === 'shoes' ? 'feet' : sl === 'hat' || sl === 'eyes' ? 'head' : sl === 'gloves' || sl === 'wrist' || sl === 'waist' || sl === 'holster' ? 'hands' : 'top';
+  },
+  dexMult() { return Player.hasTrait('dextrous') ? 0.5 : Player.hasTrait('allthumbs') ? 1.6 : 1; },
+
+  // ------------------------------------------------------------------ inventory transfers
+  transfer(it, from, to) {
+    const w = Items.weight(it);
+    const dur = (0.2 + w * 0.12) * this.dexMult();
+    return this.mk('Transferring ' + Items.name(it), dur, () => {
+      if (!Cont.has(from, it)) return;
+      if (!Cont.canFit(to, it)) { Player.say("It won't fit.", '#f99'); G.player.queue = []; return; }
+      Cont.remove(from, it);
+      Cont.add(to, it);
+      Sfx.play('pickup');
+      UI.refresh();
+    }, { anim: 'loot', lvl: this.lootLvl(from) ?? this.lootLvl(to) ?? 1, check: () => Cont.inReach(from) && Cont.inReach(to) });
+  },
+  // ensure item is in player main inventory first, then run action
+  withItem(it, actFn) {
+    const src = UI.containerOfItem(it);
+    if (src && src.kind !== 'inv' && src.kind !== 'bag') {
+      this.queue(this.transfer(it, src, Cont.inv()));
+    }
+    this.queue({ name: '', dur: 0, done: () => this.queue(actFn()), anim: 'work' });
+  },
+
+  // ------------------------------------------------------------------ consumption
+  eat(it, portion) {
+    const d = ITEMS[it.id];
+    portion = portion || 1;
+    if (d.open && !it.opened && !Player.findTag('canopener')) { Player.say('I need a can opener.', '#ccc'); return null; }
+    const dur = d.drink ? 3 : (2.5 + (d.hunger || 0.1) * 14) * portion;
+    return this.mk((d.drink ? 'Drinking ' : 'Eating ') + Items.name(it), dur, () => {
+      const p = G.player, st = p.st;
+      if (!Player.find(x => x === it)) return;
+      const fs = Items.freshState(it);
+      st.hunger = Math.max(-0.25, st.hunger - Items.foodVal(it, 'hunger') * portion);
+      st.thirst = U.clamp(st.thirst - (d.thirst || 0) * portion, 0, 1);
+      st.unhappy = U.clamp(st.unhappy + (d.unhappy || 0) * portion + (fs === 1 ? 5 : 0) + (it.burnt ? 10 : 0), 0, 100);
+      st.boredom = U.clamp(st.boredom + (d.bored || 0) * portion, 0, 100);
+      if (d.alc) st.drunk = Math.min(1, st.drunk + d.alc * portion);
+      if (d.fatigue) st.fatigue = U.clamp(st.fatigue + d.fatigue, 0, 1);
+      if (d.stress) st.stress = U.clamp(st.stress + d.stress, 0, 1);
+      let sick = 0;
+      const gut = Player.hasTrait('irongut') ? 0.5 : Player.hasTrait('weakstomach') ? 1.6 : 1;
+      if (fs === 2) { sick += 0.5; st.unhappy = Math.min(100, st.unhappy + 20); Player.say('That tasted rotten...', '#cc9'); }
+      if (d.raw && !it.cooked && R.chance(0.6)) sick += 0.35;
+      if (d.poison) st.poison = Math.min(1, st.poison + d.poison);
+      st.foodSick = Math.min(1, st.foodSick + sick * gut);
+      if (portion >= 1 || (it.portion !== undefined && it.portion - portion <= 0.01)) {
+        Player.removeItem(it);
+        if (d.empty) Player.addItem(Items.make(d.empty));
+      } else it.portion = (it.portion === undefined ? 1 : it.portion) - portion;
+      if (d.open) it.opened = true;
+      Sfx.play(d.drink ? 'drink' : 'eat');
+      UI.refresh();
+    }, Object.assign({ anim: d.drink ? 'drink' : 'eat' }, this.propOf(it)));
+  },
+  drink(it) {
+    const p = G.player;
+    if (it.fl <= 0.001) { Player.say("It's empty.", '#ccc'); return null; }
+    const amt = Math.min(it.fl, Math.max(0.08, p.st.thirst + 0.02));
+    return this.mk('Drinking', 1.5 + amt * 7, () => {
+      const st = p.st;
+      if (!Player.find(x => x === it)) return;
+      st.thirst = Math.max(0, st.thirst - amt);
+      it.fl = Math.max(0, it.fl - amt);
+      if (it.taint && R.chance(0.45)) { st.foodSick = Math.min(1, st.foodSick + 0.3 * (Player.hasTrait('irongut') ? 0.5 : 1)); Player.say('That water tasted foul...', '#cc9'); }
+      if (it.fl <= 0.001) { it.fl = 0; it.taint = false; }
+      Sfx.play('drink');
+      UI.refresh();
+    }, Object.assign({ anim: 'drink' }, this.propOf(it)));
+  },
+  drinkSource(src) {
+    const p = G.player;
+    return this.mk('Drinking', 2 + p.st.thirst * 8, () => {
+      const avail = Water.take(src, p.st.thirst + 0.05);
+      if (avail <= 0) { Player.say('No water left.', '#ccc'); return; }
+      p.st.thirst = Math.max(0, p.st.thirst - avail);
+      if (Water.tainted(src) && R.chance(0.5)) { p.st.foodSick = Math.min(1, p.st.foodSick + 0.3 * (Player.hasTrait('irongut') ? 0.5 : 1)); Player.say('That water tasted foul...', '#cc9'); }
+      Sfx.play('drink');
+    }, { anim: 'drink', prop: null, check: () => Water.near(src) });
+  },
+  fill(it, src) {
+    const d = ITEMS[it.id];
+    const need = d.fluid - it.fl;
+    if (need <= 0.01) { Player.say("It's already full.", '#ccc'); return null; }
+    return this.mk('Filling ' + Items.name(it), 1 + need * 2.5, () => {
+      const got = Water.take(src, need);
+      if (got <= 0) { Player.say('No water.', '#ccc'); return; }
+      const t = Water.tainted(src);
+      it.taint = (it.fl > 0.01 && it.taint) || t;
+      it.fl += got;
+      Sfx.play('fill');
+      UI.refresh();
+    }, { anim: 'work', check: () => Water.near(src) });
+  },
+  // ---- fire fighting
+  extinguish(tx, ty, ext) {
+    return this.mk('Spraying the fire', 2.0, () => {
+      if (!ext || ext.uses <= 0) return;
+      ext.uses--;
+      for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) Fire.douse(x, y, x === tx && y === ty ? 2 : 1.2);
+      for (let k = 0; k < 14; k++) Fx.parts.push({ x: tx + 0.5 + R.f(-1, 1), y: ty + 0.5 + R.f(-1, 1), z: R.f(0.2, 1.2), vx: R.f(-0.3, 0.3), vy: R.f(-0.3, 0.3), vz: 0.4, life: 1.4, max: 1.4, col: '#e8e8e8', size: R.f(4, 8), smoke: true });
+      if (ext.uses <= 0) Player.say('The extinguisher is empty.', '#ccc');
+      UI.refresh();
+    }, { anim: 'aim', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.6, begin: () => { Actions.face(tx, ty); Sfx.play('spray', tx + 0.5, ty + 0.5); } });
+  },
+  douse(tx, ty, cont) {
+    return this.mk('Throwing water on the fire', 1.3, () => {
+      if (!cont || cont.fl < 0.2) return;
+      const amt = Math.min(cont.fl, 0.75);
+      cont.fl -= amt;
+      Fire.douse(tx, ty, 0.9 + amt);
+      for (const [dx, dy] of DIR4) Fire.douse(tx + dx, ty + dy, amt * 0.4);
+      Fx.smoke(tx + 0.5, ty + 0.5, 0.3); Fx.smoke(tx + 0.5, ty + 0.5, 0.5);
+      Sfx.play('splash', tx + 0.5, ty + 0.5);
+      UI.refresh();
+    }, { anim: 'shove', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.4, begin: () => Actions.face(tx, ty) });
+  },
+  setFire(tx, ty, can) {
+    return this.mk('Pouring gasoline', 2.5, () => {
+      const l = Player.findTag('lighter');
+      if (!can || can.fl < 0.15 || !l) return;
+      can.fl -= 0.15;
+      if (l.uses !== undefined) { l.uses--; if (l.uses <= 0) Player.removeItem(l); }
+      Fire.ignite(tx, ty, 0.8, 12);
+      Sfx.play('fire', tx + 0.5, ty + 0.5);
+      Player.say('Burn it all.', '#f99');
+      UI.refresh();
+    }, { anim: 'pour', prop: 'gascan', check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.2, begin: () => Actions.face(tx, ty) });
+  },
+  face(tx, ty) { const p = G.player; p.angle = Math.atan2(ty + 0.5 - p.y, tx + 0.5 - p.x); },
+  pour(it) {
+    return this.mk('Emptying', 1.5, () => { it.fl = 0; it.taint = false; UI.refresh(); Sfx.play('fill'); });
+  },
+  pills(it) {
+    const d = ITEMS[it.id];
+    return this.mk('Taking ' + d.n, 2, () => {
+      const st = G.player.st;
+      if (d.pill === 'pain') st.painkill = 4;
+      if (d.pill === 'antibiotic') st.antibio = 24;
+      if (d.pill === 'beta') { st.beta = 4; st.panic *= 0.3; }
+      if (d.pill === 'antidep') st.antidep = 12;
+      if (d.pill === 'sleep') { st.fatigue = Math.min(1, st.fatigue + 0.35); G.player.sleepPill = true; }
+      if (d.pill === 'vitamin') st.fatigue = Math.max(0, st.fatigue - 0.1);
+      it.uses--;
+      if (it.uses <= 0) Player.removeItem(it);
+      Sfx.play('pills'); UI.refresh();
+    }, { anim: 'pills', prop: 'pills', propCol: (d.ic || [])[2] });
+  },
+  smoke(it) {
+    if (!Player.findTag('lighter')) { Player.say('I need a lighter.', '#ccc'); return null; }
+    return this.mk('Smoking', 6, () => {
+      const st = G.player.st;
+      st.stress = Math.max(0, st.stress - 0.3); st.unhappy = Math.max(0, st.unhappy - 6); st.smokeT = 0;
+      if (!Player.hasTrait('smoker')) st.foodSick = Math.min(1, st.foodSick + 0.1);
+      it.uses--; if (it.uses <= 0) Player.removeItem(it);
+      const l = Player.findTag('lighter'); if (l) { l.uses--; if (l.uses <= 0) Player.removeItem(l); }
+      UI.refresh();
+    }, { anim: 'smoke', prop: 'cig' });
+  },
+  read(it) {
+    const d = ITEMS[it.id];
+    const p = G.player;
+    if (Player.hasTrait('illiterate')) { Player.say("I can't read.", '#ccc'); return null; }
+    if (Render.lightAt(p.x, p.y) < 0.25) { Player.say("It's too dark to read.", '#ccc'); return null; }
+    if (d.skillBook) {
+      const s = p.skills[d.skillBook.sk];
+      if (s.lv < d.skillBook.min) { Player.say("This book is too advanced for me.", '#ccc'); return null; }
+      if (s.lv > d.skillBook.max) { Player.say("I won't learn anything from this.", '#ccc'); return null; }
+    }
+    const total = d.read / MIN_PER_SEC;
+    const a = this.mk('Reading ' + d.n, total, () => {
+      it.readP = 0;
+      if (d.skillBook) {
+        p.bookMult[d.skillBook.sk] = { mult: d.skillBook.mult, min: d.skillBook.min, max: d.skillBook.max };
+        Player.say('Finished reading! ' + SKILL_NAMES[d.skillBook.sk] + ' XP x' + d.skillBook.mult, '#8f8');
+      } else {
+        Player.say('Finished reading.', '#ccc');
+      }
+      if (d.unhappy) p.st.unhappy = Math.max(0, p.st.unhappy + d.unhappy);
+      UI.refresh();
+    }, { anim: 'read', prop: 'book', propCol: (d.ic || [])[1], fun: 22, check: () => Render.lightAt(p.x, p.y) >= 0.2 && !!Player.find(x => x === it) });
+    a.t0 = (it.readP || 0) * total;
+    a.begin = () => { a.t = a.t0; Sfx.play('page'); };
+    a.tick = () => { it.readP = a.t / total; };
+    return a;
+  },
+
+  // ------------------------------------------------------------------ medical
+  bandage(part, it) {
+    const p = G.player, d = ITEMS[it.id];
+    const fa = Player.skill('FirstAid');
+    const dur = 3.5 * (1 - fa * 0.05) * (Player.hasTrait('hemophobic') ? 1.5 : 1);
+    return this.mk('Bandaging ' + PART_NAMES[part], dur, () => {
+      if (!Player.find(x => x === it)) return;
+      const b = p.body[part];
+      b.bandage = { q: d.bandage, dirt: d.bandage === 0 ? 0.45 : d.bandage === 1 ? 0.08 : 0 };
+      if (d.bandage === 2) b.disinf = Math.max(b.disinf, 6);
+      Player.removeItem(it);
+      Player.xp('FirstAid', 5);
+      Sfx.play('bandage'); UI.refresh();
+    }, this.medAnim(part, 'bandage'));
+  },
+  removeBandage(part) {
+    return this.mk('Removing bandage', 1.5, () => { G.player.body[part].bandage = null; Sfx.play('bandage'); UI.refresh(); }, this.medAnim(part));
+  },
+  disinfect(part, it) {
+    return this.mk('Disinfecting', 2.5, () => {
+      const b = G.player.body[part];
+      b.disinf = 30; b.infect = Math.max(0, b.infect - 0.5);
+      G.player.st.pain = Math.min(100, G.player.st.pain + 10);
+      if (it.uses !== undefined) { it.uses--; if (it.uses <= 0) Player.removeItem(it); } else Player.removeItem(it);
+      Player.xp('FirstAid', 3);
+      Sfx.play('pills'); UI.refresh();
+    }, this.medAnim(part, 'bottle'));
+  },
+  stitch(part, it) {
+    return this.mk('Stitching wound', 7 * (1 - Player.skill('FirstAid') * 0.05), () => {
+      const b = G.player.body[part];
+      b.stitched = true;
+      Player.removeItem(it);
+      Player.xp('FirstAid', 8);
+      if (Player.skill('FirstAid') < 3) G.player.st.pain = Math.min(100, G.player.st.pain + 25);
+      Sfx.play('bandage'); UI.refresh();
+    }, this.medAnim(part));
+  },
+  splint(part, it) {
+    return this.mk('Applying splint', 6 * (1 - Player.skill('FirstAid') * 0.05), () => {
+      const b = G.player.body[part];
+      if (!b.w.fracture || b.splint) return;
+      b.splint = true;
+      Player.removeItem(it);
+      Player.xp('FirstAid', 10);
+      G.player.st.pain = Math.min(100, G.player.st.pain + 15);
+      Sfx.play('bandage'); UI.refresh();
+    }, this.medAnim(part, 'bandage'));
+  },
+  removeGlass(part) {
+    const tw = Player.findTag('tweezers');
+    return this.mk('Removing glass', tw ? 3 : 5, () => {
+      const b = G.player.body[part];
+      b.glass = false;
+      if (!tw && R.chance(0.4)) { Player.say('Ouch!', '#f99'); b.w.cut = Math.max(b.w.cut || 0, 10); }
+      Player.xp('FirstAid', 5);
+      UI.refresh();
+    }, this.medAnim(part));
+  },
+
+  // ------------------------------------------------------------------ gear
+  wear(it) {
+    return this.mk('Putting on ' + Items.name(it), ITEMS[it.id].bag ? 0.8 : 1.6, () => { if (Player.find(x => x === it)) { Player.wear(it); UI.refresh(); } }, { anim: 'dress', part: this.dressPart(it) });
+  },
+  unwear(it) {
+    return this.mk('Taking off ' + Items.name(it), 1.2, () => { Player.unwear(it); UI.refresh(); }, { anim: 'dress', part: this.dressPart(it) });
+  },
+  equip(it, slot) {
+    return this.mk('Equipping', 0.5, () => { if (Player.find(x => x === it)) { Player.equip(it, slot); UI.refresh(); } }, { walkOk: true });
+  },
+  // R: clear a jam; swap in the fullest spare magazine; else fill the magazine in the gun from loose rounds and
+  // rack it. A tube, cylinder or break-action gun takes its rounds one by one.
+  reload() {
+    const p = G.player;
+    const it = Player.primary();
+    if (!it || !ITEMS[it.id].gun) return;
+    const g = ITEMS[it.id].gun, k = 1 - Player.skill('Reloading') * 0.06;
+    if (it.jam) { this.queue(this.rack(it, true)); return; }
+    const rounds = () => Player.findAll(x => x.id === g.ammo);
+    const fromBox = () => { const box = Player.find(x => ITEMS[x.id].boxOf === g.ammo); if (box) { this.queue(this.openBox(box)); this.queue({ name: '', dur: 0, done: () => this.reload() }); } return !!box; };
+    if (g.mag) {
+      const inGun = it.magIn === false ? -1 : it.ammo || 0;
+      const spare = Player.findAll(x => x.id === g.mag && (x.rounds || 0) > Math.max(0, inGun)).sort((a, b) => b.rounds - a.rounds)[0];
+      if (spare) { this.queue(this.magSwap(it, spare)); return; }
+      if (inGun >= g.cap) { if (it.unracked) this.queue(this.rack(it)); else Player.say('Fully loaded.', '#ccc'); return; }
+      if (!rounds().length) {
+        if (fromBox()) return;
+        if (it.unracked && it.ammo) { this.queue(this.rack(it)); return; }
+        Player.say(inGun < 0 && !Player.find(x => x.id === g.mag) ? 'No magazine!' : 'No ammo!', '#f99'); return;
+      }
+      if (inGun < 0) {
+        // no magazine in it: fill a spare, then put it in
+        const empty = Player.find(x => x.id === g.mag);
+        if (!empty) { Player.say('No magazine!', '#f99'); return; }
+        this.queue(this.magLoad(empty)); this.queue({ name: '', dur: 0, done: () => this.reload() }); return;
+      }
+      // out with the magazine, thumb rounds into it, back in, rack
+      const n = Math.min(g.cap - it.ammo, rounds().length);
+      this.queue(this.mk('Loading magazine', (0.7 + n * 0.2) * k, () => {
+        if (Player.primary() !== it) return;
+        for (const r2 of rounds().slice(0, g.cap - it.ammo)) { Player.removeItem(r2); it.ammo++; }
+        Player.xp('Reloading', 2); Sfx.play('shellin'); UI.refresh();
+      }, { anim: 'magload', walkOk: true }));
+      this.queue(this.mk('Reloading', (it.unracked ? 1.15 : 0.8) * k, () => {
+        if (Player.primary() !== it) return;
+        it.magIn = true; it.unracked = false;
+        Player.xp('Reloading', 1); Sfx.play('reload'); UI.refresh();
+      }, { anim: 'magswap', walkOk: true, sub: it.unracked ? 'rack' : 'in' }));
+      return;
+    }
+    if (it.ammo >= g.cap) { Player.say('Fully loaded.', '#ccc'); return; }
+    if (!rounds().length) { if (!fromBox()) Player.say('No ammo!', '#f99'); return; }
+    const one = this.mk('Reloading', g.reload * k + 0.25, () => {
+      const r2 = Player.find(x => x.id === g.ammo);
+      if (!r2 || it.ammo >= g.cap) return;
+      Player.removeItem(r2); it.ammo++;
+      Player.xp('Reloading', 1);
+      Sfx.play('shellin');
+      if (it.ammo < g.cap && Player.find(x => x.id === g.ammo)) p.queue.unshift(this.mk('Reloading', one.dur, one.done, { anim: 'reload', walkOk: true }));
+      UI.refresh();
+    }, { anim: 'reload', walkOk: true });
+    this.queue(one);
+  },
+  // a spare magazine into the gun; the one that was in it (and what is left in it) goes in the pocket
+  magSwap(it, mag) {
+    const g = ITEMS[it.id].gun, k = 1 - Player.skill('Reloading') * 0.06, rack = it.unracked || !it.ammo;
+    return this.mk('Changing magazine', (rack ? 1.45 : 1.1) * k, () => {
+      if (Player.primary() !== it || !Player.find(x => x === mag)) return;
+      if (it.magIn !== false) { const old = Items.make(g.mag); old.rounds = it.ammo || 0; Player.addItem(old); }
+      Player.removeItem(mag);
+      it.ammo = mag.rounds || 0; it.magIn = true; it.unracked = false;
+      Player.xp('Reloading', 3); Sfx.play('reload'); UI.refresh();
+    }, { anim: 'magswap', walkOk: true, sub: rack ? 'rack' : 'in' });
+  },
+  // work the slide, pump or bolt: chambers a round, and throws out a jammed one
+  rack(it, jam) {
+    const g = ITEMS[it.id].gun;
+    return this.mk(jam ? 'Clearing the jam' : 'Racking', jam ? 0.9 : 0.6, () => {
+      if (Player.primary() !== it) return;
+      if (it.jam && it.ammo) { it.ammo--; Combat.eject(g.ammo === 'ShotgunShells' ? 'shell' : g.model === 'rifle' ? 'rifle' : 'brass'); }
+      it.jam = false; it.unracked = false;
+      Sfx.play(g.cycle || (g.model === 'shotgun' ? 'pump' : 'bolt')); UI.refresh();
+    }, { anim: 'magswap', walkOk: true, sub: 'rack' });
+  },
+  // thumb loose rounds into a magazine (or take them out)
+  magLoad(mag) {
+    const d = ITEMS[mag.id], have = () => Player.findAll(x => x.id === d.magOf);
+    const n = Math.min(d.magCap - (mag.rounds || 0), have().length);
+    if (n <= 0) { Player.say(have().length ? "It's full." : 'No rounds for it.', '#ccc'); return null; }
+    return this.mk('Loading ' + d.n, (0.5 + n * 0.22) * (1 - Player.skill('Reloading') * 0.06), () => {
+      for (const r2 of have().slice(0, d.magCap - (mag.rounds || 0))) { Player.removeItem(r2); mag.rounds = (mag.rounds || 0) + 1; }
+      Player.xp('Reloading', 2); Sfx.play('shellin'); UI.refresh();
+    }, { anim: 'magload', walkOk: true });
+  },
+  magUnload(mag) {
+    const d = ITEMS[mag.id];
+    return this.mk('Unloading ' + d.n, 0.4 + (mag.rounds || 0) * 0.08, () => {
+      for (let k = 0; k < (mag.rounds || 0); k++) Player.addItem(Items.make(d.magOf));
+      mag.rounds = 0; Sfx.play('shellin'); UI.refresh();
+    }, { anim: 'magload' });
+  },
+  ejectMag(it) {
+    const g = ITEMS[it.id].gun;
+    return this.mk('Ejecting magazine', 0.5, () => {
+      if (it.magIn === false) return;
+      const m = Items.make(g.mag); m.rounds = it.ammo || 0; Player.addItem(m);
+      it.ammo = 0; it.magIn = false; Sfx.play('clunk'); UI.refresh();
+    }, { anim: 'magswap', walkOk: true, sub: 'out' });
+  },
+  unload(it) {
+    const g = ITEMS[it.id].gun;
+    return this.mk('Unloading', 1.5, () => { for (let k = 0; k < it.ammo; k++) Player.addItem(Items.make(g.ammo)); it.ammo = 0; UI.refresh(); }, { anim: 'reload' });
+  },
+  openBox(it) {
+    const d = ITEMS[it.id];
+    return this.mk('Opening ' + d.n, 1.5, () => {
+      if (!Player.find(x => x === it)) return;
+      const c = UI.containerOfItem(it);
+      Player.removeItem(it);
+      for (let k = 0; k < d.boxN; k++) (c && c.items ? c.items : G.player.inv).push(Items.make(d.boxOf));
+      Sfx.play('pickup'); UI.refresh();
+    }, { anim: 'work' });
+  },
+  rip(it) {
+    const d = ITEMS[it.id];
+    const n = d.id === 'Sheet' ? 4 : (d.slot === 'jacket' || d.slot === 'pants') ? 3 : 2;
+    return this.mk('Ripping ' + d.n, Player.findTag('scissors') ? 2 : 4, () => {
+      if (!Player.find(x => x === it)) return;
+      Player.removeItem(it);
+      for (let k = 0; k < n; k++) Player.addItem(Items.make('RippedSheets'));
+      Sfx.play('rip'); UI.refresh();
+    }, { anim: 'craft' });
+  },
+  repair(it, tool) {
+    const d = ITEMS[it.id], td = ITEMS[tool.id];
+    return this.mk('Repairing ' + d.n, 4, () => {
+      const max = (d.wpn || d.gun).cond;
+      it.cond = Math.min(max, it.cond + Math.ceil(max * td.repair * (1 + Player.skill('Maintenance') * 0.1)));
+      tool.uses--; if (tool.uses <= 0) Player.removeItem(tool);
+      Player.xp('Maintenance', 4);
+      UI.refresh();
+    }, { anim: 'craft' });
+  },
+  battery(it) {
+    const bat = Player.findId('Battery');
+    if (!bat) { Player.say('I need a battery.', '#ccc'); return null; }
+    return this.mk('Replacing battery', 1.5, () => { Player.removeItem(bat); it.pow = 1; UI.refresh(); }, { anim: 'work' });
+  },
+
+  // ------------------------------------------------------------------ world
+  // a loaded gun turned on oneself (asked for in the gun's menu, confirmed first)
+  suicide(it) {
+    const p = G.player, g = ITEMS[it.id].gun;
+    if (!g || !(it.ammo > 0) || it.jam || it.magIn === false) { Player.say('It is not loaded.', '#ccc'); return; }
+    if (!confirm('End it here? This cannot be undone.')) return;
+    const kind = g.pellets ? 'shotgun' : g.cycle === 'bolt' ? 'bolt' : g.auto ? 'auto' : g.two ? 'rifle' : 'pistol', long = kind !== 'pistol';
+    this.cancel();
+    this.queue(this.mk('...', 3.2, () => {
+      if (p.dead || !(it.ammo > 0)) return;
+      it.ammo--;
+      Sfx.play(g.snd || (g.pellets ? 'shotgun' : g.model === 'rifle' ? 'rifle' : 'pistol'));
+      Noise.emit(p.x, p.y, g.noise || 30, 'gun');
+      Gore.burst(p.x, p.y, long ? 1.25 : 1.6, 16, p.angle + (long ? Math.PI : Math.PI / 2), 0.6, 1, 3, 0.5, 2);
+      Player.die('Took their own life');
+      p.death = long ? 'suicideK' : 'suicideP';
+    }, { anim: 'suicide', sub: kind, kneel: long }));
+  },
+  barricade(e) {
+    const [x, y, d] = e;
+    const f = World.feat(x, y, d);
+    const hammer = Player.findTag('hammer');
+    const plank = Player.findId('Plank');
+    if (!hammer || !plank || Player.count('Nails') < 2) { Player.say('I need a hammer, a plank and 2 nails.', '#ccc'); return null; }
+    if (f.barricade >= 4) { Player.say("Can't add more.", '#ccc'); return null; }
+    const carp = Player.skill('Carpentry');
+    const dur = 6 * (1 - carp * 0.05) * (Player.hasTrait('handy') ? 0.8 : 1);
+    let noiseT = 0;
+    return this.mk('Barricading', dur, () => {
+      const pl = Player.findId('Plank');
+      if (!pl || Player.count('Nails') < 2) return;
+      Player.removeItem(pl);
+      for (let k = 0; k < 2; k++) Player.removeItem(Player.findId('Nails'));
+      f.barricade = (f.barricade || 0) + 1;
+      f.bhp = f.bhp || [];
+      f.bhp.push(Math.round(120 * (1 + carp * 0.08) * (Player.hasTrait('handy') ? 1.2 : 1)));
+      if (f.k === 'door') f.open = false;
+      Player.xp('Carpentry', 3);
+      UI.refresh();
+    }, {
+      anim: 'hammer', prop: 'hammer', check: () => Interact.nearEdge(e, 1.6),
+      tick: (dt) => { noiseT -= dt; if (noiseT <= 0) { noiseT = 1.1; Noise.emit(G.player.x, G.player.y, 14, 'hammer'); Sfx.play('hammer'); } },
+    });
+  },
+  unbarricade(e) {
+    const [x, y, d] = e;
+    const f = World.feat(x, y, d);
+    if (!Player.findTag('hammer') && !Player.findTag('crowbar')) { Player.say('I need a hammer or crowbar.', '#ccc'); return null; }
+    return this.mk('Removing barricade', 4, () => {
+      if (!f.barricade) return;
+      f.barricade--; if (f.bhp) f.bhp.pop();
+      Player.addItem(Items.make('Plank'));
+      if (R.chance(0.5)) Player.addItem(Items.make('Nails'));
+      Noise.emit(G.player.x, G.player.y, 9, 'hammer');
+      Sfx.play('wood'); UI.refresh();
+    }, { anim: 'hammer', prop: 'hammer', check: () => Interact.nearEdge(e, 1.6) });
+  },
+  addSheet(e) {
+    const f = World.feat(...e);
+    const sh = Player.findId('Sheet');
+    if (!sh) return null;
+    return this.mk('Hanging sheet', 2.5, () => { Player.removeItem(sh); f.curtains = true; f.curtainsClosed = true; f.curtCol = '#e8e8f0'; UI.refresh(); }, { anim: 'work', check: () => Interact.nearEdge(e, 1.6) });
+  },
+  removeWinGlass(e) {
+    const f = World.feat(...e);
+    return this.mk('Removing broken glass', 2.5, () => {
+      f.glassOut = true;
+      if (!Player.worn('gloves') && R.chance(0.3)) Player.addWound(R.pick(['HandL', 'HandR']), 'scratch', { isZombie: false });
+      Sfx.play('glass');
+    }, { anim: 'work', check: () => Interact.nearEdge(e, 1.6) });
+  },
+  chop(x, y) {
+    const axe = Player.findTag('chop');
+    if (!axe) { Player.say('I need an axe.', '#ccc'); return null; }
+    const o = World.obj(x, y);
+    const sk = Player.skill('Axe');
+    const dur = 14 * (1 - sk * 0.05) * (Player.hasTrait('axeman') ? 0.65 : 1) * (o.sz || 1);
+    let nt = 0;
+    return this.mk('Chopping tree', dur, () => {
+      World.setObj(x, y, null);
+      for (let k = 0; k < 2; k++) World.dropItem(x + 0.5, y + 0.5, Items.make('Log'));
+      for (let k = 0; k < R.int(1, 3); k++) World.dropItem(x + 0.5, y + 0.5, Items.make('TreeBranch'));
+      World.dropItem(x + 0.5, y + 0.5, Items.make('Twigs'));
+      Player.xp('Axe', 5); Player.xp('Strength', 2);
+      Sfx.play('treefall');
+      Noise.emit(x, y, 18, 'chop');
+    }, {
+      anim: 'chop', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 1.8 && !!World.obj(x, y),
+      tick: (dt) => { nt -= dt; G.player.st.endurance = Math.max(0, G.player.st.endurance - dt * 0.006); if (nt <= 0) { nt = 1.2; Sfx.play('chop'); Noise.emit(x, y, 13, 'chop'); } },
+      begin: () => { G.player.angle = Math.atan2(y + 0.5 - G.player.y, x + 0.5 - G.player.x); Player.equip(axe, 'primary'); },
+    });
+  },
+  forage(x, y) {
+    const p = G.player;
+    return this.mk('Foraging', 14, () => {
+      const zk = Math.floor(x / 10) + ',' + Math.floor(y / 10);
+      const z = Wd.forage.get(zk) || { n: 0, day: Game.day() };
+      if (z.day !== Game.day()) { z.n = 0; z.day = Game.day(); }
+      Wd.forage.set(zk, z);
+      const sk = Player.skill('Foraging') + (Player.hasTrait('outdoorsman') ? 1 : 0) + (p.occ === 'ranger' ? 1 : 0);
+      // the woods are bare in winter
+      const st = Season.tree, winter = st === 'b' || Season.snow > 0.3, autumn = st === 'y' || st === 'a' || st === 's';
+      if (z.n >= 6 || !R.chance((0.3 + sk * 0.06) * (winter ? 0.45 : 1))) { Player.say(winter ? 'Nothing but frozen ground.' : "Didn't find anything.", '#ccc'); Player.xp('Foraging', 1); return; }
+      z.n++;
+      const forest = World.floor(x, y) === FL.FOREST;
+      let tbl = forest ? [['Mushrooms', autumn ? 6 : 3], ['StrangeMushrooms', 2], ['Berries', 3], ['Worms', 3], ['Insects', 2], ['Twigs', 4], ['TreeBranch', 3], ['Stone', 2]] : [['Worms', 4], ['Insects', 3], ['Twigs', 3], ['Stone', 3], ['Berries', 1], ['TreeBranch', 1]];
+      if (winter) tbl = [['Twigs', 5], ['TreeBranch', 4], ['Stone', 3], ['Mushrooms', 0.5]];
+      const n = R.int(1, sk >= 4 ? 3 : 2);
+      const found = [];
+      for (let k = 0; k < n; k++) { const id = R.weighted(tbl); Player.addItem(Items.make(id)); found.push(ITEMS[id].n); }
+      Player.say('Found: ' + found.join(', '), '#8f8');
+      Player.xp('Foraging', 4);
+      UI.refresh();
+    }, { anim: 'forage', kneel: true, fun: 8, check: () => U.dist(p.x, p.y, x + 0.5, y + 0.5) < 2.5 });
+  },
+  pickBerries(x, y) {
+    const o = World.obj(x, y);
+    return this.mk('Picking berries', 4, () => {
+      if (!o.berries) return;
+      o.berries = false; o.berryDay = Game.day();
+      for (let k = 0; k < R.int(2, 5); k++) Player.addItem(Items.make('Berries'));
+      Player.xp('Foraging', 3); UI.refresh();
+    }, { anim: 'loot', lvl: 1, begin: () => Actions.face(x, y) });
+  },
+  // pull up tall grass, weeds or reeds by hand
+  clearFol(x, y) {
+    return this.mk('Clearing', 3, () => {
+      if (Foliage.isFol(World.obj(x, y))) World.setObj(x, y, null);
+      Sfx.play('dig');
+    }, { anim: 'garden', kneel: true, check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2, begin: () => Actions.face(x, y) });
+  },
+  fish(x, y) {
+    const rod = Player.findTag('fishing');
+    if (!rod) { Player.say('I need a fishing rod.', '#ccc'); return null; }
+    return this.mk('Fishing', 22, () => {
+      const bait = Player.find(it => ITEMS[it.id].bait);
+      const ch = 0.22 + Player.skill('Fishing') * 0.05 + (bait ? 0.22 : 0);
+      if (bait) Player.removeItem(bait);
+      if (R.chance(ch)) {
+        const n = R.chance(0.3) ? 2 : 1;
+        for (let k = 0; k < n; k++) Player.addItem(Items.make('Fish'));
+        Player.say('Caught a fish!', '#8f8'); Player.xp('Fishing', 8); Sfx.play('splash');
+      } else { Player.say('Nothing is biting.', '#ccc'); Player.xp('Fishing', 1); }
+      UI.refresh();
+    }, { anim: 'fish', prop: 'rod', fun: 12, begin: () => { G.player.angle = Math.atan2(y + 0.5 - G.player.y, x + 0.5 - G.player.x); } });
+  },
+  dig(x, y) {
+    const tool = Player.findTag('dig');
+    if (!tool) { Player.say('I need a shovel or trowel.', '#ccc'); return null; }
+    return this.mk('Digging furrow', tool.id === 'Shovel' ? 5 : 8, () => {
+      if (World.objNoFol(x, y)) return;
+      Wd.floor[y * Wd.w + x] = FL.FURROW;
+      World.setObj(x, y, { t: 'crop', dir: 'S', crop: null, stage: undefined, water: 0.3, grow: 0 });
+      Player.xp('Farming', 2); Sfx.play('dig');
+    }, Object.assign(tool.id === 'Shovel' ? { anim: 'dig', prop: 'shovel' } : { anim: 'garden', kneel: true }, { check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2, begin: () => Actions.face(x, y) }));
+  },
+  plant(x, y, seeds) {
+    return this.mk('Planting', 3, () => {
+      const o = World.obj(x, y);
+      if (!o || o.t !== 'crop' || o.crop) return;
+      o.crop = ITEMS[seeds.id].seeds; o.stage = 0; o.grow = 0; o.seed = true; o.dead = false;
+      seeds.uses--; if (seeds.uses <= 0) Player.removeItem(seeds);
+      Player.xp('Farming', 3); UI.refresh();
+    }, { anim: 'garden', kneel: true, begin: () => Actions.face(x, y) });
+  },
+  water(x, y, can) {
+    return this.mk('Watering', 2.5, () => {
+      const o = World.obj(x, y);
+      const amt = Math.min(can.fl, 0.5);
+      can.fl -= amt; o.water = Math.min(1, (o.water || 0) + amt * 1.6);
+      Player.xp('Farming', 1); Sfx.play('fill'); UI.refresh();
+    }, { anim: 'pour', prop: 'wcan', begin: () => Actions.face(x, y) });
+  },
+  harvest(x, y) {
+    return this.mk('Harvesting', 4, () => {
+      const o = World.obj(x, y);
+      if (!o || o.stage < 4 || o.dead) return;
+      const cd = CROPS[o.crop];
+      const n = R.int(cd.yield[0], cd.yield[1]) + Math.floor(Player.skill('Farming') / 3);
+      for (let k = 0; k < n; k++) Player.addItem(Items.make(cd.item));
+      o.crop = null; o.stage = undefined; o.grow = 0; o.seed = false;
+      Player.say('Harvested ' + n + ' ' + cd.n, '#8f8');
+      Player.xp('Farming', 6); UI.refresh();
+    }, { anim: 'garden', sub: 'pull', kneel: true, begin: () => Actions.face(x, y) });
+  },
+  disassemble(x, y) {
+    const o = World.obj(x, y);
+    const wood = ['bed', 'table', 'chair', 'wardrobe', 'dresser', 'nightstand', 'bookshelf', 'crate', 'woodcrate', 'desk', 'counter', 'pew', 'bench', 'sofa', 'armchair', 'barrel', 'toolcab'];
+    if (!wood.includes(o.t)) return null;
+    if (!Player.findTag('hammer') && !Player.findTag('saw') && !Player.findTag('screwdriver')) { Player.say('I need a hammer, saw or screwdriver.', '#ccc'); return null; }
+    return this.mk('Disassembling ' + OBJ[o.t].n, 9, () => {
+      if (World.obj(x, y) !== o) return;
+      if (o.c && o.c.items) for (const it of o.c.items) World.dropItem(x + 0.5, y + 0.5, it);
+      // remove multi-tile partner
+      if (o.part !== undefined) for (const [dx, dy] of DIR4) { const n = World.obj(x + dx, y + dy); if (n && n.t === o.t && n.part !== undefined && n.part !== o.part) { World.setObj(x + dx, y + dy, null); break; } }
+      World.setObj(x, y, null);
+      const n = R.int(1, 3);
+      for (let k = 0; k < n; k++) World.dropItem(x + 0.5, y + 0.5, Items.make('Plank'));
+      for (let k = 0; k < R.int(0, 4); k++) World.dropItem(x + 0.5, y + 0.5, Items.make('Nails'));
+      if (o.t === 'bed' && R.chance(0.7)) World.dropItem(x + 0.5, y + 0.5, Items.make('Sheet'));
+      Player.xp('Carpentry', 3);
+      Noise.emit(x, y, 12, 'hammer'); Sfx.play('wood'); UI.refresh();
+    }, Object.assign(Player.findTag('hammer') ? { anim: 'hammer', prop: 'hammer', lvl: 0 } : Player.findTag('saw') ? { anim: 'saw', prop: 'saw' } : { anim: 'work' }, { check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2, begin: () => Actions.face(x, y) }));
+  },
+  demolishEdge(e) {
+    const [x, y, d] = e;
+    let nt = 0;
+    const t0 = World.wall(x, y, d);
+    const info = WALL_INFO[t0];
+    const dur = info && info.fence ? 6 : 14;
+    return this.mk('Demolishing', dur * (1.1 - Player.skill('Strength') * 0.04), () => {
+      if (!World.wall(x, y, d)) return;
+      const f = World.feat(x, y, d);
+      World.setWall(x, y, d, 0);
+      World.setFeat(x, y, d, null);
+      Wd.edgeHp.delete(World.ek(x, y, d));
+      const [mx, my] = Interact.edgeMid(e);
+      if (f && f.barricade) for (let k = 0; k < f.barricade; k++) if (R.chance(0.5)) World.dropItem(mx, my, Items.make('Plank'));
+      if (t0 === WT.BUILT || t0 === WT.WOODFENCE || t0 === WT.PICKET) for (let k = 0; k < R.int(0, 2); k++) World.dropItem(mx, my, Items.make('Plank'));
+      Fx.shards(mx, my, 1.2, 16, '#8a7a6a');
+      Noise.emit(mx, my, 22, 'crash');
+      Sfx.play('woodbreak', mx, my);
+      Player.xp('Strength', 4);
+      const it = Player.primary(); if (it && R.chance(0.5)) it.cond--;
+      G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.15);
+    }, {
+      anim: 'smash', prop: 'sledge', check: () => Interact.nearEdge(e, 1.8) && Interact.hasSledge(),
+      tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.4; const [mx, my] = Interact.edgeMid(e); Sfx.play('thump', mx, my); Noise.emit(mx, my, 16, 'crash'); } },
+    });
+  },
+  demolishObj(x, y) {
+    let nt = 0;
+    const o0 = World.obj(x, y), isStair = o0 && o0.sx !== undefined;
+    return this.mk(isStair ? 'Smashing the stairs' : 'Smashing', (isStair ? 16 : 7) * (1.1 - Player.skill('Strength') * 0.04), () => {
+      const o = World.obj(x, y);
+      if (!o) return;
+      if (o.sx !== undefined) {
+        World.removeStairs(x, y);
+        for (let k = 0; k < 4; k++) World.dropItem(x + 0.5, y + 0.5, Items.make('Plank'));
+        Fx.shards(x + 0.5, y + 0.5, 0.8, 20, '#8a6a48');
+        Noise.emit(x + 0.5, y + 0.5, 22, 'crash');
+        Sfx.play('woodbreak', x + 0.5, y + 0.5);
+        G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.2);
+        Player.say('The stairs are gone. I need a sheet rope now.', '#ccc');
+        UI.refresh();
+        return;
+      }
+      if (o.c && o.c.items) for (const it of o.c.items) World.dropItem(x + 0.5, y + 0.5, it);
+      if (o.part !== undefined) for (const [dx, dy] of DIR4) { const n = World.obj(x + dx, y + dy); if (n && n.t === o.t && n.part !== undefined && n.part !== o.part) { World.setObj(x + dx, y + dy, null); break; } }
+      World.setObj(x, y, null);
+      if (o.t === 'generator') Wd.powerGens = Wd.powerGens.filter(g => g !== o);
+      Fx.shards(x + 0.5, y + 0.5, 0.8, 14, '#8a7a6a');
+      Noise.emit(x + 0.5, y + 0.5, 18, 'crash');
+      Sfx.play('woodbreak', x + 0.5, y + 0.5);
+      G.player.st.endurance = Math.max(0, G.player.st.endurance - 0.08);
+      UI.refresh();
+    }, {
+      anim: 'smash', prop: 'sledge', check: () => U.dist(G.player.x, G.player.y, x + 0.5, y + 0.5) < 2 && Interact.hasSledge(),
+      tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.3; Sfx.play('thump', x + 0.5, y + 0.5); } },
+    });
+  },
+  exercise(kind) {
+    const p = G.player;
+    if (p.st.endurance < 0.3) { Player.say("I'm too tired to exercise.", '#ccc'); return null; }
+    const names = { squats: 'Doing squats', pushups: 'Doing push-ups', situps: 'Doing sit-ups' };
+    return this.mk(names[kind], 30 / MIN_PER_SEC * 0.5, () => {
+      Player.say('Good workout.', '#8f8');
+      p.st.boredom = Math.max(0, p.st.boredom - 15);
+    }, {
+      anim: kind === 'squats' ? 'squat' : 'kneel', fun: 10,
+      tick: (dt) => {
+        p.st.endurance = Math.max(0, p.st.endurance - dt * 0.006);
+        Player.xp(kind === 'pushups' ? 'Strength' : 'Fitness', dt * 0.9);
+        if (p.st.endurance < 0.12) { Actions.cancel(); Player.say("I'm exhausted.", '#ccc'); }
+      },
+    });
+  },
+  addFuel(o, it) {
+    const fv = { Plank: 60, Log: 120, TreeBranch: 40, Twigs: 15, Newspaper: 8, Magazine: 8, Novel: 15, RippedSheets: 6, Sheet: 15, ComicBook: 8 }[it.id] || 10;
+    return this.mk('Adding fuel', 1.5, () => { Player.removeItem(it); o.fuel = (o.fuel || 0) + fv; UI.refresh(); Sfx.play('wood'); }, { anim: 'loot', lvl: 0 });
+  },
+  lightFire(o) {
+    const l = Player.findTag('lighter');
+    if (!l) { Player.say('I need a lighter or matches.', '#ccc'); return null; }
+    if (!(o.fuel > 0)) { Player.say('It needs fuel first.', '#ccc'); return null; }
+    return this.mk('Lighting fire', 3, () => { o.lit = true; l.uses--; if (l.uses <= 0) Player.removeItem(l); Sfx.play('fire'); UI.refresh(); }, { anim: 'kneel' });
+  },
+  hotwire(car) {
+    return this.mk('Hotwiring', 9 * (1 - Player.skill('Electrical') * 0.06), () => {
+      if (R.chance(0.65 + Player.skill('Electrical') * 0.05 + Player.skill('Mechanics') * 0.03)) { car.hotwired = true; Player.say('Got it!', '#8f8'); Player.xp('Electrical', 5); Player.xp('Mechanics', 3); Vehicles.startEngine(car); }
+      else { Player.say("It didn't work.", '#ccc'); Player.xp('Electrical', 1); }
+    }, { anim: 'work', walkOk: false, inCar: true, begin: () => Vehicles.soundAlarm(car) });
+  },
+  refuelCar(car, can) {
+    return this.mk('Refueling', 4 + can.fl * 4, () => {
+      const room = 1 - car.gas;
+      const amt = Math.min(room * 2.5, can.fl);
+      car.gas = Math.min(1, car.gas + amt / 2.5);
+      can.fl -= amt;
+      Player.xp('Mechanics', 1); Sfx.play('fill'); UI.refresh();
+    }, { anim: 'pour', prop: 'gascan', check: () => U.dist(G.player.x, G.player.y, car.x, car.y) < 3, begin: () => { const p = G.player; p.angle = Math.atan2(car.y - p.y, car.x - p.x); } });
+  },
+  siphon(car, can) {
+    return this.mk('Siphoning gas', 5, () => {
+      const room = 1 - can.fl;
+      const amt = Math.min(room, car.gas * 2.5);
+      can.fl += amt; car.gas -= amt / 2.5;
+      UI.refresh(); Sfx.play('fill');
+    }, { anim: 'work', check: () => U.dist(G.player.x, G.player.y, car.x, car.y) < 3 });
+  },
+  pumpGas(can) {
+    return this.mk('Filling gas can', 5, () => {
+      if (G.events.powerOff) { Player.say('The pump has no power.', '#ccc'); return; }
+      can.fl = 1; Sfx.play('fill'); UI.refresh();
+    }, { anim: 'work' });
+  },
+  genFuel(o, can) {
+    return this.mk('Refueling generator', 4, () => { const amt = Math.min(can.fl, 1 - (o.fuel || 0)); o.fuel = (o.fuel || 0) + amt; can.fl -= amt; UI.refresh(); }, { anim: 'pour', prop: 'gascan' });
+  },
+  build(rec, tx, ty, d) {
+    const carp = Player.skill('Carpentry');
+    let nt = 0;
+    return this.mk('Building ' + rec.n, rec.time * (1 - carp * 0.04) * (Player.hasTrait('handy') ? 0.8 : 1), () => {
+      if (!Crafting.has(rec)) { Player.say("I'm missing materials.", '#ccc'); return; }
+      if (!Build.valid(rec, tx, ty, d)) { Player.say("Can't build there.", '#ccc'); return; }
+      Crafting.consume(rec);
+      Build.place(rec, tx, ty, d);
+      if (rec.xp) for (const sk in rec.xp) Player.xp(sk, rec.xp[sk]);
+      UI.refresh();
+    }, {
+      anim: 'hammer', prop: 'hammer', lvl: 0, check: () => U.dist(G.player.x, G.player.y, tx + 0.5, ty + 0.5) < 2.4,
+      tick: (dt) => { nt -= dt; if (nt <= 0) { nt = 1.1; Noise.emit(G.player.x, G.player.y, 13, 'hammer'); Sfx.play('hammer'); } },
+      begin: () => { G.player.angle = Math.atan2(ty + 0.5 - G.player.y, tx + 0.5 - G.player.x); },
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Water sources
+// ---------------------------------------------------------------------------
+const Water = {
+  // src: {kind:'obj', x,y} or {kind:'lake', x,y}
+  near(src) { return U.dist(G.player.x, G.player.y, src.x + 0.5, src.y + 0.5) < 2.2; },
+  tainted(src) {
+    if (src.kind === 'lake') return true;
+    const o = World.obj(src.x, src.y);
+    if (!o) return true;
+    if (o.t === 'barrel') return false;
+    if (o.t === 'toilet') return G.events.waterOff;
+    return false;
+  },
+  available(src) {
+    if (src.kind === 'lake') return true;
+    const o = World.obj(src.x, src.y);
+    if (!o) return false;
+    const w = OBJ[o.t].water;
+    if (w === 'barrel') return (o.water || 0) > 0.01;
+    if (w === 'toilet') return !G.events.waterOff || (o.tank === undefined ? 1 : o.tank) > 0.01;
+    if (w === 'tap') return !G.events.waterOff || (o.tank || 0) > 0.01;
+    return false;
+  },
+  take(src, amt) {
+    if (src.kind === 'lake') return amt;
+    const o = World.obj(src.x, src.y);
+    if (!o) return 0;
+    const w = OBJ[o.t].water;
+    if (w === 'barrel') { const got = Math.min(amt, (o.water || 0) * 4); o.water = Math.max(0, (o.water || 0) - got / 4); return got; }
+    if (!G.events.waterOff) return amt;
+    if (o.tank === undefined) o.tank = w === 'toilet' ? 1.0 : 0.3;
+    const got = Math.min(amt, o.tank);
+    o.tank -= got;
+    return got;
+  },
+};

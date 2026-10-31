@@ -1,0 +1,95 @@
+# Hollow Creek
+
+**An isometric zombie survival sandbox.** The dead have risen in a quiet rural county. There is no cure and no rescue — only how long you last.
+
+Scavenge the houses and stores of Hollow Creek and its neighbouring towns, fortify a safe house, drive, farm, cook and craft, and keep yourself fed, rested and sane while the dead hunt by sight and sound.
+
+Every graphic and model in the game is generated procedurally at runtime. The sounds and music are generated too, rendered once into ordinary audio files that can be swapped for recordings (see Sound and music).
+
+---
+
+## Getting started
+
+Hollow Creek runs in a web browser — no installation needed.
+
+1. Unzip the game folder.
+2. Open `index.html` in a current version of Chrome, Edge or Firefox.
+   If your browser blocks local files, serve the folder with any static web server (for example `npx http-server`) and open the address it prints.
+
+**Recommended:** a graphics card with WebGL for the animated 3D characters. Without one the game falls back to 2D figures. A laptop runs it comfortably on the Medium preset.
+
+Your game saves automatically. Death is permanent.
+
+## Features
+
+**A living county**
+- A procedurally generated county (896 x 896 tiles): the town of Hollow Creek and the village of Millbrook, joined by highways and back roads, with farms, cabins, a lake and forests, and the land round them: three more towns (with a hospital, a hotel, a car dealer, a mall and two factories), an army base, a prison, an airfield, a quarry, a truck stop, a drive-in, a cemetery, a sawmill, an interstate rest area, a salvage yard, and camps, wrecks and old farms out in the country.
+- Houses with real floor plans and upstairs rooms, shops with flats above, apartment blocks, police and fire stations, a clinic, a school, churches, a motel, gas stations, warehouses and a trailer park — each with loot to match.
+- Yards shaped by the people who lived there, foliage that grows wild along verges and empty lots, and four seasons with autumn colour, bare winter trees and snow.
+- A day/night cycle, rain, fog, storms, street lights, a vision cone and line of sight.
+
+**The dead**
+- Zombies that see and hear, shamble, lunge and grab hold of you, pound on doors, smash through windows, climb fences, crawl and play dead. Crouch to stay below the window sills.
+- Sandbox options for their numbers, speed (shamblers to sprinters), toughness and how the infection spreads.
+- Active ragdolls (Settings > Experimental): a body hit, shot, shoved or run down is thrown with real momentum, stumbles to catch itself, and the dead go down by how they died and pile on one another; the rest of the time, the animation.
+- Gore with wounds, real holes torn out of bodies that keep bleeding, dismemberment, blood that pools, sprays onto walls and leaves footprints; a Gore and a Gore detail setting, or switched off.
+- Deaths that follow from how they died: thrown by cars by their speed, blows from every side, gunshots by calibre, fire, stomps and falls.
+
+**Survival**
+- Hunger, thirst, fatigue, panic, stress, boredom, pain, bleeding, sickness, temperature and wetness.
+- Injuries to each body part, including fractures and infection, treated with bandages, splints and disinfectant.
+- Occupations, traits, skills and skill books.
+- Cooking, farming, foraging, fishing, trapping, generators and rain barrels; the power and water fail some days after the outbreak.
+
+**Fighting back**
+- Melee weapons that wear out (and one very rare katana), shoving and stomping; fight your way free when they grab you.
+- Ten firearms with magazines to load and swap, pump and bolt actions, jams and fire modes. Aiming shows the cone of fire and your chance to hit.
+- Barricading (and houses found already boarded up), carpentry, moving furniture, dragging bodies and heaving them over fences, crafting, molotovs and fires that spread through grass, forests and wooden houses.
+
+**Getting around**
+- Over a dozen drivable vehicles, from sedans to school buses, with keys and hot-wiring, fuel, part damage and repairs, alarms and sirens.
+- A driving model with grip and skids on wet roads, snow and gravel.
+
+**Interface**
+- Inventory and loot windows with sorting, stacks, drag and drop and item tooltips; put things down where you want them, on the floor or on a table.
+- A hotbar built from what you wear, a radial menu, a character window with health, skills and protection, a crafting window, and a paper road map of what you have explored, which you can mark up.
+- Animated 3D characters in textured clothes (dresses, skirts, long coats, hoods, ties, scarves, hi-vis vests; beards and a range of hair styles), with your gear - and any body you carry - visible on your character.
+
+## Controls
+
+| Action | Key |
+| --- | --- |
+| Move / run / sprint / sneak | WASD · Shift · Alt or X · C |
+| Aim / attack | hold Right mouse · Left click |
+| Shove or stomp | Space |
+| Reload | R |
+| Hotbar | 1–4 |
+| Context menu / interact | Right-click · E |
+| Flashlight / shout | F · Q |
+| Radial menu | V |
+| Inventory / health / crafting / skills / map | I · H · B · K · M |
+| Pause menu | Esc |
+
+All controls are also listed in the game under **How to Play**.
+
+## Sound and music
+
+All the game's audio is in the `audio/` folder as ordinary .mp3 files, so any of it can be replaced with a recording:
+
+- `audio/sfx/<name>_<n>.mp3`: sound effects. Most have several variations (`_1`, `_2`, ...), picked at random each time.
+- `audio/loops/<name>.mp3`: ambience and machine loops (rain, wind, fire, flies, birdsong, crickets, the car engine, sirens, the helicopter, tyre squeal).
+- `audio/music/<name>.mp3`: the music, by mood: `title`, `day`, `dusk`, `night`, `rain` and `winter` pieces (title, title2, day1-day4, dusk, dusk2, night1-night4, rain, rain2, winter1, winter2), the `tension` loops for chases and the death sting. A file named after a mood with a number (say `night5.mp3`) joins that mood's rotation after the list is rebuilt.
+
+Save a recording over a file with the same name and the game plays it instead (any length works). If you add or remove variations, run `node dev/audiogen/build.js` to update the list; see `dev/DEVELOPMENT.md`. Any sound without a file is synthesized by the game.
+
+## Settings
+
+The Settings screen has Optimization, Display, Audio and Controls tabs and Potato / Low / Medium / Auto / High / Ultra presets (Potato for very weak laptops). It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as active ragdolls, the memory budget, the frame rate counter (FPS or detailed) and a debug mode for testing.
+
+## Version
+
+The current version and the full patch notes are shown on the title screen under **What's new**.
+
+---
+
+© 2026 Hollow Creek. All rights reserved.
