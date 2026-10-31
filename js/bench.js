@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 const Bench = {
   SEED: 4242, SETTLE: 1, MEASURE: 3,
-  PRESETS: ['Low', 'Medium', 'High', 'Ultra'],
+  PRESETS: ['Potato', 'Low', 'Medium', 'High', 'Ultra'],
   // zombies about the camera, dead ones lying about, the hour, rain (0..1), a thunderstorm
   LOADS: [
     { n: 'Light', z: 25, dead: 0, hour: 13, rain: 0 },
@@ -117,7 +117,7 @@ const Bench = {
     const S = {};
     for (const st of r.stages) (S[st.p] = S[st.p] || {})[st.l.n] = this.stats(st);
     const bar = Math.min(50, r.hz * 0.9);
-    let rec = 'Low';
+    let rec = this.PRESETS[0];
     for (const p of this.PRESETS) { const h = S[p] && S[p].Heavy; if (h && h.fps >= bar && h.low >= 30) rec = p; }
     const cell = (s) => s ? `<b>${Math.round(s.fps)}</b> fps<div style="font-size:10px;color:#999">1% low ${Math.round(s.low)} · ${s.ms.toFixed(1)} ms</div>` : '-';
     const head = this.LOADS.map(l => `<th style="padding:4px 8px;font-weight:normal;color:#aaa">${l.n}<div style="font-size:10px">${l.z} zombies</div></th>`).join('');

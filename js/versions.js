@@ -8,6 +8,15 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.001.193', date: '2026-10-31', title: 'A Potato preset',
+    notes: [
+      'A new Potato quality preset (Settings > Optimization) for very weak laptops: a softer 40% picture, plain models for all but the nearest few characters, lights and the HUD updated 10 times a second, fewer bodies and stains kept, very few particles. Pick for me chooses it when the game runs under 20 frames a second, and the benchmark tries it too.',
+      'Walls and furniture in shadow are drawn in one go instead of two - on the benchmark nearly half the drawing calls a frame gone, which shows most on slow processors with a crowd about.',
+      'No more hitch the first time a new kind of item comes into view on the floor.',
+    ],
+    commits: [], shots: ['v036001_1'],
+  },
+  {
     v: '000.036.000.190', date: '2026-10-30', title: 'Active ragdolls, and one big map',
     notes: [
       'Active ragdolls (Settings > Experimental): physics takes a body over when something acts on it - a blow, a shot, a shove, a car, a fall, a daze, a wrecked limb, being dragged - and hands it back to the animation once it has recovered. Hit, it is thrown with real momentum, the head snaps back from a headshot, and it stumbles a step or two to catch itself; muscles and joint limits keep it in one piece, so a shove bends the body instead of tearing it out of shape.',

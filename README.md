@@ -84,7 +84,7 @@ Save a recording over a file with the same name and the game plays it instead (a
 
 ## Settings
 
-The Settings screen has Optimization, Display, Audio and Controls tabs and Low / Medium / Auto / High / Ultra presets. It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as active ragdolls, the memory budget, the frame rate counter (FPS or detailed) and a debug mode for testing.
+The Settings screen has Optimization, Display, Audio and Controls tabs and Potato / Low / Medium / Auto / High / Ultra presets (Potato for very weak laptops). It covers UI scale (Auto fits the interface to your screen), resolution, frame-rate cap, world and character detail, gore, particles, weather effects and the sound and music volumes. **Benchmark** (Optimization tab, from the title screen) runs every preset from a light to an ultra heavy load and recommends the best one for your computer. The Experimental tab holds beta options such as active ragdolls, the memory budget, the frame rate counter (FPS or detailed) and a debug mode for testing.
 
 ## Version
 

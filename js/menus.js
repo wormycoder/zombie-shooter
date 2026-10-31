@@ -400,11 +400,12 @@ const Menu = {
     const st = Perf.stats();
     if (!st || Perf.n < 120) return 'Play for a few seconds first (somewhere busy if you can), then press Pick for me again.';
     const fps = 1000 / st.p50, cur = Settings.presetName();
-    let name = fps < 28 ? 'Low' : fps < 45 ? 'Medium' : 'Auto';
+    let name = fps < 20 ? 'Potato' : fps < 28 ? 'Low' : fps < 45 ? 'Medium' : 'Auto';
     // already smooth on a heavier preset: keep it
     if (fps >= 57 && (cur === 'High' || cur === 'Ultra')) name = cur;
     // smooth on a light preset: step up one
     if (fps >= 57 && cur === 'Low') name = 'Medium';
+    if (fps >= 40 && cur === 'Potato') name = 'Low';
     Settings.usePreset(name);
     return `Measured ${Math.round(fps)} FPS (median of the last ${Perf.n} frames) — ${name} preset applied.`;
   },

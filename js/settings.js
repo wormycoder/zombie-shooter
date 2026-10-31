@@ -4,21 +4,21 @@
 // ---------------------------------------------------------------------------
 // tab: 'opt' (Optimization), 'display' or 'exp' (Experimental) on the Settings screen; grp: section heading
 const SETTINGS_OPTS = {
-  res: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Render resolution', opts: [['Auto', 'auto'], ['50%', 0.5], ['67%', 0.67], ['75%', 0.75], ['100%', 1]], tip: 'Pixels drawn per frame. Lower is much faster, especially on high-DPI screens. Auto caps high-DPI screens at 1.5x.' },
+  res: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Render resolution', opts: [['Auto', 'auto'], ['40%', 0.4], ['50%', 0.5], ['67%', 0.67], ['75%', 0.75], ['100%', 1]], tip: 'Pixels drawn per frame. Lower is much faster, especially on high-DPI screens. Auto caps high-DPI screens at 1.5x.' },
   dynRes: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Dynamic resolution', opts: [['Off', 0], ['On', 1]], tip: 'While the frame rate stays below its target (the frame rate limit, or 60), the render resolution steps down (to half at most) and comes back up when there is headroom again. Helps when the graphics card is the bottleneck (big or high-DPI screens).' },
   fps: { tab: 'opt', grp: 'Resolution & frame rate', n: 'Frame rate limit', opts: [['30 FPS', 30], ['60 FPS', 60], ['Unlimited', 0]], tip: 'A lower cap saves battery and keeps weak machines steady.' },
   detail: { tab: 'display', n: 'World detail', opts: [['Low', 0], ['High', 1]], tip: 'Low skips ground markings and litter, grass edges and power-line wires.' },
   chars3d: { tab: 'opt', grp: 'Characters & vehicles', n: 'Character detail', opts: [['Auto', 1], ['High', 4], ['Medium', 3], ['Low', 2]], tip: 'Animated 3D survivors and zombies, drawn with WebGL on the graphics card. Auto: full detail within about 9 tiles of you, then rings of simpler models drawn at lower resolution further out (the outer rings pull in when zoomed out or when the frame rate suffers). High: full detail everywhere. Medium / Low: simpler models sooner.' },
   carDetail: { tab: 'opt', grp: 'Characters & vehicles', n: 'Car detail', opts: [['Low', 0], ['Auto', 1], ['High', 2]], tip: 'Vehicles are painted once per heading at double resolution. Auto paints them at normal resolution while zoomed out (a quarter of the memory and painting time, and no visible difference), Low always does.' },
   shadows: { tab: 'opt', grp: 'Characters & vehicles', n: 'Shadows', opts: [['Off', 0], ['On', 1]], tip: 'Soft shadows under characters and vehicles.' },
-  particles: { tab: 'display', n: 'Particles', opts: [['Low', 0.3], ['Medium', 0.6], ['High', 1]], tip: 'Blood, smoke, sparks and glass.' },
+  particles: { tab: 'display', n: 'Particles', opts: [['Very low', 0.15], ['Low', 0.3], ['Medium', 0.6], ['High', 1]], tip: 'Blood, smoke, sparks and glass.' },
   ambient: { tab: 'display', n: 'Ambient particles', opts: [['Off', 0], ['Reduced', 0.5], ['Full', 1]], tip: 'Exhaust, dust, spray and tyre smoke from vehicles, and flies over rotting bodies.' },
   weather: { tab: 'display', n: 'Rain & snow', opts: [['Off', 0], ['Light', 0.45], ['Full', 1]], tip: 'Falling rain and snow on screen (the weather itself is unchanged).' },
   uiScale: { tab: 'display', n: 'UI scale', opts: [['Auto', 0], ['75%', 0.75], ['85%', 0.85], ['100%', 1], ['115%', 1.15], ['130%', 1.3], ['150%', 1.5]], tip: 'The size of the whole interface: windows, menus, the HUD and text. Auto fits it to the window: smaller on laptop screens so nothing is cut off, a little larger on very big screens.' },
-  lodDist: { tab: 'opt', grp: 'Characters & vehicles', n: 'LOD distance', opts: [['Near', 0.6], ['Normal', 1], ['Far', 1.6]], tip: 'How far from you characters keep their detailed models before switching to simpler ones (anything within 6 tiles always stays detailed, except on Low character detail).' },
-  lodMax: { tab: 'opt', grp: 'Characters & vehicles', n: 'Max detailed characters', opts: [['15', 15], ['25', 25], ['40', 40], ['80', 80], ['Unlimited', 0]], tip: 'In a crowd only this many moving characters (the nearest) get the detailed models; the rest use simpler ones. Bodies lying still are kept as pre-drawn pictures and do not count.' },
-  corpses: { tab: 'opt', grp: 'Memory & limits', n: 'Corpse limit', opts: [['100', 100], ['200', 200], ['400', 400], ['Unlimited', 0]], tip: 'Beyond this many bodies, the oldest ones that are out of sight decay away (what they carried is left on the ground). Bodies are cheap to draw; this mostly keeps saves small.' },
-  decals: { tab: 'opt', grp: 'Memory & limits', n: 'Decal limit', opts: [['100', 100], ['200', 200], ['450', 450], ['800', 800]], tip: 'Blood stains, scorch marks and puddles kept on the ground; past the limit the oldest disappear first.' },
+  lodDist: { tab: 'opt', grp: 'Characters & vehicles', n: 'LOD distance', opts: [['Very near', 0.4], ['Near', 0.6], ['Normal', 1], ['Far', 1.6]], tip: 'How far from you characters keep their detailed models before switching to simpler ones (anything within 6 tiles always stays detailed, except on Low character detail).' },
+  lodMax: { tab: 'opt', grp: 'Characters & vehicles', n: 'Max detailed characters', opts: [['8', 8], ['15', 15], ['25', 25], ['40', 40], ['80', 80], ['Unlimited', 0]], tip: 'In a crowd only this many moving characters (the nearest) get the detailed models; the rest use simpler ones. Bodies lying still are kept as pre-drawn pictures and do not count.' },
+  corpses: { tab: 'opt', grp: 'Memory & limits', n: 'Corpse limit', opts: [['50', 50], ['100', 100], ['200', 200], ['400', 400], ['Unlimited', 0]], tip: 'Beyond this many bodies, the oldest ones that are out of sight decay away (what they carried is left on the ground). Bodies are cheap to draw; this mostly keeps saves small.' },
+  decals: { tab: 'opt', grp: 'Memory & limits', n: 'Decal limit', opts: [['50', 50], ['100', 100], ['200', 200], ['450', 450], ['800', 800]], tip: 'Blood stains, scorch marks and puddles kept on the ground; past the limit the oldest disappear first.' },
   cache: { tab: 'opt', grp: 'Memory & limits', n: 'Sprite cache size', opts: [['Small', 0], ['Normal', 1], ['Large', 2]], tip: 'How many pre-painted walls, ground chunks, roofs, vehicle views and character pictures are kept in graphics memory. Small saves memory (older or integrated graphics); Large repaints less when you move around a lot.' },
   lightHz: { tab: 'opt', grp: 'Update rates', n: 'Lighting updates', opts: [['5 / sec', 5], ['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often lights and shadows are recalculated. Lower is cheaper; moving lights (flashlight, headlights) update less smoothly.' },
   uiHz: { tab: 'opt', grp: 'Update rates', n: 'UI refresh rate', opts: [['10 / sec', 10], ['15 / sec', 15], ['20 / sec', 20], ['25 / sec', 25], ['30 / sec', 30], ['35 / sec', 35], ['40 / sec', 40], ['45 / sec', 45], ['50 / sec', 50], ['55 / sec', 55], ['60 / sec', 60]], tip: 'How often the HUD, clock, moodles and open windows refresh.' },
@@ -41,6 +41,10 @@ const SETTINGS_OPTS = {
 // Auto (the default) is High plus the automatic helpers: dynamic resolution, adaptive character detail and car detail
 // by zoom - full quality whenever the machine keeps up
 const SETTINGS_PRESETS = {
+  // for very weak laptops (a Celeron and its built-in graphics): the fewest pictures drawn and the least work a frame -
+  // a blurrier picture, plain models for all but the nearest few, lights and the HUD updated 10 times a second; the
+  // sprite cache kept at Normal (painting pictures again costs a weak processor more than the memory)
+  Potato: { res: 0.4, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.15, ambient: 0, weather: 0, lodDist: 0.4, lodMax: 8, corpses: 50, decals: 50, cache: 1, lightHz: 10, uiHz: 10, zAnimHz: 10, zAnimLazy: 1, texCap: 0.5, worldTex: 0.5, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
   Low: { res: 0.5, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.3, ambient: 0, weather: 0.45, lodDist: 0.6, lodMax: 15, corpses: 100, decals: 100, cache: 0, lightHz: 15, uiHz: 15, zAnimHz: 15, zAnimLazy: 1, texCap: 1, worldTex: 0.5, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
   Medium: { res: 0.75, dynRes: 1, fps: 60, detail: 1, chars3d: 3, carDetail: 1, shadows: 1, particles: 0.6, ambient: 0.5, weather: 0.45, lodDist: 0.6, lodMax: 25, corpses: 200, decals: 200, cache: 1, lightHz: 30, uiHz: 30, zAnimHz: 30, zAnimLazy: 1, texCap: 1, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
   Auto: { res: 'auto', dynRes: 1, fps: 60, detail: 1, chars3d: 1, carDetail: 1, shadows: 1, particles: 1, ambient: 1, weather: 1, lodDist: 1, lodMax: 40, corpses: 0, decals: 450, cache: 1, lightHz: 60, uiHz: 30, zAnimHz: 0, zAnimLazy: 1, texCap: 2, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
@@ -73,7 +77,7 @@ const Settings = {
     const menu = typeof Menu !== 'undefined' && (G.mode === 'menu' || G.mode === 'create');
     const d = Math.min(2, window.devicePixelRatio || 1), r = this.v.res, k = menu ? Menu.q : this.v.dynRes ? Perf.scale : 1;
     if (r === 'auto') return Math.max(0.5 * Math.min(d, 1.5), Math.min(d, 1.5) * k);
-    return Math.max(0.5, d * r * k);
+    return Math.max(Math.min(0.5, r), d * r * k);
   },
 };
 Settings.load();

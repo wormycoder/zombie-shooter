@@ -564,6 +564,28 @@ HIGH (added) - FINISH OFF THE MAP, THEN MOVE IT FROM EXPERIMENTAL TO MAIN.
      The ragdoll branch merged into the main line (Settings > Experimental >
      Active ragdolls stays a beta option, off by default).
 
+HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
+      UHD 600): ADD A POTATO PRESET.
+  -> DONE (000.036.001.193). The laptop's benchmark: ~17-23 fps light, 9-12
+     ultra heavy, Low no better than Ultra - the processor, not the
+     graphics, and per drawing call rather than per pixel. Found: ~1650
+     canvas calls a frame on the light stage, 1178 of them walls and objects
+     in shadow drawn twice (sprite, then a dark overlay). Now drawn once from
+     darkened copies kept per sprite (3 of 20 steps of light, composed
+     exactly as the two draws were): ~950 calls; on the laptop the heavy
+     stages' work went down 10-25%. Floor-item icons measured without a
+     read-back from the graphics card (a hitch on first sight). The Potato
+     preset: 40% resolution (the 50% floor lifted for it), Low character
+     detail with a very near LOD distance and 8 detailed characters, lights
+     and HUD at 10/s, zombie animation 10/s, 50 corpses and decals, very
+     low particles, no weather or ambient effects, the sprite cache at
+     Normal (repainting costs a weak processor more than the memory). In
+     software rendering here: Medium crowd 13 -> 18 fps, heavy 7 -> 12 fps
+     against Low. Pick for me chooses it under 20 fps; the benchmark runs it.
+     Still open: what the laptop's browser spends outside the game's own
+     code (~15-20 ms a frame) - the Performance report from the laptop
+     would show it.
+
 --------------------------------------------------------------------
 RUN LOG
 --------------------------------------------------------------------
@@ -646,5 +668,7 @@ Run 21 (000.036.000.190), asked for: finish the map and move it out of
   Experimental; the ragdoll branch into the main line as an update.
   Drive-in, cemetery, sawmill, rest area, salvage yard; then the 400 x 400
   option removed (the 896 map is the map).
+Run 22 (000.036.001.193), asked for: a Potato preset for weak laptops;
+  shaded sprites drawn once, icon measuring without a read-back.
 Next runs, planned: more character models (clothes, hair, beards); ragdoll
   elbows and knees, getting up from the physics pose.
