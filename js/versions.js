@@ -8,6 +8,13 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.010.202', date: '2026-10-31', title: 'Where the time goes',
+    notes: [
+      'The benchmark results now show where the time went for the recommended preset at each load, in milliseconds a frame, biggest first: the zombies\' thinking, walls, objects, ground, roofs, lighting, the 3D characters, effects - and the browser\'s own share (putting the picture on the screen, the graphics card catching up), which the game cannot see into directly. It shows which part of the game holds a computer back, so the next optimizations can go where they help that computer most.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.009.201', date: '2026-10-31', title: 'Steadier nights, lighter zombie thinking',
     notes: [
       'Walls and furniture at night: the darkened copy of each picture is only kept once its light has settled (lamps, torches and fire flicker the light every frame, and remaking the copy each time cost more than it saved). Drawing the town at night took about half the time it did in a test on a slowed processor.',

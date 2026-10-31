@@ -663,9 +663,18 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      shorter ones (700 nodes within 12 tiles, 250 beyond), less often far
      off (+1 s), and test the straight way every 0.9 s past 8 tiles:
      findPath 5.1 -> 2.3 ms, zombie AI 15.6 -> 11.8 ms a frame.
-     Still open: what the laptop's browser spends outside the game's own
-     code (~15-20 ms a frame) - the Performance report from the laptop
-     would show it.
+     Laptop, 0.36.9: Potato 39/33/24/15 fps (heavy +5, ultra heavy +4).
+     Light stage profile here: ~410 shaded draws a frame (375 walls, one
+     draw each, 90% from a ready shade slot) - the draws themselves cost,
+     not the shading; a test with a picture atlas here was inconclusive
+     (the emulated graphics card is nothing like a UHD 600).
+     THEN (000.036.010): the benchmark times its main parts per frame
+     (Bench.timers wraps Zombie.updateAll, Fx.update, Render.computeLight,
+     Char3D.prepare, GL3D.flush, drawGround/Wall/Obj/Ent/Roof and
+     Render.frame; each part's own time, nested parts taken out) and the
+     results show them for the recommended preset at each load, with the
+     browser's share (frame interval - the game's work).
+     Still open: read the laptop's breakdown and go after its biggest part.
 
 --------------------------------------------------------------------
 RUN LOG

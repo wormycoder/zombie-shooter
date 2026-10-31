@@ -25,6 +25,7 @@ const Bench = {
     const stages = this.LOADS.map(l => ({ p: this.PRESETS[0], l, iv: [], work: [], warm: true }));
     for (const p of this.PRESETS) for (const l of this.LOADS) stages.push({ p, l, iv: [], work: [] });
     this.run = { keep, stages, i: -1, t: 0 };
+    this.timers(true);
     $('#menu').innerHTML = `<div class="benchbar" style="position:absolute;left:50%;top:14px;transform:translateX(-50%);padding:8px 16px;background:rgba(0,0,0,0.72);border:1px solid rgba(255,255,255,0.2);border-radius:3px;font:12px/1.5 Verdana,sans-serif;color:#ddd;text-align:center;pointer-events:auto;white-space:nowrap">
       <b>Benchmark</b> <span id="benchStage">preparing the town...</span><div style="height:4px;margin-top:6px;background:rgba(255,255,255,0.12)"><div id="benchBar" style="height:4px;width:0;background:#c8945a"></div></div>
       <div style="color:#999;font-size:11px;margin-top:4px">Esc to stop</div></div>`;
@@ -111,10 +112,57 @@ const Bench = {
     Render.frame(dt);
     // (the first stage also waits out the town's first drawing)
     const settle = this.SETTLE + (r.i === 0 ? 2 : 0);
-    if (r.t > settle) { st.iv.push(iv); st.work.push(performance.now() - t0); }
+    if (r.t > settle) {
+      st.iv.push(iv); st.work.push(performance.now() - t0);
+      const P = st.part || (st.part = {});
+      for (const k in this.acc) P[k] = (P[k] || 0) + this.acc[k];
+    }
+    for (const k in this.acc) this.acc[k] = 0;
     const bar = $('#benchBar');
     if (bar) bar.style.width = ((r.i + Math.min(1, r.t / (this.SETTLE + this.MEASURE))) / r.stages.length * 100).toFixed(1) + '%';
     if (r.t >= settle + this.MEASURE) this.next();
+  },
+  // Where the time goes: the main parts of a frame timed while the benchmark runs (each part's own time - a part
+  // timed inside another is taken out of it), so the results show what a computer spends its frame on. The rest of
+  // the frame - between the game's work and the next frame - is the browser's: putting the picture on the screen, the
+  // graphics card catching up, its own housekeeping.
+  PARTS: [['zombies', 'Zombie', 'updateAll', 'zombies'], ['effects', 'Fx', 'update', 'effects'], ['light', 'Render', 'computeLight', 'lighting'],
+    ['chars', 'Char3D', 'prepare', 'characters'], ['gl', 'GL3D', 'flush', '3D drawing'], ['ground', 'Render', 'drawGround', 'ground'],
+    ['walls', 'Render', 'drawWall', 'walls'], ['objects', 'Render', 'drawObj', 'objects'], ['ents', 'Render', 'drawEnt', 'people'],
+    ['roofs', 'Render', 'drawRoof', 'roofs'], ['render', 'Render', 'frame', 'other drawing']],
+  acc: {},
+  timers(on) {
+    const objs = { Zombie, Fx, Render, Char3D: typeof Char3D !== 'undefined' ? Char3D : null, GL3D: typeof GL3D !== 'undefined' ? GL3D : null };
+    if (!on) { for (const [k, o, f, , orig] of (this.wrapped || [])) o[f] = orig; this.wrapped = null; return; }
+    if (this.wrapped) return;
+    this.wrapped = [];
+    const stack = [], acc = this.acc;
+    for (const [k, on_, f] of this.PARTS) {
+      const o = objs[on_];
+      if (!o || typeof o[f] !== 'function') continue;
+      const orig = o[f];
+      acc[k] = 0;
+      o[f] = function () {
+        if (G.mode !== 'bench') return orig.apply(this, arguments);
+        const t = performance.now();
+        stack.push(0);
+        try { return orig.apply(this, arguments); } finally {
+          const inner = stack.pop(), el = performance.now() - t;
+          acc[k] += el - inner;
+          if (stack.length) stack[stack.length - 1] += el;
+        }
+      };
+      this.wrapped.push([k, o, f, 0, orig]);
+    }
+  },
+  // the parts of one stage, ms a frame, biggest first, and the browser's share
+  split(st) {
+    const n = st.iv.length;
+    if (!n || !st.part) return '';
+    const iv = st.iv.reduce((a, b) => a + b, 0) / n, work = st.work.reduce((a, b) => a + b, 0) / n;
+    const parts = this.PARTS.map(([k, , , name]) => [name, (st.part[k] || 0) / n]).filter(e => e[1] >= 0.05);
+    parts.push(['the rest', Math.max(0, work - parts.reduce((a, e) => a + e[1], 0))], ['browser & screen', Math.max(0, iv - work)]);
+    return parts.sort((a, b) => b[1] - a[1]).map(([nm, v]) => `${nm} ${v.toFixed(1)}`).join(' · ');
   },
   // average frames a second, the 1% low (the slowest frames), the work per frame in ms
   stats(st) {
@@ -128,6 +176,7 @@ const Bench = {
     const r = this.run;
     if (!r) return;
     this.run = null; this.pumping = false;
+    this.timers(false);
     window.removeEventListener('keydown', this.key, true);
     const K = r.keep;
     Object.assign(Settings.v, K.v); Settings.save(); Settings.apply();
@@ -152,6 +201,7 @@ const Bench = {
       <table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th></th>${head}</tr>${rows}</table>
       <div class="sml" style="margin:10px 0">Frames a second, uncapped (made back to back, not held to the screen or the frame rate limit), the slowest 1% of frames, and the time the game worked on each frame.
       Recommended: <b>${rec}</b> - the highest preset that stays smooth with a heavy crowd.</div>
+      <div class="sml" style="margin:0 0 10px;font-size:10px;line-height:1.5;color:#aaa"><b>Where the time went</b>, ${rec}, ms a frame:${r.stages.filter(st => !st.warm && st.p === rec).map(st => `<div><b>${st.l.n}:</b> ${this.split(st)}</div>`).join('')}</div>
       <div class="btn big" data-bres="use">Use ${rec}</div><div class="btn big" data-bres="back">Back</div></div></div>`;
     $('#menu').onclick = (e) => {
       const b = e.target.closest('[data-bres]');
