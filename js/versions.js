@@ -8,6 +8,13 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.005.197', date: '2026-10-31', title: 'A loading screen',
+    notes: [
+      'Starting a new game or continuing one now goes through a loading screen that makes up front what used to be made the first time it was needed - a hitch in the middle of play: the sound clips, every item\'s picture, the 3D characters, and the town for a few screens round you (walls, roofs, ground, furniture, trees and the people in it, out-of-view furniture included). A bar shows how far it has got.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.004.196', date: '2026-10-31', title: 'Out of sight, out of the frame',
     notes: [
       'New setting, Settings > Optimization > Drawing > Out-of-view objects: Hidden leaves out the furniture, props and fences on tiles you cannot see right now (behind you, in other rooms, round corners) until they come into view again; trees and the buildings\' walls and roofs still show. The Potato preset uses it: on the benchmark about a quarter fewer drawing calls a frame.',

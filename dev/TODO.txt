@@ -606,6 +606,16 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      shades and hides as in play). Canvas calls a frame, Potato: light 933
      -> 694, medium 1178 -> 962 (it was ~1650 on light before 0.36.1).
      Laptop, 0.36.3 uncapped: Potato 32/29/17/13, Low 30/28/19/11 fps.
+     Laptop, 0.36.4: Potato 40/34/20/12, Low 30/29/16/11 fps (uncapped).
+     THEN (000.036.005, asked for: a loading screen that loads everything):
+     js/preload.js - before play (new game, continue) the game holds still
+     (G.mode 'loading') while the sound clips finish, every item icon is
+     drawn and measured, GL3D starts, and a 3 x 3 block of screens round the
+     survivor is drawn 3 frames each with out-of-view furniture included
+     (Render.warming). Not the whole map: the picture caches (walls 600 on
+     Potato) would throw the first of it away again - the warm-up stays well
+     inside them (walls ~250, sprites ~500). From a file (file://) the sound
+     files cannot be decoded ahead (the browser plays them from elements).
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.

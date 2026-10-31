@@ -114,13 +114,19 @@ const Menu = {
       if (k === 'controls') this.controls(false);
     };
   },
+  // the loading screen: a title, the step under way and a bar
+  loading(title, step, f) {
+    $('#menu').innerHTML = `<div class="modal loading"><div style="text-align:center"><div class="ltext">${title}</div>`
+      + (step === undefined ? '' : `<div class="lbar"><div style="width:${Math.round((f || 0) * 100)}%"></div></div><div class="lstep">${step}</div>`) + '</div></div>';
+  },
   load() {
-    $('#menu').innerHTML = '<div class="modal loading"><div class="ltext">Loading...</div></div>';
+    this.loading('Loading...');
     setTimeout(async () => {
       try {
         const ok = await Save.load();
         if (!ok) { this.show(); return; }
         this.bgWorld = null;
+        await Preload.run((s, f) => this.loading('Loading...', s, f));
         UI.startGame();
         UI.toast('Welcome back.');
       } catch (e) { console.error(e); alert('Failed to load save: ' + e.message); this.show(); }
@@ -305,11 +311,12 @@ const Menu = {
     this.cfg = null;
     if (this.pre && this.pre.key === JSON.stringify(cfg.sb) + Game.WORLD_SIZE) { cfg.world = this.pre.w; cfg.seed = this.pre.seed; }
     this.pre = null;
-    $('#menu').innerHTML = '<div class="modal loading"><div class="ltext">Generating Hollow Creek...</div></div>';
-    setTimeout(() => {
+    this.loading('Generating Hollow Creek...');
+    setTimeout(async () => {
       Save.wipe();
       this.bgWorld = null;
       Game.newGame(cfg);
+      await Preload.run((s, f) => this.loading('Getting ready...', s, f));
       UI.startGame();
       this.intro();
     }, 40);

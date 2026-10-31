@@ -271,7 +271,7 @@ const Render = {
     }
     const dMin = minX + minY, dMax = maxX + maxY, WN = w.wallN, WW = w.wallW, OB = w.obj;
     // furniture in rooms never seen is not drawn (dark floors only, not black silhouettes of what is inside)
-    const RMa = w.room, SNa = w.seen, VGa = World.visGen, vgen = World.gen, hideUnseen = (live && !p.dead) || Bench.eyes();
+    const RMa = w.room, SNa = w.seen, VGa = World.visGen, vgen = World.gen, hideUnseen = ((live && !p.dead) || Bench.eyes()) && !this.warming;
     // (Out-of-view objects: Hidden - nothing but trees drawn on tiles not in view now, seen before or not)
     // and no fences either (building walls stay: a house must not look hollow)
     const keepOut = Settings.v.unseen !== 0, isTree = (o) => o.t === 'tree' || o.t === 'st_tree';

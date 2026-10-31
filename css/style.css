@@ -294,6 +294,9 @@ kbd { display: inline-block; min-width: 92px; padding: 1px 6px; background: rgba
 .foot { margin-top: 18px; font-size: 10px; color: #8c8c8c; text-shadow: 0 1px 3px #000; }
 .loading { background: #000; }
 .ltext { font-size: 18px; color: #cccccc; letter-spacing: 2px; }
+.lbar { width: 320px; max-width: 70vw; height: 4px; margin: 16px auto 8px; background: rgba(255,255,255,0.12); }
+.lbar > div { height: 4px; background: #c8945a; transition: width 0.15s; }
+.lstep { font-size: 12px; color: #8a8a8a; letter-spacing: 1px; text-align: center; }
 .death { background: rgba(30, 0, 0, 0.55); }
 /* the pause and death screens: plain words on the darkened game, as on the title screen */
 .pausing { background: rgba(0, 0, 0, 0.55); }
