@@ -628,6 +628,16 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      900 zombies: updated a step 430 -> 246, update 8.5 -> 7.2 ms here.
      The benchmark's zombies are seen through Bench.eyes (not only within
      9 tiles), so its crowds now cost what they do in play.
+     Laptop, 0.36.6: Potato 40/34/20/13, Low 29/28/14/9 fps - best so far.
+     THEN (000.036.007, asked for: load before the game starts - audio at
+     0%, effects sprayed behind the screen): the loading screen also loads
+     every sound file from a file (AudioFiles.warm: muted, 16x, until it
+     can play through; later plays clone the loaded element), draws the
+     town by night and in the rain, sprays blood / gore / shots / flashes /
+     smoke / casings and restores every list after (by name), runs the
+     zombies with 1 ms steps, and keeps sound effects off throughout. The
+     town warm-up stops at 70% of the picture caches. From a file here:
+     314 sound files in ~2.5 s, the whole screen ~13 s with the map made.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.

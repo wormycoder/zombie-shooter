@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.007.199', date: '2026-10-31', title: 'A fuller loading screen',
+    notes: [
+      'The loading screen does more before play starts: played from a file, every sound is loaded once at no volume (later sounds start from that copy instead of reading the file again); the town round you is also drawn by night and in the rain; blood, gore, shots, flashes, smoke and casings are sprayed behind the screen and cleared away again; and the zombies think a few times with no time passing - so the first fight, the first shot and the first night no longer stutter while the browser gets ready for them. Nothing is heard and nothing moves meanwhile.',
+      'The town drawn ahead stops short of filling the picture caches (on Potato it could fill them, and the first of it would have been thrown away again).',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.006.198', date: '2026-10-31', title: 'Lighter crowds',
     notes: [
       'New setting, Settings > Optimization > Crowd sprites: zombies further off that are only walking or standing share ready-made pictures (by look, facing, step of the walk and light) instead of each being drawn on its own. In a street crowd of 150, the characters drawn each frame went from 47 to 20. Up close, and whatever a zombie does besides walking, is drawn as before. On in the Potato preset.',

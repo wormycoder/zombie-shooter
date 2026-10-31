@@ -42,7 +42,9 @@ const AudioFiles = {
     if (!Sfx.on || !this.has(name)) return false;
     const lvl = (this.LEVEL[name] || 0.5) * g * (0.9 + Math.random() * 0.15), r = (rate || 1) * (0.96 + Math.random() * 0.08);
     if (this.mode === 'el') {
-      const n = AUDIO_LIST.sfx[name], a = new Audio(this.url('sfx', name + '_' + (1 + ((Math.random() * n) | 0))));
+      // (a copy of the element loaded at the loading screen when there is one: the file is not read and decoded again)
+      const n = AUDIO_LIST.sfx[name], url = this.url('sfx', name + '_' + (1 + ((Math.random() * n) | 0))), pre = this.pre && this.pre[url], a = pre ? pre.cloneNode() : new Audio(url);
+      a.muted = false;
       a.volume = U.clamp(lvl * Sfx.vol.master * Sfx.vol.sfx, 0, 1); a.preservesPitch = false; a.playbackRate = r;
       a.onerror = () => this.failed.add(name);
       a.play().catch(() => {});
@@ -58,6 +60,27 @@ const AudioFiles = {
     if (vb) { const vg = c.createGain(); vg.gain.value = vb; out.connect(vg); vg.connect(Sfx.sfxVerb); }
     s.start();
     return true;
+  },
+  // from a file (element mode): every sound file started once at no volume (at 16x) until it can play through, and
+  // kept - later plays copy the loaded element. step(fraction) reports progress
+  pre: null,
+  async warm(step) {
+    if (this.mode !== 'el' || this.pre || typeof AUDIO_LIST === 'undefined') return;
+    const pre = this.pre = {}, urls = [];
+    for (const [n, c] of Object.entries(AUDIO_LIST.sfx)) for (let i = 1; i <= c; i++) urls.push(this.url('sfx', n + '_' + i));
+    let i = 0, done = 0;
+    const one = (url) => new Promise((res) => {
+      const a = new Audio(url);
+      a.preload = 'auto'; a.muted = true; a.volume = 0; a.preservesPitch = false;
+      // (ready once it can play through: loaded and decoded - it is stopped there)
+      const fin = () => { clearTimeout(to); a.onended = a.oncanplaythrough = a.onerror = null; try { a.pause(); } catch (e) { /* */ } res(); };
+      const to = setTimeout(fin, 3000);
+      a.onended = a.oncanplaythrough = fin; a.onerror = () => { this.failed.add(url); fin(); };
+      pre[url] = a;
+      a.play().then(() => { try { a.playbackRate = 16; } catch (e) { /* */ } }).catch(fin);
+    });
+    const run = async () => { while (i < urls.length) { await one(urls[i++]); done++; if (step && done % 8 === 0) step(done / urls.length); } };
+    await Promise.all([run(), run(), run(), run(), run(), run(), run(), run()]);
   },
   // a looping source of a loop file into dest (Web Audio); null without the file. Loops are rendered len s long plus
   // half a second that repeats their start, so any window of len s loops cleanly (a recording loops whole)
