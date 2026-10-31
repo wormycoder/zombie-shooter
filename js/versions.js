@@ -8,6 +8,14 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.002.194', date: '2026-10-31', title: 'A fairer benchmark, a gentler Potato',
+    notes: [
+      'The benchmark starts with a warm-up lap (not counted): the first preset measured no longer pays alone for painting the whole town the first time, which made it look several frames a second slower than it is.',
+      'The Potato preset keeps Low\'s character detail and sprite cache, and only takes away what surely costs a weak laptop: a softer 40% picture, lights, the HUD and zombie animation at 10 a second, very few particles and no weather on screen. (Pulling the detailed characters in closer made a crowd slower on a real graphics card, not faster.)',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.001.193', date: '2026-10-31', title: 'A Potato preset',
     notes: [
       'A new Potato quality preset (Settings > Optimization) for very weak laptops: a softer 40% picture, plain models for all but the nearest few characters, lights and the HUD updated 10 times a second, fewer bodies and stains kept, very few particles. Pick for me chooses it when the game runs under 20 frames a second, and the benchmark tries it too.',

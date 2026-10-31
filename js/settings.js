@@ -41,10 +41,12 @@ const SETTINGS_OPTS = {
 // Auto (the default) is High plus the automatic helpers: dynamic resolution, adaptive character detail and car detail
 // by zoom - full quality whenever the machine keeps up
 const SETTINGS_PRESETS = {
-  // for very weak laptops (a Celeron and its built-in graphics): the fewest pictures drawn and the least work a frame -
-  // a blurrier picture, plain models for all but the nearest few, lights and the HUD updated 10 times a second; the
-  // sprite cache kept at Normal (painting pictures again costs a weak processor more than the memory)
-  Potato: { res: 0.4, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.15, ambient: 0, weather: 0, lodDist: 0.4, lodMax: 8, corpses: 50, decals: 50, cache: 1, lightHz: 10, uiHz: 10, zAnimHz: 10, zAnimLazy: 1, texCap: 0.5, worldTex: 0.5, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
+  // for very weak laptops (a Celeron and built-in graphics sharing the system's memory): Low with less of what is
+  // sure to cost the processor or the graphics - a blurrier picture (fewer pixels to fill and move), lights, the HUD
+  // and zombie animation updated 10 times a second, very few particles, no weather on screen. The rest stays as Low's:
+  // the small sprite cache (less held in the shared graphics memory) and the character detail rings (pulled in
+  // further, more of a crowd goes to sprites re-rendered every few frames, which on a real graphics card costs more)
+  Potato: { res: 0.4, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.15, ambient: 0, weather: 0, lodDist: 0.6, lodMax: 15, corpses: 100, decals: 100, cache: 0, lightHz: 10, uiHz: 10, zAnimHz: 10, zAnimLazy: 1, texCap: 0.5, worldTex: 0.5, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
   Low: { res: 0.5, dynRes: 1, fps: 30, detail: 0, chars3d: 2, carDetail: 0, shadows: 0, particles: 0.3, ambient: 0, weather: 0.45, lodDist: 0.6, lodMax: 15, corpses: 100, decals: 100, cache: 0, lightHz: 15, uiHz: 15, zAnimHz: 15, zAnimLazy: 1, texCap: 1, worldTex: 0.5, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
   Medium: { res: 0.75, dynRes: 1, fps: 60, detail: 1, chars3d: 3, carDetail: 1, shadows: 1, particles: 0.6, ambient: 0.5, weather: 0.45, lodDist: 0.6, lodMax: 25, corpses: 200, decals: 200, cache: 1, lightHz: 30, uiHz: 30, zAnimHz: 30, zAnimLazy: 1, texCap: 1, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1 },
   Auto: { res: 'auto', dynRes: 1, fps: 60, detail: 1, chars3d: 1, carDetail: 1, shadows: 1, particles: 1, ambient: 1, weather: 1, lodDist: 1, lodMax: 40, corpses: 0, decals: 450, cache: 1, lightHz: 60, uiHz: 30, zAnimHz: 0, zAnimLazy: 1, texCap: 2, worldTex: 1, zLazy: 1, zAdapt: 1, chunkLazy: 1 },

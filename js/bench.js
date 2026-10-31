@@ -19,7 +19,9 @@ const Bench = {
   start() {
     if (G.mode !== 'menu') return;
     const keep = { v: Object.assign({}, Settings.v), zombies: G.zombies, cars: G.cars, wd: Wd, weather: G.weather, time: G.time, player: G.player };
-    const stages = [];
+    // (a warm-up lap first, not counted: the first time through, the town's walls, roofs and ground are all painted
+    // for the first time, which the first preset measured would otherwise pay for alone)
+    const stages = [{ p: this.PRESETS[0], l: this.LOADS[0], iv: [], work: [], warm: true }];
     for (const p of this.PRESETS) for (const l of this.LOADS) stages.push({ p, l, iv: [], work: [] });
     this.run = { keep, stages, i: -1, t: 0, hz: 1000 / (Game.rIv || 16.7) };
     $('#menu').innerHTML = `<div class="benchbar" style="position:absolute;left:50%;top:14px;transform:translateX(-50%);padding:8px 16px;background:rgba(0,0,0,0.72);border:1px solid rgba(255,255,255,0.2);border-radius:3px;font:12px/1.5 Verdana,sans-serif;color:#ddd;text-align:center;pointer-events:auto;white-space:nowrap">
@@ -47,7 +49,7 @@ const Bench = {
     const st = r.stages[r.i], L = st.l;
     if (r.i === 0 || r.stages[r.i - 1].p !== st.p) Settings.usePreset(st.p);
     // the same crowd in the same places for every preset
-    let q = this.SEED + r.i % this.LOADS.length;
+    let q = this.SEED + this.LOADS.indexOf(L);
     const rnd = () => { q = (q + 0x6d2b79f5) | 0; let t = Math.imul(q ^ (q >>> 15), 1 | q); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     G.zombies = [];
     let tries = 0;
@@ -64,7 +66,7 @@ const Bench = {
     G.time = L.hour * 60;
     G.weather = { rain: L.rain, target: L.rain, fog: L.storm ? 0.3 : 0.1, temp: 18, next: 1e12, storm: !!L.storm };
     const el = $('#benchStage');
-    if (el) el.textContent = `${st.p} · ${L.n} (${L.z} zombies) · stage ${r.i + 1} of ${r.stages.length}`;
+    if (el) el.textContent = st.warm ? 'warming up (painting the town)' : `${st.p} · ${L.n} (${L.z} zombies) · stage ${r.i} of ${r.stages.length - 1}`;
   },
   // one frame (Game.loop, uncapped): the crowd, the effects and the world drawn as in play; iv = ms since the last
   frame(dt, iv) {
@@ -115,7 +117,7 @@ const Bench = {
   // with the slowest frames above 30 under the heavy load)
   results(r) {
     const S = {};
-    for (const st of r.stages) (S[st.p] = S[st.p] || {})[st.l.n] = this.stats(st);
+    for (const st of r.stages) if (!st.warm) (S[st.p] = S[st.p] || {})[st.l.n] = this.stats(st);
     const bar = Math.min(50, r.hz * 0.9);
     let rec = this.PRESETS[0];
     for (const p of this.PRESETS) { const h = S[p] && S[p].Heavy; if (h && h.fps >= bar && h.low >= 30) rec = p; }

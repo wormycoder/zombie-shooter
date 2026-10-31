@@ -582,6 +582,15 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      Normal (repainting costs a weak processor more than the memory). In
      software rendering here: Medium crowd 13 -> 18 fps, heavy 7 -> 12 fps
      against Low. Pick for me chooses it under 20 fps; the benchmark runs it.
+     THEN (000.036.002): on the laptop Potato came out slower than Low (21
+     vs 27 fps light, 15 vs 19 heavy). Two causes: the benchmark's first
+     preset paid alone for painting the town (Low first: 17-19 fps light;
+     second: 27) - a warm-up lap now comes first, uncounted; and the closer
+     LOD rings / 8 detailed characters pushed a crowd onto re-rendered
+     sprites, dearer on a real GPU. Potato now: Low plus 40%, 10/s lights,
+     HUD and animation, very few particles, no weather (cache Small, LOD as
+     Low). The laptop: an integrated UHD 600 sharing system memory (128 MB
+     reserved) - small caches suit it.
      Still open: what the laptop's browser spends outside the game's own
      code (~15-20 ms a frame) - the Performance report from the laptop
      would show it.
