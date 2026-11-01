@@ -1,0 +1,1141 @@
+'use strict';
+// ---------------------------------------------------------------------------
+// Player: stats, moodles, body health, inventory, movement, combat
+// ---------------------------------------------------------------------------
+const PARTS = ['Head', 'Neck', 'TorsoUpper', 'TorsoLower', 'Groin', 'UpperArmL', 'UpperArmR', 'ForeArmL', 'ForeArmR', 'HandL', 'HandR', 'UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR'];
+const PART_NAMES = { Head: 'Head', Neck: 'Neck', TorsoUpper: 'Upper Torso', TorsoLower: 'Lower Torso', Groin: 'Groin', UpperArmL: 'Left Upper Arm', UpperArmR: 'Right Upper Arm', ForeArmL: 'Left Forearm', ForeArmR: 'Right Forearm', HandL: 'Left Hand', HandR: 'Right Hand', UpperLegL: 'Left Thigh', UpperLegR: 'Right Thigh', LowerLegL: 'Left Shin', LowerLegR: 'Right Shin', FootL: 'Left Foot', FootR: 'Right Foot' };
+const PART_REGION = { Head: 'head', Neck: 'neck', TorsoUpper: 'torso', TorsoLower: 'torso', Groin: 'groin', UpperArmL: 'uarms', UpperArmR: 'uarms', ForeArmL: 'farms', ForeArmR: 'farms', HandL: 'hands', HandR: 'hands', UpperLegL: 'ulegs', UpperLegR: 'ulegs', LowerLegL: 'llegs', LowerLegR: 'llegs', FootL: 'feet', FootR: 'feet' };
+const ATTACK_W = [['HandL', 8], ['HandR', 8], ['ForeArmL', 11], ['ForeArmR', 11], ['UpperArmL', 6], ['UpperArmR', 6], ['TorsoUpper', 10], ['TorsoLower', 7], ['Head', 4], ['Neck', 3], ['Groin', 2], ['UpperLegL', 4], ['UpperLegR', 4], ['LowerLegL', 5], ['LowerLegR', 5], ['FootL', 2], ['FootR', 2]];
+const WOUND = {
+  scratch: { n: 'Scratched', heal: [10, 18], bleed: 0.12, pain: 8, dmg: 2.5 },
+  cut: { n: 'Lacerated', heal: [24, 40], bleed: 0.35, pain: 18, dmg: 5 },
+  bite: { n: 'Bitten', heal: [50, 70], bleed: 0.4, pain: 25, dmg: 8 },
+  deep: { n: 'Deep Wound', heal: [60, 90], bleed: 0.7, pain: 30, dmg: 7 },
+  burn: { n: 'Burned', heal: [40, 60], bleed: 0, pain: 35, dmg: 6 },
+  fracture: { n: 'Fractured', heal: [420, 620], bleed: 0, pain: 40, dmg: 8 },
+};
+const LEG_PARTS = ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'FootL', 'FootR'];
+const ARM_PARTS = ['UpperArmL', 'UpperArmR', 'ForeArmL', 'ForeArmR', 'HandL', 'HandR'];
+const WEAR_SLOTS = ['hat', 'eyes', 'neck', 'shirt', 'jacket', 'vest', 'gloves', 'pants', 'shoes', 'wrist', 'back', 'belt', 'waist', 'holster'];
+const FISTS = { sk: null, dmg: [0.1, 0.25], range: 0.85, arc: 0.6, swing: 0.55, hits: 1, knock: 0.12, crit: 0.05, end: 0.012, model: null };
+
+const Player = {
+  create(o) {
+    const p = {
+      x: o.x, y: o.y, angle: 0.8, r: 0.27,
+      name: o.name, occ: o.occ, traits: o.traits.slice(),
+      skills: {}, bookMult: {},
+      look: o.look,
+      inv: [], att: {},
+      st: { hunger: 0.06, thirst: 0.06, fatigue: 0.1, endurance: 1, panic: 0, stress: 0, boredom: 0, unhappy: 0, foodSick: 0, wet: 0, temp: 37, drunk: 0, smokeT: 0, cold: 0, coldT: 0, painkill: 0, beta: 0, antidep: 0, antibio: 0, poison: 0 },
+      body: {}, health: 100, infection: null,
+      moveMode: 'walk', sneak: false,
+      swing: null, fireCd: 0, action: null, queue: [], path: null,
+      asleep: false, inCar: null, dead: false,
+      anim: { ph: 0, amp: 0 }, halo: [], kills: 0, hurtFlash: 0, grabbed: 0,
+      fovT: 0, noiseT: 0, minutesAlive: 0, flashOn: false, sleepFade: 0, sitting: false,
+      seenZ: 0, lastFov: null,
+    };
+    for (const pt of PARTS) p.body[pt] = { w: {}, bandage: null, infect: 0, disinf: 0, glass: false, stitched: false };
+    for (const sk in SKILL_NAMES) p.skills[sk] = { lv: 0, xp: 0 };
+    p.skills.Fitness.lv = 5; p.skills.Strength.lv = 5;
+    const occ = OCCUPATIONS.find(x => x.id === o.occ);
+    if (occ) { for (const sk in occ.sk) p.skills[sk].lv += occ.sk[sk]; for (const t of occ.traits || []) if (!p.traits.includes(t)) p.traits.push(t); }
+    for (const tid of p.traits) { const t = traitDef(tid); if (t && t.sk) for (const sk in t.sk) p.skills[sk].lv += t.sk[sk]; }
+    for (const sk in p.skills) p.skills[sk].lv = U.clamp(p.skills[sk].lv, 0, 10);
+    return p;
+  },
+  get p() { return G.player; },
+  hasTrait(id) { return !!(G.player && G.player.traits && G.player.traits.includes(id)); },
+  skill(sk) { return G.player.skills[sk] ? G.player.skills[sk].lv : 0; },
+  xp(sk, amt) {
+    const p = G.player;
+    const s = p.skills[sk];
+    if (!s || s.lv >= 10) return;
+    let m = 1;
+    if (this.hasTrait('fastlearner')) m *= 1.3;
+    if (this.hasTrait('slowlearner')) m *= 0.7;
+    if (this.hasTrait('pacifist') && ['Axe', 'LongBlunt', 'ShortBlunt', 'LongBlade', 'ShortBlade', 'Spear', 'Aiming'].includes(sk)) m *= 0.75;
+    const bm = p.bookMult[sk];
+    if (bm && s.lv >= bm.min && s.lv <= bm.max) m *= bm.mult;
+    s.xp += amt * m;
+    const tbl = (sk === 'Fitness' || sk === 'Strength') ? XP_TABLE_PASSIVE : XP_TABLE;
+    while (s.lv < 10 && s.xp >= tbl[s.lv]) {
+      s.xp -= tbl[s.lv]; s.lv++;
+      this.say('+ ' + SKILL_NAMES[sk], '#8f8');
+      Sfx.play('levelup');
+    }
+  },
+  say(txt, col) {
+    const p = G.player;
+    if (!p) return;
+    if (p.halo.length && p.halo[p.halo.length - 1].txt === txt) { p.halo[p.halo.length - 1].t = 3; return; }
+    p.halo.push({ txt, col: col || '#fff', t: 3 });
+    if (p.halo.length > 4) p.halo.shift();
+  },
+
+  // ------------------------------------------------------------------ inventory
+  bags() { return G.player.inv.filter(it => ITEMS[it.id].bag && (it.worn || it.equipped)); },
+  containers() { return [{ items: G.player.inv, name: 'Inventory', main: true }].concat(this.bags().map(b => ({ items: b.items, name: Items.name(b), bag: b }))); },
+  allItems() { const out = []; for (const c of this.containers()) for (const it of c.items) out.push(it); return out; },
+  find(pred) { for (const c of this.containers()) for (const it of c.items) if (pred(it)) return it; return null; },
+  findAll(pred) { const out = []; for (const c of this.containers()) for (const it of c.items) if (pred(it)) out.push(it); return out; },
+  findTag(tag) { return this.find(it => Items.has(it, tag) && (it.cond === undefined || it.cond > 0 || ITEMS[it.id].cat === 'Clothing')); },
+  findId(id) { return this.find(it => it.id === id); },
+  count(id) { return this.findAll(it => it.id === id).length; },
+  // flat on your face (a sprinting hop gone wrong): down, then up again
+  FALL: 0.65,
+  trip() {
+    const p = G.player;
+    Actions.cancel();
+    p.fallT = 0; p.path = null; p.sitting = false;
+    p.hurtFlash = 0.6; p.st.endurance = Math.max(0, p.st.endurance - 0.05);
+    if (R.chance(0.4)) this.addWound(R.pick(['HandL', 'HandR', 'LowerLegL', 'LowerLegR']), 'scratch', { isZombie: false });
+    this.say(R.pick(['Ow!', 'Damn it!', 'Argh!']), '#f99');
+    Sfx.play('thud'); Noise.emit(p.x, p.y, 8, 'thud');
+  },
+  removeItem(it) {
+    for (const c of this.containers()) { const k = c.items.indexOf(it); if (k >= 0) { c.items.splice(k, 1); this.unflag(it); return true; } }
+    return false;
+  },
+  unflag(it) {
+    delete it.equipped; delete it.worn;
+    const a = G.player.att;
+    if (a) for (const s in a) if (a[s] === it.uid) delete a[s];
+  },
+  addItem(it) { G.player.inv.push(it); },
+  capacity() { return 8 + this.skill('Strength') * 0.55; },
+  bagCap(bag) { let c = ITEMS[bag.id].bag.cap; if (this.hasTrait('organized')) c *= 1.3; if (this.hasTrait('disorganized')) c *= 0.7; return c; },
+  weight() {
+    let w = 0;
+    for (const it of G.player.inv) {
+      const d = ITEMS[it.id];
+      let iw = Items.weight(it);
+      if (it.worn && d.cat === 'Clothing') iw *= 0.35;
+      w += iw;
+    }
+    return w;
+  },
+  heavyRatio() { return this.weight() / this.capacity(); },
+  primary() { return G.player.inv.find(it => it.equipped === 'primary' || it.equipped === 'both') || null; },
+  secondary() { return G.player.inv.find(it => it.equipped === 'secondary' || it.equipped === 'both') || null; },
+  weaponDef() {
+    const it = this.primary();
+    if (!it) return null;
+    const d = ITEMS[it.id];
+    return d.wpn || d.gun ? d : null;
+  },
+  ensureMain(it) {
+    const p = G.player;
+    if (p.inv.includes(it)) return;
+    for (const b of this.bags()) { const k = b.items.indexOf(it); if (k >= 0) { b.items.splice(k, 1); p.inv.push(it); return; } }
+  },
+  equip(it, slot) {
+    const d = ITEMS[it.id];
+    this.ensureMain(it);
+    if (it.worn) delete it.worn;
+    const two = (d.wpn && d.wpn.two) || (d.gun && d.gun.two) || d.generator;
+    if (slot === 'primary' && two) slot = 'both';
+    for (const o of G.player.inv) {
+      if (o === it) continue;
+      if (slot === 'both' && o.equipped) delete o.equipped;
+      else if (o.equipped === slot || o.equipped === 'both') delete o.equipped;
+    }
+    it.equipped = slot;
+    Sfx.play('equip');
+  },
+  unequip(it) { delete it.equipped; if (ITEMS[it.id].light) it.on = false; Sfx.play('equip'); },
+  wear(it) {
+    const d = ITEMS[it.id];
+    this.ensureMain(it);
+    let slot = d.slot;
+    if (d.bag) slot = d.bag.back ? 'back' : d.bag.belt ? 'belt' : null;
+    if (!slot) return;
+    for (const o of G.player.inv) if (o !== it && o.worn === slot) delete o.worn;
+    delete it.equipped;
+    it.worn = slot;
+    Sfx.play('cloth');
+  },
+  unwear(it) { delete it.worn; Sfx.play('cloth'); },
+  worn(slot) { return G.player.inv.find(it => it.worn === slot) || null; },
+  hasWatch() { return !!G.player.inv.find(it => it.worn === 'wrist' && ITEMS[it.id].watch) || !!this.find(it => ITEMS[it.id].watch); },
+  hasKeyFor(f) {
+    if (!f || f.b === undefined) return false;
+    const b = Wd.buildings[f.b];
+    return !!this.find(it => it.id === 'HouseKey' && it.keyId === (b ? b.keyId : -1));
+  },
+  nearHeat() {
+    const p = G.player, cx = Math.floor(p.x), cy = Math.floor(p.y);
+    if (Fire.near(p.x, p.y, 2) > 0.3) return true;
+    for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+      const o = World.obj(x, y);
+      if (o && (((o.t === 'campfire' || o.t === 'bbq') && o.lit) || (o.t === 'stove' && o.on && World.hasPower(x, y)))) return true;
+    }
+    return false;
+  },
+  // a broken leg rules out running, a broken arm weakens attacks
+  brokenLeg() { const p = G.player; return LEG_PARTS.some(pt => p.body[pt].w.fracture > 0); },
+  brokenArm() { const p = G.player; return ARM_PARTS.some(pt => p.body[pt].w.fracture > 0); },
+  fracture(parts) {
+    const p = G.player, pt = R.pick(parts), b = p.body[pt];
+    b.w.fracture = Math.max(b.w.fracture || 0, R.f(WOUND.fracture.heal[0], WOUND.fracture.heal[1]));
+    p.health -= WOUND.fracture.dmg;
+    p.st.panic = Math.min(100, p.st.panic + 30);
+    this.say(PART_NAMES[pt] + ': Fractured!', '#f66');
+    Sfx.play('hurt'); Sfx.play('break');
+    if (p.health <= 0) this.die('Died from a bad fall');
+  },
+  // sitting down on a chair, a sofa, a bench: on the seat, facing the way it faces; standing up, back where you came
+  // from (a sofa or a bench is solid furniture)
+  SEAT_H: { chair: 0.46, sofa: 0.42, armchair: 0.42, bench: 0.46, pew: 0.46 },
+  sitOn(o, x, y) {
+    const p = G.player;
+    p.seat = { h: this.SEAT_H[o.t] || 0.45, bx: p.x, by: p.y, solid: !!OBJ[o.t].solid };
+    p.x = x + 0.5; p.y = y + 0.5;
+    const v = DIRV[o.dir] || [0, 1];
+    p.angle = Math.atan2(v[1], v[0]);
+    p.sitting = true;
+    Sfx.play(o.t === 'chair' || o.t === 'bench' || o.t === 'pew' ? 'wood' : 'cloth');
+  },
+  standUp() {
+    const p = G.player, s = p.seat;
+    if (!s) return;
+    p.seat = null;
+    if (s.solid) { p.x = s.bx; p.y = s.by; }
+    Sfx.play('cloth');
+  },
+  flashlight() {
+    const p = G.player;
+    if (!p || p.inCar) return false;
+    const s = this.secondary(), pr = this.primary();
+    for (const it of [s, pr]) if (it && ITEMS[it.id].light && it.on && it.pow > 0) return true;
+    return false;
+  },
+  look() {
+    const p = G.player;
+    const L = Object.assign({}, p.look);
+    const w = (s) => this.worn(s);
+    const shirt = w('shirt'), jacket = w('jacket'), pants = w('pants'), shoes = w('shoes'), hat = w('hat'), back = w('back'), vest = w('vest'), gloves = w('gloves');
+    const bl = (it) => it.bloody ? Col.mix(it.col, '#4a0a08', 0.35) : it.col;
+    L.shirt = shirt ? bl(shirt) : L.skin;
+    L.sleeves = shirt ? (ITEMS[shirt.id].cover.includes('farms') ? 'long' : ITEMS[shirt.id].id === 'TankTop' ? 'none' : 'short') : 'none';
+    L.jacket = jacket ? bl(jacket) : null;
+    L.pants = pants ? bl(pants) : L.skin;
+    L.shorts = pants ? !ITEMS[pants.id].cover.includes('llegs') : true;
+    L.shoes = shoes ? shoes.col : L.skin;
+    L.hat = hat ? { type: ITEMS[hat.id].hatType || 'cap', col: hat.col } : null;
+    L.bag = back ? (back.col || ITEMS[back.id].bag.col || '#555') : null;
+    L.vest = vest ? vest.col : null;
+    { const nk = w('neck'); L.neck = nk ? { tie: !!ITEMS[nk.id].tie, col: nk.col } : null; L.hivis = !!(vest && ITEMS[vest.id].hivis); }
+    L.gloves = gloves ? gloves.col : null;
+    L.glasses = !!w('eyes');
+    L.att = Hotbar.visual();
+    // textures: the cloth of each thing worn, blood soaked into bloody clothes; a man's stubble grows over three days
+    Char3D.dress(L, w, 0.5);
+    Zombie.garb(L, w);
+    // the hood goes up in the rain (outdoors, nothing on the head) and comes down indoors or when it stops
+    if (L.hood && !hat) {
+      const rain = G.weather ? G.weather.rain : 0, out = !p.inCar && World.outdoor(p.x, p.y);
+      if (out && rain > 0.3) p.hoodUp = true; else if (!out || rain < 0.15) p.hoodUp = false;
+      L.hoodUp = !!p.hoodUp;
+    }
+    L.stubble = L.female ? 0 : Math.round(U.clamp(0.15 + p.minutesAlive / 4320, 0, 1) * 10) / 10;
+    L.dirt = 0.06;
+    return L;
+  },
+
+  // ------------------------------------------------------------------ update
+  update(dt) {
+    const p = G.player;
+    if (p.dead) { p.deadT = (p.deadT || 0) + dt; return; }
+    const gh = dt * MIN_PER_SEC / 60;
+    p.minutesAlive += dt * MIN_PER_SEC;
+    p.hurtFlash = Math.max(0, p.hurtFlash - dt * 2);
+    for (const h of p.halo) h.t -= dt / Math.max(1, G.speed);
+    p.halo = p.halo.filter(h => h.t > 0);
+    if (p.grabbed > 0) p.grabbed -= dt;
+    // held by the dead: how many have hold (Zombie.grabUpdate), struggling, and three pairs of hands pull you down
+    let gn = 0;
+    if (!p.inCar) for (const z of Zombie.near(p.x, p.y, 1.6)) if (z.st === 'grab' && !z.dead) gn++;
+    p.grabN = gn;
+    if (gn) p.grabbed = Math.max(p.grabbed, 0.3);
+    if (gn >= 3 && !Debug.god) { p.dragT = (p.dragT || 0) + dt; if (p.dragT > 2) { this.die('Dragged down by the dead'); Sfx.play('scream'); return; } }
+    else p.dragT = Math.max(0, (p.dragT || 0) - dt);
+    if (p.fireCd > 0) p.fireCd -= dt;
+    if (p.shoutT > 0) p.shoutT -= dt;
+    if (p.foT > 0) p.foT -= dt;
+    // a body being dragged trails behind; let go of it if it is lost, too far, or we are busy elsewhere
+    if (p.drag) {
+      const z = p.drag;
+      if (!z.dead || p.inCar || p.dead || G.zombies.indexOf(z) < 0 || U.dist(p.x, p.y, z.x, z.y) > 2.4) p.drag = null;
+      else {
+        const dx = z.x - p.x, dy = z.y - p.y, d = Math.hypot(dx, dy) || 1;
+        if (d > 0.8) World.move(z, -dx / d * (d - 0.8), -dy / d * (d - 0.8), 0.2);
+        z.a = Math.atan2(-dy, -dx) + (p.dragS === 2 ? Math.PI : 0);
+      }
+    }
+    if (p.cycle) { p.cycle.t += dt; if (p.cycle.t >= p.cycle.dur) p.cycle = null; }
+    // camera
+    let cx = p.inCar ? p.inCar.x : vxOf(p.x), cy = p.inCar ? p.inCar.y : p.y;
+    // driving, the view leads the car by up to 5 tiles so more of the road ahead is on screen
+    if (p.inCar) { const c = p.inCar, L = U.clamp((c.v || 0) * 0.2, -2, 5); cx += Math.cos(c.a) * L; cy += Math.sin(c.a) * L; }
+    const cz = p.inCar ? 0 : Render.entZ(p);
+    Render.cam.x += (cx - Render.cam.x) * Math.min(1, dt * 8);
+    Render.cam.y += (cy - Render.cam.y) * Math.min(1, dt * 8);
+    Render.cam.z += (cz - Render.cam.z) * Math.min(1, dt * 8);
+    if (p.asleep) { this.sleepUpdate(dt, gh); this.updateStats(gh, dt); this.fov(dt); return; }
+    // tripped: down on the ground, then getting up
+    if (p.fallT !== undefined && p.fallT !== null) {
+      p.fallT += dt;
+      if (p.fallT >= this.FALL + Zombie.GETUP) p.fallT = null;
+      else { p.anim.amp = 0; this.updateStats(gh, dt); this.fov(dt); return; }
+    }
+    p.sleepFade = Math.max(0, p.sleepFade - dt);
+    if (p.inCar) { Vehicles.driveInput(p.inCar, dt); this.updateStats(gh, dt); this.fov(dt); return; }
+    this.movement(dt);
+    this.combat(dt);
+    this.updateStats(gh, dt);
+    this.fov(dt);
+    // flashlight battery
+    for (const it of [this.primary(), this.secondary()]) if (it && ITEMS[it.id].light && it.on) { it.pow -= gh * 0.012; if (it.pow <= 0) { it.pow = 0; it.on = false; this.say('The batteries are dead.'); } }
+    for (const it of p.inv) if (ITEMS[it.id].radio && it.on) { it.pow -= gh * 0.008; if (it.pow <= 0) { it.pow = 0; it.on = false; } }
+  },
+  fov(dt) {
+    const p = G.player;
+    p.fovT -= dt / Math.max(1, G.speed > 5 ? 3 : 1);
+    const px = p.inCar ? p.inCar.x : p.x, py = p.inCar ? p.inCar.y : p.y;
+    const ang = p.inCar ? p.inCar.a : p.angle;
+    const key = Math.floor(px * 4) + ',' + Math.floor(py * 4) + ',' + Math.round(ang * 10);
+    if (p.fovT > 0 && key === p.lastFov) return;
+    p.fovT = 0.12; p.lastFov = key;
+    let range = 42;
+    if (this.hasTrait('shortsighted') && !this.worn('eyes')) range = 20;
+    if (G.weather.fog > 0) range *= 1 - G.weather.fog * 0.55;
+    let cone = this.hasTrait('eagleeyed') ? 1.95 : 1.65;
+    if (p.inCar) cone = 1.9;
+    let near = this.hasTrait('keenhearing') ? 3.2 : this.hasTrait('hardofhearing') ? 1.2 : 2.0;
+    if (p.asleep) { range = 0.5; near = 0.5; }
+    World.computeFOV(px, py, ang, cone, range, near);
+  },
+  speedMult() {
+    const p = G.player;
+    let m = 1;
+    const hr = this.heavyRatio();
+    if (hr > 1) m *= hr > 1.75 ? 0.4 : hr > 1.5 ? 0.55 : hr > 1.25 ? 0.7 : 0.85;
+    const end = p.st.endurance;
+    if (end < 0.1) m *= 0.65; else if (end < 0.25) m *= 0.8; else if (end < 0.5) m *= 0.92;
+    if (p.health < 40) m *= 0.85;
+    if (p.grabN >= 2) m *= 0.08; else if (p.grabbed > 0) m *= 0.3;
+    for (const pt of LEG_PARTS) { const b = p.body[pt]; if (b.w.cut || b.w.bite || b.w.deep) { m *= 0.85; break; } }
+    for (const pt of LEG_PARTS) { const b = p.body[pt]; if (b.w.fracture) { m *= b.splint ? 0.72 : 0.5; break; } }
+    if (this.hasTrait('obese')) m *= 0.88; else if (this.hasTrait('overweight')) m *= 0.94;
+    if (this.hasTrait('adrenaline')) m *= 1 + p.st.panic / 400;
+    if (p.st.fatigue > 0.9) m *= 0.85;
+    return m;
+  },
+  movement(dt) {
+    const p = G.player;
+    let mx = 0, my = 0;
+    if (!UI.typing) {
+      if (Input.down('w')) { mx -= 1; my -= 1; }
+      if (Input.down('s')) { mx += 1; my += 1; }
+      if (Input.down('a')) { mx -= 1; my += 1; }
+      if (Input.down('d')) { mx += 1; my -= 1; }
+    }
+    const moving = mx !== 0 || my !== 0;
+    if (moving) {
+      p.path = null;
+      if (p.action && !p.action.walkOk) Actions.cancel();
+      p.sitting = false;
+      if (p.seat) this.standUp();
+    }
+    if (Input.hit('c')) { p.sneak = !p.sneak; this.say(p.sneak ? 'Sneaking' : 'Walking', '#ccc'); }
+    const aiming = Input.aiming() && !p.action;
+    p.aiming = aiming;
+    let run = Input.down('Shift');
+    let sprint = Input.down('Alt') || Input.down('x');
+    if (p.st.endurance < 0.1) { run = false; sprint = false; }
+    if ((run || sprint) && this.brokenLeg()) { run = false; sprint = false; }
+    if (aiming) { run = false; sprint = false; }
+    // auto-walk path
+    if (!moving && p.path && p.path.length) {
+      const ty = p.path[0][1], tx = World.lvX(p, p.path[0][0]);
+      const gx = tx + 0.5, gy = ty + 0.5;
+      const dx = gx - p.x, dy = gy - p.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 0.25 || (p.path.length === 1 && p.pathStop && d < p.pathStop)) {
+        p.path.shift();
+        if (!p.path.length) { p.path = null; if (p.onArrive) { const f = p.onArrive; p.onArrive = null; f(); } }
+      } else {
+        // open doors along the way
+        const e = World.edgeBetween(Math.floor(p.x), Math.floor(p.y), tx, ty);
+        if (e) {
+          const f = World.feat(e[0], e[1], e[2]);
+          if (f && f.k === 'door' && !f.open && !f.broken && d < 1.2) { Interact.toggleDoor(f, e); }
+          else if (f && f.k === 'window' && d < 1.1 && (f.open || f.smashed)) { Interact.climb(e); p.path.shift(); return; }
+          else if (!f && World.wall(e[0], e[1], e[2]) && WALL_INFO[World.wall(e[0], e[1], e[2])].climb && d < 1.1) { Interact.climb(e); p.path.shift(); return; }
+        }
+        mx = dx / d; my = dy / d;
+        this.applyMove(mx, my, dt, false, Input.down('Shift'), false, true);
+        return;
+      }
+    }
+    if (p.action && !moving) { p.anim.amp = Math.max(0, p.anim.amp - dt * 4); return; }
+    // facing
+    const [wx, wy] = Render.mouseWorld();
+    const mouseA = Math.atan2(wy - p.y, wx - p.x);
+    let target = p.angle;
+    const sw = p.swing, stT = sw && (sw.kind === 'stomp' ? sw.target : sw.floor);
+    if (stT && !stT.dead) target = Math.atan2(sw.ty - p.y, sw.tx - p.x);   // keep over the body being stomped or struck
+    else if (aiming || (sw && sw.kind !== 'shove' && sw.kind !== 'stomp')) target = mouseA;
+    else if (moving) target = Math.atan2(my, mx);
+    else if (!Input.overUI) target = mouseA;
+    const turnRate = aiming ? 9 : 11;
+    const da = U.angDiff(p.angle, target);
+    p.angle = U.normAng(p.angle + U.clamp(da, -turnRate * dt, turnRate * dt));
+    if (moving) {
+      const l = Math.sqrt(mx * mx + my * my);
+      this.applyMove(mx / l, my / l, dt, aiming, run, sprint, false);
+    } else {
+      p.moveMode = 'idle';
+      p.anim.amp = Math.max(0, p.anim.amp - dt * 5);
+    }
+  },
+  applyMove(nx, ny, dt, aiming, run, sprint, auto) {
+    const p = G.player;
+    let sp = 1.75;
+    let mode = 'walk';
+    if (sprint) { sp = 4.0 + this.skill('Sprinting') * 0.12; mode = 'sprint'; }
+    else if (run) { sp = 3.0 + this.skill('Sprinting') * 0.05; mode = 'run'; }
+    // dragging a body: a slow walk at best
+    if (p.drag) { sp = 1.0; mode = 'walk'; }
+    if (p.sneak && mode === 'walk') sp = 1.05 + this.skill('Sneaking') * 0.04;
+    if (aiming) {
+      sp = 1.0 + this.skill('Nimble') * 0.08;
+      const back = Math.abs(U.angDiff(p.angle, Math.atan2(ny, nx))) > 1.6;
+      if (back) sp *= 0.75;
+      this.xp('Nimble', dt * 0.15);
+    }
+    if (p.swing) sp *= p.swing.kind === 'stomp' || p.swing.floor ? 0.12 : 0.5;
+    sp *= this.speedMult() * Debug.speed;
+    if (p.st.drunk > 0.3) { const wob = Math.sin(performance.now() / 300) * p.st.drunk * 0.5; const c = Math.cos(wob), s = Math.sin(wob); const tx = nx * c - ny * s; ny = nx * s + ny * c; nx = tx; }
+    p.moveMode = mode; p.mdir = Math.atan2(ny, nx);
+    // bloody footprints after stepping in blood (gore.js)
+    Gore.steps(p, sp * dt, p.mdir);
+    const ox = p.x, oy = p.y;
+    if (Debug.ghost) { p.x += nx * sp * dt; p.y += ny * sp * dt; } else World.move(p, nx * sp * dt, ny * sp * dt, p.r);
+    Vehicles.pushOut(p, p.r);
+    this.pushZombies(p);
+    const moved = U.dist(ox, oy, p.x, p.y);
+    // running into a low fence: hop it without stopping (the side the run is held up on)
+    if (!auto && (mode === 'run' || mode === 'sprint') && !p.action && !p.swing) {
+      const cx = Math.floor(p.x), cy = Math.floor(p.y);
+      for (const [d, n, m] of [[0, nx, p.x - ox], [1, ny, p.y - oy]]) {
+        if (Math.abs(n) < 0.3 || Math.abs(m) > Math.abs(n) * sp * dt * 0.3) continue;
+        const e = World.edgeBetween(cx, cy, cx + (d ? 0 : Math.sign(n)), cy + (d ? Math.sign(n) : 0));
+        if (!e || World.feat(e[0], e[1], e[2])) continue;
+        const w = World.wall(e[0], e[1], e[2]), wi = w && WALL_INFO[w];
+        if (wi && wi.climb && wi.h < 1.6 && Interact.nearEdge(e, 0.75)) { Interact.climb(e, { vault: true }); break; }
+      }
+    }
+    p.anim.ph += moved * (mode === 'sprint' ? 3.2 : mode === 'run' ? 3.6 : 4.4);
+    p.anim.amp = Math.min(1, p.anim.amp + dt * 6) * (moved > 0.0005 ? 1 : 0.9);
+    if (auto && moved < sp * dt * 0.1) { p.stuckT = (p.stuckT || 0) + dt; if (p.stuckT > 1.2) { p.path = null; p.stuckT = 0; } } else p.stuckT = 0;
+    // endurance & xp
+    const st = p.st;
+    const fit = this.skill('Fitness');
+    let drain = 0;
+    if (mode === 'sprint') { drain = 0.032 * (1.35 - fit * 0.06) * (1.2 - this.skill('Sprinting') * 0.04); this.xp('Sprinting', dt * 0.5); this.xp('Fitness', dt * 0.25); }
+    else if (mode === 'run') { drain = 0.009 * (1.35 - fit * 0.06); this.xp('Fitness', dt * 0.1); this.xp('Lightfooted', dt * 0.04); }
+    else { this.xp('Lightfooted', dt * 0.03); if (p.sneak) this.xp('Sneaking', dt * (p.seenZ > 0 ? 0.25 : 0.04)); }
+    if (this.hasTrait('asthmatic')) drain *= 1.4;
+    if (this.heavyRatio() > 1) { drain += 0.003 * this.heavyRatio(); this.xp('Strength', dt * 0.05); }
+    if (!Debug.noTire) st.endurance = Math.max(0, st.endurance - drain * dt);
+    // footstep noise
+    p.noiseT -= dt;
+    const stepInt = mode === 'sprint' ? 0.28 : mode === 'run' ? 0.34 : 0.48;
+    if (p.noiseT <= 0 && moved > 0.001) {
+      p.noiseT = stepInt;
+      let rad = mode === 'sprint' ? 10 : mode === 'run' ? 6.5 : p.sneak ? 1.2 : 3.2;
+      rad *= 1 - this.skill('Lightfooted') * 0.05;
+      if (this.hasTrait('graceful')) rad *= 0.65;
+      if (this.hasTrait('clumsy')) rad *= 1.35;
+      if (World.isWater(p.x | 0, p.y | 0)) rad *= 1.5;
+      Noise.emit(p.x, p.y, rad, 'step');
+      Sfx.footstep(World.floor(p.x | 0, p.y | 0), mode, p.sneak);
+    }
+  },
+  pushZombies(p) {
+    for (const z of Zombie.near(p.x, p.y, 1.2)) {
+      if (z.dead || (z.lie || 0) > 0.5) continue;
+      const dx = p.x - z.x, dy = p.y - z.y;
+      const d = Math.sqrt(dx * dx + dy * dy), m = p.r + z.r;
+      if (d < m && d > 0.0001) { const push = (m - d) / d; p.x += dx * push * 0.5; p.y += dy * push * 0.5; z.x -= dx * push * 0.5; z.y -= dy * push * 0.5; World.resolve(p, p.r); }
+    }
+  },
+
+  // ------------------------------------------------------------------ combat
+  combat(dt) {
+    const p = G.player;
+    if (p.swing) {
+      const s = p.swing;
+      s.t += dt / s.dur;
+      // over a body on the ground: follow it (it may crawl) and step in so the heel or the blow lands on it
+      if (s.tx !== undefined && !s.done) {
+        const z = s.target || s.floor, reach = s.kind === 'stomp' ? 1.0 : s.w.range + 0.1;
+        if (z && !z.dead) { const q = Combat.aimPoint(z, p.x, p.y, reach); s.tx = q[0]; s.ty = q[1]; }
+        const want = s.kind === 'stomp' ? 0.48 : U.clamp(s.w.range * 0.6, 0.5, 0.85), d = U.dist(p.x, p.y, s.tx, s.ty);
+        if (d > want + 0.03 && s.t < s.hit) { const m = Math.min(d - want, dt * 2.4); World.move(p, (s.tx - p.x) / d * m, (s.ty - p.y) / d * m, p.r); }
+      }
+      // the hit lands when the animation reaches its contact frame
+      if (!s.done && s.t >= (s.hit || (s.kind === 'shove' ? 0.4 : 0.48))) { s.done = true; Combat.resolveSwing(s); }
+      if (s.t >= 1) p.swing = null;
+    }
+    if (G.placing) { FloorItems.input(); return; }
+    if (G.build) {
+      if (Input.hit('r')) G.build.d = (G.build.d + 1) % (G.build.move ? 4 : 2);
+      if (!Input.overUI && Input.takeClick()) Build.click();
+      return;
+    }
+    if (p.action || Input.overUI || UI.modalOpen()) return;
+    const wd = this.weaponDef();
+    const prim = this.primary();
+    if (Input.hit(' ')) { Combat.startShove(); return; }
+    if (prim && ITEMS[prim.id].throwable) { if (Input.takeClick()) Combat.throwItem(prim); return; }
+    if (wd && wd.gun) {
+      if (((Input.lmbClick && Input.takeClick()) || (Input.lmb && wd.gun.auto && prim.fire !== 'semi')) && p.fireCd <= 0 && (!p.swing || p.swing.kind === 'fire')) Combat.fire(prim);
+    } else if (Input.lmb && !p.swing) {
+      Combat.startMelee();
+    }
+    if (Input.hit('r')) Actions.reload();
+  },
+
+  // ------------------------------------------------------------------ zombie attacks
+  // a zombie's lunge lands: it has hold of you (true; Zombie.grabUpdate takes it from there), maybe clawing or biting
+  // as it grabs. Missed, or the clothes took it: false or a hold with no wound
+  zombieAttack(z) {
+    { const p = G.player; p.rdN = (p.rdN || 0) + 1; p.rdA = U.angDiff(p.angle, Math.atan2(p.y - z.y, p.x - z.x)); p.rdF = 0.6; }
+    const p = G.player;
+    if (p.dead || Debug.god) return false;
+    const ang = Math.atan2(z.y - p.y, z.x - p.x);
+    const behind = Math.abs(U.angDiff(p.angle, ang)) > 1.7;
+    // (a lunge that lands takes hold about half the time from behind, a third from the front; less while you swing,
+    // back off or run, and less the more nimble you are)
+    let chance = 0.5;
+    if (!behind) chance -= 0.15;
+    if (p.swing) chance -= 0.1;
+    if (p.moveMode === 'sprint' || p.moveMode === 'run') chance -= 0.18;
+    else if (p.moveMode && p.moveMode !== 'idle' && p.mdir !== undefined && Math.cos(U.angDiff(p.mdir, ang)) < -0.3) chance -= 0.08;
+    chance -= this.skill('Nimble') * 0.02;
+    if (p.inCar) chance = 0.35;
+    if (!R.chance(chance)) { if (R.chance(0.3)) this.say(R.pick(['Close call!', 'Missed me!']), '#ddd'); return false; }
+    // (through a car window it only claws: no hold)
+    if (p.inCar) { this.wound(z, 1, false); return false; }
+    if (!(p.grabN > 0)) { this.say(R.pick(["It's got me!", 'Get off me!', 'No!']), '#f99'); if (!this.grabHinted) { this.grabHinted = true; UI.hint('Grabbed! Shove (Space) or pull away to break free', 5); } }
+    this.wound(z, behind ? 0.6 : 0.35, false);
+    return true;
+  },
+  // breaking a zombie's hold: the fight-off move for where it held you and what is in your hands (Char3D 'fightoff')
+  fightOff(z) {
+    const p = G.player, rel = U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x)), a = Math.abs(rel);
+    const w = this.primary(), d = w && ITEMS[w.id].wpn;
+    p.fo = { side: a < 0.8 ? 0 : a > 2.3 ? 2 : rel < 0 ? -1 : 1, kind: d ? (d.two ? 2 : 1) : 0, v: R.int(1, 2) };
+    p.foT = 0.6;
+  },
+  // a bite (or a clawing) while it holds on: from behind or with company it gets its teeth in more often
+  grabBite(z) {
+    const p = G.player;
+    if (p.dead || Debug.god) return;
+    const behind = Math.abs(U.angDiff(p.angle, Math.atan2(z.y - p.y, z.x - p.x))) > 1.7;
+    Sfx.play('zattack', z.x, z.y);
+    if (!R.chance((behind ? 0.55 : 0.3) + Math.min(0.2, ((p.grabN || 1) - 1) * 0.08) - this.skill('Nimble') * 0.01)) return;
+    this.wound(z, 1, true);
+  },
+  // the blow itself: where, what (biting more likely while held), what the clothes stop. k: chance it breaks skin
+  wound(z, k, held) {
+    const p = G.player;
+    const part = R.weighted(ATTACK_W);
+    let type;
+    const r = R.next();
+    if (r < (held ? 0.25 : 0.12)) type = 'bite'; else if (r < 0.45) type = 'cut'; else type = 'scratch';
+    let skin = 1;
+    if (this.hasTrait('thickskinned')) skin = 0.75;
+    if (this.hasTrait('thinskinned')) skin = 1.3;
+    // clothing
+    const region = PART_REGION[part];
+    let block = 0;
+    for (const it of p.inv) {
+      if (!it.worn) continue;
+      const d = ITEMS[it.id];
+      if (!d.cover || !d.cover.includes(region)) continue;
+      const pv = (type === 'bite' ? d.bi : d.sc) / 100 * (it.cond === undefined ? 1 : 0.5 + it.cond * 0.5);
+      block = 1 - (1 - block) * (1 - pv);
+      if (R.chance(0.15)) { it.cond = Math.max(0, (it.cond === undefined ? 1 : it.cond) - 0.1); it.bloody = true; }
+    }
+    p.grabbed = Math.max(p.grabbed, 0.5);
+    p.hurtFlash = 1;
+    p.st.panic = Math.min(100, p.st.panic + (held ? 12 : 25));
+    Sfx.play('zhit');
+    if (R.chance(block) || !R.chance(Math.min(1, 0.9 * skin * k))) {
+      if (block > 0.2 && R.chance(0.5)) this.say('My clothes protected me', '#ddd');
+      return;
+    }
+    this.addWound(part, type, z);
+  },
+  addWound(part, type, src) {
+    const p = G.player;
+    if (Debug.god) return;
+    const b = p.body[part];
+    const wd = WOUND[type];
+    b.w[type] = Math.max(b.w[type] || 0, R.f(wd.heal[0], wd.heal[1]));
+    if (type !== 'burn') { b.bandage = b.bandage ? b.bandage : null; if (b.bandage) b.bandage.dirt = Math.min(1, b.bandage.dirt + 0.6); }
+    p.health -= wd.dmg;
+    p.st.stress = Math.min(1, p.st.stress + 0.1);
+    Fx.blood(p.x, p.y, 6);
+    this.say(PART_NAMES[part] + ': ' + wd.n + '!', '#f66');
+    Sfx.play('hurt');
+    if (src && src.isZombie !== false && (type === 'bite' || type === 'cut' || type === 'scratch')) {
+      const tr = G.sb ? G.sb.trans || 0 : 0;
+      const ch = tr === 2 ? 0 : type === 'bite' ? 1 : tr === 1 ? 0 : type === 'cut' ? 0.25 : 0.07;
+      if (!p.infection && R.chance(ch)) {
+        const prone = this.hasTrait('proneillness') ? 0.8 : 1;
+        p.infection = { t: 0, sym: R.f(8, 16) * prone, death: R.f(48, 72) * prone };
+      }
+    }
+    if (this.hasTrait('hemophobic')) p.st.panic = Math.min(100, p.st.panic + 20);
+    if (p.health <= 0) this.die('Succumbed to wounds');
+  },
+
+  // ------------------------------------------------------------------ stats
+  updateStats(gh, dt) {
+    const p = G.player, st = p.st;
+    const tr = (id) => this.hasTrait(id);
+    const active = p.moveMode === 'run' || p.moveMode === 'sprint' || p.swing ? 1 : 0;
+    // hunger/thirst
+    let hm = 1; if (tr('lighteater')) hm = 0.75; if (tr('heartyappetite')) hm = 1.3;
+    let tm = 1; if (tr('lowthirst')) tm = 0.6; if (tr('highthirst')) tm = 1.5;
+    st.hunger = Math.min(1, st.hunger + gh * 0.021 * hm * (1 + active * 0.6) * (p.asleep ? 0.5 : 1));
+    st.thirst = Math.min(1, st.thirst + gh * 0.032 * tm * (1 + active * 0.8) * (p.asleep ? 0.5 : 1) * (G.weather.temp > 28 ? 1.25 : 1));
+    // fatigue
+    if (!p.asleep) {
+      let fm = 1; if (tr('wakeful')) fm = 0.8; if (tr('sleepyhead')) fm = 1.25; if (tr('nightowl')) fm = 0.85;
+      st.fatigue = Math.min(1, st.fatigue + gh * 0.042 * fm * (1 + active * 0.3));
+    }
+    // endurance regen
+    if (p.moveMode !== 'run' && p.moveMode !== 'sprint') {
+      let rg = p.moveMode === 'walk' ? 0.01 : 0.022;
+      if (p.sitting || p.asleep) rg = 0.05;
+      rg *= 0.7 + this.skill('Fitness') * 0.06;
+      if (st.hunger > 0.45) rg *= 0.7;
+      if (st.fatigue > 0.8) rg *= 0.6;
+      if (this.heavyRatio() > 1.25) rg *= 0.5;
+      st.endurance = Math.min(1, st.endurance + rg * dt);
+    }
+    // panic from visible zombies
+    let seen = 0, close = 0;
+    for (const z of Zombie.near(p.x, p.y, 12)) {
+      if (z.dead || (z.va || 0) < 0.5) continue;
+      seen++;
+      const d = U.dist(p.x, p.y, z.x, z.y);
+      if (d < 4) close++;
+    }
+    p.seenZ = seen;
+    let pm = 1; if (tr('brave')) pm = 0.4; if (tr('cowardly')) pm = 2; if (tr('desensitized')) pm = 0;
+    if (st.beta > 0) pm *= 0.3;
+    if (st.drunk > 0.2) pm *= 0.6;
+    if (seen) st.panic = Math.min(100, st.panic + (seen * 1.5 + close * 4) * dt * pm * 2.2);
+    else st.panic = Math.max(0, st.panic - dt * 4);
+    if (tr('agoraphobic') && World.outdoor(p.x, p.y)) st.panic = Math.min(100, st.panic + dt * 2 * pm);
+    if (tr('claustrophobic') && !World.outdoor(p.x, p.y)) st.panic = Math.min(100, st.panic + dt * 2 * pm);
+    // stress
+    let sTarget = 0;
+    if (p.infection && p.infection.t > p.infection.sym) sTarget += 0.5;
+    if (seen) sTarget += Math.min(0.4, seen * 0.05);
+    if (st.hunger > 0.45) sTarget += 0.1;
+    if (tr('smoker')) { st.smokeT += gh; if (st.smokeT > 5) sTarget += Math.min(0.5, (st.smokeT - 5) * 0.05); }
+    st.stress = U.clamp(st.stress + (sTarget > st.stress ? 0.06 : -0.03) * gh, 0, 1);
+    // boredom/unhappy
+    const indoors = !World.outdoor(p.x, p.y);
+    const idle = !p.action && p.moveMode === 'idle' && !seen;
+    if (p.action && p.action.fun) st.boredom = Math.max(0, st.boredom - p.action.fun * gh);
+    else if (idle) st.boredom = Math.min(100, st.boredom + gh * (indoors ? 5 : 2));
+    else st.boredom = Math.max(0, st.boredom - gh * 2);
+    if (st.boredom > 50) st.unhappy = Math.min(100, st.unhappy + gh * 3);
+    if (st.antidep > 0) { st.unhappy = Math.max(0, st.unhappy - gh * 4); st.antidep -= gh; }
+    if (st.stress > 0.6) st.unhappy = Math.min(100, st.unhappy + gh * 1.5);
+    // the stench of rotting bodies
+    if ((G.stench || 0) > 0.8) {
+      st.unhappy = Math.min(100, st.unhappy + gh * G.stench * (indoors ? 6 : 3));
+      st.stress = Math.min(1, st.stress + gh * 0.02 * G.stench);
+      if (!p.saidStench || G.time - p.saidStench > 600) { p.saidStench = G.time; this.say(indoors ? 'The smell in here is unbearable.' : 'Something nearby really stinks.', '#cc9'); }
+    }
+    // wetness & temperature
+    const rain = G.weather.rain;
+    if (!indoors && rain > 0.05 && !p.inCar) st.wet = Math.min(1, st.wet + gh * rain * (G.weather.temp < 1 ? 0.25 : 0.9));
+    else st.wet = Math.max(0, st.wet - gh * (indoors ? 0.2 : 0.1));
+    let ins = 0;
+    for (const it of p.inv) if (it.worn && ITEMS[it.id].ins) ins += ITEMS[it.id].ins;
+    // unheated houses get cold in winter; fires and running stoves warm you up
+    let amb = G.weather.temp;
+    if (indoors) amb = World.hasPower(Math.floor(p.x), Math.floor(p.y)) ? Math.max(amb, 20) : Math.min(22, amb + 7);
+    if (p.inCar && p.inCar.engine) amb = Math.max(amb, 21);
+    if (amb < 18 && this.nearHeat()) amb = Math.min(24, amb + 14);
+    const thermal = amb + ins * 12 + (active ? 8 : 0) - st.wet * 10;
+    let target = 37;
+    if (thermal < 14) target = 37 - (14 - thermal) * 0.12;
+    else if (thermal > 31) target = 37 + (thermal - 31) * 0.1;
+    if (tr('outdoorsman')) target = 37 + (target - 37) * 0.5;
+    st.temp += (target - st.temp) * Math.min(1, gh * 0.8);
+    if (st.wet > 0.5 && st.temp < 36.6 && !st.cold && R.chance(gh * (tr('proneillness') ? 0.15 : 0.06))) { st.cold = 1; st.coldT = R.f(36, 72); this.say('I think I caught a cold...', '#ccc'); }
+    if (st.cold) {
+      st.coldT -= gh;
+      if (st.coldT <= 0) st.cold = 0;
+      if (R.chance(gh * 4)) { this.say(R.pick(['*Achoo!*', '*Cough* *cough*']), '#ccc'); Noise.emit(p.x, p.y, 9, 'sneeze'); Sfx.play('cough'); }
+    }
+    // drunk, drugs
+    st.drunk = Math.max(0, st.drunk - gh * 0.15);
+    st.painkill = Math.max(0, st.painkill - gh);
+    st.beta = Math.max(0, st.beta - gh);
+    st.antibio = Math.max(0, st.antibio - gh);
+    st.foodSick = Math.max(0, st.foodSick - gh * 0.04);
+    st.poison = Math.max(0, st.poison - gh * 0.06);
+    // body
+    this.updateBody(gh);
+    // health effects
+    let regen = 0;
+    if (st.hunger >= 0.7) p.health -= gh * 2.5; else if (st.hunger < 0.45) regen += 1;
+    if (st.thirst >= 0.84) p.health -= gh * 4; else if (st.thirst < 0.7) regen += 0.5;
+    if (st.foodSick > 0.5 || st.poison > 0.4) p.health -= gh * (st.foodSick + st.poison * 3) * 3;
+    if (st.temp < 34 || st.temp > 40) p.health -= gh * 3;
+    if (regen && !this.bleeding() && st.foodSick < 0.4 && !(p.infection && p.infection.t > p.infection.sym)) {
+      let r2 = regen * (tr('fasthealer') ? 1.5 : tr('slowhealer') ? 0.6 : 1) * (p.asleep ? 2 : 1);
+      p.health = Math.min(this.maxHealth(), p.health + r2 * gh);
+    }
+    // zombie infection
+    if (p.infection) {
+      const inf = p.infection;
+      inf.t += gh;
+      if (inf.t > inf.sym) {
+        const k = (inf.t - inf.sym) / (inf.death - inf.sym);
+        if (k > 0.6) p.health = Math.min(p.health, 100 * (1 - (k - 0.6) / 0.4));
+        if (R.chance(gh * 0.5)) this.say(R.pick(['I feel awful...', 'My head is pounding', 'So cold...', 'I need to lie down']), '#cc9');
+      }
+      if (inf.t >= inf.death) { this.die('Zombie infection'); return; }
+    }
+    if (p.health <= 0 && !p.dead) this.die(st.thirst >= 0.84 ? 'Dehydration' : st.hunger >= 0.7 ? 'Starvation' : 'Succumbed to wounds');
+    // occasional thoughts
+    if (!p.asleep && R.chance(gh * 0.6)) {
+      if (st.hunger > 0.45) this.say("I'm starving", '#cc9');
+      else if (st.thirst > 0.25) this.say("I'm thirsty", '#cc9');
+      else if (st.fatigue > 0.8) this.say('I need to sleep', '#cc9');
+      else if (st.boredom > 60) this.say("I'm so bored...", '#cc9');
+    }
+  },
+  maxHealth() {
+    const p = G.player;
+    let n = 0;
+    for (const pt of PARTS) for (const k in p.body[pt].w) if (p.body[pt].w[k] > 0) n += k === 'scratch' ? 1 : 3;
+    return Math.max(30, 100 - n * 2);
+  },
+  bleeding() {
+    let b = 0;
+    const p = G.player;
+    for (const pt of PARTS) b += this.partBleed(p.body[pt]);
+    return b;
+  },
+  partBleed(b) {
+    let bl = 0;
+    for (const k in b.w) if (b.w[k] > 0) bl += WOUND[k].bleed * (b.bandage ? (k === 'deep' && !b.stitched ? 0.3 : 0) : (k === 'deep' && b.stitched ? 0.2 : 1));
+    return bl;
+  },
+  updateBody(gh) {
+    const p = G.player, st = p.st;
+    let bleed = 0, pain = 0;
+    const hm = (this.hasTrait('fasthealer') ? 1.4 : this.hasTrait('slowhealer') ? 0.6 : 1) * (st.hunger > 0.45 || st.thirst > 0.7 ? 0.5 : 1);
+    for (const pt of PARTS) {
+      const b = p.body[pt];
+      let has = false;
+      for (const k in b.w) {
+        if (b.w[k] <= 0) { delete b.w[k]; continue; }
+        has = true;
+        let r = hm * (b.bandage ? 1.5 : 1);
+        if (b.infect > 0.3 || b.glass) r = 0;
+        if (k === 'deep' && !b.stitched) r = 0;
+        if (k === 'fracture') r = hm * (b.splint ? 1 : 0.3);
+        b.w[k] -= gh * r;
+        const wd = WOUND[k];
+        pain += wd.pain * Math.min(1, b.w[k] / wd.heal[0] + 0.3) * (k === 'fracture' && b.splint ? 0.5 : 1);
+        if (k === 'fracture' && b.w[k] <= 0 && b.splint) { b.splint = false; this.say(PART_NAMES[pt] + ' has healed. Splint removed.', '#8f8'); }
+      }
+      bleed += this.partBleed(b);
+      if (b.bandage) {
+        b.bandage.dirt = Math.min(1, b.bandage.dirt + gh * 0.04);
+        if (!has) { b.bandage.dirt = Math.max(b.bandage.dirt, 0.3); }
+      }
+      if (!has) { b.glass = false; b.stitched = false; b.splint = false; b.infect = Math.max(0, b.infect - gh * 0.1); continue; }
+      if (b.w.fracture && !b.w.scratch && !b.w.cut && !b.w.bite && !b.w.deep && !b.w.burn) continue; // closed fracture: no infection risk
+      if (b.disinf > 0) b.disinf -= gh;
+      if (b.disinf <= 0 && b.infect <= 0) {
+        let ch = b.bandage ? (b.bandage.dirt >= 0.99 ? 0.03 : 0.004) : 0.015;
+        if (b.glass) ch *= 3;
+        if (R.chance(gh * ch)) { b.infect = 0.05; this.say('My wound looks infected', '#cc9'); }
+      }
+      if (b.infect > 0) {
+        b.infect = U.clamp(b.infect + gh * (st.antibio > 0 ? -0.12 : b.disinf > 0 ? -0.03 : 0.02), 0, 1);
+        pain += b.infect * 25;
+      }
+      if (b.glass) pain += 10;
+    }
+    if (bleed > 0) {
+      p.health -= bleed * 12 * gh;
+      if (R.chance(gh * bleed * 40)) Fx.decal(p.x + R.f(-0.3, 0.3), p.y + R.f(-0.3, 0.3), 0.4);
+    }
+    if (st.painkill > 0) pain *= 0.35;
+    st.pain = Math.min(100, pain);
+  },
+  sickLevel() {
+    const p = G.player, st = p.st;
+    let s = Math.max(st.foodSick, st.poison);
+    if (p.infection && p.infection.t > p.infection.sym) s = Math.max(s, 0.2 + 0.8 * (p.infection.t - p.infection.sym) / (p.infection.death - p.infection.sym));
+    let wi = 0;
+    for (const pt of PARTS) wi = Math.max(wi, p.body[pt].infect);
+    s = Math.max(s, wi * 0.6);
+    if (st.cold) s = Math.max(s, 0.26);
+    return Math.min(1, s);
+  },
+  moodles() {
+    const p = G.player, st = p.st;
+    const out = [];
+    const lvl = (v, th) => { let l = 0; for (let i = 0; i < 4; i++) if (v >= th[i]) l = i + 1; return l; };
+    const add = (id, l, names, desc, good) => { if (l > 0) out.push({ id, lv: l, name: names[l - 1], desc, good }); };
+    if (st.hunger < -0.05) add('fed', st.hunger < -0.15 ? 2 : 1, ['Satiated', 'Stuffed'], 'Well fed.', true);
+    add('hungry', lvl(st.hunger, [0.15, 0.25, 0.45, 0.7]), ['Peckish', 'Hungry', 'Very Hungry', 'Starving'], 'Eat something.');
+    add('thirsty', lvl(st.thirst, [0.12, 0.25, 0.7, 0.84]), ['Slightly Thirsty', 'Thirsty', 'Parched', 'Dying of Thirst'], 'Drink something.');
+    add('tired', lvl(st.fatigue, [0.6, 0.7, 0.8, 0.9]), ['Drowsy', 'Tired', 'Very Tired', 'Ridiculously Tired'], 'Find a bed and sleep.');
+    add('endurance', lvl(1 - st.endurance, [0.25, 0.5, 0.75, 0.9]), ['Moderate Exertion', 'High Exertion', 'Excessive Exertion', 'Exhausted'], 'Rest to recover endurance.');
+    add('panic', lvl(st.panic / 100, [0.06, 0.3, 0.65, 0.8]), ['Slight Panic', 'Panic', 'Strong Panic', 'Extreme Panic'], 'Aim and accuracy reduced.');
+    add('stress', lvl(st.stress, [0.25, 0.5, 0.75, 0.9]), ['Anxious', 'Agitated', 'Nervous', 'Stressed'], 'Feeling on edge.');
+    add('bored', lvl(st.boredom / 100, [0.25, 0.5, 0.75, 0.9]), ['Slightly Bored', 'Bored', 'Very Bored', 'Extremely Bored'], 'Read or do something fun.');
+    add('unhappy', lvl(st.unhappy / 100, [0.2, 0.45, 0.6, 0.8]), ['Sad', 'Unhappy', 'Very Unhappy', 'Depressed'], 'Feeling down.');
+    add('pain', lvl(st.pain / 100, [0.1, 0.25, 0.5, 0.75]), ['Minor Pain', 'Pain', 'Severe Pain', 'Agony'], 'Painkillers help.');
+    let bl = 0; for (const pt of PARTS) if (this.partBleed(p.body[pt]) > 0) bl++;
+    add('bleeding', Math.min(4, bl), ['Minor Bleeding', 'Bleeding', 'Severe Bleeding', 'Massive Blood Loss'], 'Bandage your wounds! (H)');
+    add('injured', lvl((100 - p.health) / 100, [0.15, 0.35, 0.55, 0.75]), ['Minor Injury', 'Injured', 'Severely Injured', 'Critically Injured'], 'Health: ' + Math.round(p.health));
+    add('sick', lvl(this.sickLevel(), [0.25, 0.5, 0.75, 0.9]), ['Queasy', 'Nauseous', 'Sick', 'Fever'], 'You feel unwell.');
+    add('heavy', lvl(this.heavyRatio(), [1, 1.25, 1.5, 1.75]), ['Heavy Load', 'Very Heavy Load', 'Extremely Heavy Load', 'Crushing Weight'], 'Carrying too much.');
+    add('wet', lvl(st.wet, [0.15, 0.4, 0.7, 0.9]), ['Damp', 'Wet', 'Soaking', 'Drenched'], 'Get indoors and dry off.');
+    add('hot', lvl(st.temp, [37.6, 38.5, 39.5, 40.5]), ['Hot', 'Overheated', 'Hyperthermic', 'Heatstroke'], 'Remove clothes, rest in shade.');
+    add('cold', lvl(-st.temp, [-36.4, -35.5, -34, -32]), ['Chilly', 'Cold', 'Freezing', 'Hypothermic'], 'Wear warmer clothes, dry off.');
+    add('drunk', lvl(st.drunk, [0.1, 0.3, 0.6, 0.85]), ['Tipsy', 'Drunk', 'Wasted', 'Blackout Drunk'], 'Aim reduced.');
+    return out;
+  },
+
+  // ------------------------------------------------------------------ sleep
+  sleepUpdate(dt, gh) {
+    const p = G.player, st = p.st;
+    p.sleepFade = Math.min(0.85, p.sleepFade + dt);
+    let rate = 0.12 * (this.hasTrait('restless') ? 0.75 : 1) * (this.hasTrait('nightowl') ? 1.3 : 1) * (p.sleepQ || 1);
+    st.fatigue = Math.max(0, st.fatigue - gh * rate);
+    st.endurance = Math.min(1, st.endurance + gh * 0.5);
+    st.stress = Math.max(0, st.stress - gh * 0.05);
+    p.sleepH = (p.sleepH || 0) + gh;
+    // wake conditions
+    let wake = null;
+    if (st.fatigue <= 0.02 || p.sleepH > 11) wake = 'I feel rested.';
+    if (st.hunger > 0.6 || st.thirst > 0.7) wake = 'Hunger woke me up.';
+    if (st.pain > 60) wake = 'The pain woke me up.';
+    for (const z of Zombie.near(p.x, p.y, 4)) if (!z.dead && (z.st === 'chase' || z.st === 'attack' || z.st === 'thump') && World.lineClear(z.x, z.y, p.x, p.y, 'sight')) { wake = 'Something woke me up!'; break; }
+    if (p.wakeNoise) { wake = 'A noise woke me up!'; p.wakeNoise = false; }
+    if (wake) this.wakeUp(wake);
+  },
+  sleep(quality, onBed) {
+    const p = G.player;
+    if (p.st.fatigue < 0.3 && !p.sleepPill) { this.say("I'm not tired enough to sleep.", '#ccc'); return; }
+    p.asleep = true; p.sleepQ = quality; p.sleepH = 0; p.sleepBed = onBed; p.sleepPill = false;
+    p.preSleepSpeed = G.speed;
+    G.speed = 40;
+    UI.hint('Sleeping... (any zombie nearby will wake you)');
+  },
+  wakeUp(msg) {
+    const p = G.player;
+    p.asleep = false;
+    G.speed = 1;
+    this.say(msg || 'I woke up.', '#ccc');
+    p.sleepBed = null;
+    // step off the bed
+    if (World.tileSolid(Math.floor(p.x), Math.floor(p.y))) {
+      for (const [dx, dy] of DIR8) { const x = Math.floor(p.x) + dx, y = Math.floor(p.y) + dy; if (!World.tileSolid(x, y) && World.adjacentReach(Math.floor(p.x), Math.floor(p.y), x, y)) { p.x = x + 0.5; p.y = y + 0.5; break; } }
+    }
+    World.resolve(p, p.r);
+  },
+
+  // ------------------------------------------------------------------ death
+  die(cause) {
+    const p = G.player;
+    if (p.dead) return;
+    if (Debug.god) { p.health = Math.max(p.health, 1); return; }
+    p.dead = true; p.deathCause = cause; p.deadT = 0;
+    // how the body goes down (Char3D.DEATHS): a fall breaks bones or splats; burns end in the burned deaths
+    const burnt = Object.values(p.body || {}).some(b => b && b.w && b.w.burn);
+    p.death = /fall/i.test(cause) ? R.pick(['bones1', 'bones2', 'bones3', 'splat1', 'splat2']) : burnt && /wounds/i.test(cause) ? 'fire' + R.int(1, 3) : null;
+    // (with active ragdolls: how the body goes, see Zombie.rdStyleOf)
+    p.rdStyle = burnt && /wounds/i.test(cause) ? 'flail' : /fall/i.test(cause) ? 'crumple' : /shot|gun/i.test(cause) ? 'rigid' : p.grabN > 0 ? 'slump' : R.pick(['stumble', 'crumple', 'knees']);
+    G.corpse = true;
+    p.swing = null; p.action = null; p.queue = [];
+    if (p.inCar) Vehicles.exit(p.inCar, true);
+    G.speed = 1;
+    Sfx.play('death');
+    Music.death();
+    for (const it of p.inv) { delete it.equipped; }
+    // reanimate if infected
+    if (p.infection || cause === 'Dragged down by the dead') p.reanimate = true;
+    setTimeout(() => UI.showDeath(), 3500);
+    Save.wipe();
+  },
+
+  // ------------------------------------------------------------------ rendering
+  // what the character model shows this frame (Char3D animates from it).
+  // mode: loco / dead / sleep / sit / kneel / climb; gait: walk / run / sprint / sneak; arms: what the upper body does
+  pose() {
+    const p = G.player;
+    const prim = this.primary(), sec = this.secondary();
+    const pd = prim ? ITEMS[prim.id] : null;
+    const model = pd ? (pd.wpn ? pd.wpn.model : pd.gun ? pd.gun.model : (pd.light ? 'flashlight' : 'generic')) : null;
+    const mm = p.moveMode;
+    const pose = { walk: p.anim.ph, amp: p.anim.amp * (mm === 'sprint' ? 1.25 : mm === 'run' ? 1.1 : 0.85), t: performance.now() / 1000, weapon: model, crouch: p.sneak ? 0.55 : 0,
+      mode: 'loco', gait: mm === 'sprint' ? 'sprint' : mm === 'run' ? 'run' : p.sneak ? 'sneak' : 'walk', rdN: p.rdN, rdA: p.rdA, rdF: p.rdF, me: true, rdStyle: p.rdStyle || 'crumple' };
+    if (mm === 'sprint') pose.lean = 0.25; else if (mm === 'run') pose.lean = 0.12;
+    if (pd && (pd.wpn || pd.gun) && (pd.wpn || pd.gun).two) pose.two = true;
+    if (sec && ITEMS[sec.id].light) { pose.offhand = 'flashlight'; pose.light = sec.on && sec.pow > 0; }
+    // the head turns toward the cursor
+    if (!p.dead && !p.asleep && !p.action && !Input.overUI) { const [wx, wy] = Render.mouseWorld(); pose.look = U.clamp(U.angDiff(p.angle, Math.atan2(wy - p.y, wx - p.x)), -1.25, 1.25); }
+    const sw = p.swing;
+    if (sw) {
+      pose.swingT = sw.t;
+      if (sw.kind === 'shove') pose.arms = 'shove';
+      else if (sw.kind === 'stomp') { pose.arms = 'stomp'; if (sw.tx !== undefined) pose.stompD = U.dist(p.x, p.y, sw.tx, sw.ty) - 0.06; }
+      else if (sw.kind === 'fire') { pose.arms = 'fire'; pose.flash = sw.t < 0.25; }
+      else {
+        pose.arms = 'swing'; pose.style = this.swingStyle(pd, sw); pose.ready = !!sw.ready;
+        pose.stab = pose.style === 'stab' || pose.style === 'spear' || pose.style === 'floorStab';
+      }
+    } else if (p.aiming && pd && pd.gun) pose.arms = 'aim';
+    else if (p.aiming) { pose.arms = 'ready'; pose.style = this.swingStyle(pd, null); pose.swingT = 0.2; }
+    else if (p.action && p.action.anim) {
+      const a = p.action, an = a.anim;
+      pose.arms = an;
+      // how far through the action, for one-off moves (actanim.js), and what the hands hold for it
+      pose.k = a.dur > 0 ? U.clamp(a.t / a.dur, 0, 1) : 0; pose.at = a.t || 0;
+      if (a.prop !== undefined) { pose.weapon = a.prop; pose.two = a.prop === 'shovel' || a.prop === 'sledge'; pose.offhand = null; pose.propCol = a.propCol; }
+      if (a.part) pose.part = a.part;
+      if (a.lvl !== undefined && a.lvl !== null) pose.lvl = a.lvl;
+      if (a.sub) pose.sub = a.sub;
+      if (an === 'kneel') { pose.arms = 'work'; pose.crouch = 0.7; pose.mode = 'kneel'; }
+      if (a.kneel) { pose.crouch = 0.7; pose.mode = 'kneel'; if (a.kneelSide) pose.kneeSide = a.kneelSide; }
+      if (an === 'sit') { pose.crouch = 0.8; pose.mode = 'sit'; }
+      if (an === 'shove') { pose.swingT = 0.42; }
+      if (an === 'heave') pose.crouch = 0.6 * (1 - U.clamp((pose.k - 0.2) / 0.35, 0, 1));
+      if (an === 'squat') pose.crouch = (Math.sin(pose.t * 4) + 1) * 0.42;
+    }
+    if (p.shoutT > 0 && !p.action && !p.swing && !p.aiming) { pose.arms = 'shout'; pose.k = 1 - p.shoutT / 1.1; }
+    // carrying a body over the shoulder: shown on the model, the right arm round its legs
+    const cb = p.inv.find(i => i.id === 'Corpse');
+    if (cb && cb.z && cb.z.look) { pose.carry = cb.z.look; if (!p.action && !p.aiming && !p.swing) { pose.arms = 'carry'; pose.weapon = null; } }
+    if (p.drag && !p.action && !p.aiming) { pose.arms = 'dragc'; pose.sub = p.dragS || 1; pose.weapon = null; }
+    if (p.foT > 0 && p.fo && !p.action && !p.aiming) { pose.arms = 'fightoff'; pose.k = 1 - p.foT / 0.6; pose.foSide = p.fo.side; pose.foKind = p.fo.kind; pose.foV = p.fo.v; }
+    // working the pump or the bolt between shots
+    if (p.cycle && p.cycle.t > 0 && (pose.arms === 'aim' || pose.arms === 'fire')) { pose.cycle = U.clamp(p.cycle.t / p.cycle.dur, 0, 1); pose.cycleKind = p.cycle.kind; }
+    if (p.climb) {
+      pose.arms = 'climb'; pose.mode = 'climb'; pose.prog = p.climb.rope === 'down' ? (p.climb.t * 5) % 1 : p.climb.t; pose.rope = !!p.climb.rope; pose.climbKind = p.climb.kind;
+      pose.crouch = Math.sin(p.climb.t * Math.PI) * 0.4;
+    }
+    // a flinch when hurt, struggling when grabbed
+    if (!p.dead && !p.asleep) { if (p.hurtFlash > 0) pose.hurt = Math.min(1, p.hurtFlash); if (p.grabbed > 0) pose.grab = p.grabbed; }
+    for (const pt of LEG_PARTS) {
+      const b = p.body[pt], w = b.w;
+      const lv = w.fracture ? (b.splint ? 0.6 : 1) : (w.deep || w.bite) ? 0.5 : w.cut ? 0.3 : 0;
+      if (lv > (pose.limp || 0)) { pose.limp = lv; pose.limpSide = pt.endsWith('L') ? -1 : 1; }
+    }
+    if (p.sitting) { pose.crouch = 0.8; pose.mode = 'sit'; if (p.seat) pose.seatH = p.seat.h; }
+    if (p.fallT !== undefined && p.fallT !== null && !p.dead) {
+      const t = p.fallT;
+      pose.arms = 'idle'; pose.amp = 0; pose.lieDir = -1; pose.lieOff = 0;
+      if (t < this.FALL) { pose.mode = 'fall'; pose.prog = t / this.FALL; pose.lie = 1; }
+      else { pose.mode = 'getup'; pose.prog = U.clamp((t - this.FALL) / Zombie.GETUP, 0, 1); pose.lie = 1 - pose.prog; }
+    }
+    if (p.asleep || p.dead) {
+      pose.lie = p.dead ? Math.min(1, (p.deadT || 0) * 2) : 1;
+      const dr = p.dead && p.death && Char3D.DEATHS[p.death];
+      pose.lieDir = dr && dr.lie ? dr.lie : 1; pose.arms = 'idle'; pose.amp = 0; pose.weapon = null; pose.lieOff = p.asleep ? 0.85 : 0;
+      pose.mode = p.dead ? 'dead' : 'sleep'; pose.prog = p.dead ? Math.min(1, (p.deadT || 0) / (dr ? dr.T : 0.9)) : 1; pose.death = dr ? p.death : null;
+    }
+    return pose;
+  },
+  // melee animation for the weapon in hand: 1h, 2h, heavy, stab, spear, punch, throw; floor / floorStab at a body on the ground
+  swingStyle(pd, sw) {
+    const w = pd && pd.wpn;
+    if (sw && sw.throw) return 'throw';
+    const st = !w ? 'punch' : w.sk === 'ShortBlade' ? 'stab' : w.model === 'spear' ? 'spear' : w.model === 'sledge' ? 'heavy' : w.two ? '2h' : '1h';
+    if (sw && sw.floor) return st === 'stab' || st === 'spear' ? 'floorStab' : 'floor';
+    return st;
+  },
+  // facing and light level the player is drawn with (null when not drawn)
+  drawInfo() {
+    const p = G.player;
+    if (p.inCar) return null;
+    const s = Math.max(0.35, Render.shadeSmooth(p.x, p.y));
+    let ang = p.angle;
+    if (p.asleep && p.sleepBed) ang = p.sleepAng || ang;
+    return { ang, s };
+  },
+  draw(ctx) {
+    const p = G.player, d = this.drawInfo();
+    if (!d) return;
+    const [X, Y] = Render.epos(p);
+    Char3D.draw(ctx, p, X, Y, d.s, 1);
+  },
+  // ---- aiming a gun. Where the shot goes, worked out once a frame for the ground marks and the reticle: the line of fire
+  // out to the gun's range or the first wall, how far shots stray either side (the aim error's reach, plus a shotgun's
+  // pattern), the zombie the shot would meet and the chance of hitting it (the shot sampled the way Combat.fire makes it)
+  aimF: -1, aimA: null,
+  AIM_SAMPLES: (() => { const r = new RNG(9157), a = []; for (let i = 0; i < 48; i++) a.push(r.next() + r.next() + r.next() - 1.5, r.f(-0.35, 0.35)); return a; })(),
+  aimInfo(g) {
+    const fno = Render.fno;
+    if (this.aimF === fno && this.aimA && this.aimA.g === g) return this.aimA;
+    const p = G.player, [wx, wy] = Render.mouseWorld();
+    const a = Math.atan2(wy - p.y, wx - p.x), dx = Math.cos(a), dy = Math.sin(a);
+    const sp = Combat.spread(g, p.aiming), n = g.pellets || 1, cone = n > 1 ? g.cone || 0 : 0;
+    const half = sp * 0.9 + cone;
+    const z0 = p.x >= LV.W0 ? 0 : World.stairZ(p);
+    const mx = p.x + dx * 0.55, my = p.y + dy * 0.55;
+    const eh = World.firstEdgeHit(mx, my, mx + dx * g.range, my + dy * g.range);
+    const L = eh ? eh.t * g.range : g.range;
+    // the target: of the zombies in the cone, the one nearest the line (a tie: the nearer)
+    let tgt = null, best = 1e9;
+    const up = mx >= LV.W0;
+    for (const z of Zombie.near(mx, my, L + 1)) {
+      // (only those you can see: the ring would give away the ones in the dark)
+      if (z.dead || (z.x >= LV.W0) !== up || z.va < 0.3) continue;
+      const ox = z.x - mx, oy = z.y - my, t = ox * dx + oy * dy;
+      if (t < 0.2 || t > L) continue;
+      const rr = z.lie > 0.5 ? 0.45 : z.r + 0.06, off = Math.max(0, Math.abs(ox * dy - oy * dx) - rr), ang = off / t;
+      if (ang > half) continue;
+      const sc = ang + t * 0.002;
+      if (sc < best) { best = sc; tgt = z; }
+    }
+    // its chance: the shot's own spread sampled (fixed samples: the number does not flicker)
+    let chance = 0;
+    if (tgt) {
+      const S = this.AIM_SAMPLES, ox = tgt.x - mx, oy = tgt.y - my, rr = tgt.lie > 0.5 ? 0.45 : tgt.r + 0.06;
+      let hit = 0;
+      for (let i = 0; i < S.length; i += 2) {
+        const aimA = S[i] * sp * 0.9;
+        for (let k = 0; k < n; k++) {
+          const b = n > 1 ? aimA + (k / (n - 1) - 0.5 + S[(i + k * 2 + 1) % S.length] / (n - 1)) * cone * 2 : aimA;
+          const c = Math.cos(a + b), s = Math.sin(a + b), t = ox * c + oy * s;
+          if (t < 0 || t > L) continue;
+          const px = ox - c * t, py = oy - s * t;
+          if (px * px + py * py <= rr * rr) { hit++; break; }
+        }
+      }
+      chance = hit / (S.length / 2);
+    }
+    this.aimF = fno;
+    return (this.aimA = { g, wx, wy, a, dx, dy, mx, my, L, wall: !!eh, half, z0, tgt, chance });
+  },
+  aimCol(c) { return c >= 0.7 ? '120,220,105' : c >= 0.4 ? '235,205,80' : '230,100,80'; },
+  // under the characters, after the light: the cone of fire on the ground and a ring under the target
+  drawAimGround(ctx) {
+    const p = G.player, wd = this.weaponDef();
+    if (!wd || !wd.gun || p.action || p.dead || p.inCar) return;
+    const A = this.aimInfo(wd.gun), al = p.aiming ? 1 : 0.4, P = (x, y) => Render.P(x, y, A.z0);
+    const L = A.L, h = Math.min(A.half, 0.6);
+    const pt = (t, o) => P(A.mx + Math.cos(A.a + o) * t, A.my + Math.sin(A.a + o) * t);
+    ctx.save();
+    if (p.aiming) {
+      // the cone: filled faintly, its edges, a tick across where the shot stops (a wall: solid)
+      const a0 = pt(0, 0), l1 = pt(L, -h), r1 = pt(L, h);
+      const g = ctx.createLinearGradient(a0[0], a0[1], (l1[0] + r1[0]) / 2, (l1[1] + r1[1]) / 2);
+      g.addColorStop(0, 'rgba(255,250,235,0.16)'); g.addColorStop(1, 'rgba(255,250,235,0.03)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(l1[0], l1[1]);
+      for (let k = 1; k <= 6; k++) { const q = pt(L, -h + 2 * h * k / 6); ctx.lineTo(q[0], q[1]); }
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,250,235,0.32)';
+      ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(l1[0], l1[1]); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(r1[0], r1[1]); ctx.stroke();
+      if (A.wall) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,250,235,0.5)'; ctx.beginPath(); ctx.moveTo(l1[0], l1[1]); ctx.lineTo(r1[0], r1[1]); ctx.stroke(); }
+    }
+    // the line of fire itself
+    const e = pt(L, 0), s0 = pt(0.2, 0);
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.2; ctx.strokeStyle = `rgba(255,236,190,${0.5 * al})`;
+    ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+    ctx.setLineDash([]);
+    // the target's ring (and its chance, while aiming)
+    if (A.tgt) {
+      const z = A.tgt, c = Render.P(z.x, z.y, z.x >= LV.W0 ? 0 : World.stairZ(z)), col = this.aimCol(A.chance), r = (z.lie > 0.5 ? 0.6 : 0.42) * HTW;
+      ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath(); ctx.ellipse(c[0], c[1], r, r * 0.5, 0, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = `rgba(${col},${0.95 * al + 0.05})`;
+      ctx.beginPath(); ctx.ellipse(c[0], c[1], r, r * 0.5, 0, 0, 7); ctx.stroke();
+      if (p.aiming) {
+        ctx.font = 'bold 10px Verdana, sans-serif'; ctx.textAlign = 'left';
+        const tx = c[0] + r + 3, ty = c[1] + 4, txt = Math.round(A.chance * 100) + '%';
+        ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillText(txt, tx + 1, ty + 1);
+        ctx.fillStyle = `rgb(${col})`; ctx.fillText(txt, tx, ty);
+      }
+    }
+    ctx.restore();
+  },
+  drawOverlay(ctx) {
+    const p = G.player;
+    if (p.inCar) return;
+    const [X, Y] = Render.epos(p, 2.05);
+    // action progress bar
+    if (p.action && p.action.dur > 0.3) {
+      const k = U.clamp(p.action.t / p.action.dur, 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(X - 26, Y - 8, 52, 7);
+      ctx.fillStyle = '#c8b860'; ctx.fillRect(X - 25, Y - 7, 50 * k, 5);
+    }
+    // halo texts
+    ctx.font = '11px Verdana, sans-serif'; ctx.textAlign = 'center';
+    let yy = Y - 14;
+    for (let i = p.halo.length - 1; i >= 0; i--) {
+      const h = p.halo[i];
+      ctx.globalAlpha = Math.min(1, h.t);
+      ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillText(h.txt, X + 1, yy + 1);
+      ctx.fillStyle = h.col; ctx.fillText(h.txt, X, yy);
+      yy -= 13;
+    }
+    ctx.globalAlpha = 1;
+    // aim reticle for guns: as wide as the spread where the cursor is, in the colour of the chance to hit the target
+    const wd = this.weaponDef();
+    const A = wd && wd.gun && !p.action && !p.dead ? this.aimInfo(wd.gun) : null;
+    if (A) {
+      const d = U.dist(p.x, p.y, A.wx, A.wy);
+      const r = Math.max(4, Math.tan(A.half) * d * HTW);
+      const [cx, cy] = Render.P(A.wx, A.wy, A.z0);
+      const col = A.tgt ? this.aimCol(A.chance) : '255,255,255';
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath(); ctx.ellipse(cx, cy, r + 1, r * 0.5 + 1, 0, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1; ctx.strokeStyle = `rgba(${col},${p.aiming ? 0.85 : 0.45})`;
+      ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.5, 0, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx - 2, cy); ctx.moveTo(cx + 2, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 4); ctx.lineTo(cx, cy - 1.5); ctx.moveTo(cx, cy + 1.5); ctx.lineTo(cx, cy + 4); ctx.stroke();
+    }
+    // aim cone for melee when aiming
+    if (p.aiming && !(wd && wd.gun)) {
+      const def = wd ? wd.wpn : FISTS;
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath();
+      const [px0, py0] = Render.epos(p);
+      ctx.moveTo(px0, py0);
+      const zf = Render.entZ(p);
+      for (let k = -8; k <= 8; k++) {
+        const a = p.angle + def.arc * k / 8;
+        const x = p.x + Math.cos(a) * def.range, y = p.y + Math.sin(a) * def.range;
+        const q = Render.P(x, y, p.x >= LV.W0 ? 0 : zf);
+        ctx.lineTo(q[0], q[1]);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+  },
+};
