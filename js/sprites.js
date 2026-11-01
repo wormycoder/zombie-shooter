@@ -66,7 +66,7 @@ const Spr = {
   // a record put out of a cache: its pictures are let go at once, though the renderer's per-tile memos may still point
   // at it (they see gone and fetch a new one) - otherwise every memo'd wall or object kept its old pictures alive and
   // the cache painted duplicates
-  drop(r) { r.gone = true; r.c = null; r.sil = null; r.blk = null; },
+  drop(r) { r.gone = true; r.c = null; r.sl = null; r.blk = null; },
   // crop a big sprite to its visible pixels: less to fill every time it is drawn (and less memory). The result is
   // always a new canvas (c may be a CPU canvas, which would be uploaded to the GPU again whenever it is drawn).
   trim(c, ax, ay) {
@@ -95,13 +95,13 @@ const Spr = {
   },
   draw(ctx, rec, sx, sy, s) { this.drawShaded(ctx, rec, sx - rec.ax, sy - rec.ay, s, 1); },
   // draw sprite darkened to brightness s: one draw from a darkened copy. rec.blk is the sprite's black silhouette;
-  // rec.sil a strip of SLOTS copies, each darkened to one of DKQ steps (the sprite with the silhouette over it at that
-  // step's alpha - exactly what drawing the two straight onto the screen gives, edges and glass included) and kept
-  // for the step it was last needed at. A sprite that sits in one light (outside the view cone nearly every wall and
-  // object is darkened) costs a single draw instead of two. A slot is repainted only once the sprite's light has held
-  // a new step for STEADY frames (repainting a picture and drawing it straight after makes the graphics card catch
-  // up first, which costs far more than a second draw): until then, and where the light keeps moving (a flickering
-  // lamp, a fire, lightning, the night), it is drawn the two-draw way.
+  // rec.sl up to SLOTS darkened copies, each its own picture at one of DKQ steps (the sprite with the silhouette over
+  // it at that step's alpha - exactly what drawing the two straight onto the screen gives, edges and glass included).
+  // A sprite that sits in one light (outside the view cone nearly every wall and object is darkened) costs a single
+  // draw instead of two. A copy is never painted over: a new step gets a new picture, the copy used longest ago let go
+  // (painting into a picture the graphics card has been drawing from makes it finish first, which cost more than all
+  // the rest of the shading). A copy is only made once the sprite's light has held a new step for STEADY frames:
+  // until then, and where the light keeps moving (a flickering lamp, a fire, lightning), it is drawn the two-draw way.
   STEADY: 8,
   SLOTS: 3, DKQ: 20,
   drawShaded(ctx, rec, x, y, s, alpha) {
@@ -110,35 +110,39 @@ const Spr = {
     const dk = 1 - s;
     if (dk > 0.02) {
       const w = rec.c.width, h = rec.c.height, q = Math.max(1, Math.min(this.DKQ, Math.round(dk * this.DKQ))), tk = Facade.tick;
-      if (!rec.sil || !rec.blk) {
+      if (!rec.blk) {
         rec.blk = mkCanvas(w, h);
         const g = rec.blk.getContext('2d');
         g.drawImage(rec.c, 0, 0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgb(3,5,14)'; g.fillRect(0, 0, w, h);
-        rec.sil = mkCanvas((w + 2) * this.SLOTS, h); rec.slv = [0, 0, 0]; rec.slu = [0, 0, 0]; rec.slr = -9; rec.wq = 0; rec.wn = 0;
+        rec.sl = []; rec.slr = -9; rec.wq = 0; rec.wn = 0;
       }
-      let k = rec.slv.indexOf(q);
-      if (k < 0) { if (rec.wq === q) rec.wn++; else { rec.wq = q; rec.wn = 1; } }
-      if (k < 0 && (rec.wn < this.STEADY || rec.slr >= tk - 1)) {
-        // (a new light not held long enough yet, or a slot repainted a moment ago: the sprite and its silhouette over it)
-        ctx.drawImage(rec.c, x, y);
-        ctx.globalAlpha = a * Math.min(1, dk);
-        ctx.drawImage(rec.blk, x, y);
-        ctx.globalAlpha = 1;
-        return;
+      const sl = rec.sl;
+      let e = null;
+      for (let i = 0; i < sl.length; i++) if (sl[i].q === q) { e = sl[i]; break; }
+      if (!e) {
+        if (rec.wq === q) rec.wn++; else { rec.wq = q; rec.wn = 1; }
+        if (rec.wn < this.STEADY || rec.slr >= tk - 1) {
+          // (a new light not held long enough yet, or a copy made a moment ago: the sprite and its silhouette over it)
+          ctx.drawImage(rec.c, x, y);
+          ctx.globalAlpha = a * Math.min(1, dk);
+          ctx.drawImage(rec.blk, x, y);
+          ctx.globalAlpha = 1;
+          return;
+        }
+        // a new copy at this step, in place of the one used longest ago
+        if (sl.length >= this.SLOTS) { let k = 0; for (let i = 1; i < sl.length; i++) if (sl[i].u < sl[k].u) k = i; sl.splice(k, 1); }
+        const c = mkCanvas(w, h), g = c.getContext('2d');
+        g.drawImage(rec.c, 0, 0); g.globalAlpha = q / this.DKQ; g.drawImage(rec.blk, 0, 0);
+        e = { q, c, u: tk };
+        sl.push(e); rec.slr = tk;
       }
-      if (k < 0) {
-        // the slot used longest ago, painted at this step
-        k = 0; for (let i = 1; i < this.SLOTS; i++) if (rec.slu[i] < rec.slu[k]) k = i;
-        const g = rec.sil.getContext('2d'), ox = k * (w + 2);
-        g.clearRect(ox, 0, w, h); g.drawImage(rec.c, ox, 0);
-        g.globalAlpha = q / this.DKQ; g.drawImage(rec.blk, ox, 0); g.globalAlpha = 1;
-        rec.slv[k] = q; rec.slr = tk;
-      }
-      rec.slu[k] = tk;
-      ctx.drawImage(rec.sil, k * (w + 2), 0, w, h, x, y, w, h);
+      e.u = tk;
+      ctx.drawImage(e.c, x, y);
     } else ctx.drawImage(rec.c, x, y);
     ctx.globalAlpha = 1;
   },
+  // pixels held in a sprite's darkened copies and silhouette (Mem)
+  shadePx(r) { let n = r.blk ? r.blk.width * r.blk.height : 0; if (r.sl) for (const e of r.sl) n += e.c.width * e.c.height; return n; },
 
   // ------------------------------------------------------------ floors
   floor(f, v, vx, gs) {

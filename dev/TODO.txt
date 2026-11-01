@@ -674,7 +674,25 @@ HIGH (added) - THE GAME RUNS BADLY ON A WEAK LAPTOP (HP 14, CELERON N4120,
      Render.frame; each part's own time, nested parts taken out) and the
      results show them for the recommended preset at each load, with the
      browser's share (frame interval - the game's work).
-     Still open: read the laptop's breakdown and go after its biggest part.
+     Laptop, 0.36.10 breakdown (Potato): light, full screen, walls 14.1
+     of ~26 ms; windowed walls 5.5; a tiny window walls 2.4 (79 fps) -
+     walls scale with the town on screen (the number of faces drawn), not
+     the resolution. Browser & screen ~5-8 ms whatever the size.
+     THEN (000.036.011, asked for: walls drawn in blocks): tried - each
+     screen diagonal's walls in runs of 8 columns drawn from one picture
+     (depth order kept: walls stand on their tiles' back edges). It did
+     not pay: a straight wall crosses a new diagonal at every tile, so a
+     run held 1.7 faces on average, and the runs were remade as the light
+     moved; walls cost the same with or without. Dropped. A depth-correct
+     block (a building's whole face) needs the renderer to redraw what is
+     in front of each person over them - a big rewrite, not done.
+     Found on the way: drawing from the darkened-copy strip cost ~4 ms of
+     the light stage's ~9 (4x slowdown) against ~5 for the same draws
+     unshaded; repainting a slot of a picture the graphics side had drawn
+     from makes it finish first. Spr.drawShaded now keeps each step as its
+     own canvas, never painted over (a new step: a new canvas, the oldest
+     let go; STEADY kept). drawShaded ~9.4 -> ~7 ms (noisy here).
+     Still open: walls - the number of faces drawn.
 
 --------------------------------------------------------------------
 RUN LOG

@@ -8,6 +8,13 @@
 // ---------------------------------------------------------------------------
 const VERSION_LOG = [
   {
+    v: '000.036.011.203', date: '2026-11-01', title: 'Lighter shading',
+    notes: [
+      'Walls and furniture in the dark are drawn from darkened copies that are made once and never painted over: a new light gets a new copy. Painting over a copy the graphics card was still drawing from made it stop and catch up first, and that wait cost almost as much as drawing the walls themselves - in a test on a slowed processor the shading took about a quarter less time. The pictures look exactly as before.',
+    ],
+    commits: [], shots: [],
+  },
+  {
     v: '000.036.010.202', date: '2026-10-31', title: 'Where the time goes',
     notes: [
       'The benchmark results now show where the time went for the recommended preset at each load, in milliseconds a frame, biggest first: the zombies\' thinking, walls, objects, ground, roofs, lighting, the 3D characters, effects - and the browser\'s own share (putting the picture on the screen, the graphics card catching up), which the game cannot see into directly. It shows which part of the game holds a computer back, so the next optimizations can go where they help that computer most.',
